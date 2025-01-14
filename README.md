@@ -120,6 +120,10 @@ extendedConfigFile = "macos10.15_1.vmxf"
 
 批量复制完成会自动启动虚拟机，启动成功后自动执行安装重启脚本命令，执行重装，重装重启后实现kbjfrfpoJU唯一。
 
+脚本调用示例如下图
+![image](https://github.com/user-attachments/assets/9e9a969f-c307-46f5-acae-f55d04e2213b)
+
+
 使用使用namp扫描同网段获取maco的ip地址，
 
 免密登录，执行重启安装脚本
