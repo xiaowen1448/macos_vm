@@ -137,6 +137,15 @@ ju值更改之后，需要实现批量更改五码，重启后生效
 
 更改五码，五码文本来源于，使用脚本批量分割后，批量生成成品的唯一的config.plist 分发给虚拟机，执行远程复制，远程重启，更改五码成功
 至此，批量克隆虚拟机，更改ju，更改五码实现。
+修改完的成品如下图：
+vm01
+
+![image](https://github.com/user-attachments/assets/18e10026-c924-4810-834e-b12cc8871b12)
+
+vm02
+
+![image](https://github.com/user-attachments/assets/8b5dcd4e-207a-43f7-b12c-60424f4930c4)
+
 
 
 技术支持咨询： tel,webchat:19337108781，Telegram：jishuzhai1448
