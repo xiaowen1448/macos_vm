@@ -96,7 +96,7 @@ C:\Users\wx>
 制作macos  iso 文件参见文档，来源于chatgpt macos制作可以启动的iso引导文件.docx
 
 安装全新的macos虚拟机，并注入，clover或者Oencore引导，bios设置clover或者opencore引导为第一位，
-控制台端电脑需和macos模板虚拟机添加互信实现免密登录，远程免密拷贝文件，这样克隆出的虚拟机没太都是互信。可实现批量免密控制
+控制台端电脑需和macos模板虚拟机添加互信实现免密登录，远程免密拷贝文件，这样克隆出的虚拟机全都是互信。可实现批量免密控制
 添加自动执行脚本保存为sh，添加执行权限，例如
 auto_install.sh  脚本功能实现命令行超级权限执行重装macos ,重启后生效，已实现更改ju值
 disable_appleAlert.sh    脚本实现重装后禁用appleid提示，重启后生效
