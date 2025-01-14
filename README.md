@@ -1,8 +1,6 @@
 # macos_vm
 
 脚本运行环境：
-![image](https://github.com/user-attachments/assets/53ee8f5c-fd4f-4d08-8624-200479a7cd96)
-
 
 需要TemplateVM路径下有模板虚拟机
 
@@ -12,6 +10,9 @@ macos10.15.vmdk
 macos10.15.vmx
 macos10.15.nvram
 macos10.15.vmxf
+![image](https://github.com/user-attachments/assets/12cd0cc8-6fb8-4312-876f-2a3f6622fcaa)
+
+
 
 克隆虚拟机基于这个四个文件模板进行拷贝，macos 脚本需要提前复制进入macos系统某个目录，
 
@@ -54,7 +55,7 @@ VMware® Workstation 17 Pro
 
 macos 版本macos 10.15 
 
-命令插件支持如下
+命令插件支持如下(放置在tools目录下)
 
 ssh scp 用于远程登录macos虚拟机免密执行某个脚本,scp用于远程拷贝文件到虚拟机，无此命令，参考百度下载OpenSSH或者某些工具，添加进入系统环境变量即可
 
