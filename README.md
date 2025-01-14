@@ -96,7 +96,7 @@ C:\Users\wx>
 制作macos  iso 文件参见文档，来源于chatgpt macos制作可以启动的iso引导文件.docx
 
 安装全新的macos虚拟机，并注入，clover或者Oencore引导，bios设置clover或者opencore引导为第一位，
-控制台端电脑需和macos模板虚拟机添加互信实现免密登录，远程免密拷贝文件，这样克隆出的虚拟机没太都是互信。可实现批量免密控制
+控制台端电脑需和macos模板虚拟机添加互信实现免密登录，远程免密拷贝文件，这样克隆出的虚拟机全都是互信。可实现批量免密控制
 添加自动执行脚本保存为sh，添加执行权限，例如
 auto_install.sh  脚本功能实现命令行超级权限执行重装macos ,重启后生效，已实现更改ju值
 disable_appleAlert.sh    脚本实现重装后禁用appleid提示，重启后生效
@@ -120,11 +120,13 @@ extendedConfigFile = "macos10.15_1.vmxf"
 
 批量复制完成会自动启动虚拟机，启动成功后自动执行安装重启脚本命令，执行重装，重装重启后实现kbjfrfpoJU唯一。
 
-使用使用namp扫描同网段获取maco的ip地址，
+脚本调用示例如下图
+![image](https://github.com/user-attachments/assets/9e9a969f-c307-46f5-acae-f55d04e2213b)
 
-免密登录，执行重启安装脚本
+开始批量自动重装示例
+![image](https://github.com/user-attachments/assets/e61770a7-6bc0-4ec1-92ff-268e94372dd1)
 
-安装成功，继续执行disable_appleAlert.sh 禁用提示appleid  
+使用使用namp扫描同网段获取macos的ip地址，免密登录，执行重启安装脚本,安装成功，继续执行disable_appleAlert.sh 禁用提示appleid  
 
 批量克隆步骤实现批量复制虚拟机目录，脚本修改vmc配置文件，实现每台虚拟机名称对应的配置文件是唯一的，开机后不会提示已复制和已移动，每台为唯一
 
@@ -134,7 +136,7 @@ ju值更改之后，需要实现批量更改五码，重启后生效
 至此，批量克隆虚拟机，更改ju，更改五码实现。
 
 
-技术支持咨询： tel,webchat:19337108781
+技术支持咨询： tel,webchat:19337108781，Telegram：jishuzhai1448
 
 国内技术博客：
 
