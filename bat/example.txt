@@ -1,0 +1,16 @@
+Starting Nmap 7.95 ( https://nmap.org ) at 2025-01-14 12:38 中国标准时间
+Nmap scan report for bogon (192.168.119.152)
+Host is up (0.00037s latency).
+Not shown: 999 closed tcp ports (reset)
+PORT   STATE SERVICE
+22/tcp open  ssh
+MAC Address: 00:0C:29:6A:46:60 (VMware)
+
+Nmap scan report for bogon (192.168.119.153)
+Host is up (0.00040s latency).
+Not shown: 999 closed tcp ports (reset)
+PORT   STATE SERVICE
+22/tcp open  ssh
+MAC Address: 00:0C:29:F4:01:1F (VMware)
+
+Nmap done: 199 IP addresses (2 hosts up) scanned in 46.58 seconds

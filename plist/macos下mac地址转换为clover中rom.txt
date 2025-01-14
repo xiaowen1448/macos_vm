@@ -1,0 +1,12 @@
+命令如下 ：echo -n "A1B2C3D4E5F6" | xxd -r -p | base64
+
+
+例子如下执行
+
+wx@bogon ~ % echo -n "A1B2C3D4E5F6" | xxd -r -p | base64
+obLD1OX2
+wx@bogon ~ %
+
+
+
+

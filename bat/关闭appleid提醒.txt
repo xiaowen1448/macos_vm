@@ -1,0 +1,22 @@
+禁用appleid 提示
+
+echo "123456" | sudo -S defaults write com.apple.systempreferences AppleIDAuthAlert -bool false
+
+
+重新开启自动登录(待验证 )
+
+
+echo "123456" | sudo -S defaults read /Library/Preferences/com.apple.loginwindow autoLoginUser
+
+echo "123456" | sudo -S security add-generic-password -a "wx" -s "com.apple.loginwindow.password" -w "123456"
+
+security create-keychain -p "123456"  ~/Library/Keychains/login.keychain-db
+
+security unlock-keychain -p "123456" ~/Library/Keychains/login.keychain-db
+
+
+security set-keychain-settings -t 3600 -l ~/Library/Keychains/login.keychain-db
+
+
+echo "123456" | sudo -S launchctl asuser $(id -u) security unlock-keychain  -p "123456"  ~/Library/Keychains/login.keychain-db  
+
