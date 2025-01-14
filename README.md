@@ -98,28 +98,31 @@ C:\Users\wx>
 安装全新的macos虚拟机，并注入，clover或者Oencore引导，bios设置clover或者opencore引导为第一位，
 控制台端电脑需和macos模板虚拟机添加互信实现免密登录，远程免密拷贝文件，这样克隆出的虚拟机全都是互信。可实现批量免密控制
 添加自动执行脚本保存为sh，添加执行权限，例如
+
 auto_install.sh  脚本功能实现命令行超级权限执行重装macos ,重启后生效，已实现更改ju值
+
 disable_appleAlert.sh    脚本实现重装后禁用appleid提示，重启后生效
+
 mount_efi.sh  	脚本功能为实现挂载磁盘efi分区,更改config.plist 由scp远程实现
+
 reboot.sh  		脚本实现重启操作系统
+
+random_hostname.sh   脚本实现随机主机名防止克隆后提示冲突
+
 重建nvrm.bat  重装macos后会改变clover和macosx的引导顺序，将原有定义好的bios信息也就是nvrm文件替换。
-单独保存vmdk，nvrm文件其余不要，保存文件夹为macos10.15，
 
-新建测试虚拟机，编辑磁盘为80G ，网卡接入为nat，镜像文件为iso，新建后将vmx文件拷贝出来，
+
+单独保存vmdk，nvrm文件其余不要，保存文件夹为macos10.15，新建测试虚拟机，编辑磁盘为80G ，网卡接入为nat，镜像文件为iso，新建后将vmx文件拷贝出来，
 这样新开机的虚拟机会重新生成mac地址，确保每台虚拟机网卡mac地址不会冲突。
+编辑vmx文件添加bios.bootDelay = "1000"，方便后期按F2进行调试，删除以下参数
 
-编辑vmx文件添加bios.bootDelay = "1000"，方便后期按F2进行调试
-
-删除以下参数
 displayName = "macos10.15_1"   #为macos虚拟机的名称
 sata0:0.fileName = "macos10.15_1.vmdk"   #macos 虚拟机磁盘
 nvram = "macos10.15_1.nvram"       #macos虚拟机的bios信息
 extendedConfigFile = "macos10.15_1.vmxf"     
 
 以上参数脚本会自动更改，实现每台虚拟机都是唯一的名字，避免虚拟机开机后会提示冲突
-
 批量复制完成会自动启动虚拟机，启动成功后自动执行安装重启脚本命令，执行重装，重装重启后实现kbjfrfpoJU唯一。
-
 脚本调用示例如下图
 ![image](https://github.com/user-attachments/assets/9e9a969f-c307-46f5-acae-f55d04e2213b)
 
