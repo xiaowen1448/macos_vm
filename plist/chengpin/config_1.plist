@@ -941,7 +941,7 @@
 		<key>#BiosVendor</key>
 		<string>Apple Inc.</string>
 		<key>SmUUID</key>
-		<string>d194159d-4db5-4072-ae2b-748af74451bd</string>
+		<string>e213548a-9e2c-4532-9785-bd081dc0ca42</string>
 		<key>LocationInChassis</key>
 		<string>Part Component</string>
 		<key>#ChassisType</key>
@@ -1099,7 +1099,7 @@
 		<key>InjectKexts</key>
 		<string>Detect</string>
 		<key>CustomUUID</key>
-		<string>19ab7450-4204-418d-ac0f-e2dbebb21719</string>
+		<string>75cd7ca2-c2dc-4726-9fac-7a5ad9f31833</string>
 		<key>#CustomUUID</key>
 		<string>511CE201-1000-4000-9999-010203040506</string>
 		<key>#NoCaches</key>

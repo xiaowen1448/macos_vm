@@ -1,11 +1,11 @@
- ssh  -o StrictHostKeyChecking=no  wx@192.168.119.152  '/Users/wx/mount_efi.sh'
+ ssh  -o StrictHostKeyChecking=no  wx@192.168.119.156  '/Users/wx/mount_efi.sh'
  
- ssh  -o StrictHostKeyChecking=no  wx@192.168.119.153 '/Users/wx/mount_efi.sh'
+ ssh  -o StrictHostKeyChecking=no  wx@192.168.119.157 '/Users/wx/mount_efi.sh'
  
- scp D:\VMs\plist\chengpin\config_1.plist  wx@192.168.119.152:/Volumes/EFI/CLOVER/config.plist
+ scp D:\macos_vm\plist\chengpin\config_1.plist  wx@192.168.119.156:/Volumes/EFI/CLOVER/config.plist
  
- scp D:\VMs\plist\chengpin\config_2.plist  wx@192.168.119.153:/Volumes/EFI/CLOVER/config.plist
+ scp D:\macos_vm\plist\chengpin\config_2.plist  wx@192.168.119.157:/Volumes/EFI/CLOVER/config.plist
  
- ssh  -o StrictHostKeyChecking=no  wx@192.168.119.152  '/Users/wx/reboot.sh' 
+ ssh  -o StrictHostKeyChecking=no  wx@192.168.119.156  '/Users/wx/reboot.sh' 
  
- ssh  -o StrictHostKeyChecking=no  wx@192.168.119.153 '/Users/wx/reboot.sh'
+ ssh  -o StrictHostKeyChecking=no  wx@192.168.119.157 '/Users/wx/reboot.sh'
