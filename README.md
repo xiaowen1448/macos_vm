@@ -1,6 +1,8 @@
 # macos_vm
 
 脚本运行环境：
+![image](https://github.com/user-attachments/assets/53ee8f5c-fd4f-4d08-8624-200479a7cd96)
+
 
 需要TemplateVM路径下有模板虚拟机
 
