@@ -123,6 +123,8 @@ extendedConfigFile = "macos10.15_1.vmxf"
 脚本调用示例如下图
 ![image](https://github.com/user-attachments/assets/9e9a969f-c307-46f5-acae-f55d04e2213b)
 
+开始批量自动重装示例
+![image](https://github.com/user-attachments/assets/e61770a7-6bc0-4ec1-92ff-268e94372dd1)
 
 使用使用namp扫描同网段获取maco的ip地址，
 
