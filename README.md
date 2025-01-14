@@ -126,11 +126,7 @@ extendedConfigFile = "macos10.15_1.vmxf"
 开始批量自动重装示例
 ![image](https://github.com/user-attachments/assets/e61770a7-6bc0-4ec1-92ff-268e94372dd1)
 
-使用使用namp扫描同网段获取maco的ip地址，
-
-免密登录，执行重启安装脚本
-
-安装成功，继续执行disable_appleAlert.sh 禁用提示appleid  
+使用使用namp扫描同网段获取macos的ip地址，免密登录，执行重启安装脚本,安装成功，继续执行disable_appleAlert.sh 禁用提示appleid  
 
 批量克隆步骤实现批量复制虚拟机目录，脚本修改vmc配置文件，实现每台虚拟机名称对应的配置文件是唯一的，开机后不会提示已复制和已移动，每台为唯一
 
