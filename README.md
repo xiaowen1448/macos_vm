@@ -10,8 +10,7 @@ macos10.15.vmdk
 macos10.15.vmx
 macos10.15.nvram
 macos10.15.vmxf
-![image](https://github.com/user-attachments/assets/12cd0cc8-6fb8-4312-876f-2a3f6622fcaa)
-
+![image](https://github.com/user-attachments/assets/30c8a7aa-bf9b-413b-9d75-6ffba77f2a7d)
 
 
 克隆虚拟机基于这个四个文件模板进行拷贝，macos 脚本需要提前复制进入macos系统某个目录，
@@ -52,6 +51,7 @@ VMware® Workstation 环境配置
 
 VMware® Workstation 17 Pro
 17.5.1 build-23298084
+![image](https://github.com/user-attachments/assets/7fb032b9-26b4-4f01-ae50-4356ffa5823b)
 
 macos 版本macos 10.15 
 
@@ -132,7 +132,6 @@ ju值更改之后，需要实现批量更改五码，重启后生效
 
 更改五码，五码文本来源于，使用脚本批量分割后，批量生成成品的唯一的config.plist 分发给虚拟机，执行远程复制，远程重启，更改五码成功
 至此，批量克隆虚拟机，更改ju，更改五码实现。
-
 
 
 技术支持咨询： tel,webchat:19337108781
