@@ -100,11 +100,17 @@ C:\Users\wx>
 添加自动执行脚本保存为sh，添加执行权限，例如
 
 auto_install.sh  脚本功能实现命令行超级权限执行重装macos ,重启后生效，已实现更改ju值
+
 disable_appleAlert.sh    脚本实现重装后禁用appleid提示，重启后生效
+
 mount_efi.sh  	脚本功能为实现挂载磁盘efi分区,更改config.plist 由scp远程实现
+
 reboot.sh  		脚本实现重启操作系统
+
 random_hostname.sh   脚本实现随机主机名防止克隆后提示冲突
+
 重建nvrm.bat  重装macos后会改变clover和macosx的引导顺序，将原有定义好的bios信息也就是nvrm文件替换。
+
 
 单独保存vmdk，nvrm文件其余不要，保存文件夹为macos10.15，新建测试虚拟机，编辑磁盘为80G ，网卡接入为nat，镜像文件为iso，新建后将vmx文件拷贝出来，
 这样新开机的虚拟机会重新生成mac地址，确保每台虚拟机网卡mac地址不会冲突。
