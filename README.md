@@ -152,7 +152,7 @@ vm02
 
 
 
-技术支持咨询： tel,webchat:19337108781，Telegram：jishuzhai1448
+技术支持咨询： tel,wechat:19337108781，Telegram：jishuzhai1448
 
 国内技术博客：
 
