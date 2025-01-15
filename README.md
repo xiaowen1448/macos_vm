@@ -12,6 +12,9 @@ macos10.15.nvram
 macos10.15.vmxf
 ![image](https://github.com/user-attachments/assets/30c8a7aa-bf9b-413b-9d75-6ffba77f2a7d)
 
+批量克隆脚本执行示例如下：
+![image](https://github.com/user-attachments/assets/2188f407-639e-472a-8adf-e424be840965)
+
 
 克隆虚拟机基于这个四个文件模板进行拷贝，macos 脚本需要提前复制进入macos系统某个目录，执行默认目录为用户家目录的一些sh脚本，参考macos_sh目录
 
