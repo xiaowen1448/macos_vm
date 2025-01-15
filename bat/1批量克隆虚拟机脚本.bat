@@ -51,8 +51,9 @@ for /f "tokens=1,2,3,4 delims=." %%a in ("%vmnet_ip%") do (
 	set new_vmnet_ip=%%a.%%b.%%c.!result_d!
 )
 echo !new_vmnet_ip!-%nmap_count%
-nmap !new_vmnet_ip!-%nmap_count%  > example.txt 
-awk -F: "/report/{ print $0 }" example.txt | awk -F" " "{ print $NF }"  > ip_list.txt
+rem nmap !new_vmnet_ip!-%nmap_count%  > example.txt 
+awk -F: "/report/{ print $0 }" example.txt | awk -F" " "{ print $NF }"  > ip_list.txt  &&  sed -i  "s/(//g"  ip_list.txt | sed -i  "s/)//g"  ip_list.txt
+del sed*
 echo  "IP address information is saved in this text  ip_list.txt"
 echo  "ip address  is done   ...................."
 echo  " run  ssh  going  ............................"
@@ -62,7 +63,7 @@ for /f "tokens=* delims=" %%a in (ip_list.txt) do (
 	set /a plist_num+=1
 	REM   ssh  -o StrictHostKeyChecking=no  cc@192.168.122.190  '/Users/wx/auto_install.sh'
 	ssh  -o StrictHostKeyChecking=no  wx@%%a   '/Users/wx/mount_efi.sh'
-	scp %plist_path%\config_!plist_num!.plist  wx@%%a :/Volumes/EFI/CLOVER/config.plist
+	scp %plist_path%\config_!plist_num!.plist  wx@%%a:/Volumes/EFI/CLOVER/config.plist
 	start cmd /k ssh  -o StrictHostKeyChecking=no  wx@%%a  '/Users/wx/auto_install.sh'
 )
 echo   "start revise   JU ,Please wait  ................."
