@@ -11,6 +11,7 @@ set sum=15
 set num=1
 set vmnet_ip=192.168.119.1
 set nmap_count=253
+rem  memory size 
 set memsize="2048"
 set plist_path=D:\macos_vm\plist\chengpin
 set plist_num=0
