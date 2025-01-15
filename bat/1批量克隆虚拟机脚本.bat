@@ -14,6 +14,7 @@ set nmap_count=253
 set memsize="2048"
 set plist_path=D:\macos_vm\plist\chengpin
 set plist_num=0
+echo  "" > run.log
 REM Perform batch creation
 for /L %%i in (1,1,%VM_COUNT%) do (
 
@@ -32,40 +33,42 @@ for /L %%i in (1,1,%VM_COUNT%) do (
 	REM displayName = "macOS 10.15"
 	REM sata0:0.fileName = "macOS 10.15.vmdk"
 	REM extendedConfigFile = "macOS 10.15.vmxf"
-	move "!VM_DIR!\macos10.15.vmx"  "!VM_DIR!\macos10.15_%%i.vmx"
-	move  "!VM_DIR!\macos10.15.vmdk"    "!VM_DIR!\macos10.15_%%i.vmdk" 
-	move  "!VM_DIR!\macos10.15.vmxf"    "!VM_DIR!\macos10.15_%%i.vmxf"
-	move  "!VM_DIR!\macos10.15.nvram"    "!VM_DIR!\macos10.15_%%i.nvram"
-    echo Created VM %%i at !VM_DIR!
-	echo  "Start launching virtual machines in bulk, please wait   ......................."
+	move "!VM_DIR!\macos10.15.vmx"  "!VM_DIR!\macos10.15_%%i.vmx"  >> run.log  2>&1
+	move  "!VM_DIR!\macos10.15.vmdk"    "!VM_DIR!\macos10.15_%%i.vmdk"  >> run.log  2>&1
+	move  "!VM_DIR!\macos10.15.vmxf"    "!VM_DIR!\macos10.15_%%i.vmxf" >> run.log  2>&1
+	move  "!VM_DIR!\macos10.15.nvram"    "!VM_DIR!\macos10.15_%%i.nvram" >> run.log  2>&1
+    echo Created VM_%%i at !VM_DIR!
+	echo "Starting  launching virtual machines VM_%%i , please wait   ......................."
 	"C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe"    start  !VM_DIR!\macos10.15_%%i.vmx
 )
-echo "All virtual machines have been created and are waiting to be started ..................."
+echo All virtual machines have been created and are waiting to be started ................... 
 rem   the virtual machine to starting   please wait    .................... 
 rem   Wait for the VM to start up and obtain the IP address of the VM
 timeout /t 240 
-echo  "The IP address is being scanned, please wait    ...................."
+echo The IP address is being scanned, please wait    .................... 
 REM  Define the range of nmap scan addresses  for Example   192.168.119.2-10
 for /f "tokens=1,2,3,4 delims=." %%a in ("%vmnet_ip%") do (
 	set /a result_d=%%d + %num%
 	set new_vmnet_ip=%%a.%%b.%%c.!result_d!
 )
 echo !new_vmnet_ip!-%nmap_count%
-rem nmap !new_vmnet_ip!-%nmap_count%  > example.txt 
-awk -F: "/report/{ print $0 }" example.txt | awk -F" " "{ print $NF }"  > ip_list.txt  &&  sed -i  "s/(//g"  ip_list.txt | sed -i  "s/)//g"  ip_list.txt
+nmap !new_vmnet_ip!-%nmap_count%  > example.txt 
+awk -F: "/report/{ print $0 }" example.txt | awk -F" " "{ print $NF }"  > ip_list.txt  
+sed -i  "s/(//g"  ip_list.txt 
+sed -i  "s/)//g"  ip_list.txt
 del sed*
-echo  "IP address information is saved in this text  ip_list.txt"
-echo  "ip address  is done   ...................."
-echo  " run  ssh  going  ............................"
+rem  echo  "IP address information is saved in this text  ip_list.txt"
+echo nmap ip address  is done   ....................
+echo Start executing scripts in batches  ............................
 rem  VM_COUNT  Number of virtual machines
 rem  Set the number of config.plist to be used
 for /f "tokens=* delims=" %%a in (ip_list.txt) do (
 	set /a plist_num+=1
 	REM   ssh  -o StrictHostKeyChecking=no  cc@192.168.122.190  '/Users/wx/auto_install.sh'
-	ssh  -o StrictHostKeyChecking=no  wx@%%a   '/Users/wx/mount_efi.sh'
-	scp %plist_path%\config_!plist_num!.plist  wx@%%a:/Volumes/EFI/CLOVER/config.plist
+	ssh  -o StrictHostKeyChecking=no  wx@%%a   '/Users/wx/mount_efi.sh'  >> run.log  2>&1
+	scp %plist_path%\config_!plist_num!.plist  wx@%%a:/Volumes/EFI/CLOVER/config.plist  >> run.log  2>&1
 	start cmd /k ssh  -o StrictHostKeyChecking=no  wx@%%a  '/Users/wx/auto_install.sh'
 )
-echo   "start revise   JU ,Please wait  ................."
+echo start revise kbjfrfpoJU ,Please wait  .................
 
 pause
