@@ -13,7 +13,7 @@ macos10.15.vmxf
 ![image](https://github.com/user-attachments/assets/30c8a7aa-bf9b-413b-9d75-6ffba77f2a7d)
 
 
-克隆虚拟机基于这个四个文件模板进行拷贝，macos 脚本需要提前复制进入macos系统某个目录，
+克隆虚拟机基于这个四个文件模板进行拷贝，macos 脚本需要提前复制进入macos系统某个目录，执行默认目录为用户家目录的一些sh脚本，参考macos_sh目录
 
 此项目代码仅用于批量生产唯一的虚拟机mac，更改五码，更改ju值，目前仅用于测试
 此项目脚本用户批量克隆虚拟机，调用macos镜像安装脚本，用户执行无人值守重装脚本 ，更改 kbjfrfpoJU值，ju值查看可利用iMessageDebug运行查看
