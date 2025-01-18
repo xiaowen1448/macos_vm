@@ -40,7 +40,7 @@ for /L %%i in (1,1,%VM_COUNT%) do (
 	move  "!VM_DIR!\macos10.15.nvram"    "!VM_DIR!\macos10.15_%%i.nvram" >> run.log  2>&1
     echo Created VM_%%i at !VM_DIR!
 	echo "Starting  launching virtual machines VM_%%i , please wait   ......................."
-	"C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe"    start  !VM_DIR!\macos10.15_%%i.vmx
+	"C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe"    start  !VM_DIR!\macos10.15_%%i.vmx nogui
 )
 echo All virtual machines have been created and are waiting to be started ................... 
 rem   the virtual machine to starting   please wait    .................... 
