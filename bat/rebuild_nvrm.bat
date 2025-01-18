@@ -17,15 +17,15 @@ for /f "tokens=* delims=" %%a in (ip_list.txt) do (
 for /L %%i in (1,1,%VM_COUNT%) do (
 	set VM_DIR=%VM_BASE_PATH%\VM_%%i
 	set /a sum=!sum!+%%i
-	echo  "Virtual Machine 1 starts to stop ..............  "
-	"C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe"    stop   !VM_DIR!\macos10.15_%%i.vmx
+	echo  "Virtual Machine %%i starts to stop ..............  "
+	"C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe"    stop   !VM_DIR!\macos10.15_%%i.vmx nogui
 	echo  "VM macos10.15_%%i  has stopped    ...............  "
 	rem  move  "%TEMPLATE_PATH%\macos10.15.nvram"    "!VM_DIR!\macos10.15_%%i.nvram"
     echo "VM macos10.15_%%i starts rebuilding NVRM  ..............  "
-	copy /y  "%TEMPLATE_PATH%\macos10.15.nvram"    "!VM_DIR!\macos10.15_%%i.nvram"
+	copy /y  "%TEMPLATE_PATH%\macos10.15.nvram"    "!VM_DIR!\macos10.15_%%i.nvram" >> run.log  2>&1
     echo "VM macos10.15_%%i rebuilds NVRM Complete  ..............  "
 	echo "Start starting Virtual Machine macos10.15_%%i ..............   "
-	"C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe"    start    !VM_DIR!\macos10.15_%%i.vmx
+	"C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe"    start    !VM_DIR!\macos10.15_%%i.vmx nogui
 	echo "VM macos10.15_%%i  has started ..............  "
 )
 echo  "All virtual machines NVRM have been rebuilt ..............""
