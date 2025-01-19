@@ -11,7 +11,8 @@ for /r "%VM_BASE_PATH%" %%f in (*.vmx) do (
    rem    "%VMRUN_PATH%" start "%%f" nogui
    if /i "%%~xf"==".vmx"  (
         echo starting  vm: %%f
-        %VMRUN_PATH% start "%%f" nogui
+        %VMRUN_PATH% start "%%f" 
+		rem nogui
     ) else (
        rem   echo skip : %%f 
     )
