@@ -1,30 +1,30 @@
-Starting Nmap 7.95 ( https://nmap.org ) at 2025-01-19 13:42 中国标准时间
+Starting Nmap 7.95 ( https://nmap.org ) at 2025-01-19 15:38 中国标准时间
 Nmap scan report for 192.168.119.156
-Host is up (0.0022s latency).
+Host is up (0.00057s latency).
 Not shown: 999 closed tcp ports (reset)
 PORT   STATE SERVICE
 22/tcp open  ssh
 MAC Address: 00:0C:29:FA:0C:07 (VMware)
 
 Nmap scan report for 192.168.119.157
-Host is up (0.00052s latency).
+Host is up (0.00093s latency).
 Not shown: 999 closed tcp ports (reset)
 PORT   STATE SERVICE
 22/tcp open  ssh
 MAC Address: 00:0C:29:8A:2C:FB (VMware)
 
 Nmap scan report for 192.168.119.158
-Host is up (0.00076s latency).
+Host is up (0.00074s latency).
 Not shown: 999 closed tcp ports (reset)
 PORT   STATE SERVICE
 22/tcp open  ssh
 MAC Address: 00:0C:29:99:94:7D (VMware)
 
 Nmap scan report for 192.168.119.159
-Host is up (0.00060s latency).
+Host is up (0.00045s latency).
 Not shown: 999 closed tcp ports (reset)
 PORT   STATE SERVICE
 22/tcp open  ssh
 MAC Address: 00:0C:29:CF:B6:87 (VMware)
 
-Nmap done: 252 IP addresses (4 hosts up) scanned in 14.84 seconds
+Nmap done: 252 IP addresses (4 hosts up) scanned in 17.26 seconds
