@@ -4,6 +4,7 @@ REM Set the template VM path
 set TEMPLATE_PATH=D:\macos_vm\TemplateVM\macos10.15
 REM Set the storage path of the target VM
 set VM_BASE_PATH=D:\macos_vm\NewVM
+set ISO_BASE_HOME=D:\macos_vm\iso
 REM Set the number of virtual machines that need to be created
 set VM_COUNT=4
 rem  Random numbers start
@@ -15,10 +16,9 @@ rem  memory size
 set memsize="2048"
 set plist_path=D:\macos_vm\plist\chengpin
 set plist_num=0
-echo  "" > run.log
+echo  "" > log\run.log
 REM Perform batch creation
 for /L %%i in (1,1,%VM_COUNT%) do (
-
     REM Create a new virtual machine directory
     set VM_DIR=%VM_BASE_PATH%\VM_%%i
 	set /a sum=!sum!+%%i
@@ -29,18 +29,21 @@ for /L %%i in (1,1,%VM_COUNT%) do (
 	echo  sata0:0.fileName = "macos10.15_%%i.vmdk"  >>  "!VM_DIR!\macos10.15.vmx"
 	echo  nvram = "macos10.15_%%i.nvram"  >>  "!VM_DIR!\macos10.15.vmx" 
 	echo  extendedConfigFile = "macos10.15_%%i.vmxf"   >>  "!VM_DIR!\macos10.15.vmx" 
+	rem  iso\Installer_macOS_Catalina_10.15.7.iso
+	echo sata0:1.fileName = "%ISO_BASE_HOME%\Installer_macOS_Catalina_10.15.7.iso"  >>  "!VM_DIR!\macos10.15.vmx" 
 	echo  memsize="2048"  >>   "!VM_DIR!\macos10.15.vmx"
 	REM nvram = "macOS 10.15.nvram"  bios  
 	REM displayName = "macOS 10.15"
 	REM sata0:0.fileName = "macOS 10.15.vmdk"
 	REM extendedConfigFile = "macOS 10.15.vmxf"
-	move "!VM_DIR!\macos10.15.vmx"  "!VM_DIR!\macos10.15_%%i.vmx"  >> run.log  2>&1
-	move  "!VM_DIR!\macos10.15.vmdk"    "!VM_DIR!\macos10.15_%%i.vmdk"  >> run.log  2>&1
-	move  "!VM_DIR!\macos10.15.vmxf"    "!VM_DIR!\macos10.15_%%i.vmxf" >> run.log  2>&1
-	move  "!VM_DIR!\macos10.15.nvram"    "!VM_DIR!\macos10.15_%%i.nvram" >> run.log  2>&1
+	move "!VM_DIR!\macos10.15.vmx"  "!VM_DIR!\macos10.15_%%i.vmx"  >> log\run.log  2>&1
+	move  "!VM_DIR!\macos10.15.vmdk"    "!VM_DIR!\macos10.15_%%i.vmdk"  >> log\run.log  2>&1
+	move  "!VM_DIR!\macos10.15.vmxf"    "!VM_DIR!\macos10.15_%%i.vmxf" >> log\run.log  2>&1
+	move  "!VM_DIR!\macos10.15.nvram"    "!VM_DIR!\macos10.15_%%i.nvram" >> log\run.log  2>&1
     echo Created VM_%%i at !VM_DIR!
 	echo "Starting  launching virtual machines VM_%%i , please wait   ......................."
-	"C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe"    start  !VM_DIR!\macos10.15_%%i.vmx nogui
+	"C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe"    start  !VM_DIR!\macos10.15_%%i.vmx 
+	rem   nogui
 )
 echo All virtual machines have been created and are waiting to be started ................... 
 rem   the virtual machine to starting   please wait    .................... 
@@ -53,21 +56,21 @@ for /f "tokens=1,2,3,4 delims=." %%a in ("%vmnet_ip%") do (
 	set new_vmnet_ip=%%a.%%b.%%c.!result_d!
 )
 echo !new_vmnet_ip!-%nmap_count%
-nmap !new_vmnet_ip!-%nmap_count%  > example.txt 
-awk -F: "/report/{ print $0 }" example.txt | awk -F" " "{ print $NF }"  > ip_list.txt  
-sed -i  "s/(//g"  ip_list.txt 
-sed -i  "s/)//g"  ip_list.txt
+nmap !new_vmnet_ip!-%nmap_count%  > nmap\example.txt 
+awk -F: "/report/{ print $0 }" nmap\example.txt | awk -F" " "{ print $NF }"  > nmap\ip_list.txt  
+sed -i  "s/(//g"  nmap\ip_list.txt 
+sed -i  "s/)//g"  nmap\ip_list.txt
 del sed*
 rem  echo  "IP address information is saved in this text  ip_list.txt"
 echo nmap ip address  is done   ....................
 echo Start executing scripts in batches  ............................
 rem  VM_COUNT  Number of virtual machines
 rem  Set the number of config.plist to be used
-for /f "tokens=* delims=" %%a in (ip_list.txt) do (
+for /f "tokens=* delims=" %%a in (nmap\ip_list.txt) do (
 	set /a plist_num+=1
 	REM   ssh  -o StrictHostKeyChecking=no  cc@192.168.122.190  '/Users/wx/auto_install.sh'
-	ssh  -o StrictHostKeyChecking=no  wx@%%a   '/Users/wx/mount_efi.sh'  >> run.log  2>&1
-	scp %plist_path%\config_!plist_num!.plist  wx@%%a:/Volumes/EFI/CLOVER/config.plist  >> run.log  2>&1
+	ssh  -o StrictHostKeyChecking=no  wx@%%a   '/Users/wx/mount_efi.sh'  >> log\run.log  2>&1
+	scp %plist_path%\config_!plist_num!.plist  wx@%%a:/Volumes/EFI/CLOVER/config.plist  >> log\run.log  2>&1
 	start cmd /k ssh  -o StrictHostKeyChecking=no  wx@%%a  '/Users/wx/auto_install.sh'
 )
 echo start revise kbjfrfpoJU ,Please wait  .................
