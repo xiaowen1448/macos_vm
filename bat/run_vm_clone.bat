@@ -19,7 +19,7 @@ rem  memory size
 set memsize="2048"
 set plist_path=%BASE_DIR%\..\plist\chengpin
 set plist_num=0
-echo  "" > log\run.log
+del  log\run.log
 REM Perform batch creation
 for /L %%i in (1,1,%VM_COUNT%) do (
     REM Create a new virtual machine directory
@@ -67,17 +67,10 @@ rem  del sed*
 rem  echo  "IP address information is saved in this text  ip_list.txt"
 rem echo nmap ip address  is done   ....................
 echo  Obtaining the IP address of the VM is in progress!......................
-:check
-call ip_find.bat
-rem  echo %errorlevel%
-if %errorlevel% neq 0 (
-echo  The VM IP was not found  Waiting for 10 seconds, press a key to continue... ......................
-timeout /t 10
+rem :check
+rem  goto check 
 call get_vm_ip.bat
-goto check     
-) else (
-echo echo  IP address information is saved in %IP_PATH%\ip_list.txt!......................
-)
+type %IP_PATH%\ip_list.txt
 echo Start executing scripts in batches  ............................
 rem  VM_COUNT  Number of virtual machines
 rem  Set the number of config.plist to be used
