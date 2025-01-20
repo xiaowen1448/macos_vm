@@ -9,9 +9,9 @@ set VMRUN_PATH="C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe"
 rem 遍历目录下所有的 .vmx 文件并启动
 for /r "%VM_BASE_PATH%" %%f in (*.vmx) do (
    rem    "%VMRUN_PATH%" start "%%f" nogui
-   if /i "%%~xf"==".vmx"  (
-        echo starting  vm: %%f
-        %VMRUN_PATH% start "%%f"  
+   if /i "%%~xf"==".vmx"  ( 
+        echo restarting  vm:%%f
+        %VMRUN_PATH% reset "%%f"		
 		rem nogui
     ) else (
        rem   echo skip : %%f 

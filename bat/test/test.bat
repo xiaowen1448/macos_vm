@@ -1,12 +1,20 @@
 @setlocal enabledelayedexpansion
 @echo off
-
-set num=1
-set vmnet_ip=192.168.119.1
-for /f "tokens=1,2,3,4 delims=." %%a in ("%vmnet_ip%") do (
-	set /a result_d=%%d + %num%
-	set new_vmnet_ip=%%a.%%b.%%c.!result_d!
-	
+set  BASE_DIR=%cd%
+set TEMPLATE_PATH=%BASE_DIR%\..\..\TemplateVM\macos10.15
+REM Set the storage path of the target VM
+set VM_BASE_PATH=%BASE_DIR%\..\..\NewVM
+set ISO_BASE_HOME=%BASE_DIR%\..\..\iso
+REM Set the number of virtual machines that need to be created
+for /r "%VM_BASE_PATH%" %%f in (*.*) do (
+   rem    "%VMRUN_PATH%" start "%%f" nogui
+   if /i "%%~xf"==".vmx"  (
+       echo %%f------------
+    )else if /i "%%~xf"==".nvram" (
+      echo %%f=========
+    )else (
+   rem   echo Value is unknown
 )
-echo !new_vmnet_ip!
+)
+
 pause
