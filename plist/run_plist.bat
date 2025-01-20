@@ -1,11 +1,12 @@
 @setlocal enabledelayedexpansion
 @echo off	
 REM  定义原始文件config.plist
-set pdir=D:\macos_vm\plist\config\
-set pdir_output=D:\macos_vm\plist\chengpin\
+set BASE_DIR=%cd%
+set pdir=%BASE_DIR%\config\
+set pdir_output=%BASE_DIR%\chengpin\
 REM   读取原始文本五码文件
 REM :846878D3B2B4:FV984520CNDHWVQDY:FVFXP1HVHV22:Mac-B4831CEBD52A0C4C:MacBookPro14,1:
-REM  Model: $1 , Board-id:$2 , SerialNumber:$3   ,CustomUUID:$4 ,ROM:$5 , BoardSerialNumber:$6  ,SmUUID:$7
+REM  Model: $1 , Board-id:$2 , SerialNumber:$3   ,CustomUUID:$4 ,ROM:$5 , MLB:$6  ,SmUUID:$7
 set count=0
    for /f "tokens=* delims=" %%a in (5.txt) do (
 	REM  $2 :ROM ,$3:BoardSerialNumber,$4:SerialNumber,$5:Board-id,$6:Model
