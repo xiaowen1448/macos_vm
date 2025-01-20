@@ -73,7 +73,7 @@ rem  echo %errorlevel%
 if %errorlevel% neq 0 (
 echo  The VM IP was not found  Waiting for 10 seconds, press a key to continue... ......................
 timeout /t 10
-call get_VM_IPAddress.bat
+call get_vm_ipaddress.bat
 goto check     
 ) else (
 echo echo  IP address information is saved in %IP_PATH%\ip_list.txt!......................
