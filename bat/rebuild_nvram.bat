@@ -15,9 +15,9 @@ for /r "%VM_BASE_PATH%" %%f in (*.*) do (
    if /i "%%~xf"==".nvram"  (
     rem  echo %%f
 	rem   %VMRUN_PATH%  stop  %%f nogui
-	echo "%%f starts rebuilding NVRM  ..............  "
+	echo "%%f starting  rebuilding NVRM  ..............  "
 	copy /y  "%TEMPLATE_PATH%\macos10.15.nvram"    %%f  >> log\run.log  2>&1
-    echo "%%f  rebuilds NVRM Complete  ..............  "
+    echo "%%f  rebuilding  NVRM Complete  ..............  "
     )else (
    rem   echo Value is unknown
 )
