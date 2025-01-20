@@ -10,8 +10,9 @@ rem 遍历目录下所有的 .vmx 文件并启动
 for /r "%VM_BASE_PATH%" %%f in (*.vmx) do (
    rem    "%VMRUN_PATH%" start "%%f" nogui
    if /i "%%~xf"==".vmx"  (
-        echo stopping  vm: %%f
+        echo The virtual machine is being stopped vm: %%f
         %VMRUN_PATH% stop "%%f"
+		echo The virtual machine has stopped  vm: %%f
 		rem nogui
     ) else (
        rem   echo skip : %%f 
