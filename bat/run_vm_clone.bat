@@ -8,8 +8,9 @@ set VM_BASE_PATH=%BASE_DIR%\..\NewVM
 set ISO_BASE_HOME=%BASE_DIR%\..\iso
 set IP_PATH=%BASE_DIR%\ip
 REM Set the number of virtual machines that need to be created
-set VM_COUNT=4
+set VM_COUNT=2
 set VMRUN_PATH="C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe"
+set ssh_uname=wx
 rem  Random numbers start
 set sum=15
 set num=1
@@ -27,6 +28,7 @@ for /L %%i in (1,1,%VM_COUNT%) do (
 	set /a sum=!sum!+%%i
     mkdir !VM_DIR!
     REM Copy the template VM file
+	echo Start cloning the virtual machine files ！ please wait   .......................
     xcopy /E /I %TEMPLATE_PATH% !VM_DIR!  >> log\run.log  2>&1
     echo  displayName = "macos10.15_%%i" >>  "!VM_DIR!\macos10.15.vmx"
 	echo  sata0:0.fileName = "macos10.15_%%i.vmdk"  >>  "!VM_DIR!\macos10.15.vmx"
@@ -77,9 +79,9 @@ rem  Set the number of config.plist to be used
 for /f "tokens=* delims=" %%a in (%IP_PATH%\ip_list.txt) do (
 	set /a plist_num+=1
 	REM   ssh  -o StrictHostKeyChecking=no  cc@192.168.122.190  '/Users/wx/auto_install.sh'
-	ssh  -o StrictHostKeyChecking=no  wx@%%a   '/Users/wx/mount_efi.sh'  >> log\run.log  2>&1
-	scp %plist_path%\config_!plist_num!.plist  wx@%%a:/Volumes/EFI/CLOVER/config.plist  >> log\run.log  2>&1
-	start cmd /k ssh  -o StrictHostKeyChecking=no  wx@%%a  '/Users/wx/auto_install.sh'
+	ssh  -o StrictHostKeyChecking=no  %ssh_uname%@%%a   '/Users/%ssh_uname%/mount_efi.sh'  >> log\run.log  2>&1
+	scp %plist_path%\config_!plist_num!.plist  %ssh_uname%@%%a:/Volumes/EFI/CLOVER/config.plist  >> log\run.log  2>&1
+	start cmd /k ssh  -o StrictHostKeyChecking=no  %ssh_uname%@%%a  '/Users/%ssh_uname%/auto_install.sh'
 )
 echo start revise kbjfrfpoJU ,Please wait  .................
 
