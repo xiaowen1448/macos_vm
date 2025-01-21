@@ -34,13 +34,8 @@ for /L %%i in (1,1,%VM_COUNT%) do (
 	echo  sata0:0.fileName = "macos10.15_%%i.vmdk"  >>  "!VM_DIR!\macos10.15.vmx"
 	echo  nvram = "macos10.15_%%i.nvram"  >>  "!VM_DIR!\macos10.15.vmx" 
 	echo  extendedConfigFile = "macos10.15_%%i.vmxf" >> "!VM_DIR!\macos10.15.vmx" 
-	rem  iso\Installer_macOS_Catalina_10.15.7.iso
 	echo sata0:1.fileName = "%ISO_BASE_HOME%\Installer_macOS_Catalina_10.15.7.iso"  >>  "!VM_DIR!\macos10.15.vmx" 
 	echo  memsize="2048" >> "!VM_DIR!\macos10.15.vmx"
-	REM nvram = "macOS 10.15.nvram"  bios  
-	REM displayName = "macOS 10.15"
-	REM sata0:0.fileName = "macOS 10.15.vmdk"
-	REM extendedConfigFile = "macOS 10.15.vmxf"
 	move "!VM_DIR!\macos10.15.vmx" "!VM_DIR!\macos10.15_%%i.vmx"  >> log\run.log  2>&1
 	move "!VM_DIR!\macos10.15.vmdk" "!VM_DIR!\macos10.15_%%i.vmdk"  >> log\run.log  2>&1
 	move "!VM_DIR!\macos10.15.vmxf" "!VM_DIR!\macos10.15_%%i.vmxf" >> log\run.log  2>&1
@@ -50,24 +45,8 @@ for /L %%i in (1,1,%VM_COUNT%) do (
 	%VMRUN_PATH%  start  !VM_DIR!\macos10.15_%%i.vmx 
 	rem   nogui
 )
-echo All virtual machines have been created and are waiting to be started ................... 
-rem   the virtual machine to starting   please wait    .................... 
-rem   Wait for the VM to start up and obtain the IP address of the VM
-rem  timeout /t 240 
+echo All virtual machines have been created and are waiting to be started ...................  
 echo The IP address is being scanned, please wait .................... 
-REM  Define the range of nmap scan addresses  for Example   192.168.119.2-10
-rem for /f "tokens=1,2,3,4 delims=." %%a in ("%vmnet_ip%") do (
-rem 	set /a result_d=%%d + %num%
-rem 	set new_vmnet_ip=%%a.%%b.%%c.!result_d!
-rem )
-rem  echo !new_vmnet_ip!-%nmap_count%
-rem  nmap !new_vmnet_ip!-%nmap_count%  > %IP_PATH%\example.txt 
-rem awk -F: "/report/{ print $0 }" %IP_PATH%\example.txt | awk -F" " "{ print $NF }"  > %IP_PATH%\ip_list.txt  
-rem sed -i  "s/(//g"  %IP_PATH%\ip_list.txt 
-rem sed -i  "s/)//g"  %IP_PATH%\ip_list.txt
-rem  del sed*
-rem  echo  "IP address information is saved in this text  ip_list.txt"
-rem echo nmap ip address  is done   ....................
 echo  Obtaining the IP address of the VM is in progress!......................
 rem :check
 rem  goto check 
