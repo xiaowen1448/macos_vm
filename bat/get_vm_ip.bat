@@ -6,12 +6,12 @@ REM Set the storage path of the target VM
 set VM_BASE_PATH=%BASE_DIR%\..\NewVM
 set IP_PATH=%BASE_DIR%\ip
 REM Set the number of virtual machines that need to be created
-set VM_COUNT=4
 set VMRUN_PATH="C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe" 
 copy /y nul %IP_PATH%\ip_list.txt  >> log\run.log  2>&1
 for /r "%VM_BASE_PATH%" %%f in (*.vmx) do (
    rem    "%VMRUN_PATH%" start "%%f" nogui
    if /i "%%~xf"==".vmx"  (
+	echo  %%f
     REM  %VMRUN_PATH% getGuestIPAddress  %%f  >>  %IP_PATH%\ip_list.txt
 	set VM_EXE=%VMRUN_PATH% getGuestIPAddress  %%f 
 	for /f %%i in ('!VM_EXE!') do set VAR_IP=%%i
@@ -28,6 +28,7 @@ for /r "%VM_BASE_PATH%" %%f in (*.vmx) do (
    rem   echo Value is unknown
 )
 )
+pause 
 rem  type %IP_PATH%\ip_list.txt
 
 
