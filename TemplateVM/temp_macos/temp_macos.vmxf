@@ -5,4 +5,4 @@
 <ClientMetaData>
 <clientMetaDataAttributes/>
 <HistoryEventList/></ClientMetaData>
-<vmxPathName type="string">temp_macos.vmx</vmxPathName></VM></Foundry>
+<vmxPathName type="string">temp_macos.vmx</vmxPathName></VM><tools-install-info><installError>0</installError><updateCounter>1</updateCounter></tools-install-info></Foundry>
