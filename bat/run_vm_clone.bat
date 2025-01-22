@@ -28,7 +28,7 @@ for /L %%i in (1,1,%VM_COUNT%) do (
 	set /a sum=!sum!+%%i
     mkdir !VM_DIR!
     REM Copy the template VM file
-	echo Start cloning the virtual machine files ！ please wait   .......................
+	echo Start cloning the virtual machine files please wait   .......................
     xcopy /E /I %TEMPLATE_PATH% !VM_DIR!  >> log\run.log  2>&1
     echo  displayName = "macos10.15_%%i" >>  "!VM_DIR!\macos10.15.vmx"
 	echo  sata0:0.fileName = "macos10.15_%%i.vmdk"  >>  "!VM_DIR!\macos10.15.vmx"
