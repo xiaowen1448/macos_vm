@@ -34,6 +34,6 @@ for /f "tokens=* delims=" %%a in (%IP_PATH%\ip_list.txt) do (
 	ssh  -o StrictHostKeyChecking=no  %ssh_uname%@%%a   '/Users/%ssh_uname%/auto_send_key.sh'  >> log\run.log  2>&1
 	
 )
-echo disable_appleAlert is   done  !...............
+echo auto_Send_vmkey  is   done  !...............
 
 pause  
