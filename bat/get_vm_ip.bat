@@ -11,13 +11,12 @@ copy /y nul %IP_PATH%\ip_list.txt  >> log\run.log  2>&1
 for /r "%VM_BASE_PATH%" %%f in (*.vmx) do (
    rem    "%VMRUN_PATH%" start "%%f" nogui
    if /i "%%~xf"==".vmx"  (
-	echo  %%f
     REM  %VMRUN_PATH% getGuestIPAddress  %%f  >>  %IP_PATH%\ip_list.txt
 	set VM_EXE=%VMRUN_PATH% getGuestIPAddress  %%f 
 	for /f %%i in ('!VM_EXE!') do set VAR_IP=%%i
 	echo !VAR_IP! | findstr /r "^[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*"  >> log\run.log  2>&1
 	if !errorlevel! equ 0 (
-	%VMRUN_PATH% getGuestIPAddress  %%f  >>  %IP_PATH%\ip_list.txt
+	echo %%f:!VAR_IP!  >>  %IP_PATH%\ip_list.txt
 	) else (
 	copy /y nul %IP_PATH%\ip_list.txt  >> log\run.log  2>&1
 	echo  Please wait for the virtual machine %%f to restart ! .............
@@ -28,7 +27,6 @@ for /r "%VM_BASE_PATH%" %%f in (*.vmx) do (
    rem   echo Value is unknown
 )
 )
-pause 
 rem  type %IP_PATH%\ip_list.txt
 
 

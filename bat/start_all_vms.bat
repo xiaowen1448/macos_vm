@@ -11,10 +11,10 @@ for /r "%VM_BASE_PATH%" %%f in (*.vmx) do (
    rem    "%VMRUN_PATH%" start "%%f" nogui
    if /i "%%~xf"==".vmx"  (
         echo starting  vm: %%f
-        %VMRUN_PATH% start "%%f"  
+        %VMRUN_PATH% start "%%f" nogui 
 		rem nogui
     ) else (
        rem   echo skip : %%f 
     )
 )
-
+echo "All virtual machines have been started .............."
