@@ -1,11 +1,18 @@
 模板虚拟机配置修改如下
-此处存放模板虚拟机的文件
-包含：
+
+此处存放模板虚拟机的文件包含：
+
+
 macos10.15.nvram
+
 macos10.15.vmdk
+
 macos10.15.vmx
+
 macos10.15.vmxf
+
 新建空的虚拟机，挂载模板虚拟机磁盘vmdk，修改vmdk的脚本和偏好设置。
+
 1.用户自动登录配置：用户和群组，下拉自动登录勾选当前用户。
 
 ![1737538923281](https://github.com/user-attachments/assets/bad1f3bc-04c8-4a0e-9482-8f8a7d5ed851)
