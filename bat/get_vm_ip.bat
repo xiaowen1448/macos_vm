@@ -16,7 +16,7 @@ for /r "%VM_BASE_PATH%" %%f in (*.vmx) do (
 	for /f %%i in ('!VM_EXE!') do set VAR_IP=%%i
 	echo !VAR_IP! | findstr /r "^[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*"  >> log\run.log  2>&1
 	if !errorlevel! equ 0 (
-	echo %%f:!VAR_IP!  >>  %IP_PATH%\ip_list.txt
+	echo !VAR_IP!  >>  %IP_PATH%\ip_list.txt
 	) else (
 	copy /y nul %IP_PATH%\ip_list.txt  >> log\run.log  2>&1
 	echo  Please wait for the virtual machine %%f to restart ! .............
