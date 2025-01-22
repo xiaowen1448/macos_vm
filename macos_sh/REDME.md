@@ -9,14 +9,14 @@ auto_send_key.sh 脚本需要安全隐私里面开启终端访问权限，远程
 
  ![image](https://github.com/user-attachments/assets/7c4928c8-e7b9-4f09-9896-f99d4b4ca1fe)
 
-按需配置:
-	关闭屏幕休眠
+按需配置: 关闭屏幕休眠
+
  ![image](https://github.com/user-attachments/assets/520bded3-864a-44eb-b311-46c45011d4bb)
 
-	完全磁盘访问权限:为sshd
+完全磁盘访问权限:为sshd
   ![image](https://github.com/user-attachments/assets/bb9885b2-1b0d-45da-9f3a-dc6467cf5136)
   
-	文件和文件夹修改为:勾选sshd,终端勾选可移除卷宗，桌面文件夹，
+文件和文件夹修改为:勾选sshd,终端勾选可移除卷宗，桌面文件夹，
  ![image](https://github.com/user-attachments/assets/3b21822f-42ae-405a-b954-c7eecfb34e9b)
 
 3.配置用户级别的开机自启动脚本，实现开机后随机主机名，比秒克隆大批量出现冲突，自启动脚本配置如下
