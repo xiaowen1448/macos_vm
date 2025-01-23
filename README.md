@@ -131,10 +131,12 @@ extendedConfigFile = "macos10.15_1.vmxf"
 以上参数脚本会自动更改，实现每台虚拟机都是唯一的名字，避免虚拟机开机后会提示冲突
 批量复制完成会自动启动虚拟机，启动成功后自动执行安装重启脚本命令，执行重装，重装重启后实现kbjfrfpoJU唯一。
 脚本调用示例如下图
-![image](https://github.com/user-attachments/assets/9e9a969f-c307-46f5-acae-f55d04e2213b)
+![image](https://github.com/user-attachments/assets/76fe5b22-755b-42dc-bab8-187cfca38bab)
 
 开始批量自动重装示例
-![image](https://github.com/user-attachments/assets/e61770a7-6bc0-4ec1-92ff-268e94372dd1)
+
+![image](https://github.com/user-attachments/assets/bcc1fb0f-2424-488d-af1b-be7db249e116)
+
 
 使用使用namp扫描同网段获取macos的ip地址，免密登录，执行重启安装脚本,安装成功，继续执行disable_appleAlert.sh 禁用提示appleid  
 
