@@ -7,9 +7,9 @@ REM Set the storage path of the target VM
 set VM_BASE_PATH=%BASE_DIR%\..\NewVM
 set ISO_BASE_HOME=%BASE_DIR%\..\iso
 set IP_PATH=%BASE_DIR%\var_files
-set LOG_PATH=%BASE_DIR%\var_files
+set LOG_PATH=%BASE_DIR%\log
 REM Set the number of virtual machines that need to be created
-set VM_COUNT=2
+set VM_COUNT=3
 set VMRUN_PATH="C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe"
 set ssh_uname=wx
 rem  Random numbers start
@@ -21,7 +21,7 @@ rem  memory size
 set memsize="2048"
 set plist_path=%BASE_DIR%\..\plist\chengpin
 set plist_num=0
-del  log\run.log
+copy /y nul %LOG_PATH%\run.log >> %LOG_PATH%\run.log  2>&1
 REM Perform batch creation
 for /L %%i in (1,1,%VM_COUNT%) do (
     REM Create a new virtual machine directory
@@ -51,7 +51,7 @@ echo The IP address is being scanned, please wait ....................
 echo  Obtaining the IP address of the VM is in progress!......................
 rem :check
 rem  goto check 
-call get_vm_ip.bat
+call get_vm_ip.bat 30
 type %IP_PATH%\ip_list.txt
 echo Start executing scripts in batches  ............................
 rem  VM_COUNT  Number of virtual machines
@@ -63,6 +63,6 @@ for /f "tokens=* delims=" %%a in (%IP_PATH%\ip_list.txt) do (
 	scp %plist_path%\config_!plist_num!.plist  %ssh_uname%@%%a:/Volumes/EFI/CLOVER/config.plist  >> %LOG_PATH%\run.log  2>&1
 	start cmd /k ssh  -o StrictHostKeyChecking=no  %ssh_uname%@%%a  '/Users/%ssh_uname%/auto_install.sh'
 )
+echo  Obtaining the IP address of the VM is in progress!......................
 echo start revise kbjfrfpoJU ,Please wait  .................
-
 pause

@@ -6,12 +6,14 @@ REM Set the storage path of the target VM
 set VM_BASE_PATH=%BASE_DIR%\..\NewVM
 set IP_PATH=%BASE_DIR%\var_files
 set ISO_BASE_HOME=%BASE_DIR%\..\iso
-set LOG_PATH=%BASE_DIR%\log
+set LOG_PATH=%BASE_DIR%\var_files
 set plist_num=0
 copy /y nul %IP_PATH%\ip_list.txt  >> %LOG_PATH%\run.log   2>&1
 copy /y nul %IP_PATH%\vmx_list.txt  >> %LOG_PATH%\run.log   2>&1
 set VMRUN_PATH="C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe"
 REM vmx files path vmx_list.txt
+set var_time=%1
+echo %var_time%
 for /r "%VM_BASE_PATH%" %%f in (*.*) do (
 	if /i "%%~xf"==".vmx"  (
 	echo %%f >> %IP_PATH%\vmx_list.txt
@@ -33,7 +35,7 @@ for /f "delims=" %%a in (%IP_PATH%\vmx_list.txt) do (
 	echo !VAR_IP! >>  %IP_PATH%\ip_list.txt 
 	) else (
 	echo  Please wait the VM %%a to Restarting ! .............
-	timeout /t 10 >> %LOG_PATH%\run.log  2>&1  
+	timeout /t %var_time% >> %LOG_PATH%\run.log  2>&1  
 	goto check
 	)
 )
