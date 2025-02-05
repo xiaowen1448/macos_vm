@@ -6,7 +6,7 @@ rebuild_nvram.bat 重建虚拟机的nvram，也就是bios，更改为最初的cl
 
 disable_appleAlert.bat 重装后禁用appleid 登录提示框
 
-auto_Send_vmkey.bat 重装后自动登录失效，使用脚本实现自动登录，输入密码登录，只需执行一次，后续自动登录即生效
+auto_send_vmkey.bat 重装后自动登录失效，使用脚本实现自动登录，输入密码登录，只需执行一次，后续自动登录即生效
 
 get_vm_ip.bat 动态获取批量虚拟机的ip地址，一台失败即会影响所有的虚拟机ip地址获取，
 
