@@ -79,16 +79,20 @@ uuidgen  需要安装windows VisualStudio，安装选择c++桌面开发，或者
 C:\Users\wx>powershell -Command  [guid]::NewGuid()
 
 Guid
+
 ----
 fc2fdd4a-2d58-40a1-8dee-c996410daa18
+
 
 C:\Users\wx>
 
 
 C:\Users\wx>uuidgen
+
 48835612-b80d-4fc0-b02d-a74d55e14115
 
 C:\Users\wx>where uuidgen
+
 C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\uuidgen.exe
 
 C:\Users\wx>
