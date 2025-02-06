@@ -31,12 +31,12 @@ for /L %%i in (1,1,%VM_COUNT%) do (
     REM Copy the template VM file
 	echo Start cloning the virtual machine files please wait   .......................
     xcopy /E /I %TEMPLATE_PATH% !VM_DIR!  >> %LOG_PATH%\run.log  2>&1
-    echo  displayName = "macos10.15_%%i" >>  "!VM_DIR!\macos10.15.vmx"
-	echo  sata0:0.fileName = "macos10.15_%%i.vmdk"  >>  "!VM_DIR!\macos10.15.vmx"
-	echo  nvram = "macos10.15_%%i.nvram"  >>  "!VM_DIR!\macos10.15.vmx" 
-	echo  extendedConfigFile = "macos10.15_%%i.vmxf" >> "!VM_DIR!\macos10.15.vmx" 
+    echo displayName = "macos10.15_%%i" >>  "!VM_DIR!\macos10.15.vmx"
+	echo sata0:0.fileName = "macos10.15_%%i.vmdk"  >>  "!VM_DIR!\macos10.15.vmx"
+	echo nvram = "macos10.15_%%i.nvram"  >>  "!VM_DIR!\macos10.15.vmx" 
+	echo extendedConfigFile = "macos10.15_%%i.vmxf" >> "!VM_DIR!\macos10.15.vmx" 
 	echo sata0:1.fileName = "%ISO_BASE_HOME%\Installer_macOS_Catalina_10.15.7.iso"  >>  "!VM_DIR!\macos10.15.vmx" 
-	echo  memsize="2048" >> "!VM_DIR!\macos10.15.vmx"
+	echo memsize="2048" >> "!VM_DIR!\macos10.15.vmx"
 	move "!VM_DIR!\macos10.15.vmx" "!VM_DIR!\macos10.15_%%i.vmx"  >> %LOG_PATH%\run.log  2>&1
 	move "!VM_DIR!\macos10.15.vmdk" "!VM_DIR!\macos10.15_%%i.vmdk"  >> %LOG_PATH%\run.log  2>&1
 	move "!VM_DIR!\macos10.15.vmxf" "!VM_DIR!\macos10.15_%%i.vmxf" >> %LOG_PATH%\run.log  2>&1
