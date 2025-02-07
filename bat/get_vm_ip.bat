@@ -13,7 +13,7 @@ copy /y nul %IP_PATH%\vmx_list.txt  >> %LOG_PATH%\run.log   2>&1
 set VMRUN_PATH="C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe"
 REM vmx files path vmx_list.txt
 set var_time=%1
-echo %var_time%
+REM  echo %var_time%
 for /r "%VM_BASE_PATH%" %%f in (*.*) do (
 	if /i "%%~xf"==".vmx"  (
 	echo %%f >> %IP_PATH%\vmx_list.txt
