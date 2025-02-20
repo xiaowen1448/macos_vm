@@ -18,3 +18,5 @@ for /r "%VM_BASE_PATH%" %%f in (*.vmx) do (
     )
 )
 echo "All virtual machines have been started .............."
+
+pause
