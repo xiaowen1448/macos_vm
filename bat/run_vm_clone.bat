@@ -65,4 +65,13 @@ for /f "tokens=* delims=" %%a in (%IP_PATH%\ip_list.txt) do (
 )
 echo  Obtaining the IP address of the VM is in progress!......................
 echo start revise kbjfrfpoJU ,Please wait  .................
-pause
+rem  下一步，监控安装程序是否执行完毕，
+rem  安装程序执行完毕，系统是否在重启中
+REM 系统重启中大约二十分钟半小时间，花费
+REM 安装完成后，检测ip地址是否存在，ssh是否可以连接，Finder进程是否存在，进程存在表示安装已经执行完毕，可以进行下一步的操作了。
+
+REM  执行auto_send_vmkey.bat  实现自动登录，disable_appleAlert.bat 实现禁用appleid 提示
+REM rebuild_nvram.bat 用于设置clover为第一引导，（更改顺序为放到系统安装完毕之后执行，因为安装包后会更改引导顺序导致五码为VM开头的一串，
+rem  ）更改期间需要关闭系统，scp_plist.bat 实现自动更改五码，需要系统为开机状态。
+
+pause 
