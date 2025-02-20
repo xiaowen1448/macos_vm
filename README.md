@@ -108,11 +108,17 @@ C:\Users\wx>
 
 安装全新的macos虚拟机，并注入，clover或者Oencore引导，bios设置clover或者opencore引导为第一位，
 控制台端电脑需和macos模板虚拟机添加互信实现免密登录，远程免密拷贝文件，这样克隆出的虚拟机全都是互信。可实现批量免密控制
-添加自动执行脚本保存为sh，添加执行权限，例如
+添加自动执行脚本保存为sh，添加执行权限，脚本功能说明如下：
 
 auto_install.sh  脚本功能实现命令行超级权限执行重装macos ,重启后生效，已实现更改ju值
 
+auto_send_key.sh 自动登录macos脚本实现窗口自动输入用户名密码
+
 disable_appleAlert.sh    脚本实现重装后禁用appleid提示，重启后生效
+
+find_pgrep.sh 用于检测macos是否启动完成，检测Finder进程是否存在
+
+iMessageDebug 查看主机五码信息，及uuid信息
 
 mount_efi.sh  	脚本功能为实现挂载磁盘efi分区,更改config.plist 由scp远程实现
 
