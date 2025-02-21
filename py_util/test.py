@@ -6,7 +6,16 @@ import util_str
 vmrun="C:\\Program Files (x86)\\VMware\\VMware Workstation\\vmrun.exe"
 ssh_username="wx"
 sh_name="~/CGSSessionScreenLockedTime.sh"
+#此参数用于匹配安装后的maco登录窗体，如匹配成功则代表macos启动成功
 find_str="CGSSessionScreenLockedTime"
+
+'''
+find_pgrep.sh 用于匹配成品虚拟机启动成功，用于匹配进程Finder，有进程代表系统启动完毕。,如下执行输出示例
+PS D:\\macos_vm> ssh wx@192.168.119.156 '~/find_pgrep.sh'
+330
+PS D:\\macos_vm>
+'''
+
 if __name__ == "__main__":
     # 示例路径，替换为实际虚拟机文件路径
     directory = "D:\\macos_vm\\NewVM"  # 替换为你的目录路径
@@ -25,5 +34,7 @@ if __name__ == "__main__":
         #print(f"{str}===============")
         if str:
             print(f"匹配窗体时间戳成功，macos系统启动完毕可以登录")
+            #开始执行自动登录和禁用appleid提示
+            #，注入五码脚本，重建nvrm，
         else:
             print(f"没有匹配到窗体时间戳，macos系统未成功启动，请等待！")
