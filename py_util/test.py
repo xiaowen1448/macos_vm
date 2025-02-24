@@ -4,6 +4,7 @@ import util_ssh
 import util_cmd
 import util_str
 import time
+import sys
 vmrun="C:\\Program Files (x86)\\VMware\\VMware Workstation\\vmrun.exe"
 ssh_username="wx"
 sh_name_LockedTime="~/CGSSessionScreenLockedTime.sh"
@@ -43,6 +44,7 @@ def test():
                     # 此处为判断，重装后安装成功，匹配锁屏窗口
                     # 开始执行自动登录和禁用appleid提示
                     # ，注入五码脚本，重建nvrm，
+                    sys.exit()
                 else:
                     print(f"没有匹配到窗体时间戳，macos系统正在启动，请等待！")
                     # 此处为判断，执行安装脚本期间，匹配auto_install脚本进程，如存在则脚本正在执行，如ip不存活代表脚本执行成功，系统正在重启中
@@ -51,6 +53,7 @@ def test():
                     str = util_str.contains_substring(IOConsoleUsers, find_str_finder)
                     print(f"{str}")
                     print(f"匹配到Finder进程，macos系统已经自动登录")
+                    sys.exit()
 
             else:
                 print(f"❌ SSH 登录失败：十秒后重新尝试")
