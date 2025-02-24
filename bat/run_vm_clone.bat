@@ -65,4 +65,6 @@ for /f "tokens=* delims=" %%a in (%IP_PATH%\ip_list.txt) do (
 )
 echo  Obtaining the IP address of the VM is in progress!......................
 echo start revise kbjfrfpoJU ,Please wait  .................
+
+rem  执行重装后需要利用python判断远端auto_install进程是否存在和ip和ssh是否存活，ip消失后系统重启安装脚本则执行成功
 pause 
