@@ -1,16 +1,10 @@
-import subprocess
-import ipaddress
-def find_vm_ip(vmrun,vm_path):
-        try:
-            command = f'"{vmrun}"  getGuestIPAddress {vm_path}'
-            ip_address = subprocess.check_output(command, shell=True).decode().strip()
-            ipaddress.ip_address(ip_address)
-          #  print(f"获取虚拟机ip地址成功，")
-            return ip_address
-        except ValueError:
-         #   print(f"未知的IP地址，虚拟机正在启动")
-            return False
+import os
 
-
-
-
+def find_vmx_files(directory):
+    """遍历目录及其子目录，查找所有 .vmx 文件"""
+    vmx_files = []
+    for root, _, files in os.walk(directory):
+        for file in files:
+            if file.endswith(".vmx"):
+                vmx_files.append(os.path.join(root, file))
+    return vmx_files

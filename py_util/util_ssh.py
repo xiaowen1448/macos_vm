@@ -1,5 +1,4 @@
 import subprocess
-import test
 def test_ssh_with_command(host, username):
     """使用系统 ssh 命令测试 SSH 登录"""
     try:
