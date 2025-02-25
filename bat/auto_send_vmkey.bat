@@ -24,7 +24,7 @@ set plist_num=0
 echo  Obtaining the IP address of the VM is in progress!......................
 rem :check
 rem  goto check 
-copy /y nul %IP_PATH%\ip_list.txt  >> %LOG_PATH%\run.log  2>&1  
+copy /y nul %IP_PATH%\ip_list.txt  >> %LOG_PATH%\run.log  2>&1
 call get_vm_ip.bat
 type %IP_PATH%\ip_list.txt
 echo Start executing scripts in batches  ............................
@@ -35,5 +35,3 @@ for /f "tokens=* delims=" %%a in (%IP_PATH%\ip_list.txt) do (
 	ssh  -o StrictHostKeyChecking=no  %ssh_uname%@%%a   '/Users/%ssh_uname%/auto_send_key.sh'  >> %LOG_PATH%\run.log  2>&1  
 )
 echo auto_Send_vmkey is done  !...............
-
-pause  

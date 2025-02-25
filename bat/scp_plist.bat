@@ -40,5 +40,3 @@ rem  	scp %plist_path%\config_%plist_num%.plist  %ssh_uname%@%%a:/Volumes/EFI/CL
     scp %plist_path%\config_!plist_num!.plist  %ssh_uname%@!scp_ip!:/Volumes/EFI/CLOVER/config.plist
 )
  echo All plist files are copied!...............
-
- pause

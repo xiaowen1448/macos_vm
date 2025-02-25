@@ -25,4 +25,4 @@ for /r "%VM_BASE_PATH%" %%f in (*.*) do (
 )
 call start_all_vms.bat
 echo  "All virtual machines NVRM have been rebuilt ..............""
-pause 
+

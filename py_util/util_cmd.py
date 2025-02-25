@@ -20,7 +20,7 @@ def execute_ssh_command(host, username, command):
         if output:
             print(f"输出:\n{output}")
         if error:
-            print(f"错误:\n{error}")
+            print(f"输出2:\n{output}")
 
         return output, error
 
