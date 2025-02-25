@@ -19,8 +19,9 @@ str_disable_appleAlert="~/disable_appleAlert.sh"
 str_auto_send_vmkey="~/auto_send_key.sh"
 str_reboot="~/reboot.sh"
 str_mount_efi="~/mount_efi.sh"
+plist_num=1
 remote_plist_dir="/Volumes/EFI/CLOVER/config.plist"
-local_plist_dir="D:\\macos_vm\\plist\\chengpin\\config_1.plist"
+local_plist_dir=f"D:\\macos_vm\\plist\\chengpin\\config_{plist_num}.plist"
 temp_nvramfiles="D:\\macos_vm\\TemplateVM\\macos10.15\\macos10.15.nvram"
 '''
 
@@ -71,7 +72,7 @@ def test():
                     file_local_path = f"D:\\macos_vm\\plist\\chengpin\\config_{inum}.plist"
                     print(f"{file_local_path}=======================")
                     remote_file_path = "/Volumes/EFI/CLOVER/config.plist"
-                    util_scp_plist.scp_plist(vm_ip, ssh_username, local_plist_dir, remote_plist_dir)
+                    util_scp_plist.scp_plist(vm_ip, ssh_username, file_local_path, remote_plist_dir)
                     #停止虚拟机\
                     print(f"{vm_path.replace("vmx","nvram")}")
                     util_vmx_ctrl.ctrl_vm(vmrun,"stop",vm_path)
@@ -100,7 +101,6 @@ def test():
                         # 整个for循环未执行完毕，仍然错误，代表虚拟机无法获取ip，继续执行剩余for循环
                         print(f"{inum}------------------------{for_len}")
                         continue
-
             else:
                 print(f"❌ 虚拟机{vmx}系统 SSH 登录失败：十秒后重新尝试")
                 time.sleep(4)
