@@ -11,16 +11,15 @@ sh_name_finder="~/find_pgrep.sh"
 find_str_finder="finder"
 
 '''
-find_pgrep.sh 用于匹配成品虚拟机启动成功，用于匹配进程Finder，有进程代表系统启动完毕。,如下执行输出示例
-PS D:\\macos_vm> ssh wx@192.168.119.156 '~/find_pgrep.sh'
-330
-PS D:\\macos_vm>
+函数测试主要实现，判断执行auto_install.sh 后判断ip是否存活需要执行test2.py ，如存活代表脚本正在执行未完成，如不存活，代表脚本执行完毕
+macos  开始重启部署步骤中，第二步骤需要执test.py 判断锁屏窗体是否获取，如未获取，则安装进程未完成，如获取，则安装进程已完成，可以执行登录。
+test.py 为默认的没四秒执行一个for循环体，动态获取虚拟机macos的窗口体，直到全部列表虚拟机获取到，for循环执行结束
 '''
 
 def test2():
     # 示例路径，替换为实际虚拟机文件路径
     directory = "D:\\macos_vm\\NewVM"  # 替换为你的目录路径
-    vmx_files = util_vmx.find_vmx_files(directory)
+    vmx_files = util_vmx.find_vmx_files(directory,".vmx")
     # 输出所有找到的 .vmx 文件
     inum = 0
     for_len = len(vmx_files)
@@ -47,11 +46,12 @@ def test2():
             if for_len == inum:
                 # 整个for循环执行完毕，仍然错误，代表虚拟机无法获取ip，整个for循环全部重新执行
                 print(f"{inum}====================={for_len}")
-                test2()
+                continue
             else:
                 # 整个for循环未执行完毕，仍然错误，代表虚拟机无法获取ip，继续执行剩余for循环
                 print(f"{inum}------------------------{for_len}")
                 continue
+
 test2()
 
 
