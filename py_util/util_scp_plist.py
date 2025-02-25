@@ -7,7 +7,7 @@ def scp_plist(host, username,file_local_path,remote_file_path):
             check=True
         )
         if result.returncode == 0:
-            print(f"拷贝文件成功")
+            print(f"拷贝文件成功,拷贝命令如下:{result}")
             return True
         else:
             print(f"{result}++++++++++++++")
