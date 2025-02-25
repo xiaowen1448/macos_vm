@@ -37,4 +37,3 @@ for /f "tokens=* delims=" %%a in (%IP_PATH%\ip_list.txt) do (
 )
 echo disable_appleAlert is   done  !...............
 
-pause  
