@@ -4,4 +4,8 @@ cd  /d ..\plist\
 rem  开始读取五码配置文件，开始批量生成成品plist
 call   ..\plist\run_plist.bat
 rem  开始执行自动克隆，更改ju值，分配五码
+
+cd  /d ..\bat
+call   ..\bat\run_vm_clone.bat
+
 python  test.py
