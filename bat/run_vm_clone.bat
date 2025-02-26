@@ -68,6 +68,6 @@ echo start revise kbjfrfpoJU ,Please wait  .................
 
 rem 执行安装后调用ip监控脚本test2.py
 rem 如ip不存活代表虚拟机已经执行安装脚本完毕，则开始执行test.py
-python ..\py_util\test2.py
+rem python ..\py_util\test2.py
 python ..\py_util\test.py
 rem  执行重装后需要利用python判断远端auto_install进程是否存在和ip和ssh是否存活，ip消失后系统重启安装脚本则执行成功

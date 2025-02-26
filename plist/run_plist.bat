@@ -8,7 +8,8 @@ REM   读取原始文本五码文件
 REM :846878D3B2B4:FV984520CNDHWVQDY:FVFXP1HVHV22:Mac-B4831CEBD52A0C4C:MacBookPro14,1:
 REM  Model: $1 , Board-id:$2 , SerialNumber:$3   ,CustomUUID:$4 ,ROM:$5 , MLB:$6  ,SmUUID:$7
 set count=0
-   for /f "tokens=* delims=" %%a in (5.txt) do (
+echo %BASE_DIR%
+   for /f "tokens=* delims=" %%a in (%BASE_DIR%\5.txt) do (
 	REM  $2 :ROM ,$3:BoardSerialNumber,$4:SerialNumber,$5:Board-id,$6:Model
 	rem sed "s/$1/MacBookPro14,1/" test.txt
 	rem  echo The first column is: %RESULT%
@@ -70,6 +71,6 @@ set count=0
 	
 	 REM delete  sed temp files 
  )
-echo   All Config files Written done ..................
-pause
+echo    total of  %count%  plist files have been generated ..................
+
 
