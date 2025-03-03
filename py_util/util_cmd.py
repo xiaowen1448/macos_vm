@@ -9,27 +9,29 @@ def execute_ssh_command(host, username, command):
     try:
         # 使用用户名和密码连接到远程主机
         client.connect(hostname=host, username=username, timeout=5)
-
         # 执行命令
         stdin, stdout, stderr = client.exec_command(command)
-
         # 获取命令输出
         output = stdout.read().decode()  # 获取命令输出
         error = stderr.read().decode()  # 获取错误输出
-
         if output:
-            print(f"输出:\n{output}")
+            #print(f"输出:\n{output}")
+            inum=1
         if error:
-            print(f"输出2:\n{output}")
+           # print(f"输出2:\n{output}")
+           inum = 1
 
         return output, error
 
     except paramiko.AuthenticationException:
-        print("❌ SSH 认证失败，用户名或密码错误")
+       # print("❌ SSH 认证失败，用户名或密码错误")
+        return ""
     except paramiko.SSHException as e:
-        print(f"⚠️ SSH 连接错误: {e}")
+       # print(f"⚠️ SSH 连接错误: {e}")
+        return ""
     except Exception as e:
-        print(f"❌ 连接失败: {e}")
+        #print(f"❌ 连接失败: {e}")
+        return ""
     finally:
         client.close()
 
