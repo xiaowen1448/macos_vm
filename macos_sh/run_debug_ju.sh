@@ -1,0 +1,1 @@
+yes | ~/Desktop/iMessageDebug | grep -i -w kbjfrfpoJU | awk '{print$2}'

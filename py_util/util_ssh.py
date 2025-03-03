@@ -9,9 +9,9 @@ def test_ssh_with_command(host, username):
         if result.returncode == 0:
             return True
         else:
-            return False
+            return ""
     except Exception as e:
         print(f"❌ 连接失败:")
-    return False
+    return ""
 # 示例调用
 # test_ssh_with_command("192.168.1.100", "user")
