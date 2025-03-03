@@ -11,20 +11,22 @@ import shutil
 import util_scp_plist
 import re
 import  json
+import util_str
 vmrun="C:\\Program Files (x86)\\VMware\\VMware Workstation\\vmrun.exe"
 ssh_username="wx"
 sh_user_home=f"/Users/{ssh_username}"
-str_CGSSessionScreenLockedTime="~/CGSSessionScreenLockedTime.sh"
 #此参数用于匹配安装后的maco登录窗体，如匹配成功则代表macos启动成功
 str_LockedTime="CGSSessionScreenLockedTime"
 str_finder=f"{sh_user_home}/find_pgrep.sh"
 #此参数用于匹配安装后的maco登录窗体，如匹配成功则代表macos启动成功
+str_CGSSessionScreenLockedTime=f"{sh_user_home}/CGSSessionScreenLockedTime.sh"
 str_disable_appleAlert=f"{sh_user_home}/disable_appleAlert.sh"
 str_auto_send_vmkey=f"{sh_user_home}/auto_send_key.sh"
 str_reboot=f"{sh_user_home}/reboot.sh"
 str_mount_efi=f"{sh_user_home}/mount_efi.sh"
 str_run_debug_sn=f"{sh_user_home}/run_debug_sn.sh"
 str_run_debug_ju=f"{sh_user_home}/run_debug_ju.sh"
+str_run_debug_install=f"{sh_user_home}/find_startosinstall.sh"
 plist_num=1
 remote_plist_dir="/Volumes/EFI/CLOVER/config.plist"
 local_plist_dir=f"D:\\macos_vm\\plist\\chengpin\\config_{plist_num}.plist"
@@ -86,21 +88,25 @@ def json_runlist_allvmips():
     vmx_files = util_vmx.find_vmx_files(vm_directory, ".vmx")
     inum = 0
     for_len = len(vmx_files)
-    # 输出所有找到的 .vmx 文件vmx_files = util_vmx.find_vmx_files(directory,".vmx")
-    for vmx in vmx_files:
-        vm_ip = run_list_vmip(vmx)
-        str_vmx=vmx.split("\\")[-1]
-        if run_list_vmip(vmx):
-          #  print(f"虚拟机VM_{inum}获取ip成功")
-            data_vms[str_vmx] = vm_ip
+    if for_len==0:
+        print(f"获取虚拟机文件失败，未找到虚拟机配置文件！")
+    else:
+        # 输出所有找到的 .vmx 文件vmx_files = util_vmx.find_vmx_files(directory,".vmx")
+        for vmx in vmx_files:
+            vm_ip = run_list_vmip(vmx)
+            str_vmx = vmx.split("\\")[-1]
+            if run_list_vmip(vmx):
+                #  print(f"虚拟机VM_{inum}获取ip成功")
+                data_vms[str_vmx] = vm_ip
 
-        else:
-          #  print(f"虚拟机VM_{inum}获取ip失败")
-            data_vms[str_vmx] = vm_ip
-    data = {"data": data_vms}
-    json_str = json.dumps(data, indent=4)
-    print(f"虚拟机获取IP,返回结果:{json_str}")
-    return json_str
+            else:
+                #  print(f"虚拟机VM_{inum}获取ip失败")
+                data_vms[str_vmx] = vm_ip
+        data = {"data": data_vms}
+        json_str = json.dumps(data, indent=4)
+        print(f"虚拟机获取IP,返回结果:{json_str}")
+        return json_str
+
 
 
 '''
@@ -112,69 +118,176 @@ def  json_ssh_debug():
     data_vms = {}
     vmx_files = util_vmx.find_vmx_files(vm_directory, ".vmx")
     for_len = len(vmx_files)
-    # 输出所有找到的 .vmx 文件vmx_files = util_vmx.find_vmx_files(directory,".vmx")
-    for vmx in vmx_files:
-        vm_ip = util_ip.find_vm_ip(vmrun, vmx)
-        # 获取序列号信息
-        ssh_str = util_ssh.test_ssh_with_command(vm_ip, ssh_username)
-        data_vms[vmx.split("\\")[-1]] = ssh_str
-    data = {"data": data_vms}
-    json_str = json.dumps(data, indent=4)
-    print(f"虚拟机获取SSH登录,返回结果:{json_str}")
-    return json_str
+    if for_len == 0:
+        print(f"获取虚拟机文件失败，未找到虚拟机配置文件！")
+    else:
+        # 输出所有找到的 .vmx 文件vmx_files = util_vmx.find_vmx_files(directory,".vmx")
+        for vmx in vmx_files:
+            vm_ip = util_ip.find_vm_ip(vmrun, vmx)
+            # 获取序列号信息
+            ssh_str = util_ssh.test_ssh_with_command(vm_ip, ssh_username)
+            data_vms[vmx.split("\\")[-1]] = ssh_str
+        data = {"data": data_vms}
+        json_str = json.dumps(data, indent=4)
+        print(f"虚拟机获取SSH登录,返回结果:{json_str}")
+        return json_str
+
 
 #macos 获取所有虚拟机序列号json串
 def json_sn_debug():
     data_vms = {}
     vmx_files = util_vmx.find_vmx_files(vm_directory, ".vmx")
     for_len = len(vmx_files)
-    # 输出所有找到的 .vmx 文件vmx_files = util_vmx.find_vmx_files(directory,".vmx")
-    for vmx in vmx_files:
-        str_vmx = vmx.split("\\")[-1]
-        vm_ip = util_ip.find_vm_ip(vmrun, vmx)
-        #获取序列号信息
-        str_debug = re.sub(r"\n", "", " ".join(util_cmd.execute_ssh_command(vm_ip, ssh_username, str_run_debug_sn)))
-        data_vms[str_vmx] = str_debug
-    data = {"data": data_vms}
-    json_str = json.dumps(data, indent=4)
-    print(f"虚拟机获取SN信息,返回结果:{json_str}")
-    return json_str
+    if for_len == 0:
+        print(f"获取虚拟机文件失败，未找到虚拟机配置文件！")
+    else:
+
+        # 输出所有找到的 .vmx 文件vmx_files = util_vmx.find_vmx_files(directory,".vmx")
+        for vmx in vmx_files:
+            str_vmx = vmx.split("\\")[-1]
+            vm_ip = util_ip.find_vm_ip(vmrun, vmx)
+            #获取序列号信息
+            str_debug = re.sub(r"\n", "", " ".join(util_cmd.execute_ssh_command(vm_ip, ssh_username, str_run_debug_sn)))
+            data_vms[str_vmx] = str_debug
+        data = {"data": data_vms}
+        json_str = json.dumps(data, indent=4)
+        print(f"虚拟机获取SN信息,返回结果:{json_str}")
+        return json_str
 
 #macos 获取所有虚拟机JU值json串
 def json_ju_debug():
     data_vms = {}
     vmx_files = util_vmx.find_vmx_files(vm_directory, ".vmx")
     for_len = len(vmx_files)
-    # 输出所有找到的 .vmx 文件vmx_files = util_vmx.find_vmx_files(directory,".vmx")
-    for vmx in vmx_files:
-        str_vmx = vmx.split("\\")[-1]
-        vm_ip = util_ip.find_vm_ip(vmrun, vmx)
-        #获取序列号信息
-        str_debug = re.sub(r"\n", ""," ".join(util_cmd.execute_ssh_command(vm_ip, ssh_username, str_run_debug_ju)))
-        data_vms[str_vmx] = str_debug
-    data = {"data": data_vms}
-    json_str = json.dumps(data, indent=4)
-    print(f"虚拟机获取JU信息,返回结果:{json_str}")
-    return json_str
+    if for_len == 0:
+        print(f"获取虚拟机文件失败，未找到虚拟机配置文件！")
+    else:
+        # 输出所有找到的 .vmx 文件vmx_files = util_vmx.find_vmx_files(directory,".vmx")
+        for vmx in vmx_files:
+            str_vmx = vmx.split("\\")[-1]
+            vm_ip = util_ip.find_vm_ip(vmrun, vmx)
+            #获取序列号信息
+            str_debug = re.sub(r"\n", ""," ".join(util_cmd.execute_ssh_command(vm_ip, ssh_username, str_run_debug_ju)))
+            data_vms[str_vmx] = str_debug
+        data = {"data": data_vms}
+        json_str = json.dumps(data, indent=4)
+        print(f"虚拟机获取JU信息,返回结果:{json_str}")
+        return json_str
 
+#匹配finder进程，用户获取桌面登录
 def json_finder_debug():
     data_vms = {}
     vmx_files = util_vmx.find_vmx_files(vm_directory, ".vmx")
+    for_len = len(vmx_files)
     # 输出所有找到的 .vmx 文件vmx_files = util_vmx.find_vmx_files(directory,".vmx")
-    for vmx in vmx_files:
-        str_vmx = vmx.split("\\")[-1]
-        vm_ip = util_ip.find_vm_ip(vmrun, vmx)
-        # 获取序列号信息
-        str_debug = " ".join(util_cmd.execute_ssh_command(vm_ip, ssh_username, str_finder)).replace("\n", "")
-        data_vms[str_vmx] = str_debug
-    data = {"data": data_vms}
-    json_str = json.dumps(data, indent=4)
-    print(f"虚拟机获取Finder进程信息,返回结果:{json_str}")
-    return json_str
+    if for_len == 0:
+        print(f"获取虚拟机文件失败，未找到虚拟机配置文件！")
+    else:
+        for vmx in vmx_files:
+            str_vmx = vmx.split("\\")[-1]
+            vm_ip = util_ip.find_vm_ip(vmrun, vmx)
+            # 获取序列号信息
+            str_debug = " ".join(util_cmd.execute_ssh_command(vm_ip, ssh_username, str_finder)).replace("\n", "")
+            data_vms[str_vmx] = str_debug
+        data = {"data": data_vms}
+        json_str = json.dumps(data, indent=4)
+        print(f"虚拟机获取Finder进程信息,返回结果:{json_str}")
+        return json_str
+#匹配锁屏进程，用户获取桌面登录，返回匹配锁屏窗口，匹配成功则返回true，否则则返回false
+def json_locker_debug():
+    data_vms = {}
+    vmx_files = util_vmx.find_vmx_files(vm_directory, ".vmx")
+    for_len = len(vmx_files)
+    # 输出所有找到的 .vmx 文件vmx_files = util_vmx.find_vmx_files(directory,".vmx")
+    if for_len == 0:
+        print(f"获取虚拟机文件失败，未找到虚拟机配置文件！")
+    else:
+        for vmx in vmx_files:
+            str_vmx = vmx.split("\\")[-1]
+            vm_ip = util_ip.find_vm_ip(vmrun, vmx)
+            # 获取序列号信息
+            str_finder_ps= (" ".join(util_cmd.execute_ssh_command(vm_ip, ssh_username, str_CGSSessionScreenLockedTime)))
+                         #str.replace("\n", "")
+            str_debug = util_str.contains_substring(str_finder_ps, str_LockedTime)
+            data_vms[str_vmx] = str_debug
+        data = {"data": data_vms}
+        json_str = json.dumps(data, indent=4)
+        print(f"虚拟机获取CGSSessionScreenLockedTime进程信息,返回结果:{json_str}")
+        return json_str
+#匹配自动安装进程，如匹配到正在安装，如无匹配或者无法联通则代表，安装成功正在重启
+def json_installer_debug():
+    data_vms = {}
+    vmx_files = util_vmx.find_vmx_files(vm_directory, ".vmx")
+    for_len = len(vmx_files)
+    if for_len == 0:
+        print(f"获取虚拟机文件失败，未找到虚拟机配置文件！")
+    else:
+        # 输出所有找到的 .vmx 文件vmx_files = util_vmx.find_vmx_files(directory,".vmx")
+        for vmx in vmx_files:
+            str_vmx = vmx.split("\\")[-1]
+            vm_ip = util_ip.find_vm_ip(vmrun, vmx)
+            # 获取序列号信息
+            str_debug = " ".join(util_cmd.execute_ssh_command(vm_ip, ssh_username, str_run_debug_install)).replace("\n", "")
+            data_vms[str_vmx] = str_debug
+        data = {"data": data_vms}
+        json_str = json.dumps(data, indent=4)
+        print(f"虚拟机获取startinstall进程信息,返回结果:{json_str}")
+        return json_str
+
+#动态监控虚拟机ip是否存活，五秒后重新尝试，执行完安装脚本后开始检测，如ip存活代表正在安装，不存活则安装成功，正在重启中
+def run_auto_list_vmip_off():
+    data_ip = json_runlist_allvmips()
+    data = json.loads(data_ip)
+    inum = 0
+    len_str = len(data["data"].items())
+    for key, value in data["data"].items():
+        inum = inum + 1
+        # print(f"虚拟机{key},ip地址:{value}")
+        if value:
+
+            if inum < len_str:
+                print(f"虚拟机{key},ip地址:{value}获取成功,虚拟机正在执行安装中，")
+                continue
+            else:
+                print(f"虚拟机{key},ip地址:{value}虚拟机正在执行安装中,五秒重新尝试")
+                sleep(5)
+                run_auto_list_vmip_off()
+        else:
+            if inum < len_str:
+                print(f"虚拟机{key},脚本执行成功，正在重启等下安装进程")
+                continue
+            else:
+                print(f"虚拟机{key},脚本执行成功，正在重启等下安装进程,五秒后重新执行ip地址检测....")
+                return True
+
+
+#动态监控虚拟机ip是否存活，五秒后重新尝试，
+def run_auto_lsit_vmip():
+    data_ip = json_runlist_allvmips()
+    data = json.loads(data_ip)
+    inum=0
+    len_str=len(data["data"].items())
+    for key, value in data["data"].items():
+        inum = inum + 1
+        #print(f"虚拟机{key},ip地址:{value}")
+        if value:
+            if inum < len_str:
+                print(f"虚拟机{key},ip地址:{value}获取成功")
+                continue
+            else:
+                print(f"虚拟机{key},ip地址:{value}获取成功")
+                return True
+        else:
+            if inum<len_str:
+                print(f"虚拟机{key},ip地址:{value},获取失败！,五秒钟后重新尝试获取....")
+                continue
+            else:
+                sleep(5)
+                print(f"虚拟机{key},ip地址:{value},获取失败！,五秒钟后重新尝试获取....")
+                run_auto_lsit_vmip()
 
 def run00():
     f_string_array = []#安装完毕的数组，和为安装完毕的数组
-    vm_directory = "D:\\macos_vm\\NewVM"  # 替换为你的目录路径
     vmx_files = util_vmx.find_vmx_files(vm_directory, ".vmx")
     inum = 0
     for_len = len(vmx_files)
@@ -188,6 +301,8 @@ def run00():
             f_string_array.extend([False])
     print(f"虚拟机vmx，正在执行脚本安装,返回结果:{f_string_array}")
     return  f_string_array
+
+
 
 
 def test():
@@ -271,27 +386,9 @@ def test():
                 print(f"{inum}------------------------{for_len}")
                 continue
 
-#获取ip地址存活信息，数组内容为ip地址或者false
-def run01():
-    f_string_array = []#安装完毕的数组，和为安装完毕的数组
-    vmx_files = util_vmx.find_vmx_files(vm_directory, ".vmx")
-    inum=0
-    for_len = len(vmx_files)
-    # 输出所有找到的 .vmx 文件vmx_files = util_vmx.find_vmx_files(directory,".vmx")
-    for vmx in vmx_files:
-        vm_ip=run_list_vmip(vmx)
-        if run_list_vmip(vmx):
-            print(f"虚拟机VM_{inum}获取ip成功")
-            f_string_array.extend([vm_ip])
-        else:
-            print(f"虚拟机VM_{inum}获取ip失败")
-            f_string_array.extend([False])
-    print(f"虚拟机获取IP,返回结果:{f_string_array}")
-    return  f_string_array
-
 def run03():
     #列出虚拟机ip
-    json_runlist_allvmips()
+    data_ip=json_runlist_allvmips()
     #列出ssh登录返回值
     json_ssh_debug()
     #列出序列号
@@ -301,6 +398,24 @@ def run03():
     #列出finder进程信息
     json_finder_debug()
 
+    #匹配autoinstall进程
+    json_installer_debug()
+    #判断数组值是否相同
+    #
+   # data=json.loads(data_ip)
+    run_auto_lsit_vmip()
 
-run03()
+def run04():
+   if run_auto_list_vmip_off():
+       print(f"全部虚拟机安装脚本执行成功!")
+       if run_auto_lsit_vmip():
+           print(f"全部虚拟机ip地址已经获取成功!")
+       else:
+           print("其他！")
+   else:
+       print("其他2！")
 
+json_finder_debug()
+json_locker_debug()
+json_ju_debug()
+json_sn_debug()
