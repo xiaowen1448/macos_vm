@@ -1,1 +1,1 @@
-ps aux | grep -i finder.app | grep -v grep
+pgrep -x Finder
