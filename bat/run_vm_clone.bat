@@ -21,7 +21,37 @@ rem  memory size
 set memsize="2048"
 set plist_path=%BASE_DIR%\..\plist\chengpin
 set plist_num=0
-
+copy /y nul %LOG_PATH%\run.log >> %LOG_PATH%\run.log  2>&1
+REM Perform batch creation
+for /L %%i in (1,1,%VM_COUNT%) do (
+    REM Create a new virtual machine directory
+    set VM_DIR=%VM_BASE_PATH%\VM_%%i
+	set /a sum=!sum!+%%i
+    mkdir !VM_DIR!
+    REM Copy the template VM file
+	echo Start cloning the virtual machine files please wait   .......................
+    xcopy /E /I %TEMPLATE_PATH% !VM_DIR!  >> %LOG_PATH%\run.log  2>&1
+    echo displayName = "macos10.15_%%i" >>  "!VM_DIR!\macos10.15.vmx"
+	echo sata0:0.fileName = "macos10.15_%%i.vmdk"  >>  "!VM_DIR!\macos10.15.vmx"
+	echo nvram = "macos10.15_%%i.nvram"  >>  "!VM_DIR!\macos10.15.vmx" 
+	echo extendedConfigFile = "macos10.15_%%i.vmxf" >> "!VM_DIR!\macos10.15.vmx" 
+	echo sata0:1.fileName = "%ISO_BASE_HOME%\Installer_macOS_Catalina_10.15.7.iso"  >>  "!VM_DIR!\macos10.15.vmx" 
+	echo memsize="2048" >> "!VM_DIR!\macos10.15.vmx"
+	move "!VM_DIR!\macos10.15.vmx" "!VM_DIR!\macos10.15_%%i.vmx"  >> %LOG_PATH%\run.log  2>&1
+	move "!VM_DIR!\macos10.15.vmdk" "!VM_DIR!\macos10.15_%%i.vmdk"  >> %LOG_PATH%\run.log  2>&1
+	move "!VM_DIR!\macos10.15.vmxf" "!VM_DIR!\macos10.15_%%i.vmxf" >> %LOG_PATH%\run.log  2>&1
+	move "!VM_DIR!\macos10.15.nvram" "!VM_DIR!\macos10.15_%%i.nvram" >> %LOG_PATH%\run.log  2>&1
+    echo Created VM_%%i at !VM_DIR!
+	echo "Starting  launching virtual machines VM_%%i , please wait   ......................."
+	%VMRUN_PATH%  start  !VM_DIR!\macos10.15_%%i.vmx 
+	rem   nogui
+)
+echo All virtual machines have been created and are waiting to be started ...................  
+echo The IP address is being scanned, please wait .................... 
+echo  Obtaining the IP address of the VM is in progress!......................
+rem :check
+rem  goto check 
+call get_vm_ip.bat 30
 type %IP_PATH%\ip_list.txt
 echo Start executing scripts in batches  ............................
 rem  VM_COUNT  Number of virtual machines

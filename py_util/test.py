@@ -1,11 +1,8 @@
-from contextlib import nullcontext
 from time import sleep
-
 import util_vmx
 import util_ip
 import util_ssh
 import util_cmd
-import util_str
 import time
 import util_vmx_ctrl
 import shutil
@@ -13,8 +10,6 @@ import util_scp_plist
 import re
 import  json
 import util_str
-from py_util.util_ju_all_unique import are_all_unique
-
 vmrun="C:\\Program Files (x86)\\VMware\\VMware Workstation\\vmrun.exe"
 ssh_username="wx"
 sh_user_home=f"/Users/{ssh_username}"
@@ -30,6 +25,8 @@ str_mount_efi=f"{sh_user_home}/mount_efi.sh"
 str_run_debug_sn=f"{sh_user_home}/run_debug_sn.sh"
 str_run_debug_ju=f"{sh_user_home}/run_debug_ju.sh"
 str_run_debug_install=f"{sh_user_home}/find_startosinstall.sh"
+str_auto_send_key=f"{sh_user_home}/auto_send_key.sh"
+str_caff=f"{sh_user_home}/caff.sh"
 plist_num=1
 remote_plist_dir="/Volumes/EFI/CLOVER/config.plist"
 local_plist_dir=f"D:\\macos_vm\\plist\\chengpin\\config_{plist_num}.plist"
@@ -111,6 +108,65 @@ def json_runlist_allvmips():
         print(f"虚拟机获取IP,返回结果:{json_str}")
         return json_str
 
+#此函数用于发送唤醒 Mac 显示器，避免执行自动脚本返回失败。
+def caff():
+    data_vms = {}
+    caff_ary=[]
+    caff_flag=False
+    vmx_files = util_vmx.find_vmx_files(vm_directory, ".vmx")
+    for_len = len(vmx_files)
+    if for_len == 0:
+        print(f"获取虚拟机文件失败，未找到虚拟机配置文件！")
+    else:
+        # 输出所有找到的 .vmx 文件vmx_files = util_vmx.find_vmx_files(directory,".vmx")
+        for vmx in vmx_files:
+            str_vmx = vmx.split("\\")[-1]
+            vm_ip = util_ip.find_vm_ip(vmrun, vmx)
+            # 获取序列号信息
+            str_debug = re.sub(r"\n", "","".join(util_cmd.execute_ssh_command(vm_ip, ssh_username, str_caff)))
+            data_vms[str_vmx] = str_debug
+            caff_ary.append(str_debug)
+        data = {"data": data_vms}
+        json_str = json.dumps(data, indent=4)
+        print(f"虚拟机执行唤醒显示器caff,返回结果:{caff_ary}")
+        if all(item == "0" for item in caff_ary):
+            caff_flag=True
+            print(f"虚拟机执行唤醒显示器caff,执行成功")
+        else:
+            print(f"虚拟机执行唤醒显示器caff,执行失败")
+        return caff_flag
+#此函数用于发送虚拟机自动按键实现锁屏，解锁
+def auto_send_keys():
+    data_vms = {}
+    keys_ary=[]
+    keys_flag=False
+    vmx_files = util_vmx.find_vmx_files(vm_directory, ".vmx")
+    for_len = len(vmx_files)
+    if for_len == 0:
+        print(f"获取虚拟机文件失败，未找到虚拟机配置文件！")
+    else:
+
+        # 输出所有找到的 .vmx 文件vmx_files = util_vmx.find_vmx_files(directory,".vmx")
+        for vmx in vmx_files:
+            str_vmx = vmx.split("\\")[-1]
+            vm_ip = util_ip.find_vm_ip(vmrun, vmx)
+            # 获取序列号信息
+            str_debug = re.sub(r"\n", "", "".join(util_cmd.execute_ssh_command(vm_ip, ssh_username, str_auto_send_key)))
+            data_vms[str_vmx] = str_debug
+            keys_ary.append(str_debug)
+        data = {"data": data_vms}
+        json_str = json.dumps(data, indent=4)
+        print(f"虚拟机执行auto_keys,返回结果:{keys_ary}")
+        if all(item == "0" for item in keys_ary):
+            print(f"虚拟机keys脚本执行成功")
+            keys_flag=True
+        else:
+            print(f"虚拟机keys脚本执行失败")
+        return keys_flag
+
+
+#此函数用于发送脚本实现禁用appleid
+#def dis_appleid():
 
 
 '''
@@ -185,9 +241,15 @@ def json_ju_debug():
         print(f"虚拟机获取JU信息,返回结果:{json_str}")
         return json_str
 
+
+def all_not_empty(arr):
+    return all(arr)
+
 #匹配finder进程，用户获取桌面登录
 def json_finder_debug():
     data_vms = {}
+    finder_ary=[]
+    data_flag=False
     vmx_files = util_vmx.find_vmx_files(vm_directory, ".vmx")
     for_len = len(vmx_files)
     # 输出所有找到的 .vmx 文件vmx_files = util_vmx.find_vmx_files(directory,".vmx")
@@ -200,13 +262,23 @@ def json_finder_debug():
             # 获取序列号信息
             str_debug = "".join(util_cmd.execute_ssh_command(vm_ip, ssh_username, str_finder)).replace("\n", "")
             data_vms[str_vmx] = str_debug
-        data = {"data": data_vms}
-        json_str = json.dumps(data, indent=4)
-        print(f"虚拟机获取Finder进程信息,返回结果:{json_str}")
-        return json_str
+            finder_ary.append(str_debug)
+       # data = {"data": data_vms}
+       # json_str = json.dumps(data, indent=4)
+        print(f"虚拟机获取Finder进程信息,返回结果:{finder_ary}")
+        if all_not_empty(finder_ary):
+            print(f"全部虚拟机获取Finder进程信息成功!")
+            data_flag = True
+        else:
+            print(f"部分虚拟机获取Finder进程信息成功失败!")
+            sleep(5)
+            json_finder_debug()
+        return data_flag
 #匹配锁屏进程，用户获取桌面登录，返回匹配锁屏窗口，匹配成功则返回true，否则则返回false
 def json_locker_debug():
     data_vms = {}
+    locker_ary=[]
+    locker_flag=False
     vmx_files = util_vmx.find_vmx_files(vm_directory, ".vmx")
     for_len = len(vmx_files)
     # 输出所有找到的 .vmx 文件vmx_files = util_vmx.find_vmx_files(directory,".vmx")
@@ -221,10 +293,18 @@ def json_locker_debug():
                          #str.replace("\n", "")
             str_debug = util_str.contains_substring(str_finder_ps, str_LockedTime)
             data_vms[str_vmx] = str_debug
+            locker_ary.append(str_debug)
         data = {"data": data_vms}
         json_str = json.dumps(data, indent=4)
-        print(f"虚拟机获取CGSSessionScreenLockedTime进程信息,返回结果:{json_str}")
-        return json_str
+        print(f"虚拟机获取CGSSessionScreenLockedTime进程信息,返回结果:{locker_ary}")
+        if all(item == True for item in locker_ary):
+            print(f"全部虚拟机获取LockedTime进程信息,返回结果:{locker_ary}")
+            locker_flag=True
+        else:
+            print(f"部分虚拟机未获取LockedTime进程信息,返回结果:{locker_ary}")
+            sleep(5)
+            json_locker_debug()
+        return locker_flag
 #匹配自动安装进程，如匹配到正在安装，如无匹配或者无法联通则代表，安装成功正在重启
 def json_installer_debug():
     data_vms = {}
@@ -263,29 +343,28 @@ def run_installer_status():
         inum = inum + 1
         if value is False:
             print(f"虚拟机{key}获取ip地址失败")
-            ip_ary.append(False)
+            ip_ary.append(True)
         else:
             print(f"虚拟机{key}获取ip地址成功")
-            ip_ary.append(True)
+            ip_ary.append(False)
     for key2, value2 in data2["data"].items():
         inum2 = inum2 + 1
         if value2 == "":
-            ins_ary.append(False)
+            ins_ary.append(True)
             print(f"虚拟机{key2}获取installer进程失败")
         else:
             print(f"虚拟机{key2}获取installer进程成功")
-            ins_ary.append(True)
-    if set(ip_ary) == {True} and set(ins_ary) == {True} :
-        print(f"所有虚拟机ip地址均获取到，正在执行安装脚本，请等待")
-        sleep(5)
-        run_installer_status()
-    elif set(ip_ary) == {False} and  set(ins_ary) == {False}:
+            ins_ary.append(False)
+    print(ip_ary)
+    print(ins_ary)
+    if  all(item == True for item in ip_ary) and   all(item == True for item in ins_ary):
         print(f"所有虚拟机脚本执行完毕正在重启！")
-        in_flag=True
+        in_flag = True
     else:
         print(f"部分虚拟机未执行完毕！请等待")
         sleep(5)
-        run_installer_status()
+        return False
+    print(f"{in_flag}+++++++++++++++++++++++++++")
     return in_flag
 
 
@@ -313,6 +392,34 @@ def run_auto_lsit_vmip():
                 sleep(5)
                 print(f"虚拟机{key},ip地址:{value},获取失败！,五秒钟后重新尝试获取....")
                 run_auto_lsit_vmip()
+
+def  dis_appleid():
+    data_vms = {}
+    finder_ary = []
+    data_flag = False
+    vmx_files = util_vmx.find_vmx_files(vm_directory, ".vmx")
+    for_len = len(vmx_files)
+    # 输出所有找到的 .vmx 文件vmx_files = util_vmx.find_vmx_files(directory,".vmx")
+    if for_len == 0:
+        print(f"获取虚拟机文件失败，未找到虚拟机配置文件！")
+    else:
+        for vmx in vmx_files:
+            str_vmx = vmx.split("\\")[-1]
+            vm_ip = util_ip.find_vm_ip(vmrun, vmx)
+            # 获取序列号信息
+            str_debug = "".join(util_cmd.execute_ssh_command(vm_ip, ssh_username, str_disable_appleAlert)).replace("\n", "")
+            data_vms[str_vmx] = str_debug
+            finder_ary.append(str_debug)
+        # data = {"data": data_vms}
+        # json_str = json.dumps(data, indent=4)
+        print(f"虚拟机执行str_disable_appleAlert,返回结果:{finder_ary}")
+        if all_not_empty(finder_ary):
+            print(f"全部虚拟机执行str_disable_appleAlert)成功!")
+            data_flag = True
+        else:
+            print(f"虚拟机str_disable_appleAlert)成功失败!")
+        return data_flag
+
 
 def run00():
     f_string_array = []#安装完毕的数组，和为安装完毕的数组
@@ -432,22 +539,33 @@ def run03():
     run_auto_lsit_vmip()
 
 def run04():
+    #脚本函数只运行一次，用于判断auto安装脚本是否执行完毕
+    in_flag=run_installer_status()
+    print(f"{in_flag}=========================")
+    if in_flag:
+        # 开始动态获取，虚拟机IP地址。用于判断脚本吧是否安装完毕
+        if run_auto_lsit_vmip():
+            print(f"全部虚拟机ip地址已经获取成功!")
+            # ssh均登录成功,返回True
+            if json_ssh_debug():
+                # 获取所有虚拟机Finder状态匹配，全部匹配则为True
+                print(json_finder_debug())
+                # 获取所有虚拟机的锁屏状态匹配，全部匹配则为True，此状态为安装完毕后，ju更改成功的状态
+                print(json_locker_debug())
+                # 开始执行唤醒脚本和自动key脚本
+                caff()
+                auto_send_keys()
+                # 开始执行disabled appleid 脚本
+                dis_appleid()
+                # 执行scp plist文件，如果不存在plist，则执行脚本生成
 
-       if run_auto_lsit_vmip():
-           print(f"全部虚拟机ip地址已经获取成功!")
-           if json_ssh_debug():
-               print(json_locker_debug())
-               data0=json.loads(json_locker_debug())
-
-               len_str = len(data0["data"].items())
-               for key, value in data0["data"].items():
-                   print(f"{key}:{value}")
-               #json_locker_debug()["data"].items()
-               #判断获取debug是否为true，则执行自动键位脚本和disabled appleid脚本，执行scp_plist.sh
-               #执行重建nvram脚本，重启后完成，再次调用监控finder脚本，最后成功
-           else:
-               print("")
-       else:
-           print("其他！")
+                print(f"所有虚拟机脚本执行完毕，开始执行scp plist文件，如果不存在plist，则执行脚本生成")
+            else:
+                print("")
+        else:
+            print("其他！")
+    else:
+        print(f"{in_flag}------------------------------")
+        run04()
 
 run04()
