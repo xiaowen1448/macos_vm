@@ -19,7 +19,7 @@ str_finder=f"{sh_user_home}/find_pgrep.sh"
 #此参数用于匹配安装后的maco登录窗体，如匹配成功则代表macos启动成功
 str_CGSSessionScreenLockedTime=f"{sh_user_home}/CGSSessionScreenLockedTime.sh"
 str_disable_appleAlert=f"{sh_user_home}/disable_appleAlert.sh"
-str_dis_screensaver="f{sh_user_home}/dis_screensaver.sh"
+str_dis_screensaver=f"{sh_user_home}/dis_screensaver.sh"
 str_auto_send_vmkey=f"{sh_user_home}/auto_send_key.sh"
 str_reboot=f"{sh_user_home}/reboot.sh"
 str_mount_efi=f"{sh_user_home}/mount_efi.sh"
@@ -245,7 +245,7 @@ def json_all_debug():
                     data_vms[str_vmx] = str_debug
                 data = {"data": data_vms}
                 json_str = json.dumps(data, indent=4)
-                #print(f"虚拟机获取DEBUG信息,返回结果:{json_str}")
+                print(f"虚拟机获取DEBUG信息,返回结果:{json_str}")
         else:
             json_all_debug()
     else:

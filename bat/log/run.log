@@ -166,3 +166,25 @@ Password:Volume EFI on disk0s1 mounted
 :/Volumes/EFI/CLOVER/config.plist: No such file or directory
 Password:Volume EFI on disk0s1 mounted
 :/Volumes/EFI/CLOVER/config.plist: No such file or directory
+另一个程序正在使用此文件，进程无法访问。
+已复制         0 个文件。
+D:\macos_vm\bat\..\TemplateVM\macos10.15\macos10.15.nvram
+D:\macos_vm\bat\..\TemplateVM\macos10.15\macos10.15.vmdk
+D:\macos_vm\bat\..\TemplateVM\macos10.15\macos10.15.vmx
+复制了 3 个文件
+移动了         1 个文件。
+移动了         1 个文件。
+系统找不到指定的文件。
+移动了         1 个文件。
+D:\macos_vm\bat\..\TemplateVM\macos10.15\macos10.15.nvram
+D:\macos_vm\bat\..\TemplateVM\macos10.15\macos10.15.vmdk
+D:\macos_vm\bat\..\TemplateVM\macos10.15\macos10.15.vmx
+复制了 3 个文件
+移动了         1 个文件。
+移动了         1 个文件。
+系统找不到指定的文件。
+移动了         1 个文件。
+Password:Volume EFI on disk0s1 mounted
+:/Volumes/EFI/CLOVER/config.plist: No such file or directory
+Password:Volume EFI on disk0s1 mounted
+:/Volumes/EFI/CLOVER/config.plist: No such file or directory
