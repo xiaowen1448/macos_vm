@@ -678,7 +678,7 @@ def  run05():
                 #重建nvram文件
                 rebuild_nvram()
                 print(f"所有虚拟机均已经配置完毕,等待重启中................")
-                print(f"{json_all_debug()}")
+                json_all_debug()
             else:
                 run05()
         else:
