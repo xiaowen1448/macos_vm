@@ -10,7 +10,6 @@ import util_scp_plist
 import re
 import  json
 import util_str
-import subprocess
 vmrun="C:\\Program Files (x86)\\VMware\\VMware Workstation\\vmrun.exe"
 ssh_username="wx"
 sh_user_home=f"/Users/{ssh_username}"
@@ -25,6 +24,7 @@ str_reboot=f"{sh_user_home}/reboot.sh"
 str_mount_efi=f"{sh_user_home}/mount_efi.sh"
 str_run_debug_sn=f"{sh_user_home}/run_debug_sn.sh"
 str_run_debug_ju=f"{sh_user_home}/run_debug_ju.sh"
+str_all_debug=f"{sh_user_home}/run_all_debug.sh"
 str_run_debug_install=f"{sh_user_home}/find_startosinstall.sh"
 str_auto_send_key=f"{sh_user_home}/auto_send_key.sh"
 str_caff=f"{sh_user_home}/caff.sh"
@@ -204,6 +204,7 @@ def  json_ssh_debug():
 #macos 获取所有虚拟机序列号json串
 def json_sn_debug():
     data_vms = {}
+    json_str = {}
     vmx_files = util_vmx.find_vmx_files(vm_directory, ".vmx")
     for_len = len(vmx_files)
     if for_len == 0:
@@ -220,11 +221,41 @@ def json_sn_debug():
         data = {"data": data_vms}
         json_str = json.dumps(data, indent=4)
         print(f"虚拟机获取SN信息,返回结果:{json_str}")
-        return json_str
+    return json_str
+def json_all_debug():
+    data_vms = {}
+    json_str={}
+    vmx_files = util_vmx.find_vmx_files(vm_directory, ".vmx")
+    for_len = len(vmx_files)
+    if run_auto_lsit_vmip():
+        print(f"全部虚拟机ip地址已经获取成功!")
+        # ssh均登录成功,返回True
+        if json_ssh_debug():
+            if for_len == 0:
+                print(f"获取虚拟机文件失败，未找到虚拟机配置文件！")
+            else:
+
+                # 输出所有找到的 .vmx 文件vmx_files = util_vmx.find_vmx_files(directory,".vmx")
+                for vmx in vmx_files:
+                    str_vmx = vmx.split("\\")[-1]
+                    vm_ip = util_ip.find_vm_ip(vmrun, vmx)
+                    # 获取序列号信息
+                    str_debug = re.sub(r"\n", "",
+                                       " ".join(util_cmd.execute_ssh_command(vm_ip, ssh_username, str_all_debug)))
+                    data_vms[str_vmx] = str_debug
+                data = {"data": data_vms}
+                json_str = json.dumps(data, indent=4)
+                print(f"虚拟机获取DEBUG信息,返回结果:{json_str}")
+        else:
+            json_all_debug()
+    else:
+        json_all_debug()
+    return json_str
 
 #macos 获取所有虚拟机JU值json串
 def json_ju_debug():
     data_vms = {}
+    json_str = {}
     vmx_files = util_vmx.find_vmx_files(vm_directory, ".vmx")
     for_len = len(vmx_files)
     if for_len == 0:
@@ -240,7 +271,7 @@ def json_ju_debug():
         data = {"data": data_vms}
         json_str = json.dumps(data, indent=4)
         print(f"虚拟机获取JU信息,返回结果:{json_str}")
-        return json_str
+    return json_str
 
 
 def all_not_empty(arr):
@@ -488,6 +519,19 @@ def run03():
    # data=json.loads(data_ip)
     run_auto_lsit_vmip()
 
+def rebuild_nvram():
+    vmx_files = util_vmx.find_vmx_files(vm_directory, ".vmx")
+    for vmx in vmx_files:
+        print(f"Found VMX file: {vmx}")
+        vm_path = vmx
+      # vm_ip = util_ip.find_vm_ip(vmrun, vm_path)
+        print(f"nvram文件：{vm_path.replace("vmx", "nvram")}")
+        util_vmx_ctrl.ctrl_vm(vmrun, "stop", vm_path)
+        print(f"虚拟机{vm_path}已经停止!")
+        shutil.copy(temp_nvramfiles, vm_path.replace("vmx", "nvram"))
+        print(f"虚拟机{vm_path}nvram已经重建")
+        util_vmx_ctrl.ctrl_vm(vmrun, "start", vm_path)
+        print(f"虚拟机{vm_path}已经启动!")
 def test():
     # 示例路径，替换为实际虚拟机文件路径
     vmx_files = util_vmx.find_vmx_files(vm_directory,".vmx")
@@ -572,11 +616,11 @@ def test():
 def run04():
     #脚本函数只运行一次，用于判断auto安装脚本是否执行完毕
     in_flag=run_installer_status()
-    print(f"{in_flag}=========================")
+    print(f"auto安装脚本:{in_flag}=========================")
     if in_flag:
         run05()
     else:
-        print(f"{in_flag}------------------------------")
+        print(f"auto安装脚本:{in_flag}------------------------------")
         run04()
 def  run05():
     if run_auto_lsit_vmip():
@@ -584,8 +628,6 @@ def  run05():
         # ssh均登录成功,返回True
         if json_ssh_debug():
             if json_locker_debug():
-                # 获取所有虚拟机Finder状态匹配，全部匹配则为True
-                #print(json_finder_debug())
                 # 获取所有虚拟机的锁屏状态匹配，全部匹配则为True，此状态为安装完毕后，ju更改成功的状态
                 #print(json_locker_debug())
                 # 开始执行唤醒脚本和自动key脚本
@@ -598,16 +640,17 @@ def  run05():
                 # 激活黑屏的mac，开始发送自动按键
                 caff()
                 auto_send_keys()
-                subprocess.run(["D:\\macos_vm\\bat\\scp_plist.bat"], shell=True)
-                subprocess.run(["D:\\macos_vm\\bat\\rebuild_nvram.bat"], shell=True)
-                print(f"所有虚拟机均已经配置完毕！")
+               # subprocess.run(["D:\\macos_vm\\bat\\scp_plist.bat"], shell=True)
+                scp_plist()
+                #subprocess.run(["D:\\macos_vm\\bat\\rebuild_nvram.bat"], shell=True)
+                rebuild_nvram()
+                print(f"所有虚拟机均已经配置完毕,等待重启中................")
+                print(f"{json_all_debug()}")
             else:
                 run05()
         else:
-            print("")
+            run05()
     else:
-        print("其他！")
+        run05()
 
-run04()
-
-
+run05()
