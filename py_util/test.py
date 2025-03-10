@@ -19,6 +19,7 @@ str_finder=f"{sh_user_home}/find_pgrep.sh"
 #此参数用于匹配安装后的maco登录窗体，如匹配成功则代表macos启动成功
 str_CGSSessionScreenLockedTime=f"{sh_user_home}/CGSSessionScreenLockedTime.sh"
 str_disable_appleAlert=f"{sh_user_home}/disable_appleAlert.sh"
+str_dis_screensaver="f{sh_user_home}/dis_screensaver.sh"
 str_auto_send_vmkey=f"{sh_user_home}/auto_send_key.sh"
 str_reboot=f"{sh_user_home}/reboot.sh"
 str_mount_efi=f"{sh_user_home}/mount_efi.sh"
@@ -28,9 +29,8 @@ str_all_debug=f"{sh_user_home}/run_all_debug.sh"
 str_run_debug_install=f"{sh_user_home}/find_startosinstall.sh"
 str_auto_send_key=f"{sh_user_home}/auto_send_key.sh"
 str_caff=f"{sh_user_home}/caff.sh"
-plist_num=1
 remote_plist_dir="/Volumes/EFI/CLOVER/config.plist"
-local_plist_dir=f"D:\\macos_vm\\plist\\chengpin\\config_{plist_num}.plist"
+local_plist_dir=f"D:\\macos_vm\\plist\\chengpin\\"
 temp_nvramfiles="D:\\macos_vm\\TemplateVM\\macos10.15\\macos10.15.nvram"
 vm_directory = "D:\\macos_vm\\NewVM"  # 替换为你的目录路径
 '''
@@ -245,7 +245,7 @@ def json_all_debug():
                     data_vms[str_vmx] = str_debug
                 data = {"data": data_vms}
                 json_str = json.dumps(data, indent=4)
-                print(f"虚拟机获取DEBUG信息,返回结果:{json_str}")
+                #print(f"虚拟机获取DEBUG信息,返回结果:{json_str}")
         else:
             json_all_debug()
     else:
@@ -454,6 +454,35 @@ def  dis_appleid():
             print(f"虚拟机str_disable_appleAlert)失败!")
     return data_flag
 
+#禁用屏幕锁定
+def dis_screensaver():
+    data_vms = {}
+    finder_ary = []
+    data_flag = False
+    vmx_files = util_vmx.find_vmx_files(vm_directory, ".vmx")
+    for_len = len(vmx_files)
+    # 输出所有找到的 .vmx 文件vmx_files = util_vmx.find_vmx_files(directory,".vmx")
+    if for_len == 0:
+        print(f"获取虚拟机文件失败，未找到虚拟机配置文件！")
+    else:
+        for vmx in vmx_files:
+            str_vmx = vmx.split("\\")[-1]
+            vm_ip = util_ip.find_vm_ip(vmrun, vmx)
+            # 获取脚本输出
+            str_debug = "".join(util_cmd.execute_ssh_command(vm_ip, ssh_username, str_dis_screensaver)).replace("\n","")
+            data_vms[str_vmx] = str_debug
+            finder_ary.append(str_debug)
+        # data = {"data": data_vms}
+        # json_str = json.dumps(data, indent=4)
+        print(f"虚拟机执行脚本str_dis_screensaver,返回结果:{finder_ary}")
+        if all_not_empty(finder_ary):
+            print(f"全部虚拟机执行脚本str_dis_screensaver成功!")
+            data_flag = True
+        else:
+            print(f"全部虚拟机执行脚本str_dis_screensaver)失败!")
+    return data_flag
+
+
 def scp_plist():
     data_vms = {}
     plist_ary = []
@@ -470,7 +499,7 @@ def scp_plist():
             str_vmx = vmx.split("\\")[-1]
             vm_ip = util_ip.find_vm_ip(vmrun, vmx)
             util_cmd.execute_ssh_command(vm_ip, ssh_username, str_mount_efi)
-            file_local_path = f"D:\\macos_vm\\plist\\chengpin\\config_{inum}.plist"
+            file_local_path = f"{local_plist_dir}config_{inum}.plist"
             plist_flag=util_scp_plist.scp_plist(vm_ip, ssh_username, file_local_path, remote_plist_dir)
         # data = {"data": data_vms}
         # json_str = json.dumps(data, indent=4)
@@ -635,14 +664,18 @@ def  run05():
                 auto_send_keys()
                 # 开始执行disabled appleid 脚本
                 dis_appleid()
+                #执行禁用屏幕锁定脚本
+                dis_screensaver()
                 # 执行scp plist文件，如果不存在plist，则执行脚本生成
                # subprocess.run(["D:\\macos_vm\\bat\\disable_appleAlert.bat"], shell=True)
                 # 激活黑屏的mac，开始发送自动按键
                 caff()
                 auto_send_keys()
                # subprocess.run(["D:\\macos_vm\\bat\\scp_plist.bat"], shell=True)
+                #拷贝五码plist文件
                 scp_plist()
                 #subprocess.run(["D:\\macos_vm\\bat\\rebuild_nvram.bat"], shell=True)
+                #重建nvram文件
                 rebuild_nvram()
                 print(f"所有虚拟机均已经配置完毕,等待重启中................")
                 print(f"{json_all_debug()}")
@@ -653,4 +686,4 @@ def  run05():
     else:
         run05()
 
-run05()
+run04()
