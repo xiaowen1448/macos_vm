@@ -10,6 +10,7 @@ import util_scp_plist
 import re
 import  json
 import util_str
+import subprocess
 vmrun="C:\\Program Files (x86)\\VMware\\VMware Workstation\\vmrun.exe"
 ssh_username="wx"
 sh_user_home=f"/Users/{ssh_username}"
@@ -103,10 +104,10 @@ def json_runlist_allvmips():
             else:
                 #  print(f"虚拟机VM_{inum}获取ip失败")
                 data_vms[str_vmx] = vm_ip
-        data = {"data": data_vms}
-        json_str = json.dumps(data, indent=4)
-        print(f"虚拟机获取IP,返回结果:{json_str}")
-        return json_str
+    data = {"data": data_vms}
+    json_str = json.dumps(data, indent=4)
+    print(f"虚拟机获取IP,返回结果:{json_str}")
+    return json_str
 
 #此函数用于发送唤醒 Mac 显示器，避免执行自动脚本返回失败。
 def caff():
@@ -304,7 +305,7 @@ def json_locker_debug():
             print(f"部分虚拟机未获取LockedTime进程信息,返回结果:{locker_ary}")
             sleep(5)
             json_locker_debug()
-        return locker_flag
+    return locker_flag
 #匹配自动安装进程，如匹配到正在安装，如无匹配或者无法联通则代表，安装成功正在重启
 def json_installer_debug():
     data_vms = {}
@@ -373,6 +374,7 @@ def run_auto_lsit_vmip():
     data_ip = json_runlist_allvmips()
     data = json.loads(data_ip)
     inum=0
+    ip_flag=False
     len_str=len(data["data"].items())
     for key, value in data["data"].items():
         inum = inum + 1
@@ -383,7 +385,7 @@ def run_auto_lsit_vmip():
                 continue
             else:
                 print(f"虚拟机{key},ip地址:{value}获取成功")
-                return True
+                ip_flag=True
         else:
             if inum<len_str:
                 print(f"虚拟机{key},ip地址:{value},获取失败！,五秒钟后重新尝试获取....")
@@ -392,6 +394,7 @@ def run_auto_lsit_vmip():
                 sleep(5)
                 print(f"虚拟机{key},ip地址:{value},获取失败！,五秒钟后重新尝试获取....")
                 run_auto_lsit_vmip()
+    return ip_flag
 
 def  dis_appleid():
     data_vms = {}
@@ -417,9 +420,37 @@ def  dis_appleid():
             print(f"全部虚拟机执行str_disable_appleAlert)成功!")
             data_flag = True
         else:
-            print(f"虚拟机str_disable_appleAlert)成功失败!")
-        return data_flag
+            print(f"虚拟机str_disable_appleAlert)失败!")
+    return data_flag
 
+def scp_plist():
+    data_vms = {}
+    plist_ary = []
+    data_flag = False
+    inum=0
+    vmx_files = util_vmx.find_vmx_files(vm_directory, ".vmx")
+    for_len = len(vmx_files)
+    # 输出所有找到的 .vmx 文件vmx_files = util_vmx.find_vmx_files(directory,".vmx")
+    if for_len == 0:
+        print(f"获取虚拟机文件失败，未找到虚拟机配置文件！")
+    else:
+        for vmx in vmx_files:
+            inum=inum+1
+            str_vmx = vmx.split("\\")[-1]
+            vm_ip = util_ip.find_vm_ip(vmrun, vmx)
+            util_cmd.execute_ssh_command(vm_ip, ssh_username, str_mount_efi)
+            file_local_path = f"D:\\macos_vm\\plist\\chengpin\\config_{inum}.plist"
+            plist_flag=util_scp_plist.scp_plist(vm_ip, ssh_username, file_local_path, remote_plist_dir)
+        # data = {"data": data_vms}
+        # json_str = json.dumps(data, indent=4)
+            plist_ary.append(plist_flag)
+        print(f"虚拟机执行拷贝plist文件,返回结果:{plist_ary}")
+        if all(item == True for item in plist_ary):
+            print(f"所有虚拟机执行拷贝plist文件成功!")
+            data_flag = True
+        else:
+            print(f"虚虚拟机执行拷贝plist文件失败!")
+    return  data_flag
 
 def run00():
     f_string_array = []#安装完毕的数组，和为安装完毕的数组
@@ -437,6 +468,25 @@ def run00():
     print(f"虚拟机vmx，正在执行脚本安装,返回结果:{f_string_array}")
     return  f_string_array
 
+
+def run03():
+    #列出虚拟机ip
+    data_ip=json_runlist_allvmips()
+    #列出ssh登录返回值
+    json_ssh_debug()
+    #列出序列号
+    json_sn_debug()
+    #列出ju值
+    json_ju_debug()
+    #列出finder进程信息
+    json_finder_debug()
+
+    #匹配autoinstall进程
+    json_installer_debug()
+    #判断数组值是否相同
+    #
+   # data=json.loads(data_ip)
+    run_auto_lsit_vmip()
 
 def test():
     # 示例路径，替换为实际虚拟机文件路径
@@ -519,53 +569,45 @@ def test():
                 print(f"{inum}------------------------{for_len}")
                 continue
 
-def run03():
-    #列出虚拟机ip
-    data_ip=json_runlist_allvmips()
-    #列出ssh登录返回值
-    json_ssh_debug()
-    #列出序列号
-    json_sn_debug()
-    #列出ju值
-    json_ju_debug()
-    #列出finder进程信息
-    json_finder_debug()
-
-    #匹配autoinstall进程
-    json_installer_debug()
-    #判断数组值是否相同
-    #
-   # data=json.loads(data_ip)
-    run_auto_lsit_vmip()
-
 def run04():
     #脚本函数只运行一次，用于判断auto安装脚本是否执行完毕
     in_flag=run_installer_status()
     print(f"{in_flag}=========================")
     if in_flag:
-        # 开始动态获取，虚拟机IP地址。用于判断脚本吧是否安装完毕
-        if run_auto_lsit_vmip():
-            print(f"全部虚拟机ip地址已经获取成功!")
-            # ssh均登录成功,返回True
-            if json_ssh_debug():
+        run05()
+    else:
+        print(f"{in_flag}------------------------------")
+        run04()
+def  run05():
+    if run_auto_lsit_vmip():
+        print(f"全部虚拟机ip地址已经获取成功!")
+        # ssh均登录成功,返回True
+        if json_ssh_debug():
+            if json_locker_debug():
                 # 获取所有虚拟机Finder状态匹配，全部匹配则为True
-                print(json_finder_debug())
+                #print(json_finder_debug())
                 # 获取所有虚拟机的锁屏状态匹配，全部匹配则为True，此状态为安装完毕后，ju更改成功的状态
-                print(json_locker_debug())
+                #print(json_locker_debug())
                 # 开始执行唤醒脚本和自动key脚本
                 caff()
                 auto_send_keys()
                 # 开始执行disabled appleid 脚本
                 dis_appleid()
                 # 执行scp plist文件，如果不存在plist，则执行脚本生成
-
-                print(f"所有虚拟机脚本执行完毕，开始执行scp plist文件，如果不存在plist，则执行脚本生成")
+               # subprocess.run(["D:\\macos_vm\\bat\\disable_appleAlert.bat"], shell=True)
+                # 激活黑屏的mac，开始发送自动按键
+                caff()
+                auto_send_keys()
+                subprocess.run(["D:\\macos_vm\\bat\\scp_plist.bat"], shell=True)
+                subprocess.run(["D:\\macos_vm\\bat\\rebuild_nvram.bat"], shell=True)
+                print(f"所有虚拟机均已经配置完毕！")
             else:
-                print("")
+                run05()
         else:
-            print("其他！")
+            print("")
     else:
-        print(f"{in_flag}------------------------------")
-        run04()
+        print("其他！")
 
 run04()
+
+
