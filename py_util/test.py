@@ -87,7 +87,6 @@ def run_list_vmip(vmx_file):
 def json_runlist_allvmips():
     data_vms={}
     vmx_files = util_vmx.find_vmx_files(vm_directory, ".vmx")
-    inum = 0
     for_len = len(vmx_files)
     if for_len==0:
         print(f"获取虚拟机文件失败，未找到虚拟机配置文件！")
@@ -128,8 +127,8 @@ def caff():
             str_debug = re.sub(r"\n", "","".join(util_cmd.execute_ssh_command(vm_ip, ssh_username, str_caff)))
             data_vms[str_vmx] = str_debug
             caff_ary.append(str_debug)
-        data = {"data": data_vms}
-        json_str = json.dumps(data, indent=4)
+        #data = {"data": data_vms}
+        #json_str = json.dumps(data, indent=4)
         print(f"虚拟机执行唤醒显示器caff,返回结果:{caff_ary}")
         if all(item == "0" for item in caff_ary):
             caff_flag=True
@@ -156,8 +155,8 @@ def auto_send_keys():
             str_debug = re.sub(r"\n", "", "".join(util_cmd.execute_ssh_command(vm_ip, ssh_username, str_auto_send_key)))
             data_vms[str_vmx] = str_debug
             keys_ary.append(str_debug)
-        data = {"data": data_vms}
-        json_str = json.dumps(data, indent=4)
+        #data = {"data": data_vms}
+        #json_str = json.dumps(data, indent=4)
         print(f"虚拟机执行auto_keys,返回结果:{keys_ary}")
         if all(item == "0" for item in keys_ary):
             print(f"虚拟机keys脚本执行成功")
@@ -191,8 +190,8 @@ def  json_ssh_debug():
             ssh_str = util_ssh.test_ssh_with_command(vm_ip, ssh_username)
             data_vms[vmx.split("\\")[-1]] = ssh_str
             ssh_ary.append(ssh_str)
-        data = {"data": data_vms}
-        json_str = json.dumps(data, indent=4)
+        #data = {"data": data_vms}
+        #json_str = json.dumps(data, indent=4)
         print(f"虚拟机获取SSH登录,返回结果:{ssh_ary}")
         if all(item == True for item in ssh_ary):
             print(f"虚拟机ssh全部登录成功!")
@@ -327,8 +326,8 @@ def json_locker_debug():
             str_debug = util_str.contains_substring(str_finder_ps, str_LockedTime)
             data_vms[str_vmx] = str_debug
             locker_ary.append(str_debug)
-        data = {"data": data_vms}
-        json_str = json.dumps(data, indent=4)
+        #data = {"data": data_vms}
+        #json_str = json.dumps(data, indent=4)
         print(f"虚拟机获取CGSSessionScreenLockedTime进程信息,返回结果:{locker_ary}")
         if all(item == True for item in locker_ary):
             print(f"全部虚拟机获取LockedTime进程信息,返回结果:{locker_ary}")
@@ -368,10 +367,10 @@ def run_installer_status():
     inum2 = 0
     ip_ary=[]
     ins_ary=[]
-    in_flag=False
+    #in_flag=False
     #检测虚拟机IP存活和进程存活同时为空或者同时为True
-    len_str = len(data["data"].items())
-    en_str = len(data2["data"].items())
+    #len_str = len(data["data"].items())
+    #en_str = len(data2["data"].items())
     for key, value in data["data"].items():
         inum = inum + 1
         if value is False:
@@ -485,7 +484,7 @@ def dis_screensaver():
 
 
 def scp_plist():
-    data_vms = {}
+    #data_vms = {}
     plist_ary = []
     data_flag = False
     inum=0
@@ -497,7 +496,7 @@ def scp_plist():
     else:
         for vmx in vmx_files:
             inum=inum+1
-            str_vmx = vmx.split("\\")[-1]
+            #str_vmx = vmx.split("\\")[-1]
             vm_ip = util_ip.find_vm_ip(vmrun, vmx)
             util_cmd.execute_ssh_command(vm_ip, ssh_username, str_mount_efi)
             file_local_path = f"{local_plist_dir}config_{inum}.plist"
@@ -516,8 +515,8 @@ def scp_plist():
 def run00():
     f_string_array = []#安装完毕的数组，和为安装完毕的数组
     vmx_files = util_vmx.find_vmx_files(vm_directory, ".vmx")
-    inum = 0
-    for_len = len(vmx_files)
+    #inum = 0
+    #for_len = len(vmx_files)
     # 输出所有找到的 .vmx 文件vmx_files = util_vmx.find_vmx_files(directory,".vmx")
     for vmx in vmx_files:
         if runos_install(vmx):
@@ -532,7 +531,7 @@ def run00():
 
 def run03():
     #列出虚拟机ip
-    data_ip=json_runlist_allvmips()
+    #data_ip=json_runlist_allvmips()
     #列出ssh登录返回值
     json_ssh_debug()
     #列出序列号
