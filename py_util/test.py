@@ -666,9 +666,9 @@ def  run05():
                 dis_appleid()
                 # 执行scp plist文件，如果不存在plist，则执行脚本生成
                # subprocess.run(["D:\\macos_vm\\bat\\disable_appleAlert.bat"], shell=True)
-                # 激活黑屏的mac，开始发送自动按键
-                caff()
-                auto_send_keys()
+                # 激活黑屏的mac，开始发送自动按键(后续已经弃用)
+               # caff()
+              #  auto_send_keys()
                # subprocess.run(["D:\\macos_vm\\bat\\scp_plist.bat"], shell=True)
                 #拷贝五码plist文件
                 scp_plist()
