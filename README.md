@@ -21,15 +21,6 @@ macos10.15.vmxf
 ![0dd9b2cb1d55f72bb9d4a9d99421949](https://github.com/user-attachments/assets/58ca7808-06b7-4452-9675-e6d2a8f6697c)
 
 
-
-![image](https://github.com/user-attachments/assets/0a0b3610-6221-4d50-b525-610121c40da2)
-
-
-![image](https://github.com/user-attachments/assets/5fffc3d5-1f12-473f-9df5-f0a57fea8be0)
-
-
-
-
 克隆虚拟机基于这个四个文件模板进行拷贝，macos 脚本需要提前复制进入macos系统某个目录，执行默认目录为用户家目录的一些sh脚本，参考macos_sh目录
 
 此项目代码仅用于批量生产唯一的虚拟机mac，更改五码，更改ju值，目前仅用于测试
