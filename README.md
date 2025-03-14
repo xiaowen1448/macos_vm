@@ -8,6 +8,15 @@
 
 ![0dd9b2cb1d55f72bb9d4a9d99421949](https://github.com/user-attachments/assets/58ca7808-06b7-4452-9675-e6d2a8f6697c)
 
+脚本执行完毕输出如下
+
+![image](https://github.com/user-attachments/assets/9628b8f6-f49f-40b0-9636-c38f838783d1)
+
+![image](https://github.com/user-attachments/assets/e8c746ba-3c48-404f-b5e3-f3593ab2560f)
+
+
+
+
 此项目脚本用户批量克隆虚拟机，更改 kbjfrfpoJU值，ju值查看可利用iMessageDebug运行查看
 
 wx@bogon ~ % /Users/wx/Desktop/iMessageDebug ; exit;
