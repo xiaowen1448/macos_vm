@@ -1,10 +1,6 @@
 # macos_vm
 
-批量克隆脚本执行示例如下：
-![image](https://github.com/user-attachments/assets/2188f407-639e-472a-8adf-e424be840965)
-
-
-后续更新版本克隆增加监控虚拟机功能如下图：
+批量克隆增加监控虚拟机功能如下图：
 
 ![0dd9b2cb1d55f72bb9d4a9d99421949](https://github.com/user-attachments/assets/58ca7808-06b7-4452-9675-e6d2a8f6697c)
 
