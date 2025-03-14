@@ -1,7 +1,5 @@
 # macos_vm
 
-![image](https://github.com/user-attachments/assets/30c8a7aa-bf9b-413b-9d75-6ffba77f2a7d)
-
 批量克隆脚本执行示例如下：
 ![image](https://github.com/user-attachments/assets/2188f407-639e-472a-8adf-e424be840965)
 
@@ -46,14 +44,6 @@ VMware® Workstation 环境配置
 VMware® Workstation 17 Pro
 17.5.1 build-23298084
 ![image](https://github.com/user-attachments/assets/7fb032b9-26b4-4f01-ae50-4356ffa5823b)
-
-批量复制完成会自动启动虚拟机，启动成功后自动执行安装重启脚本命令，执行重装，重装重启后实现kbjfrfpoJU唯一。
-脚本调用示例如下图
-![image](https://github.com/user-attachments/assets/76fe5b22-755b-42dc-bab8-187cfca38bab)
-
-开始批量自动重装示例
-
-![image](https://github.com/user-attachments/assets/bcc1fb0f-2424-488d-af1b-be7db249e116)
 
 修改完的成品如下图：
 
