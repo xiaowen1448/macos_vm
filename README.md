@@ -36,7 +36,7 @@ Credits: ElNono, mdmwii,flux84, sugarface, pokenguyen
 Do you want to save to iMessageDebug.txt? (y/n) 
 ju值为： kbjfrfpoJU: 39feee3569700187b9e15f700427984e20
 
-批量实现克隆虚拟机需求，要求实现每台虚拟机ju值为唯一，五码后续更改有批量生成的confi.plist文件实现替换，实现uuid，五码每台为唯一
+批量实现克隆虚拟机需求，要求实现每台虚拟机ju值为唯一，五码每台为唯一
 
 windows 环境配置
 ======================================================
