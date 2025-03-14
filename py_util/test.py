@@ -25,7 +25,7 @@ str_reboot=f"{sh_user_home}/reboot.sh"
 str_mount_efi=f"{sh_user_home}/mount_efi.sh"
 str_run_debug_sn=f"{sh_user_home}/run_debug_sn.sh"
 str_run_debug_ju=f"{sh_user_home}/run_debug_ju.sh"
-str_all_debug=f"{sh_user_home}/run_all_debug.sh"
+str_debug_all=f"{sh_user_home}/run_debug_all.sh"
 str_run_debug_install=f"{sh_user_home}/find_startosinstall.sh"
 str_auto_send_key=f"{sh_user_home}/auto_send_key.sh"
 str_caff=f"{sh_user_home}/caff.sh"
@@ -110,6 +110,7 @@ def json_runlist_allvmips():
     return json_str
 
 #此函数用于发送唤醒 Mac 显示器，避免执行自动脚本返回失败。
+#已经弃用，改为senkey中模拟输入激活屏幕休眠
 def caff():
     data_vms = {}
     caff_ary=[]
@@ -241,7 +242,7 @@ def json_all_debug():
                     vm_ip = util_ip.find_vm_ip(vmrun, vmx)
                     # 获取序列号信息
                     str_debug = re.sub(r"\n", "",
-                                       " ".join(util_cmd.execute_ssh_command(vm_ip, ssh_username, str_all_debug)))
+                                       " ".join(util_cmd.execute_ssh_command(vm_ip, ssh_username, str_debug_all)))
                     data_vms[str_vmx] = str_debug
                 data = {"data": data_vms}
                 json_str = json.dumps(data, indent=4)
@@ -659,13 +660,11 @@ def  run05():
             if json_locker_debug():
                 # 获取所有虚拟机的锁屏状态匹配，全部匹配则为True，此状态为安装完毕后，ju更改成功的状态
                 #print(json_locker_debug())
-                # 开始执行唤醒脚本和自动key脚本
-                caff()
+                # 开始执行唤醒脚本和自动key脚本(后续已经弃用)
+               # caff()
                 auto_send_keys()
                 # 开始执行disabled appleid 脚本
                 dis_appleid()
-                #执行禁用屏幕锁定脚本
-                dis_screensaver()
                 # 执行scp plist文件，如果不存在plist，则执行脚本生成
                # subprocess.run(["D:\\macos_vm\\bat\\disable_appleAlert.bat"], shell=True)
                 # 激活黑屏的mac，开始发送自动按键
@@ -677,6 +676,8 @@ def  run05():
                 #subprocess.run(["D:\\macos_vm\\bat\\rebuild_nvram.bat"], shell=True)
                 #重建nvram文件
                 rebuild_nvram()
+                #执行禁用屏幕锁定脚本
+                dis_screensaver()
                 print(f"所有虚拟机均已经配置完毕,等待重启中................")
                 json_all_debug()
             else:
