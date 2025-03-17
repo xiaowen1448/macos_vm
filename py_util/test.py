@@ -165,7 +165,33 @@ def auto_send_keys():
         else:
             print(f"虚拟机keys脚本执行失败")
         return keys_flag
+def  run_reboot():
+    data_vms = {}
+    keys_ary=[]
+    keys_flag=False
+    vmx_files = util_vmx.find_vmx_files(vm_directory, ".vmx")
+    for_len = len(vmx_files)
+    if for_len == 0:
+        print(f"获取虚拟机文件失败，未找到虚拟机配置文件！")
+    else:
 
+        # 输出所有找到的 .vmx 文件vmx_files = util_vmx.find_vmx_files(directory,".vmx")
+        for vmx in vmx_files:
+            str_vmx = vmx.split("\\")[-1]
+            vm_ip = util_ip.find_vm_ip(vmrun, vmx)
+            # 获取序列号信息
+            str_debug = re.sub(r"\n", "", "".join(util_cmd.execute_ssh_command(vm_ip, ssh_username, str_reboot)))
+            data_vms[str_vmx] = str_debug
+            keys_ary.append(str_debug)
+        #data = {"data": data_vms}
+        #json_str = json.dumps(data, indent=4)
+        print(f"虚拟机执行reboot,返回结果:{keys_ary}")
+        if all(item == "0" for item in keys_ary):
+            print(f"虚拟机执行reboot脚本执行成功")
+            keys_flag=True
+        else:
+            print(f"虚拟机执行reboot脚本执行失败")
+        return keys_flag
 
 #此函数用于发送脚本实现禁用appleid
 #def dis_appleid():
@@ -689,7 +715,7 @@ def  run05():
                 # 执行禁用屏幕锁定脚本
                 dis_screensaver()
                 #需要执行重启后生效
-                rebuild_nvram()
+                run_reboot()
                 print(f"所有虚拟机均已经配置完毕,等待重启中................")
                 json_all_debug()
             else:
@@ -700,4 +726,4 @@ def  run05():
         run05()
 
 
-# run04()
+run04()
