@@ -8,8 +8,9 @@ import util_vmx_ctrl
 import shutil
 import util_scp_plist
 import re
-import  json
+import json
 import util_str
+import os
 vmrun="C:\\Program Files (x86)\\VMware\\VMware Workstation\\vmrun.exe"
 ssh_username="wx"
 sh_user_home=f"/Users/{ssh_username}"
@@ -30,9 +31,9 @@ str_run_debug_install=f"{sh_user_home}/find_startosinstall.sh"
 str_auto_send_key=f"{sh_user_home}/auto_send_key.sh"
 str_caff=f"{sh_user_home}/caff.sh"
 remote_plist_dir="/Volumes/EFI/CLOVER/config.plist"
-local_plist_dir=f"D:\\macos_vm\\plist\\chengpin\\"
-temp_nvramfiles="D:\\macos_vm\\TemplateVM\\macos10.15\\macos10.15.nvram"
-vm_directory = "D:\\macos_vm\\NewVM"  # 替换为你的目录路径
+local_plist_dir=f"{os.path.abspath('..')}\\plist\\chengpin\\"
+temp_nvramfiles=f"{os.path.abspath('..')}\\TemplateVM\\macos10.15\\macos10.15.nvram"
+vm_directory = f"{os.path.abspath('..')}\\NewVM"  # 替换为你的目录路径
 '''
 find_pgrep.sh 用于匹配成品虚拟机启动成功，用于匹配进程Finder，有进程代表系统启动完毕。,如下执行输出示例
 PS D:\\macos_vm> ssh wx@192.168.119.156 '~/find_pgrep.sh'
@@ -642,6 +643,16 @@ def test():
                 print(f"{inum}------------------------{for_len}")
                 continue
 
+
+#动态获取目录，
+def  list_dir():
+    print(f"{os.path.abspath('..')}")
+    print(local_plist_dir)
+    print(temp_nvramfiles)
+    print(vm_directory)
+#list_dir()
+
+
 def run04():
     #脚本函数只运行一次，用于判断auto安装脚本是否执行完毕
     in_flag=run_installer_status()
@@ -675,8 +686,10 @@ def  run05():
                 #subprocess.run(["D:\\macos_vm\\bat\\rebuild_nvram.bat"], shell=True)
                 #重建nvram文件
                 rebuild_nvram()
-                #执行禁用屏幕锁定脚本
+                # 执行禁用屏幕锁定脚本
                 dis_screensaver()
+                #需要执行重启后生效
+                rebuild_nvram()
                 print(f"所有虚拟机均已经配置完毕,等待重启中................")
                 json_all_debug()
             else:
@@ -686,4 +699,5 @@ def  run05():
     else:
         run05()
 
-run04()
+
+# run04()

@@ -59,8 +59,8 @@ rem  Set the number of config.plist to be used
 for /f "tokens=* delims=" %%a in (%IP_PATH%\ip_list.txt) do (
 	set /a plist_num+=1
 	REM   ssh  -o StrictHostKeyChecking=no  cc@192.168.122.190  '/Users/wx/auto_install.sh'
-	ssh  -o StrictHostKeyChecking=no  %ssh_uname%@%%a   '/Users/%ssh_uname%/mount_efi.sh'  >> %LOG_PATH%\run.log  2>&1
-	scp %plist_path%\config_!plist_num!.plist  %ssh_uname%@%%a:/Volumes/EFI/CLOVER/config.plist  >> %LOG_PATH%\run.log  2>&1
+	rem  ssh  -o StrictHostKeyChecking=no  %ssh_uname%@%%a   '/Users/%ssh_uname%/mount_efi.sh'  >> %LOG_PATH%\run.log  2>&1
+	rem scp %plist_path%\config_!plist_num!.plist  %ssh_uname%@%%a:/Volumes/EFI/CLOVER/config.plist  >> %LOG_PATH%\run.log  2>&1
 	start cmd /k ssh  -o StrictHostKeyChecking=no  %ssh_uname%@%%a  '/Users/%ssh_uname%/auto_install.sh'
 )
 echo  Obtaining the IP address of the VM is in progress!......................
