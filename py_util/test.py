@@ -139,32 +139,52 @@ def caff():
         return caff_flag
 #此函数用于发送虚拟机自动按键实现锁屏，解锁
 def auto_send_keys():
-    data_vms = {}
+    data_keys = {}
+    data_caff={}
     keys_ary=[]
+    caff_ary=[]
     keys_flag=False
+    caff_flag = False
     vmx_files = util_vmx.find_vmx_files(vm_directory, ".vmx")
     for_len = len(vmx_files)
     if for_len == 0:
         print(f"获取虚拟机文件失败，未找到虚拟机配置文件！")
     else:
-
         # 输出所有找到的 .vmx 文件vmx_files = util_vmx.find_vmx_files(directory,".vmx")
         for vmx in vmx_files:
             str_vmx = vmx.split("\\")[-1]
             vm_ip = util_ip.find_vm_ip(vmrun, vmx)
+            # 开始执行唤醒脚本和自动key脚本(后续已经弃用)
+            str_debug_caff = re.sub(r"\n", "", "".join(util_cmd.execute_ssh_command(vm_ip, ssh_username, str_caff)))
             # 获取序列号信息
-            str_debug = re.sub(r"\n", "", "".join(util_cmd.execute_ssh_command(vm_ip, ssh_username, str_auto_send_key)))
-            data_vms[str_vmx] = str_debug
-            keys_ary.append(str_debug)
+            print(f"虚拟机{str_vmx}唤醒脚本已经执行！")
+            str_debug_key = re.sub(r"\n", "", "".join(util_cmd.execute_ssh_command(vm_ip, ssh_username, str_auto_send_key)))
+            print(f"虚拟机{str_vmx}auto_key脚本已经执行！")
+            data_keys[str_vmx] = str_debug_key
+            keys_ary.append(str_debug_key)
+            data_caff[str_vmx] = str_debug_caff
+            caff_ary.append(str_debug_caff)
         #data = {"data": data_vms}
         #json_str = json.dumps(data, indent=4)
-        print(f"虚拟机执行auto_keys,返回结果:{keys_ary}")
+        print(f"虚拟机执行auto_keys脚本,返回结果:{keys_ary}")
+        print(f"虚拟机执行caff脚本,返回结果:{caff_ary}")
         if all(item == "0" for item in keys_ary):
             print(f"虚拟机keys脚本执行成功")
             keys_flag=True
         else:
             print(f"虚拟机keys脚本执行失败")
-        return keys_flag
+        if all(item == "0" for item in caff_ary):
+            print(f"虚拟机caff脚本执行成功")
+            caff_flag=True
+        else:
+            print(f"虚拟机caff脚本执行失败")
+        if keys_flag and caff_flag:
+            print(f"虚拟机auto_keys脚本和keys脚本均执行完毕!")
+            return True
+        else:
+            print(f"虚拟机auto_keys脚本和keys脚本均执行失败!")
+            return False
+
 def  run_reboot():
     data_vms = {}
     keys_ary=[]
@@ -186,7 +206,7 @@ def  run_reboot():
         #data = {"data": data_vms}
         #json_str = json.dumps(data, indent=4)
         print(f"虚拟机执行reboot,返回结果:{keys_ary}")
-        if all(item == "0" for item in keys_ary):
+        if all(item == "Password:" for item in keys_ary):
             print(f"虚拟机执行reboot脚本执行成功")
             keys_flag=True
         else:
@@ -696,15 +716,12 @@ def  run05():
             if json_locker_debug():
                 # 获取所有虚拟机的锁屏状态匹配，全部匹配则为True，此状态为安装完毕后，ju更改成功的状态
                 #print(json_locker_debug())
-                # 开始执行唤醒脚本和自动key脚本(后续已经弃用)
-               # caff()
-                auto_send_keys()
                 # 开始执行disabled appleid 脚本
                 dis_appleid()
                 # 执行scp plist文件，如果不存在plist，则执行脚本生成
                # subprocess.run(["D:\\macos_vm\\bat\\disable_appleAlert.bat"], shell=True)
                 # 激活黑屏的mac，开始发送自动按键(后续已经弃用)
-               # caff()
+                #caff()
               #  auto_send_keys()
                # subprocess.run(["D:\\macos_vm\\bat\\scp_plist.bat"], shell=True)
                 #拷贝五码plist文件
@@ -713,6 +730,7 @@ def  run05():
                 #重建nvram文件
                 rebuild_nvram()
                 # 执行禁用屏幕锁定脚本
+                auto_send_keys()
                 dis_screensaver()
                 #需要执行重启后生效
                 run_reboot()
