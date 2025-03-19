@@ -9,7 +9,7 @@ set ISO_BASE_HOME=%BASE_DIR%\..\iso
 set IP_PATH=%BASE_DIR%\var_files
 set LOG_PATH=%BASE_DIR%\log
 REM Set the number of virtual machines that need to be created
-set VM_COUNT=2
+set VM_COUNT=3
 set VMRUN_PATH="C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe"
 set ssh_uname=wx
 rem  Random numbers start
