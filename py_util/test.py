@@ -147,43 +147,49 @@ def auto_send_keys():
     caff_flag = False
     vmx_files = util_vmx.find_vmx_files(vm_directory, ".vmx")
     for_len = len(vmx_files)
-    if for_len == 0:
-        print(f"获取虚拟机文件失败，未找到虚拟机配置文件！")
+    if run_auto_lsit_vmip():
+        if for_len == 0:
+            print(f"获取虚拟机文件失败，未找到虚拟机配置文件！")
+        else:
+            # 输出所有找到的 .vmx 文件vmx_files = util_vmx.find_vmx_files(directory,".vmx")
+            for vmx in vmx_files:
+                str_vmx = vmx.split("\\")[-1]
+                vm_ip = util_ip.find_vm_ip(vmrun, vmx)
+                # 开始执行唤醒脚本和自动key脚本(后续已经弃用)
+                str_debug_caff = re.sub(r"\n", "", "".join(util_cmd.execute_ssh_command(vm_ip, ssh_username, str_caff)))
+                # 获取序列号信息
+                print(f"虚拟机{str_vmx}唤醒脚本已经执行！")
+                str_debug_key = re.sub(r"\n", "",
+                                       "".join(util_cmd.execute_ssh_command(vm_ip, ssh_username, str_auto_send_key)))
+                print(f"虚拟机{str_vmx}auto_key脚本已经执行！")
+                data_keys[str_vmx] = str_debug_key
+                keys_ary.append(str_debug_key)
+                data_caff[str_vmx] = str_debug_caff
+                caff_ary.append(str_debug_caff)
+            # data = {"data": data_vms}
+            # json_str = json.dumps(data, indent=4)
+            print(f"虚拟机执行auto_keys脚本,返回结果:{keys_ary}")
+            print(f"虚拟机执行caff脚本,返回结果:{caff_ary}")
+            if all(item == "0" for item in keys_ary):
+                print(f"虚拟机keys脚本执行成功")
+                keys_flag = True
+            else:
+                print(f"虚拟机keys脚本执行失败")
+            if all(item == "0" for item in caff_ary):
+                print(f"虚拟机caff脚本执行成功")
+                caff_flag = True
+            else:
+                print(f"虚拟机caff脚本执行失败")
+            if keys_flag and caff_flag:
+                print(f"虚拟机auto_keys脚本和keys脚本均执行完毕!")
+                return True
+            else:
+                print(f"虚拟机auto_keys脚本和keys脚本均执行失败!")
+                return False
     else:
-        # 输出所有找到的 .vmx 文件vmx_files = util_vmx.find_vmx_files(directory,".vmx")
-        for vmx in vmx_files:
-            str_vmx = vmx.split("\\")[-1]
-            vm_ip = util_ip.find_vm_ip(vmrun, vmx)
-            # 开始执行唤醒脚本和自动key脚本(后续已经弃用)
-            str_debug_caff = re.sub(r"\n", "", "".join(util_cmd.execute_ssh_command(vm_ip, ssh_username, str_caff)))
-            # 获取序列号信息
-            print(f"虚拟机{str_vmx}唤醒脚本已经执行！")
-            str_debug_key = re.sub(r"\n", "", "".join(util_cmd.execute_ssh_command(vm_ip, ssh_username, str_auto_send_key)))
-            print(f"虚拟机{str_vmx}auto_key脚本已经执行！")
-            data_keys[str_vmx] = str_debug_key
-            keys_ary.append(str_debug_key)
-            data_caff[str_vmx] = str_debug_caff
-            caff_ary.append(str_debug_caff)
-        #data = {"data": data_vms}
-        #json_str = json.dumps(data, indent=4)
-        print(f"虚拟机执行auto_keys脚本,返回结果:{keys_ary}")
-        print(f"虚拟机执行caff脚本,返回结果:{caff_ary}")
-        if all(item == "0" for item in keys_ary):
-            print(f"虚拟机keys脚本执行成功")
-            keys_flag=True
-        else:
-            print(f"虚拟机keys脚本执行失败")
-        if all(item == "0" for item in caff_ary):
-            print(f"虚拟机caff脚本执行成功")
-            caff_flag=True
-        else:
-            print(f"虚拟机caff脚本执行失败")
-        if keys_flag and caff_flag:
-            print(f"虚拟机auto_keys脚本和keys脚本均执行完毕!")
-            return True
-        else:
-            print(f"虚拟机auto_keys脚本和keys脚本均执行失败!")
-            return False
+        print(f"虚拟机正在重启！")
+        auto_send_keys()
+
 
 def  run_reboot():
     data_vms = {}
@@ -509,24 +515,29 @@ def dis_screensaver():
     vmx_files = util_vmx.find_vmx_files(vm_directory, ".vmx")
     for_len = len(vmx_files)
     # 输出所有找到的 .vmx 文件vmx_files = util_vmx.find_vmx_files(directory,".vmx")
-    if for_len == 0:
-        print(f"获取虚拟机文件失败，未找到虚拟机配置文件！")
-    else:
-        for vmx in vmx_files:
-            str_vmx = vmx.split("\\")[-1]
-            vm_ip = util_ip.find_vm_ip(vmrun, vmx)
-            # 获取脚本输出
-            str_debug = "".join(util_cmd.execute_ssh_command(vm_ip, ssh_username, str_dis_screensaver)).replace("\n","")
-            data_vms[str_vmx] = str_debug
-            finder_ary.append(str_debug)
-        # data = {"data": data_vms}
-        # json_str = json.dumps(data, indent=4)
-        print(f"虚拟机执行脚本str_dis_screensaver,返回结果:{finder_ary}")
-        if all_not_empty(finder_ary):
-            print(f"全部虚拟机执行脚本str_dis_screensaver成功!")
-            data_flag = True
+    if run_auto_lsit_vmip():
+        if for_len == 0:
+            print(f"获取虚拟机文件失败，未找到虚拟机配置文件！")
         else:
-            print(f"全部虚拟机执行脚本str_dis_screensaver)失败!")
+            for vmx in vmx_files:
+                str_vmx = vmx.split("\\")[-1]
+                vm_ip = util_ip.find_vm_ip(vmrun, vmx)
+                # 获取脚本输出
+                str_debug = "".join(util_cmd.execute_ssh_command(vm_ip, ssh_username, str_dis_screensaver)).replace(
+                    "\n", "")
+                data_vms[str_vmx] = str_debug
+                finder_ary.append(str_debug)
+            # data = {"data": data_vms}
+            # json_str = json.dumps(data, indent=4)
+            print(f"虚拟机执行脚本str_dis_screensaver,返回结果:{finder_ary}")
+            if all_not_empty(finder_ary):
+                print(f"全部虚拟机执行脚本str_dis_screensaver成功!")
+                data_flag = True
+            else:
+                print(f"全部虚拟机执行脚本str_dis_screensaver)失败!")
+    else:
+        print(f"虚拟机正在重启!")
+        dis_screensaver()
     return data_flag
 
 
@@ -732,7 +743,7 @@ def  run05():
                 # 执行禁用屏幕锁定脚本
                 auto_send_keys()
                 dis_screensaver()
-                #需要执行重启后生效
+                # 需要执行重启后生效
                 run_reboot()
                 print(f"所有虚拟机均已经配置完毕,等待重启中................")
                 json_all_debug()
@@ -744,4 +755,4 @@ def  run05():
         run05()
 
 
-run04()
+#run04()
