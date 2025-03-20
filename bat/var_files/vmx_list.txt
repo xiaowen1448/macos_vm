@@ -1,3 +1,2 @@
 D:\macos_vm\NewVM\VM_1\macos10.15_1.vmx 
 D:\macos_vm\NewVM\VM_2\macos10.15_2.vmx 
-D:\macos_vm\NewVM\VM_3\macos10.15_3.vmx 
