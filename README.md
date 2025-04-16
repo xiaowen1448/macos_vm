@@ -64,13 +64,8 @@ vm02
 
 
 
-技术支持咨询： tel,wechat:19337108781，Telegram：jishuzhai1448
+技术支持咨询： Telegram：jishuzhai1448 
 
-国内技术博客：
-
-csdn：https://blog.csdn.net/wenxiaocsdn?spm=1000.2115.3001.5343
-
-博客园：https://www.cnblogs.com/wenxiao1-2-3-4
 
 
 
