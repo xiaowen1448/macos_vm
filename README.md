@@ -64,8 +64,7 @@ vm02
 
 
 
-技术支持咨询： Telegram：@jishuniu
-
+技术支持咨询： Telegram：@xiaowen1449
 
 
 
