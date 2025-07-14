@@ -10,7 +10,7 @@ set IP_PATH=%BASE_DIR%\var_files
 set LOG_PATH=%BASE_DIR%\var_files
 REM Set the number of virtual machines that need to be created
 set VM_COUNT=4
-set VMRUN_PATH="C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe"
+set VMRUN_PATH=vmrun
 set ssh_uname=wx
 rem  Random numbers start
 set sum=15

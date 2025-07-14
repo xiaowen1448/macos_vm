@@ -10,7 +10,7 @@ set LOG_PATH=%BASE_DIR%\var_files
 set plist_num=0
 copy /y nul %IP_PATH%\ip_list.txt  >> %LOG_PATH%\run.log   2>&1
 copy /y nul %IP_PATH%\vmx_list.txt  >> %LOG_PATH%\run.log   2>&1
-set VMRUN_PATH="C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe"
+set VMRUN_PATH=vmrun
 REM vmx files path vmx_list.txt
 set var_time=%1
 REM  echo %var_time%
