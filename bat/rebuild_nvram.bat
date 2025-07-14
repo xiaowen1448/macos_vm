@@ -7,7 +7,7 @@ set VM_BASE_PATH=%BASE_DIR%\..\NewVM
 REM Set the number of virtual machines that need to be created
 SET RUN_BAT=%BASE_DIR%\utilities_bat
 set VM_COUNT=4
-set VMRUN_PATH="C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe"
+set VMRUN_PATH=vmrun
 rem  stop  vms
 call stop_all_vms.bat
 rem  copy  nvram  
