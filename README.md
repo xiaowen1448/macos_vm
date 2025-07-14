@@ -60,26 +60,11 @@ vm02
 
 ![image](https://github.com/user-attachments/assets/8b5dcd4e-207a-43f7-b12c-60424f4930c4)
 
-登陆im测试
-
-![image](https://github.com/user-attachments/assets/1db3be81-72bd-4ffa-8444-b85891d75e7c)
-
-
-![image](https://github.com/user-attachments/assets/3b831298-2788-4848-9cdd-1c3142cbb1b7)
-
-![image](https://github.com/user-attachments/assets/39e317dc-5a8c-4e70-8304-60143ff1a661)
 
 
 
 
-
-技术支持咨询： tel,wechat:19337108781，Telegram：jishuzhai1448
-
-国内技术博客：
-
-csdn：https://blog.csdn.net/wenxiaocsdn?spm=1000.2115.3001.5343
-
-博客园：https://www.cnblogs.com/wenxiao1-2-3-4
+技术支持咨询： Telegram：@xiaowen1449
 
 
 
