@@ -11,8 +11,8 @@ import re
 import json
 import util_str
 import os
-vmrun="C:\\Program Files (x86)\\VMware\\VMware Workstation\\vmrun.exe"
-ssh_username="wx"
+vmrun="vmrun.exe"
+ssh_username="cc"
 sh_user_home=f"/Users/{ssh_username}"
 #此参数用于匹配安装后的maco登录窗体，如匹配成功则代表macos启动成功
 str_LockedTime="CGSSessionScreenLockedTime"
@@ -760,8 +760,8 @@ def  run05():
                 # 执行scp plist文件，如果不存在plist，则执行脚本生成
                # subprocess.run(["D:\\macos_vm\\bat\\disable_appleAlert.bat"], shell=True)
                 # 激活黑屏的mac，开始发送自动按键(后续已经弃用)
-                #caff()
-              #  auto_send_keys()
+               # caff()
+               # auto_send_keys()
                # subprocess.run(["D:\\macos_vm\\bat\\scp_plist.bat"], shell=True)
                 #拷贝五码plist文件,按照虚拟机序列号，匹配config文件序列号
                 scp_plist()
@@ -769,7 +769,7 @@ def  run05():
                 #重建nvram文件
                 #rebuild_nvram()
                 # 执行禁用屏幕锁定脚本
-                #auto_send_keys()
+                dis_screensaver()
                # dis_screensaver()
                 # 需要执行重启后生效
                 run_test()
@@ -780,5 +780,6 @@ def  run05():
             run05()
     else:
         run05()
+
 
 run05()

@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>虚拟机控制面板</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- 终端风格克隆日志窗口样式 -->
+    <style>
+    .clone-log-terminal {
+      background: #181a1b;
+      color: #e0e0e0;
+      font-family: 'Fira Mono', 'Consolas', 'Menlo', monospace;
+      border-radius: 8px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+      margin-top: 24px;
+      max-width: 100%;
+      width: 100%;
+      position: relative;
+    }
+    .clone-log-title {
+      padding: 10px 18px;
+      border-bottom: 1px solid #222;
+      font-weight: bold;
+      background: #23272b;
+      color: #7fffd4;
+      border-radius: 8px 8px 0 0;
+      font-size: 1.08em;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .clone-log-copy {
+      color: #7fffd4;
+      background: none;
+      border: none;
+      font-size: 1.2em;
+      cursor: pointer;
+      margin-left: 8px;
+      transition: color 0.18s;
+    }
+    .clone-log-copy:hover {
+      color: #fff;
+    }
+    .clone-log-body {
+      max-height: 240px;
+      overflow-y: auto;
+      padding: 14px 18px;
+      font-size: 15px;
+      line-height: 1.6;
+      background: #181a1b;
+    }
+    .clone-log-body pre {
+      margin: 0;
+      color: #b6ffb6;
+      background: none;
+      font-family: inherit;
+    }
+    .btn, .btn:visited, .btn-outline-secondary, .btn-outline-secondary:visited {
+      color: #222 !important;
+      background: #fff !important;
+      border: 2px solid #dee2e6 !important;
+      border-radius: 24px !important;
+      font-weight: bold;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      transition: background 0.18s, color 0.18s, box-shadow 0.18s;
+    }
+    .btn:hover, .btn:focus,
+    .btn-outline-secondary:hover, .btn-outline-secondary:focus {
+      color: #222 !important;
+      background: #f5f5f5 !important;
+      border-color: #b0b3b8 !important;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.10);
+    }
+    </style>
+</head>
+<body>
+<div class="d-flex align-items-center" style="position:absolute; top:18px; right:120px; z-index:2000;">
+  <div class="dropdown">
+    <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="langDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+      语言
+    </button>
+    <ul class="dropdown-menu" aria-labelledby="langDropdown">
+      <li><a class="dropdown-item" href="?lang=zh">中文</a></li>
+      <li><a class="dropdown-item" href="?lang=en">English</a></li>
+    </ul>
+  </div>
+</div>
+<a href="{{ url_for('logout') }}" class="btn btn-outline-secondary position-absolute" style="top: 18px; right: 32px; z-index: 2000;">登出</a>
+<div class="container-fluid mt-4">
+    <div class="row">
+        <!-- 左侧菜单 -->
+        <nav class="col-md-3 col-lg-2 sidebar bg-white p-3">
+            <h5 class="mb-4"><span style="color:#000; font-style:italic; font-weight:bold;">macos_vm管理平台</span></h5>
+            <div class="accordion" id="accordionMenu">
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingVM">
+                        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseVM" aria-expanded="false" aria-controls="collapseVM">
+                            虚拟机管理
+                        </button>
+                    </h2>
+                    <div id="collapseVM" class="accordion-collapse collapse" aria-labelledby="headingVM" data-bs-parent="#accordionMenu">
+                        <div class="accordion-body p-0">
+                            <ul class="nav flex-column">
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#" onclick="showPanel('clone')">虚拟机批量克隆</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link active" href="#" onclick="showPanel('list')">虚拟机成品信息</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#" onclick="showPanel('script-list')">虚拟机脚本管理</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#" onclick="showPanel('trust')">虚拟机互信管理</a>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingBoot">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseBoot" aria-expanded="false" aria-controls="collapseBoot">
+                            引导管理
+                        </button>
+                    </h2>
+                    <div id="collapseBoot" class="accordion-collapse collapse" aria-labelledby="headingBoot" data-bs-parent="#accordionMenu">
+                        <div class="accordion-body p-0">
+                            <ul class="nav flex-column">
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#" onclick="showPanel('wuma')">虚拟机五码管理</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#" onclick="showPanel('mupan')">虚拟机母盘管理</a>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <!-- 新增同级菜单项 -->
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingEncrypt">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseEncrypt" aria-expanded="false" aria-controls="collapseEncrypt">
+                            数据加密功能
+                        </button>
+                    </h2>
+                    <div id="collapseEncrypt" class="accordion-collapse collapse" aria-labelledby="headingEncrypt" data-bs-parent="#accordionMenu">
+                        <div class="accordion-body p-0">
+                            <ul class="nav flex-column">
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#" onclick="showPanel('encrypt-code')">代码加密</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#" onclick="showPanel('encrypt-wuma')">五码加密</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#" onclick="showPanel('encrypt-id')">id加密</a>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingProxy">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseProxy" aria-expanded="false" aria-controls="collapseProxy">
+                            代理ip配置
+                        </button>
+                    </h2>
+                    <div id="collapseProxy" class="accordion-collapse collapse" aria-labelledby="headingProxy" data-bs-parent="#accordionMenu">
+                        <div class="accordion-body p-0">
+                            <ul class="nav flex-column">
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#" onclick="showPanel('proxy-assign')">代理ip分配</a>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingSoft">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSoft" aria-expanded="false" aria-controls="collapseSoft">
+                            虚拟机软件管理
+                        </button>
+                    </h2>
+                    <div id="collapseSoft" class="accordion-collapse collapse" aria-labelledby="headingSoft" data-bs-parent="#accordionMenu">
+                        <div class="accordion-body p-0">
+                            <ul class="nav flex-column">
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#" onclick="showPanel('soft-version')">版本查看</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#" onclick="showPanel('soft-env')">环境变量</a>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingResource">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseResource" aria-expanded="false" aria-controls="collapseResource">
+                            系统资源管理
+                        </button>
+                    </h2>
+                    <div id="collapseResource" class="accordion-collapse collapse" aria-labelledby="headingResource" data-bs-parent="#accordionMenu">
+                        <div class="accordion-body p-0">
+                            <ul class="nav flex-column">
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#" onclick="showPanel('cpu')">CPU资源</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#" onclick="showPanel('mem')">内存资源</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#" onclick="showPanel('disk')">磁盘资源</a>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingSystem">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSystem" aria-expanded="false" aria-controls="collapseSystem">
+                            系统管理
+                        </button>
+                    </h2>
+                    <div id="collapseSystem" class="accordion-collapse collapse" aria-labelledby="headingSystem" data-bs-parent="#accordionMenu">
+                        <div class="accordion-body p-0">
+                            <ul class="nav flex-column">
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#" onclick="showPanel('sys-version')">系统版本</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#" onclick="showPanel('sys-plugin')">系统插件管理</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#" onclick="showPanel('sys-user')">用户管理</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#" onclick="showPanel('sys-auth')">授权管理</a>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+ 
+            </div>
+        </nav>
+        <!-- 右侧内容 -->
+        <main class="col-md-9 col-lg-10 p-4" id="detailPanel">
+            <div id="panel-list">
+                <h3>虚拟机成品信息</h3>
+                <div class="mb-3 d-flex gap-2">
+                    <button class="btn btn-outline-secondary btn-sm">批量重启</button>
+                    <button class="btn btn-outline-secondary btn-sm">批量关机</button>
+                    <button class="btn btn-outline-secondary btn-sm">批量挂起</button>
+                    <button class="btn btn-outline-secondary btn-sm">批量DeBug</button>
+                </div>
+                <table class="table table-bordered bg-white">
+                    <thead>
+                        <tr>
+                            <th><input type="checkbox" id="selectAllVMs" onclick="toggleAllVMs(this)"></th>
+                            <th>名称</th>
+                            <th>IP</th>
+                            <th>状态</th>
+                            <th>IMessageDbug信息</th>
+                            <th>更换五码</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for vm in vm_list %}
+                        <tr>
+                            <td><input type="checkbox" class="vm-checkbox"></td>
+                            <td>{{ vm.name }}</td>
+                            <td>{{ vm.ip }}</td>
+                            <td>{{ vm.status }}</td>
+                            <td><pre class="mb-0">{{ vm.imessage }}</pre></td>
+                            <td><button class="btn btn-outline-secondary btn-sm">手动分配五码</button></td>
+                            <td>
+                                <button class="btn btn-outline-secondary btn-sm">挂起</button>
+                                <button class="btn btn-outline-secondary btn-sm">重启</button>
+                                <button class="btn btn-outline-secondary btn-sm">关机</button>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                <nav aria-label="Page navigation">
+                  <ul class="pagination justify-content-center mt-3">
+                    <li class="page-item disabled"><a class="page-link" href="#">上一页</a></li>
+                    <li class="page-item active"><a class="page-link" href="#">1</a></li>
+                    <li class="page-item"><a class="page-link" href="#">2</a></li>
+                    <li class="page-item"><a class="page-link" href="#">3</a></li>
+                    <li class="page-item"><a class="page-link" href="#">下一页</a></li>
+                  </ul>
+                </nav>
+                <div class="clone-log-terminal">
+                  <div class="clone-log-title">任务信息
+                    <button class="clone-log-copy" title="复制内容" onclick="copyTerminalContent(this)"><i class="bi bi-clipboard"></i></button>
+                  </div>
+                  <div class="clone-log-body">
+                    <pre>
+[10:05:01] 任务队列初始化完成。
+[10:05:03] 检查虚拟机 vm_01 状态 ... 正常
+[10:05:04] 检查虚拟机 vm_02 状态 ... 正常
+[10:05:05] 检查虚拟机 vm_03 状态 ... 正常
+[10:05:06] 检查虚拟机 vm_04 状态 ... 正常
+[10:05:07] 检查虚拟机 vm_05 状态 ... 正常
+[10:05:08] 检查虚拟机 vm_06 状态 ... 正常
+[10:05:10] 所有虚拟机状态正常，准备批量操作。
+[10:05:12] 批量重启任务已下发。
+[10:05:15] 批量关机任务已下发。
+[10:05:18] 批量挂起任务已下发。
+...
+                    </pre>
+                  </div>
+                </div>
+            </div>
+            <div id="panel-wuma" style="display:none;">
+                <h3>虚拟机五码管理</h3>
+                <div class="mb-3">
+                    <button class="btn btn-outline-secondary btn-sm">上传五码文本</button>
+                </div>
+                <table class="table table-bordered bg-white">
+                    <thead>
+                        <tr>
+                            <th>名称</th>
+                            <th>可用数量</th>
+                            <th>已用</th>
+                            <th>五码版本</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>文本1</td>
+                            <td>文本2</td>
+                            <td>文本3</td>
+                            <td>版本A</td>
+                            <td><button class="btn btn-outline-secondary btn-sm">查看五码</button></td>
+                        </tr>
+                        <tr>
+                            <td>文本4</td>
+                            <td>文本5</td>
+                            <td>文本6</td>
+                            <td>版本B</td>
+                            <td><button class="btn btn-outline-secondary btn-sm">查看五码</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div id="panel-wuma-version" style="display:none;">
+                <h3>五码版本</h3>
+                <p>这里是五码版本的内容（可后续扩展）</p>
+            </div>
+            <div id="panel-mupan" style="display:none;">
+                <h3>虚拟机母盘管理</h3>
+                <div class="mb-3 d-flex gap-2">
+                    <button class="btn btn-outline-secondary btn-sm">上传母盘</button>
+                    <button class="btn btn-outline-secondary btn-sm">初始化母盘</button>
+                    <button class="btn btn-outline-secondary btn-sm">删除所有快照</button>
+                </div>
+                <table class="table table-bordered bg-white">
+                    <thead>
+                        <tr>
+                            <th>母盘名称</th>
+                            <th>母盘虚拟机名称</th>
+                            <th>母盘版本</th>
+                            <th>母盘大小</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>base_disk_01</td><td>vm_01</td><td>macos10.12</td><td>40GB</td><td><button class="btn btn-outline-secondary btn-sm">数据校验</button></td></tr>
+                        <tr><td>base_disk_02</td><td>vm_02</td><td>macos10.15</td><td>60GB</td><td><button class="btn btn-outline-secondary btn-sm">数据校验</button></td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div id="panel-script-list" style="display:none;">
+                <h3>脚本列表</h3>
+                <div class="mb-3 d-flex gap-2">
+                    <button class="btn btn-outline-secondary btn-sm">批量上传脚本</button>
+                    <button class="btn btn-outline-secondary btn-sm">刷新列表</button>
+                </div>
+                <table class="table table-bordered bg-white">
+                    <thead>
+                        <tr>
+                            <th>文件名</th>
+                            <th>修改时间</th>
+                            <th>大小(Byte)</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for script in script_list %}
+                        <tr>
+                            <td>{{ script.name }}</td>
+                            <td>{{ script.mtime }}</td>
+                            <td>{{ script.size }}</td>
+                            <td><button class="btn btn-outline-secondary btn-sm">脚本修改</button></td>
+                            <td><button class="btn btn-outline-secondary btn-sm">上传至mac</button></td>
+
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                <nav aria-label="Page navigation">
+                  <ul class="pagination justify-content-center mt-3">
+                    <li class="page-item disabled"><a class="page-link" href="#">上一页</a></li>
+                    <li class="page-item active"><a class="page-link" href="#">1</a></li>
+                    <li class="page-item"><a class="page-link" href="#">2</a></li>
+                    <li class="page-item"><a class="page-link" href="#">3</a></li>
+                    <li class="page-item"><a class="page-link" href="#">下一页</a></li>
+                  </ul>
+                </nav>
+            </div>
+            <div id="panel-clone" style="display:none;">
+                <h3>虚拟机批量克隆</h3>
+                <button class="btn btn-outline-secondary btn-sm mb-3" data-bs-toggle="modal" data-bs-target="#cloneTaskModal">启动克隆任务</button>
+                <div class="modal fade" id="cloneTaskModal" tabindex="-1" aria-labelledby="cloneTaskModalLabel" aria-hidden="true">
+                  <div class="modal-dialog">
+                    <div class="modal-content bg-dark text-light">
+                      <div class="modal-header">
+                        <h5 class="modal-title" id="cloneTaskModalLabel">启动克隆任务</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                      </div>
+                      <div class="modal-body">
+                        <form>
+                          <div class="mb-3">
+                            <label for="cloneCount" class="form-label">克隆数量</label>
+                            <input type="number" class="form-control" id="cloneCount" min="1" max="20" value="1">
+                          </div>
+                          <div class="mb-3">
+                            <label for="cloneName" class="form-label">克隆名称</label>
+                            <input type="text" class="form-control mb-2" id="cloneName" placeholder="如 vm_clone_01">
+                            <select class="form-select" id="cloneNameSelect">
+                              <option value="">选择已有名称</option>
+                              <option value="vm_clone_01">vm_clone_01</option>
+                              <option value="vm_clone_02">vm_clone_02</option>
+                              <option value="vm_clone_03">vm_clone_03</option>
+                            </select>
+                          </div>
+                          <div class="mb-3">
+                            <label for="clonePath" class="form-label">物理存放位置</label>
+                            <input type="text" class="form-control mb-2" id="clonePath" placeholder="如 D:/macos_vms">
+                            <select class="form-select" id="clonePathSelect">
+                              <option value="">选择已有路径</option>
+                              <option value="D:/macos_vms">D:/macos_vms</option>
+                              <option value="E:/macos_vms">E:/macos_vms</option>
+                            </select>
+                          </div>
+                          <div class="mb-3">
+                            <label for="cloneBaseDisk" class="form-label">母盘选择</label>
+                            <select class="form-select" id="cloneBaseDisk">
+                              <option value="">请选择母盘</option>
+                              <option value="base_disk_01">base_disk_01</option>
+                              <option value="base_disk_02">base_disk_02</option>
+                            </select>
+                          </div>
+                          <div class="mb-3">
+                            <label class="form-label">克隆方式</label>
+                            <div>
+                              <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="cloneType" id="linkClone" value="link" checked>
+                                <label class="form-check-label" for="linkClone">链接克隆</label>
+                              </div>
+                              <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="cloneType" id="fullClone" value="full">
+                                <label class="form-check-label" for="fullClone">完整克隆</label>
+                              </div>
+                            </div>
+                          </div>
+                          <div class="mb-3">
+                            <label class="form-label">自增方式</label>
+                            <div>
+                              <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="autoIncType" id="autoNum" value="num" checked>
+                                <label class="form-check-label" for="autoNum">自增数字</label>
+                              </div>
+                              <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="autoIncType" id="autoAlpha" value="alpha">
+                                <label class="form-check-label" for="autoAlpha">自增字母</label>
+                              </div>
+                            </div>
+                          </div>
+                        </form>
+                      </div>
+                      <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                        <button type="button" class="btn btn-primary">确认启动</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <table class="table table-bordered bg-white">
+                    <thead>
+                        <tr>
+                            <th>现存虚拟机名称</th>
+                            <th>虚拟机IP</th>
+                            <th>虚拟机版本</th>
+                            <th>虚拟机状态</th>
+                            <th>克隆进程</th>
+                            <th>脚本状态</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>vm_01</td><td>192.168.1.101</td><td>macos10.12</td><td>启动中</td><td>进行中</td><td>成功</td></tr>
+                        <tr><td>vm_02</td><td>192.168.1.102</td><td>macos10.12</td><td>已启动</td><td>已完成</td><td>失败</td></tr>
+                        <tr><td>vm_03</td><td>192.168.1.103</td><td>macos10.12</td><td>启动中</td><td>等待中</td><td>未执行</td></tr>
+                        <tr><td>vm_04</td><td>192.168.1.104</td><td>macos10.12</td><td>已启动</td><td>进行中</td><td>成功</td></tr>
+                        <tr><td>vm_05</td><td>192.168.1.105</td><td>macos10.12</td><td>启动中</td><td>已完成</td><td>失败</td></tr>
+                        <tr><td>vm_06</td><td>192.168.1.106</td><td>macos10.12</td><td>已启动</td><td>等待中</td><td>未执行</td></tr>
+                     
+                    </tbody>
+                </table>
+                <nav aria-label="Page navigation">
+                  <ul class="pagination justify-content-center mt-3">
+                    <li class="page-item disabled"><a class="page-link" href="#">上一页</a></li>
+                    <li class="page-item active"><a class="page-link" href="#">1</a></li>
+                    <li class="page-item"><a class="page-link" href="#">2</a></li>
+                    <li class="page-item"><a class="page-link" href="#">3</a></li>
+                    <li class="page-item"><a class="page-link" href="#">下一页</a></li>
+                  </ul>
+                </nav>
+                <div class="clone-log-terminal">
+                  <div class="clone-log-title">任务信息
+                    <button class="clone-log-copy" title="复制内容" onclick="copyTerminalContent(this)"><i class="bi bi-clipboard"></i></button>
+                  </div>
+                  <div class="clone-log-body">
+                    <pre>
+[10:01:23] 开始克隆 vm_01 ...
+[10:01:25] vm_01 克隆进程进行中 ...
+[10:01:30] vm_01 克隆完成，脚本执行成功。
+[10:01:31] 开始克隆 vm_02 ...
+[10:01:35] vm_02 克隆进程已完成，脚本执行失败。
+[10:01:36] 开始克隆 vm_03 ...
+[10:01:40] vm_03 克隆进程进行中 ...
+[10:01:45] vm_03 克隆完成，脚本执行成功。
+[10:01:46] 开始克隆 vm_04 ...
+[10:01:50] vm_04 克隆进程进行中 ...
+[10:01:55] vm_04 克隆完成，脚本执行成功。
+[10:01:56] 开始克隆 vm_05 ...
+[10:02:00] vm_05 克隆进程进行中 ...
+[10:02:05] vm_05 克隆完成，脚本执行失败。
+[10:02:06] 开始克隆 vm_06 ...
+[10:02:10] vm_06 克隆进程进行中 ...
+[10:02:15] vm_06 克隆完成，脚本执行成功。
+[10:02:16] 开始克隆 vm_07 ...
+[10:02:20] vm_07 克隆进程进行中 ...
+[10:02:25] vm_07 克隆完成，脚本执行成功。
+[10:02:26] 开始克隆 vm_08 ...
+[10:02:30] vm_08 克隆进程进行中 ...
+[10:02:35] vm_08 克隆完成，脚本执行失败。
+[10:02:36] 开始克隆 vm_09 ...
+[10:02:40] vm_09 克隆进程进行中 ...
+[10:02:45] vm_09 克隆完成，脚本执行成功。
+[10:02:46] 开始克隆 vm_10 ...
+[10:02:50] vm_10 克隆进程进行中 ...
+[10:02:55] vm_10 克隆完成，脚本执行成功。
+...
+                    </pre>
+                  </div>
+                </div>
+            </div>
+            <div id="panel-delete" style="display:none;">
+                <h3>虚拟机删除</h3>
+                <p>这里是虚拟机删除的内容（可后续扩展）</p>
+            </div>
+            <div id="panel-trust" style="display:none;">
+                <h3>虚拟机互信管理</h3>
+                <p>这里是虚拟机互信管理的内容（可后续扩展）</p>
+            </div>
+            <!-- 新增内容面板 -->
+            <div id="panel-encrypt" style="display:none;">
+                <h3>数据加密功能</h3>
+                <p>这里是数据加密功能的内容（可后续扩展）</p>
+            </div>
+            <div id="panel-encrypt-code" style="display:none;">
+                <h3>代码加密</h3>
+                <p>这里是代码加密的内容（可后续扩展）</p>
+            </div>
+            <div id="panel-encrypt-wuma" style="display:none;">
+                <h3>五码加密</h3>
+                <p>这里是五码加密的内容（可后续扩展）</p>
+            </div>
+            <div id="panel-encrypt-id" style="display:none;">
+                <h3>id加密</h3>
+                <p>这里是id加密的内容（可后续扩展）</p>
+            </div>
+            <div id="panel-soft" style="display:none;">
+                <h3>虚拟机软件管理</h3>
+                <p>这里是虚拟机软件管理的内容（可后续扩展）</p>
+            </div>
+            <div id="panel-soft-version" style="display:none;">
+                <h3>版本查看</h3>
+                <p>这里是版本查看的内容（可后续扩展）</p>
+            </div>
+            <div id="panel-soft-env" style="display:none;">
+                <h3>环境变量</h3>
+                <p>这里是环境变量的内容（可后续扩展）</p>
+            </div>
+            <div id="panel-cpu" style="display:none;">
+                <h3>CPU资源</h3>
+                <p>这里是CPU资源的内容（可后续扩展）</p>
+            </div>
+            <div id="panel-mem" style="display:none;">
+                <h3>内存资源</h3>
+                <p>这里是内存资源的内容（可后续扩展）</p>
+            </div>
+            <div id="panel-disk" style="display:none;">
+                <h3>磁盘资源</h3>
+                <p>这里是磁盘资源的内容（可后续扩展）</p>
+            </div>
+            <div id="panel-sys-version" style="display:none;">
+                <h3>系统版本</h3>
+                <p>这里是系统版本的内容（可后续扩展）</p>
+            </div>
+            <div id="panel-sys-plugin" style="display:none;">
+                <h3>系统插件管理</h3>
+                <p>这里是系统插件管理的内容（可后续扩展）</p>
+            </div>
+            <div id="panel-sys-user" style="display:none;">
+                <h3>用户管理</h3>
+                <p>这里是用户管理的内容（可后续扩展）</p>
+            </div>
+            <div id="panel-sys-auth" style="display:none;">
+                <h3>授权管理</h3>
+                <p>这里是授权管理的内容（可后续扩展）</p>
+            </div>
+            <div id="panel-proxy-assign" style="display:none;">
+                <h3>代理ip分配</h3>
+                <p>这里是代理ip分配的内容（可后续扩展）</p>
+            </div>
+            <div id="panel-boot" style="display:none;">
+                <h3>引导管理</h3>
+                <p>这里是引导管理的内容（可后续扩展）</p>
+            </div>
+        </main>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.js"></script>
+<script>
+function showPanel(type) {
+    document.getElementById('panel-list').style.display = (type === 'list') ? '' : 'none';
+    document.getElementById('panel-wuma').style.display = (type === 'wuma') ? '' : 'none';
+    document.getElementById('panel-wuma-version').style.display = (type === 'wuma-version') ? '' : 'none';
+    document.getElementById('panel-mupan').style.display = (type === 'mupan') ? '' : 'none';
+    document.getElementById('panel-script-list').style.display = (type === 'script-list') ? '' : 'none';
+    document.getElementById('panel-clone').style.display = (type === 'clone') ? '' : 'none';
+    document.getElementById('panel-delete').style.display = (type === 'delete') ? '' : 'none';
+    document.getElementById('panel-trust').style.display = (type === 'trust') ? '' : 'none';
+    document.getElementById('panel-encrypt').style.display = (type === 'encrypt') ? '' : 'none';
+    document.getElementById('panel-encrypt-code').style.display = (type === 'encrypt-code') ? '' : 'none';
+    document.getElementById('panel-encrypt-wuma').style.display = (type === 'encrypt-wuma') ? '' : 'none';
+    document.getElementById('panel-encrypt-id').style.display = (type === 'encrypt-id') ? '' : 'none';
+    document.getElementById('panel-proxy-assign').style.display = (type === 'proxy-assign') ? '' : 'none';
+    document.getElementById('panel-soft').style.display = (type === 'soft') ? '' : 'none';
+    document.getElementById('panel-soft-version').style.display = (type === 'soft-version') ? '' : 'none';
+    document.getElementById('panel-soft-env').style.display = (type === 'soft-env') ? '' : 'none';
+    document.getElementById('panel-cpu').style.display = (type === 'cpu') ? '' : 'none';
+    document.getElementById('panel-mem').style.display = (type === 'mem') ? '' : 'none';
+    document.getElementById('panel-disk').style.display = (type === 'disk') ? '' : 'none';
+    document.getElementById('panel-sys-version').style.display = (type === 'sys-version') ? '' : 'none';
+    document.getElementById('panel-sys-plugin').style.display = (type === 'sys-plugin') ? '' : 'none';
+    document.getElementById('panel-sys-user').style.display = (type === 'sys-user') ? '' : 'none';
+    document.getElementById('panel-sys-auth').style.display = (type === 'sys-auth') ? '' : 'none';
+    document.getElementById('panel-boot').style.display = (type === 'boot') ? '' : 'none';
+    // 菜单高亮
+    var links = document.querySelectorAll('.nav-link');
+    links.forEach(link => link.classList.remove('active'));
+    // 虚拟机管理子菜单高亮
+    if(type === 'clone') {
+        var vmLinks = document.querySelectorAll('#accordionMenu .nav-link');
+        vmLinks.forEach(link => link.classList.remove('active'));
+        vmLinks[0].classList.add('active');
+    }
+    if(type === 'list') links[0].classList.add('active');
+    if(type === 'wuma') links[1].classList.add('active');
+    if(type === 'mupan') links[2].classList.add('active');
+    // 脚本管理子菜单高亮
+    if(type === 'script-list') {
+        var scriptLinks = document.querySelectorAll('#collapseScript .nav-link');
+        scriptLinks.forEach(link => link.classList.remove('active'));
+        scriptLinks[0].classList.add('active');
+    }
+    // 五码管理子菜单高亮
+    if(type === 'wuma' || type === 'wuma-version') {
+        var wumaLinks = document.querySelectorAll('#collapseWuma .nav-link');
+        wumaLinks.forEach(link => link.classList.remove('active'));
+        if(type === 'wuma') wumaLinks[0].classList.add('active');
+        if(type === 'wuma-version') wumaLinks[1].classList.add('active');
+    }
+    // 虚拟机互信管理子菜单高亮
+    if(type === 'trust') {
+        var vmLinks = document.querySelectorAll('#accordionMenu .nav-link');
+        vmLinks.forEach(link => link.classList.remove('active'));
+        vmLinks[5].classList.add('active');
+    }
+    // 数据加密功能子菜单高亮
+    if(type === 'encrypt' || type === 'encrypt-code' || type === 'encrypt-wuma' || type === 'encrypt-id') {
+        var encryptLinks = document.querySelectorAll('#collapseEncrypt .nav-link');
+        encryptLinks.forEach(link => link.classList.remove('active'));
+        if(type === 'encrypt') encryptLinks[0].classList.add('active');
+        if(type === 'encrypt-code') encryptLinks[0].classList.add('active');
+        if(type === 'encrypt-wuma') encryptLinks[1].classList.add('active');
+        if(type === 'encrypt-id') encryptLinks[2].classList.add('active');
+    }
+    // 代理ip配置子菜单高亮
+    if(type === 'proxy-assign') {
+        var proxyLinks = document.querySelectorAll('#collapseProxy .nav-link');
+        proxyLinks.forEach(link => link.classList.remove('active'));
+        proxyLinks[0].classList.add('active');
+    }
+}
+
+function toggleAllVMs(source) {
+    var checkboxes = document.querySelectorAll('.vm-checkbox');
+    checkboxes.forEach(cb => cb.checked = source.checked);
+}
+
+function copyTerminalContent(btn) {
+  const pre = btn.closest('.clone-log-terminal').querySelector('pre');
+  if (pre) {
+    navigator.clipboard.writeText(pre.textContent).then(() => {
+      btn.innerHTML = '<i class="bi bi-clipboard-check"></i>';
+      setTimeout(() => { btn.innerHTML = '<i class="bi bi-clipboard"></i>'; }, 1200);
+    });
+  }
+}
+</script>
+</body>
+</html> 
