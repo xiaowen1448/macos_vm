@@ -3,7 +3,10 @@ def test_ssh_with_command(host, username):
     """使用系统 ssh 命令测试 SSH 登录"""
     try:
         result = subprocess.run(
-            ["ssh", "-o", "BatchMode=yes", f"{username}@{host}", "exit"],
+            ["ssh",
+             "-o","BatchMode=yes",
+             "-o","StrictHostKeyChecking=no",
+             f"{username}@{host}", "exit"],
             capture_output=True, text=True, timeout=5
         )
         if result.returncode == 0:

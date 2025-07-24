@@ -922,9 +922,9 @@
 		<key>CsrActiveConfig</key>
 		<string>0x3E7</string>
 		<key>MLB</key>
-		<string>FV9846307HCHWVQEC</string>
+		<string>FV9817704Y5J2VCDD</string>
 		<key>ROM</key>
-		<data>hGh44uMe</data>
+		<data>hGh4DQfq</data>
 		<key>BooterConfig</key>
 		<string>0x28</string>
 	</dict>
@@ -941,7 +941,7 @@
 		<key>#BiosVendor</key>
 		<string>Apple Inc.</string>
 		<key>SmUUID</key>
-		<string>7c0d5e66-f239-4e3a-9a19-5bfbf7d78c38</string>
+		<string>5c01f81b-4786-4cf6-87be-d5b0b46b013b</string>
 		<key>LocationInChassis</key>
 		<string>Part Component</string>
 		<key>#ChassisType</key>
@@ -951,11 +951,11 @@
 		<key>BoardVersion</key>
 		<string>1.0</string>
 		<key>ProductName</key>
-		<string>MacBookPro14,1</string>
+		<string>iMac18,1</string>
 		<key>#EfiVersion</key>
 		<string>288.0.0.0.0</string>
 		<key>SerialNumber</key>
-		<string>FVFXPVDUHV29</string>
+		<string>C02TV7JMJ1WK</string>
 		<key>#BoardVersion</key>
 		<string>Proto1</string>
 		<key>#BiosVersion</key>
@@ -1088,7 +1088,7 @@
 		<key>EfiVersion</key>
 		<string>207.0.0.0.0</string>
 		<key>Board-ID</key>
-		<string>Mac-B4831CEBD52A0C4C</string>
+		<string>Mac-4B682C642B45593E</string>
 		<key>PlatformFeature</key>
 		<string>0x1A</string>
 		<key>#BiosReleaseDate</key>
@@ -1099,7 +1099,7 @@
 		<key>InjectKexts</key>
 		<string>Detect</string>
 		<key>CustomUUID</key>
-		<string>239d4166-e209-40dc-9682-178a48dcb905</string>
+		<string>6e685eb2-5fc8-447b-932f-8eee7ec2ab37</string>
 		<key>#CustomUUID</key>
 		<string>511CE201-1000-4000-9999-010203040506</string>
 		<key>#NoCaches</key>
