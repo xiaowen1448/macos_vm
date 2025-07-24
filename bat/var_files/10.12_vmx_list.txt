@@ -1,0 +1,2 @@
+"D:\macos_vm\bat\..\NewVM\10.12\VM_3\macos10.12_VM_3.vmx" 
+"D:\macos_vm\bat\..\NewVM\10.12\VM_4\macos10.12_VM_4.vmx" 
