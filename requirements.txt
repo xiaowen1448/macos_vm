@@ -1,0 +1,2 @@
+paramiko
+Flask>=2.0 
