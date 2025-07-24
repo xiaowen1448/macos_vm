@@ -70,7 +70,9 @@ vm02
 
 初成模型，底层后续实现，客户端和web客户端均可
 
-<img width="1850" height="1080" alt="image" src="https://github.com/user-attachments/assets/7c79fb2c-b63d-405a-9228-b727f6877877" />
+
+<img width="1334" height="846" alt="image" src="https://github.com/user-attachments/assets/7abfcd62-8c8a-40ad-848e-c6d30dd3302e" />
+
 
 
 技术支持咨询： Telegram：@xiaowen1448
