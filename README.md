@@ -68,6 +68,10 @@ vm02
 
 <img width="1639" height="995" alt="image" src="https://github.com/user-attachments/assets/f06c1e72-9267-4007-92b6-4a804a877cdb" />
 
+初成模型，底层后续实现
+<img width="1850" height="1080" alt="image" src="https://github.com/user-attachments/assets/7c79fb2c-b63d-405a-9228-b727f6877877" />
+
+
 技术支持咨询： Telegram：@xiaowen1448
 wechat：w8686512
 
