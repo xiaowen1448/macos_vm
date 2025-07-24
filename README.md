@@ -60,6 +60,9 @@ vm02
 
 ![image](https://github.com/user-attachments/assets/8b5dcd4e-207a-43f7-b12c-60424f4930c4)
 
+新增低版本10.12克隆
+
+<img width="1822" height="785" alt="image" src="https://github.com/user-attachments/assets/9e23a73f-adeb-4589-acb0-cee58ced64b4" />
 
 
 
