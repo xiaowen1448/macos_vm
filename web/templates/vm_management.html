@@ -604,7 +604,7 @@
                         </span>
                     </td>
                     <td id="ip-${vm.name}">
-                        ${vm.ip || '<span class="text-muted">-</span>'}
+                        ${vm.status === 'running' ? '<span id="ip-status-${vm.name}">获取中...</span>' : '<span class="text-muted">-</span>'}
                     </td>
                     <td id="wuma-${vm.name}">
                         ${vm.wuma_info || '<span class="text-muted">-</span>'}
@@ -857,6 +857,7 @@
             // 如果有运行中的虚拟机，禁用批量删除按钮
             const hasRunningVMs = runningVMs.length > 0;
             const deleteBtn = document.getElementById('deleteSelectedBtn');
+            
             deleteBtn.disabled = count === 0 || hasRunningVMs;
             
             // 更新按钮提示
@@ -1281,6 +1282,27 @@
             const links = document.querySelectorAll(`#${linkContainerId} .nav-link`);
             links.forEach(link => link.classList.remove('active'));
             event.target.classList.add('active');
+        }
+
+        // 在 updateVMTableWithPagination 渲染表格后调用 fetchAllRunningVMIPs(currentVMs);
+        // 其中 currentVMs 是当前页的虚拟机数组
+        function fetchAllRunningVMIPs(vmList) {
+            vmList.forEach(vm => {
+                if (vm.status === 'running') {
+                    fetch(`/api/vm_ip_status/${encodeURIComponent(vm.name)}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success && data.ip_status && data.ip_status.ip) {
+                                document.getElementById('ip-' + vm.name).textContent = data.ip_status.ip;
+                            } else {
+                                document.getElementById('ip-' + vm.name).textContent = '未获取到';
+                            }
+                        })
+                        .catch(() => {
+                            document.getElementById('ip-' + vm.name).textContent = '获取失败';
+                        });
+                }
+            });
         }
     </script>
 </body>

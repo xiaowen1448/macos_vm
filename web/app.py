@@ -786,6 +786,61 @@ def api_vm_details(vm_name):
             'message': f'获取虚拟机详细信息失败: {str(e)}'
         })
 
+@app.route('/api/vm_ip_status/<vm_name>')
+@login_required
+def api_vm_ip_status(vm_name):
+    """获取虚拟机IP状态信息"""
+    try:
+        ip_status = get_vm_ip_status(vm_name)
+        
+        return jsonify({
+            'success': True,
+            'vm_name': vm_name,
+            'ip_status': ip_status
+        })
+        
+    except Exception as e:
+        print(f"[DEBUG] 获取虚拟机IP状态失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取虚拟机IP状态失败: {str(e)}'
+        })
+
+@app.route('/api/vm_ip_monitor', methods=['POST'])
+@login_required
+def api_vm_ip_monitor():
+    """批量监控虚拟机IP状态"""
+    try:
+        data = request.get_json()
+        vm_names = data.get('vm_names', [])
+        
+        if not vm_names:
+            return jsonify({'success': False, 'message': '缺少虚拟机名称'})
+        
+        results = {}
+        for vm_name in vm_names:
+            try:
+                ip_status = get_vm_ip_status(vm_name)
+                results[vm_name] = ip_status
+            except Exception as e:
+                results[vm_name] = {
+                    'ip': None,
+                    'status': 'error',
+                    'message': f'监控失败: {str(e)}'
+                }
+        
+        return jsonify({
+            'success': True,
+            'results': results
+        })
+        
+    except Exception as e:
+        print(f"[DEBUG] 批量监控IP状态失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'批量监控失败: {str(e)}'
+        })
+
 @app.route('/api/vm_start', methods=['POST'])
 @login_required
 def api_vm_start():
@@ -1002,20 +1057,146 @@ def get_vm_status(vm_path):
         return 'unknown'
 
 def get_vm_ip(vm_name):
-    """获取虚拟机IP地址"""
+    """获取虚拟机IP地址，优先用vmrun getGuestIPAddress"""
     try:
-        # 这里可以调用现有的IP获取脚本
+        # 1. 通过vmrun getGuestIPAddress
+        vm_file = find_vm_file(vm_name)
+        if vm_file:
+            vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
+            if not os.path.exists(vmrun_path):
+                vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
+            try:
+                cmd = [vmrun_path, 'getGuestIPAddress', vm_file, '-wait']
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                if result.returncode == 0:
+                    ip = result.stdout.strip()
+                    if is_valid_ip(ip):
+                        return ip
+            except Exception as e:
+                print(f"[DEBUG] vmrun getGuestIPAddress 获取IP失败: {str(e)}")
+        # 2. 兜底：调用现有的IP获取脚本
         ip_script = os.path.join(os.path.dirname(__file__), '..', 'bat', 'get_vm_ip.bat')
         if os.path.exists(ip_script):
             result = subprocess.run([ip_script, vm_name], capture_output=True, text=True, timeout=30)
-            if result.returncode == 0:
-                return result.stdout.strip()
-        
+            if result.returncode == 0 and result.stdout.strip():
+                ip = result.stdout.strip()
+                if is_valid_ip(ip):
+                    return ip
+        # 3. 兜底：从VMX文件读取
+        if vm_file and os.path.exists(vm_file):
+            try:
+                with open(vm_file, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+                    lines = content.split('\n')
+                    for line in lines:
+                        if 'ip=' in line.lower() or 'ipaddress=' in line.lower():
+                            ip = line.split('=')[1].strip().strip('"')
+                            if is_valid_ip(ip):
+                                return ip
+            except Exception as e:
+                print(f"[DEBUG] 从VMX文件读取IP失败: {str(e)}")
         return None
-        
     except Exception as e:
         print(f"[DEBUG] 获取虚拟机IP失败: {str(e)}")
         return None
+
+def is_valid_ip(ip):
+    """验证IP地址格式"""
+    if not ip:
+        return False
+    
+    try:
+        parts = ip.split('.')
+        if len(parts) != 4:
+            return False
+        
+        for part in parts:
+            if not part.isdigit():
+                return False
+            num = int(part)
+            if num < 0 or num > 255:
+                return False
+        
+        return True
+    except:
+        return False
+
+def get_vm_ip_status(vm_name):
+    """获取虚拟机IP状态信息"""
+    try:
+        ip = get_vm_ip(vm_name)
+        if not ip:
+            return {
+                'ip': None,
+                'status': 'no_ip',
+                'message': '未获取到IP地址'
+            }
+        
+        # 检查IP连通性
+        ping_result = check_ip_connectivity(ip)
+        
+        if ping_result['success']:
+            return {
+                'ip': ip,
+                'status': 'online',
+                'message': 'IP地址可达',
+                'response_time': ping_result.get('response_time')
+            }
+        else:
+            return {
+                'ip': ip,
+                'status': 'offline',
+                'message': 'IP地址不可达',
+                'error': ping_result.get('error')
+            }
+            
+    except Exception as e:
+        print(f"[DEBUG] 获取IP状态失败: {str(e)}")
+        return {
+            'ip': None,
+            'status': 'error',
+            'message': f'获取IP状态失败: {str(e)}'
+        }
+
+def check_ip_connectivity(ip):
+    """检查IP地址连通性"""
+    try:
+        # 使用ping命令检查连通性
+        result = subprocess.run(['ping', '-n', '1', '-w', '3000', ip], 
+                              capture_output=True, text=True, timeout=10)
+        
+        if result.returncode == 0:
+            # 解析响应时间
+            response_time = None
+            for line in result.stdout.split('\n'):
+                if '时间=' in line or 'time=' in line.lower():
+                    try:
+                        time_str = line.split('时间=')[1].split('ms')[0].strip()
+                        response_time = int(time_str)
+                    except:
+                        pass
+                    break
+            
+            return {
+                'success': True,
+                'response_time': response_time
+            }
+        else:
+            return {
+                'success': False,
+                'error': 'ping失败'
+            }
+            
+    except subprocess.TimeoutExpired:
+        return {
+            'success': False,
+            'error': '连接超时'
+        }
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e)
+        }
 
 def get_wuma_info(vm_name):
     """获取虚拟机五码信息"""
