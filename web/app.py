@@ -408,6 +408,17 @@ def clone_vm_worker(task_id):
         
         add_task_log(task_id, 'info', f'找到 {len(plist_files)} 个plist文件，需要克隆 {clone_count} 个虚拟机')
         
+        # 发送初始进度信息
+        initial_progress = {
+            'type': 'progress',
+            'current': 0,
+            'total': clone_count,
+            'current_vm': '',
+            'current_vm_progress': 0,
+            'estimated_remaining': clone_count * 30  # 预估总时间
+        }
+        task['logs'].append(initial_progress)
+        
         for i in range(clone_count):
             try:
                 print(f"[DEBUG] 开始克隆第 {i+1}/{clone_count} 个虚拟机")
@@ -446,6 +457,17 @@ def clone_vm_worker(task_id):
                 add_task_log(task_id, 'info', f'虚拟机文件夹: {vm_folder_path}')
                 if plist_file:
                     add_task_log(task_id, 'info', f'使用配置文件: {plist_file}')
+                
+                # 发送当前虚拟机进度信息
+                current_vm_progress = {
+                    'type': 'progress',
+                    'current': i,
+                    'total': clone_count,
+                    'current_vm': vm_name,
+                    'current_vm_progress': 0,  # 开始克隆
+                    'estimated_remaining': max(0, (clone_count - i) * 30)
+                }
+                task['logs'].append(current_vm_progress)
                 
                 # 执行克隆命令
                 vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
@@ -519,6 +541,17 @@ def clone_vm_worker(task_id):
                 # 更新进度
                 task['progress']['current'] = i + 1
                 print(f"[DEBUG] 更新进度: {i+1}/{clone_count}")
+                
+                # 发送详细进度信息
+                progress_data = {
+                    'type': 'progress',
+                    'current': i + 1,
+                    'total': clone_count,
+                    'current_vm': vm_name,
+                    'current_vm_progress': 100,  # 单个虚拟机克隆完成
+                    'estimated_remaining': max(0, (clone_count - i - 1) * 30)  # 预估剩余时间（秒）
+                }
+                task['logs'].append(progress_data)
                 
                 time.sleep(1)  # 避免过快执行
                 
@@ -620,49 +653,57 @@ def add_task_log(task_id, level, message):
 def api_clone_logs(task_id):
     """获取克隆任务日志流"""
     def generate():
-        if task_id not in clone_tasks:
-            yield f"data: {json.dumps({'type': 'error', 'message': '任务不存在'})}\n\n"
-            return
-        
-        task = clone_tasks[task_id]
-        last_log_index = 0
-        
-        while task['status'] in ['running']:
-            # 发送新日志
-            while last_log_index < len(task['logs']):
-                log_entry = task['logs'][last_log_index]
-                log_data = {
-                    'type': 'log',
-                    'level': log_entry['level'],
-                    'message': log_entry['message']
+        try:
+            if task_id not in clone_tasks:
+                yield f"data: {json.dumps({'type': 'error', 'message': '任务不存在'})}\n\n"
+                return
+            
+            task = clone_tasks[task_id]
+            last_log_index = 0
+            timeout_counter = 0
+            max_timeout = 300  # 5分钟超时
+            
+            while task['status'] in ['running'] and timeout_counter < max_timeout:
+                # 发送新日志和进度数据
+                while last_log_index < len(task['logs']):
+                    log_entry = task['logs'][last_log_index]
+                    
+                    # 检查是否是进度数据
+                    if isinstance(log_entry, dict) and log_entry.get('type') == 'progress':
+                        # 发送进度数据
+                        yield f"data: {json.dumps(log_entry)}\n\n"
+                    else:
+                        # 发送普通日志
+                        log_data = {
+                            'type': 'log',
+                            'level': log_entry['level'],
+                            'message': log_entry['message']
+                        }
+                        yield f"data: {json.dumps(log_data)}\n\n"
+                    
+                    last_log_index += 1
+                
+                # 发送统计更新
+                stats_data = {
+                    'type': 'stats',
+                    'stats': task['stats']
                 }
-                yield f"data: {json.dumps(log_data)}\n\n"
-                last_log_index += 1
+                yield f"data: {json.dumps(stats_data)}\n\n"
+                
+                timeout_counter += 1
+                time.sleep(1)
             
-            # 发送进度更新
-            progress_data = {
-                'type': 'progress',
-                'current': task['progress']['current'],
-                'total': task['progress']['total']
-            }
-            yield f"data: {json.dumps(progress_data)}\n\n"
-            
-            # 发送统计更新
-            stats_data = {
-                'type': 'stats',
+            # 发送完成信号
+            complete_data = {
+                'type': 'complete',
+                'success': task['status'] == 'completed',
                 'stats': task['stats']
             }
-            yield f"data: {json.dumps(stats_data)}\n\n"
+            yield f"data: {json.dumps(complete_data)}\n\n"
             
-            time.sleep(1)
-        
-        # 发送完成信号
-        complete_data = {
-            'type': 'complete',
-            'success': task['status'] == 'completed',
-            'stats': task['stats']
-        }
-        yield f"data: {json.dumps(complete_data)}\n\n"
+        except Exception as e:
+            print(f"[DEBUG] 日志流生成错误: {str(e)}")
+            yield f"data: {json.dumps({'type': 'error', 'message': f'日志流错误: {str(e)}'})}\n\n"
     
     return Response(generate(), mimetype='text/event-stream')
 

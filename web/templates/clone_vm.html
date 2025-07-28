@@ -449,6 +449,18 @@
                         <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>克隆统计</h5>
                     </div>
                     <div class="card-body py-3">
+                        <!-- 克隆进度条 -->
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="fw-bold">克隆进度</span>
+                                <span class="text-muted" id="cloneProgressText">0 / 0</span>
+                            </div>
+                            <div class="progress" style="height: 12px;">
+                                <div class="progress-bar bg-primary" id="cloneProgressBar" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- 统计数字 -->
                         <div class="row">
                             <div class="col-md-3">
                                 <div class="text-center">
@@ -472,6 +484,27 @@
                                 <div class="text-center">
                                     <div class="h4 text-info" id="totalCount">0</div>
                                     <small>总计</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 详细进度信息 -->
+                        <div class="mt-3" id="detailedProgress" style="display: none;">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <small class="text-muted">当前克隆</small>
+                                        <small class="text-primary" id="currentCloneName">-</small>
+                                    </div>
+                                    <div class="progress" style="height: 8px;">
+                                        <div class="progress-bar bg-info" id="currentCloneProgress" role="progressbar" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <small class="text-muted">预计剩余时间</small>
+                                        <small class="text-secondary" id="estimatedTime">-</small>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -570,6 +603,9 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
+                    // 设置克隆状态
+                    isCloning = true;
+                    
                     // 保存任务ID到localStorage
                     localStorage.setItem('currentCloneTaskId', data.task_id);
                     console.log('保存任务ID到localStorage:', data.task_id);
@@ -598,29 +634,60 @@
             eventSource = new EventSource(`/api/clone_logs/${taskId}`);
             
             eventSource.onmessage = function(event) {
-                const data = JSON.parse(event.data);
-                
-                if (data.type === 'log') {
-                    addLog(data.level, data.message);
-                } else if (data.type === 'progress') {
-                    updateProgress(data.current, data.total);
-                } else if (data.type === 'stats') {
-                    updateStats(data.stats);
-                } else if (data.type === 'complete') {
-                    handleComplete(data);
+                try {
+                    const data = JSON.parse(event.data);
+                    
+                    if (data.type === 'log') {
+                        addLog(data.level, data.message);
+                    } else if (data.type === 'progress') {
+                        updateProgress(data.current, data.total);
+                        // 更新详细进度信息
+                        if (data.current_vm) {
+                            updateCurrentCloneProgress(data.current_vm, data.current_vm_progress || 0);
+                        }
+                        if (data.estimated_remaining !== undefined) {
+                            updateEstimatedTime(data.estimated_remaining);
+                        }
+                    } else if (data.type === 'stats') {
+                        updateStats(data.stats);
+                    } else if (data.type === 'complete') {
+                        handleComplete(data);
+                    } else if (data.type === 'error') {
+                        addLog('error', data.message);
+                        console.error('服务器错误:', data.message);
+                    }
+                } catch (error) {
+                    console.error('解析EventSource消息失败:', error);
+                    addLog('error', '解析服务器消息失败');
                 }
             };
             
             eventSource.onerror = function(event) {
-                addLog('error', '日志流连接错误');
-                eventSource.close();
-                // 清除localStorage中的任务ID
-                localStorage.removeItem('currentCloneTaskId');
+                console.error('EventSource连接错误:', event);
+                addLog('error', '日志流连接错误，尝试重连...');
+                
+                // 关闭当前连接
+                if (eventSource) {
+                    eventSource.close();
+                }
+                
+                // 如果任务仍在运行，尝试重连
+                if (isCloning) {
+                    setTimeout(() => {
+                        console.log('尝试重新连接日志流...');
+                        connectToTask(taskId);
+                    }, 2000); // 2秒后重连
+                } else {
+                    // 清除localStorage中的任务ID
+                    localStorage.removeItem('currentCloneTaskId');
+                }
             };
         }
         
         // 开始日志流
         function startLogStream(taskId) {
+            // 显示克隆统计区域
+            document.getElementById('cloneStats').style.display = 'block';
             connectToTask(taskId);
         }
         
@@ -652,6 +719,53 @@
             
             progressBar.style.width = percentage + '%';
             progressText.textContent = `${current} / ${total} 完成`;
+            
+            // 更新克隆统计区域的进度条
+            updateCloneProgress(current, total);
+        }
+        
+        // 更新克隆进度条
+        function updateCloneProgress(current, total) {
+            const cloneProgressBar = document.getElementById('cloneProgressBar');
+            const cloneProgressText = document.getElementById('cloneProgressText');
+            const detailedProgress = document.getElementById('detailedProgress');
+            
+            if (cloneProgressBar && cloneProgressText) {
+                const percentage = total > 0 ? (current / total) * 100 : 0;
+                cloneProgressBar.style.width = percentage + '%';
+                cloneProgressBar.setAttribute('aria-valuenow', percentage);
+                cloneProgressText.textContent = `${current} / ${total}`;
+                
+                // 显示详细进度信息
+                if (detailedProgress && current > 0) {
+                    detailedProgress.style.display = 'block';
+                }
+            }
+        }
+        
+        // 更新当前克隆进度
+        function updateCurrentCloneProgress(vmName, progress) {
+            const currentCloneName = document.getElementById('currentCloneName');
+            const currentCloneProgress = document.getElementById('currentCloneProgress');
+            
+            if (currentCloneName && currentCloneProgress) {
+                currentCloneName.textContent = vmName || '-';
+                currentCloneProgress.style.width = progress + '%';
+            }
+        }
+        
+        // 更新预计剩余时间
+        function updateEstimatedTime(remainingTime) {
+            const estimatedTime = document.getElementById('estimatedTime');
+            if (estimatedTime) {
+                if (remainingTime > 0) {
+                    const minutes = Math.floor(remainingTime / 60);
+                    const seconds = remainingTime % 60;
+                    estimatedTime.textContent = `${minutes}分${seconds}秒`;
+                } else {
+                    estimatedTime.textContent = '-';
+                }
+            }
         }
         
         // 更新统计
@@ -664,6 +778,8 @@
         
         // 处理完成
         function handleComplete(data) {
+            isCloning = false;
+            
             if (eventSource) {
                 eventSource.close();
             }
@@ -688,6 +804,10 @@
             isCloning = false;
             document.getElementById('cloneBtn').disabled = false;
             document.getElementById('progressContainer').style.display = 'none';
+            // 隐藏克隆统计区域
+            document.getElementById('cloneStats').style.display = 'none';
+            // 重置详细进度信息
+            document.getElementById('detailedProgress').style.display = 'none';
         }
         
         // 清空日志
