@@ -61,7 +61,7 @@
       background: #fff !important;
       border: 2px solid #dee2e6 !important;
       border-radius: 24px !important;
-      font-weight: bold;
+            font-weight: bold;
       box-shadow: 0 2px 8px rgba(0,0,0,0.06);
       transition: background 0.18s, color 0.18s, box-shadow 0.18s;
     }
@@ -71,7 +71,7 @@
       background: #f5f5f5 !important;
       border-color: #b0b3b8 !important;
       box-shadow: 0 4px 16px rgba(0,0,0,0.10);
-    }
+        }
     </style>
 </head>
 <body>
@@ -91,7 +91,7 @@
     <div class="row">
         <!-- 左侧菜单 -->
         <nav class="col-md-3 col-lg-2 sidebar bg-white p-3">
-            <h5 class="mb-4"><span style="color:#000; font-style:italic; font-weight:bold;">macos_vm管理平台</span></h5>
+            <h5 class="mb-4"><span style="color:#000; font-style:italic; font-weight:bold;">macos_vm</span></h5>
             <div class="accordion" id="accordionMenu">
                 <div class="accordion-item">
                     <h2 class="accordion-header" id="headingVM">
@@ -103,16 +103,16 @@
                         <div class="accordion-body p-0">
                             <ul class="nav flex-column">
                                 <li class="nav-item">
-                                    <a class="nav-link" href="#" onclick="showPanel('clone')">虚拟机批量克隆</a>
+                                    <a class="nav-link" href="{{ url_for('clone_vm_page') }}" onclick="handleCloneClick()">虚拟机批量克隆</a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link active" href="#" onclick="showPanel('list')">虚拟机成品信息</a>
+                                    <a class="nav-link" href="#" onclick="handleVMInfoClick()">虚拟机成品信息</a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link" href="#" onclick="showPanel('script-list')">虚拟机脚本管理</a>
+                                    <a class="nav-link" href="#" onclick="handleVMScriptClick()">虚拟机脚本管理</a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link" href="#" onclick="showPanel('trust')">虚拟机互信管理</a>
+                                    <a class="nav-link" href="#" onclick="handleVMTrustClick()">虚拟机互信管理</a>
                                 </li>
                             </ul>
                         </div>
@@ -121,17 +121,17 @@
                 <div class="accordion-item">
                     <h2 class="accordion-header" id="headingBoot">
                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseBoot" aria-expanded="false" aria-controls="collapseBoot">
-                            引导管理
+                            母盘及五码管理
                         </button>
                     </h2>
                     <div id="collapseBoot" class="accordion-collapse collapse" aria-labelledby="headingBoot" data-bs-parent="#accordionMenu">
                         <div class="accordion-body p-0">
                             <ul class="nav flex-column">
                                 <li class="nav-item">
-                                    <a class="nav-link" href="#" onclick="showPanel('wuma')">虚拟机五码管理</a>
+                                    <a class="nav-link" href="#" onclick="handleWumaClick()">虚拟机五码管理</a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link" href="#" onclick="showPanel('mupan')">虚拟机母盘管理</a>
+                                    <a class="nav-link" href="#" onclick="handleMupanClick()">虚拟机母盘管理</a>
                                 </li>
                             </ul>
                         </div>
@@ -148,13 +148,13 @@
                         <div class="accordion-body p-0">
                             <ul class="nav flex-column">
                                 <li class="nav-item">
-                                    <a class="nav-link" href="#" onclick="showPanel('encrypt-code')">代码加密</a>
+                                    <a class="nav-link" href="#" onclick="handleEncryptCodeClick()">代码加密</a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link" href="#" onclick="showPanel('encrypt-wuma')">五码加密</a>
+                                    <a class="nav-link" href="#" onclick="handleEncryptWumaClick()">五码加密</a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link" href="#" onclick="showPanel('encrypt-id')">id加密</a>
+                                    <a class="nav-link" href="#" onclick="handleEncryptIdClick()">id加密</a>
                                 </li>
                             </ul>
                         </div>
@@ -170,7 +170,7 @@
                         <div class="accordion-body p-0">
                             <ul class="nav flex-column">
                                 <li class="nav-item">
-                                    <a class="nav-link" href="#" onclick="showPanel('proxy-assign')">代理ip分配</a>
+                                    <a class="nav-link" href="#" onclick="handleProxyAssignClick()">代理ip分配</a>
                                 </li>
                             </ul>
                         </div>
@@ -186,10 +186,10 @@
                         <div class="accordion-body p-0">
                             <ul class="nav flex-column">
                                 <li class="nav-item">
-                                    <a class="nav-link" href="#" onclick="showPanel('soft-version')">版本查看</a>
+                                    <a class="nav-link" href="#" onclick="handleSoftVersionClick()">版本查看</a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link" href="#" onclick="showPanel('soft-env')">环境变量</a>
+                                    <a class="nav-link" href="#" onclick="handleSoftEnvClick()">环境变量</a>
                                 </li>
                             </ul>
                         </div>
@@ -228,17 +228,17 @@
                             <ul class="nav flex-column">
                                 <li class="nav-item">
                                     <a class="nav-link" href="#" onclick="showPanel('sys-version')">系统版本</a>
-                                </li>
+                </li>
                                 <li class="nav-item">
                                     <a class="nav-link" href="#" onclick="showPanel('sys-plugin')">系统插件管理</a>
-                                </li>
+                </li>
                                 <li class="nav-item">
                                     <a class="nav-link" href="#" onclick="showPanel('sys-user')">用户管理</a>
-                                </li>
+                </li>
                                 <li class="nav-item">
                                     <a class="nav-link" href="#" onclick="showPanel('sys-auth')">授权管理</a>
-                                </li>
-                            </ul>
+                </li>
+            </ul>
                         </div>
                     </div>
                 </div>
@@ -253,6 +253,7 @@
                     <button class="btn btn-outline-secondary btn-sm">批量重启</button>
                     <button class="btn btn-outline-secondary btn-sm">批量关机</button>
                     <button class="btn btn-outline-secondary btn-sm">批量挂起</button>
+                    <button class="btn btn-outline-secondary btn-sm">批量更换五码</button>
                     <button class="btn btn-outline-secondary btn-sm">批量DeBug</button>
                 </div>
                 <table class="table table-bordered bg-white">
@@ -260,9 +261,9 @@
                         <tr>
                             <th><input type="checkbox" id="selectAllVMs" onclick="toggleAllVMs(this)"></th>
                             <th>名称</th>
-                            <th>IP</th>
+                            <th>IP地址</th>
                             <th>状态</th>
-                            <th>IMessageDbug信息</th>
+                            <th>Debug信息</th>
                             <th>更换五码</th>
                             <th>操作</th>
                         </tr>
@@ -275,11 +276,14 @@
                             <td>{{ vm.ip }}</td>
                             <td>{{ vm.status }}</td>
                             <td><pre class="mb-0">{{ vm.imessage }}</pre></td>
-                            <td><button class="btn btn-outline-secondary btn-sm">手动分配五码</button></td>
+                            <td><button class="btn btn-outline-secondary btn-sm px-2 py-1" style="font-size:12px;">手动分配五码</button></td>
                             <td>
-                                <button class="btn btn-outline-secondary btn-sm">挂起</button>
-                                <button class="btn btn-outline-secondary btn-sm">重启</button>
-                                <button class="btn btn-outline-secondary btn-sm">关机</button>
+                                <button class="btn btn-outline-secondary btn-sm px-2 py-1" style="font-size:12px;">挂起</button>
+                                <button class="btn btn-outline-secondary btn-sm px-2 py-1" style="font-size:12px;">重启</button>
+                                <button class="btn btn-outline-secondary btn-sm px-2 py-1" style="font-size:12px;">开机</button>
+                                <button class="btn btn-outline-secondary btn-sm px-2 py-1" style="font-size:12px;">关机</button>
+                                <button class="btn btn-outline-secondary btn-sm px-2 py-1" style="font-size:12px;">删除</button>
+
                             </td>
                         </tr>
                     {% endfor %}
@@ -292,7 +296,7 @@
                     <li class="page-item"><a class="page-link" href="#">2</a></li>
                     <li class="page-item"><a class="page-link" href="#">3</a></li>
                     <li class="page-item"><a class="page-link" href="#">下一页</a></li>
-                  </ul>
+                </ul>
                 </nav>
                 <div class="clone-log-terminal">
                   <div class="clone-log-title">任务信息
@@ -411,7 +415,7 @@
                     <li class="page-item"><a class="page-link" href="#">2</a></li>
                     <li class="page-item"><a class="page-link" href="#">3</a></li>
                     <li class="page-item"><a class="page-link" href="#">下一页</a></li>
-                  </ul>
+                </ul>
                 </nav>
             </div>
             <div id="panel-clone" style="display:none;">
@@ -425,7 +429,7 @@
                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                       </div>
                       <div class="modal-body">
-                        <form>
+                        <form id="cloneTaskForm" action="/api/clone_vm" method="post">
                           <div class="mb-3">
                             <label for="cloneCount" class="form-label">克隆数量</label>
                             <input type="number" class="form-control" id="cloneCount" min="1" max="20" value="1">
@@ -487,7 +491,7 @@
                       </div>
                       <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                        <button type="button" class="btn btn-primary">确认启动</button>
+                        <button type="submit" class="btn btn-primary">确认启动</button>
                       </div>
                     </div>
                   </div>
@@ -504,15 +508,20 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <tr><td>vm_01</td><td>192.168.1.101</td><td>macos10.12</td><td>启动中</td><td>进行中</td><td>成功</td></tr>
-                        <tr><td>vm_02</td><td>192.168.1.102</td><td>macos10.12</td><td>已启动</td><td>已完成</td><td>失败</td></tr>
-                        <tr><td>vm_03</td><td>192.168.1.103</td><td>macos10.12</td><td>启动中</td><td>等待中</td><td>未执行</td></tr>
-                        <tr><td>vm_04</td><td>192.168.1.104</td><td>macos10.12</td><td>已启动</td><td>进行中</td><td>成功</td></tr>
-                        <tr><td>vm_05</td><td>192.168.1.105</td><td>macos10.12</td><td>启动中</td><td>已完成</td><td>失败</td></tr>
-                        <tr><td>vm_06</td><td>192.168.1.106</td><td>macos10.12</td><td>已启动</td><td>等待中</td><td>未执行</td></tr>
-                     
-                    </tbody>
+                        {% for vm_data in vm_data %}
+                            <tr>
+                                <td>{{ vm_data.vm_name }}</td>
+                                <td>{{ vm_data.vm_ip }}</td>
+                                <td>{{ vm_data.vm_version }}</td>
+                                <td>{{ vm_data.vm_status }}</td>
+                                <td>{{ vm_data.cl_status }}</td>
+                                <td>{{ vm_data.sh_status }}</td>
+                               
+                            </tr>
+                        {% endfor %}
+                        </tbody>
                 </table>
+                
                 <nav aria-label="Page navigation">
                   <ul class="pagination justify-content-center mt-3">
                     <li class="page-item disabled"><a class="page-link" href="#">上一页</a></li>
@@ -520,7 +529,7 @@
                     <li class="page-item"><a class="page-link" href="#">2</a></li>
                     <li class="page-item"><a class="page-link" href="#">3</a></li>
                     <li class="page-item"><a class="page-link" href="#">下一页</a></li>
-                  </ul>
+                </ul>
                 </nav>
                 <div class="clone-log-terminal">
                   <div class="clone-log-title">任务信息
@@ -636,7 +645,7 @@
                 <p>这里是引导管理的内容（可后续扩展）</p>
             </div>
         </main>
-</div>
+    </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.js"></script>
 <script>
 function showPanel(type) {
@@ -712,6 +721,32 @@ function showPanel(type) {
     }
 }
 
+
+document.getElementById('cloneForm').onsubmit = function(e) {
+  e.preventDefault();
+  const formData = new FormData(this);
+  const data = {};
+  formData.forEach((v, k) => data[k] = v);
+
+  fetch('/api/clone_vm', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(data)
+  })
+  .then(res => res.json())
+  .then(res => {
+    if(res.status === 'ok') {
+      document.getElementById('cloneResult').innerHTML = '克隆成功:<br>' + res.cloned.map(x => `<div>${x}</div>`).join('');
+    } else {
+      document.getElementById('cloneResult').innerHTML = '克隆失败: ' + res.msg;
+    }
+  })
+  .catch(err => {
+    document.getElementById('cloneResult').innerHTML = '请求失败: ' + err;
+  });
+};
+
+
 function toggleAllVMs(source) {
     var checkboxes = document.querySelectorAll('.vm-checkbox');
     checkboxes.forEach(cb => cb.checked = source.checked);
@@ -725,6 +760,267 @@ function copyTerminalContent(btn) {
       setTimeout(() => { btn.innerHTML = '<i class="bi bi-clipboard"></i>'; }, 1200);
     });
   }
+}
+
+// 通用函数：确保菜单展开并设置链接激活状态
+function ensureMenuExpanded(menuId, linkContainerId) {
+  const menuCollapse = document.getElementById(menuId);
+  const menuButton = document.getElementById(menuId.replace('collapse', 'heading')).querySelector('.accordion-button');
+  
+  if (menuCollapse && menuButton) {
+    // 移除折叠类，添加展开类
+    menuCollapse.classList.remove('collapse');
+    menuCollapse.classList.add('show');
+    menuButton.setAttribute('aria-expanded', 'true');
+    menuButton.classList.remove('collapsed');
+  }
+  
+  // 设置当前链接为激活状态
+  const links = document.querySelectorAll(`#${linkContainerId} .nav-link`);
+  links.forEach(link => link.classList.remove('active'));
+  event.target.classList.add('active');
+}
+
+// 处理克隆链接点击，确保菜单保持展开状态
+function handleCloneClick() {
+  ensureMenuExpanded('collapseVM', 'collapseVM');
+}
+
+// 处理虚拟机成品信息链接点击，确保菜单保持展开状态
+function handleVMInfoClick() {
+  ensureMenuExpanded('collapseVM', 'collapseVM');
+  // 显示虚拟机成品信息面板
+  showPanel('list');
+}
+
+// 处理虚拟机脚本管理链接点击，确保菜单保持展开状态
+function handleVMScriptClick() {
+  // 确保虚拟机管理菜单展开
+  const vmCollapse = document.getElementById('collapseVM');
+  const vmButton = document.getElementById('headingVM').querySelector('.accordion-button');
+  
+  if (vmCollapse && vmButton) {
+    // 移除折叠类，添加展开类
+    vmCollapse.classList.remove('collapse');
+    vmCollapse.classList.add('show');
+    vmButton.setAttribute('aria-expanded', 'true');
+    vmButton.classList.remove('collapsed');
+  }
+  
+  // 设置当前链接为激活状态
+  const links = document.querySelectorAll('#collapseVM .nav-link');
+  links.forEach(link => link.classList.remove('active'));
+  event.target.classList.add('active');
+  
+  // 显示虚拟机脚本管理面板
+  showPanel('script-list');
+}
+
+// 处理虚拟机互信管理链接点击，确保菜单保持展开状态
+function handleVMTrustClick() {
+  // 确保虚拟机管理菜单展开
+  const vmCollapse = document.getElementById('collapseVM');
+  const vmButton = document.getElementById('headingVM').querySelector('.accordion-button');
+  
+  if (vmCollapse && vmButton) {
+    // 移除折叠类，添加展开类
+    vmCollapse.classList.remove('collapse');
+    vmCollapse.classList.add('show');
+    vmButton.setAttribute('aria-expanded', 'true');
+    vmButton.classList.remove('collapsed');
+  }
+  
+  // 设置当前链接为激活状态
+  const links = document.querySelectorAll('#collapseVM .nav-link');
+  links.forEach(link => link.classList.remove('active'));
+  event.target.classList.add('active');
+  
+  // 显示虚拟机互信管理面板
+  showPanel('trust');
+}
+
+// 处理虚拟机五码管理链接点击，确保菜单保持展开状态
+function handleWumaClick() {
+  // 确保引导管理菜单展开
+  const bootCollapse = document.getElementById('collapseBoot');
+  const bootButton = document.getElementById('headingBoot').querySelector('.accordion-button');
+  
+  if (bootCollapse && bootButton) {
+    // 移除折叠类，添加展开类
+    bootCollapse.classList.remove('collapse');
+    bootCollapse.classList.add('show');
+    bootButton.setAttribute('aria-expanded', 'true');
+    bootButton.classList.remove('collapsed');
+  }
+  
+  // 设置当前链接为激活状态
+  const links = document.querySelectorAll('#collapseBoot .nav-link');
+  links.forEach(link => link.classList.remove('active'));
+  event.target.classList.add('active');
+  
+  // 显示虚拟机五码管理面板
+  showPanel('wuma');
+}
+
+// 处理虚拟机母盘管理链接点击，确保菜单保持展开状态
+function handleMupanClick() {
+  // 确保引导管理菜单展开
+  const bootCollapse = document.getElementById('collapseBoot');
+  const bootButton = document.getElementById('headingBoot').querySelector('.accordion-button');
+  
+  if (bootCollapse && bootButton) {
+    // 移除折叠类，添加展开类
+    bootCollapse.classList.remove('collapse');
+    bootCollapse.classList.add('show');
+    bootButton.setAttribute('aria-expanded', 'true');
+    bootButton.classList.remove('collapsed');
+  }
+  
+  // 设置当前链接为激活状态
+  const links = document.querySelectorAll('#collapseBoot .nav-link');
+  links.forEach(link => link.classList.remove('active'));
+  event.target.classList.add('active');
+  
+  // 显示虚拟机母盘管理面板
+  showPanel('mupan');
+}
+
+// 处理代码加密链接点击，确保菜单保持展开状态
+function handleEncryptCodeClick() {
+  // 确保数据加密功能菜单展开
+  const encryptCollapse = document.getElementById('collapseEncrypt');
+  const encryptButton = document.getElementById('headingEncrypt').querySelector('.accordion-button');
+  
+  if (encryptCollapse && encryptButton) {
+    // 移除折叠类，添加展开类
+    encryptCollapse.classList.remove('collapse');
+    encryptCollapse.classList.add('show');
+    encryptButton.setAttribute('aria-expanded', 'true');
+    encryptButton.classList.remove('collapsed');
+  }
+  
+  // 设置当前链接为激活状态
+  const links = document.querySelectorAll('#collapseEncrypt .nav-link');
+  links.forEach(link => link.classList.remove('active'));
+  event.target.classList.add('active');
+  
+  // 显示代码加密面板
+  showPanel('encrypt-code');
+}
+
+// 处理五码加密链接点击，确保菜单保持展开状态
+function handleEncryptWumaClick() {
+  // 确保数据加密功能菜单展开
+  const encryptCollapse = document.getElementById('collapseEncrypt');
+  const encryptButton = document.getElementById('headingEncrypt').querySelector('.accordion-button');
+  
+  if (encryptCollapse && encryptButton) {
+    // 移除折叠类，添加展开类
+    encryptCollapse.classList.remove('collapse');
+    encryptCollapse.classList.add('show');
+    encryptButton.setAttribute('aria-expanded', 'true');
+    encryptButton.classList.remove('collapsed');
+  }
+  
+  // 设置当前链接为激活状态
+  const links = document.querySelectorAll('#collapseEncrypt .nav-link');
+  links.forEach(link => link.classList.remove('active'));
+  event.target.classList.add('active');
+  
+  // 显示五码加密面板
+  showPanel('encrypt-wuma');
+}
+
+// 处理id加密链接点击，确保菜单保持展开状态
+function handleEncryptIdClick() {
+  // 确保数据加密功能菜单展开
+  const encryptCollapse = document.getElementById('collapseEncrypt');
+  const encryptButton = document.getElementById('headingEncrypt').querySelector('.accordion-button');
+  
+  if (encryptCollapse && encryptButton) {
+    // 移除折叠类，添加展开类
+    encryptCollapse.classList.remove('collapse');
+    encryptCollapse.classList.add('show');
+    encryptButton.setAttribute('aria-expanded', 'true');
+    encryptButton.classList.remove('collapsed');
+  }
+  
+  // 设置当前链接为激活状态
+  const links = document.querySelectorAll('#collapseEncrypt .nav-link');
+  links.forEach(link => link.classList.remove('active'));
+  event.target.classList.add('active');
+  
+  // 显示id加密面板
+  showPanel('encrypt-id');
+}
+
+// 处理代理ip分配链接点击，确保菜单保持展开状态
+function handleProxyAssignClick() {
+  // 确保代理ip配置菜单展开
+  const proxyCollapse = document.getElementById('collapseProxy');
+  const proxyButton = document.getElementById('headingProxy').querySelector('.accordion-button');
+  
+  if (proxyCollapse && proxyButton) {
+    // 移除折叠类，添加展开类
+    proxyCollapse.classList.remove('collapse');
+    proxyCollapse.classList.add('show');
+    proxyButton.setAttribute('aria-expanded', 'true');
+    proxyButton.classList.remove('collapsed');
+  }
+  
+  // 设置当前链接为激活状态
+  const links = document.querySelectorAll('#collapseProxy .nav-link');
+  links.forEach(link => link.classList.remove('active'));
+  event.target.classList.add('active');
+  
+  // 显示代理ip分配面板
+  showPanel('proxy-assign');
+}
+
+// 处理版本查看链接点击，确保菜单保持展开状态
+function handleSoftVersionClick() {
+  // 确保虚拟机软件管理菜单展开
+  const softCollapse = document.getElementById('collapseSoft');
+  const softButton = document.getElementById('headingSoft').querySelector('.accordion-button');
+  
+  if (softCollapse && softButton) {
+    // 移除折叠类，添加展开类
+    softCollapse.classList.remove('collapse');
+    softCollapse.classList.add('show');
+    softButton.setAttribute('aria-expanded', 'true');
+    softButton.classList.remove('collapsed');
+  }
+  
+  // 设置当前链接为激活状态
+  const links = document.querySelectorAll('#collapseSoft .nav-link');
+  links.forEach(link => link.classList.remove('active'));
+  event.target.classList.add('active');
+  
+  // 显示版本查看面板
+  showPanel('soft-version');
+}
+
+// 处理环境变量链接点击，确保菜单保持展开状态
+function handleSoftEnvClick() {
+  // 确保虚拟机软件管理菜单展开
+  const softCollapse = document.getElementById('collapseSoft');
+  const softButton = document.getElementById('headingSoft').querySelector('.accordion-button');
+  
+  if (softCollapse && softButton) {
+    // 移除折叠类，添加展开类
+    softCollapse.classList.remove('collapse');
+    softCollapse.classList.add('show');
+    softButton.setAttribute('aria-expanded', 'true');
+    softButton.classList.remove('collapsed');
+  }
+  
+  // 设置当前链接为激活状态
+  const links = document.querySelectorAll('#collapseSoft .nav-link');
+  links.forEach(link => link.classList.remove('active'));
+  event.target.classList.add('active');
+  
+  // 显示环境变量面板
+  showPanel('soft-env');
 }
 </script>
 </body>

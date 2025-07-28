@@ -9,7 +9,7 @@ set ISO_BASE_HOME=%BASE_DIR%\..\iso
 set IP_PATH=%BASE_DIR%\var_files
 set LOG_PATH=%BASE_DIR%\log
 REM Set the number of virtual machines that need to be created
-set VM_COUNT=2
+set VM_COUNT=10
 set VMRUN_PATH=vmrun
 set ssh_uname=wx
 rem  Random numbers start
@@ -42,13 +42,15 @@ for /L %%i in (1,1,%VM_COUNT%) do (
 	rem  mkdir !VM_DIR!
     REM Copy the template VM file
 	echo Start cloning the virtual machine files please wait   .......................
-	vmrun -T ws clone  !TEMPLATE_PATH!\macos10.12.vmx  !VM_DIR!\macos10.12_VM_!next_num!.vmx  linked
+	rem 克隆前创建唯一快照，删除虚拟机时候删除虚拟机，并删除唯一快照
+	vmrun -T ws snapshot   !TEMPLATE_PATH!\macos10.12.vmx  macos10.12_VM_!next_num!_snapshot
+	vmrun -T ws clone  !TEMPLATE_PATH!\macos10.12.vmx  !VM_DIR!\macos10.12_VM_!next_num!.vmx  linked  -snapshot=macos10.12_VM_!next_num!_snapshot
 	rem  使用sed 替换displayName 为虚拟机显示的名称
 	sed -i "s/displayName = \".*\"/displayName = \"macos10.12_VM_!next_num!\"/"   !VM_DIR!\macos10.12_VM_!next_num!.vmx
 	del sed*
     echo Created VM_!next_num! at !VM_DIR!
 	echo "Starting  launching virtual machines VM_!next_num! , please wait   ......................."
-	%VMRUN_PATH%  start  !VM_DIR!\macos10.12_VM_!next_num!.vmx 
+	rem  %VMRUN_PATH%  start  !VM_DIR!\macos10.12_VM_!next_num!.vmx 
 	echo "!VM_DIR!\macos10.12_VM_!next_num!.vmx" >> %IP_PATH%\10.12_vmx_list.txt
 	rem   nogui
 )
@@ -57,7 +59,7 @@ echo The IP address is being scanned, please wait ....................
 echo  Obtaining the IP address of the VM is in progress!......................
 rem :check
 rem  goto check 
-call 10.12_get_vm_ip.bat 10
+rem call 10.12_get_vm_ip.bat 10
 type %IP_PATH%\10.12_ip_list.txt
 echo "Started  launching virtual machines VM_!next_num! "
 rem  VM_COUNT  Number of virtual machines
@@ -66,5 +68,5 @@ rem  Set the number of config.plist to be used
 rem 执行安装后调用ip监控脚本test2.py
 rem 如ip不存活代表虚拟机已经执行安装脚本完毕，则开始执行test.py
 rem python ..\py_util\test2.py
-python ..\py_util\test0.py
+rem  python ..\py_util\test0.py
 rem  执行重装后需要利用python判断远端auto_install进程是否存在和ip和ssh是否存活，ip消失后系统重启安装脚本则执行成功

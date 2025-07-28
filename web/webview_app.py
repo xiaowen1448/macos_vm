@@ -31,7 +31,7 @@ def wait_for_flask(url, timeout=30):
 
 if __name__ == '__main__':
     # 启动 Flask 服务
-    flask_proc = subprocess.Popen([sys.executable, "app.py"])
+    flask_proc = subprocess.Popen([sys.executable, "web/app.py"])
     # 等待 Flask 启动
     if not wait_for_flask("http://127.0.0.1:5000/login"):
         print("Flask 服务未能在规定时间内启动。")
