@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>虚拟机管理 - macOS VM</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .sidebar {
+            background: white;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+            min-height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 1000;
+            width: 280px;
+        }
+        
+        .main-content {
+            margin-left: 280px;
+            padding: 20px;
+        }
+        
+        .accordion-button:not(.collapsed) {
+            background-color: #e7f3ff;
+            color: #0d6efd;
+        }
+        
+        .nav-link {
+            color: #495057;
+            padding: 8px 16px;
+            border-radius: 4px;
+            margin: 2px 0;
+            transition: all 0.2s;
+        }
+        
+        .nav-link:hover {
+            background-color: #f8f9fa;
+            color: #0d6efd;
+        }
+        
+        .nav-link.active {
+            background-color: #0d6efd;
+            color: white;
+        }
+        
+        .card {
+            border: none;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border-radius: 10px;
+        }
+        
+        .card-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px 10px 0 0 !important;
+            padding: 20px;
+        }
+        
+        .status-badge {
+            font-size: 0.8em;
+            padding: 4px 8px;
+        }
+        
+        .vm-info-table {
+            font-size: 0.9em;
+        }
+        
+        .vm-info-table th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+        }
+        
+        .refresh-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 25px;
+            transition: all 0.3s;
+        }
+        
+        .refresh-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+        
+        .error-message {
+            display: none;
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        
+        .vm-stats {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            text-align: center;
+            flex: 1;
+        }
+        
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #0d6efd;
+        }
+        
+        .stat-label {
+            color: #6c757d;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <!-- 顶部导航栏 -->
+    <div class="navbar navbar-expand-lg navbar-light bg-white shadow-sm" style="position: fixed; top: 0; left: 280px; right: 0; z-index: 1000;">
+        <div class="container-fluid">
+            <span class="navbar-brand mb-0 h1">
+                <i class="fas fa-server me-2"></i>虚拟机管理
+            </span>
+            <div class="d-flex">
+                <div class="dropdown me-3">
+                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="langDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                        语言
+                    </button>
+                    <ul class="dropdown-menu" aria-labelledby="langDropdown">
+                        <li><a class="dropdown-item" href="?lang=zh">中文</a></li>
+                        <li><a class="dropdown-item" href="?lang=en">English</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    <a href="{{ url_for('logout') }}" class="btn btn-outline-secondary position-absolute" style="top: 18px; right: 32px; z-index: 2000;">登出</a>
+    
+    <div class="container-fluid" style="margin-left: 280px; margin-top: 80px;">
+        <div class="row">
+            <!-- 左侧菜单 -->
+            <nav class="col-md-3 col-lg-2 sidebar bg-white p-3">
+                <h5 class="mb-4"><span style="color:#000; font-style:italic; font-weight:bold;">macos_vm</span></h5>
+                <div class="accordion" id="accordionMenu">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="headingVM">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseVM" aria-expanded="true" aria-controls="collapseVM">
+                                虚拟机管理
+                            </button>
+                        </h2>
+                        <div id="collapseVM" class="accordion-collapse collapse show" aria-labelledby="headingVM" data-bs-parent="#accordionMenu">
+                            <div class="accordion-body p-0">
+                                <ul class="nav flex-column">
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="{{ url_for('clone_vm_page') }}" onclick="handleCloneClick()">虚拟机批量克隆</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link active" href="{{ url_for('vm_management_page') }}" onclick="handleVMManagementClick()">虚拟机管理</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="#" onclick="handleVMInfoClick()">虚拟机成品信息</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="#" onclick="handleVMScriptClick()">虚拟机脚本管理</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="#" onclick="handleVMTrustClick()">虚拟机互信管理</a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="headingBoot">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseBoot" aria-expanded="false" aria-controls="collapseBoot">
+                                母盘及五码管理
+                            </button>
+                        </h2>
+                        <div id="collapseBoot" class="accordion-collapse collapse" aria-labelledby="headingBoot" data-bs-parent="#accordionMenu">
+                            <div class="accordion-body p-0">
+                                <ul class="nav flex-column">
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="#" onclick="handleWumaClick()">虚拟机五码管理</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="#" onclick="handleMupanClick()">虚拟机母盘管理</a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="headingEncrypt">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseEncrypt" aria-expanded="false" aria-controls="collapseEncrypt">
+                                数据加密功能
+                            </button>
+                        </h2>
+                        <div id="collapseEncrypt" class="accordion-collapse collapse" aria-labelledby="headingEncrypt" data-bs-parent="#accordionMenu">
+                            <div class="accordion-body p-0">
+                                <ul class="nav flex-column">
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="#" onclick="handleEncryptCodeClick()">代码加密</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="#" onclick="handleEncryptWumaClick()">五码加密</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="#" onclick="handleEncryptIdClick()">id加密</a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="headingProxy">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseProxy" aria-expanded="false" aria-controls="collapseProxy">
+                                代理ip配置
+                            </button>
+                        </h2>
+                        <div id="collapseProxy" class="accordion-collapse collapse" aria-labelledby="headingProxy" data-bs-parent="#accordionMenu">
+                            <div class="accordion-body p-0">
+                                <ul class="nav flex-column">
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="#" onclick="handleProxyAssignClick()">代理ip分配</a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="headingSoft">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSoft" aria-expanded="false" aria-controls="collapseSoft">
+                                虚拟机软件管理
+                            </button>
+                        </h2>
+                        <div id="collapseSoft" class="accordion-collapse collapse" aria-labelledby="headingSoft" data-bs-parent="#accordionMenu">
+                            <div class="accordion-body p-0">
+                                <ul class="nav flex-column">
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="#" onclick="handleSoftVersionClick()">版本查看</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="#" onclick="handleSoftEnvClick()">环境变量</a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+            
+            <!-- 右侧内容区域 -->
+            <div class="col-md-9 col-lg-10">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h4 class="mb-0">
+                                <i class="fas fa-server me-2"></i>虚拟机信息管理
+                            </h4>
+                            <button class="btn refresh-btn" onclick="refreshVMData()">
+                                <i class="fas fa-sync-alt me-2"></i>刷新数据
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <!-- 虚拟机统计信息 -->
+                        <div class="vm-stats" id="vmStats">
+                            <div class="stat-card">
+                                <div class="stat-number" id="totalVMs">-</div>
+                                <div class="stat-label">总虚拟机数</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number" id="runningVMs">-</div>
+                                <div class="stat-label">运行中</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number" id="stoppedVMs">-</div>
+                                <div class="stat-label">已停止</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number" id="onlineVMs">-</div>
+                                <div class="stat-label">在线</div>
+                            </div>
+                        </div>
+                        
+                        <!-- 错误信息显示 -->
+                        <div class="error-message" id="errorMessage"></div>
+                        
+                        <!-- 加载状态 -->
+                        <div class="loading" id="loading">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">加载中...</span>
+                            </div>
+                            <p class="mt-2">正在获取虚拟机信息...</p>
+                        </div>
+                        
+                        <!-- 虚拟机列表 -->
+                        <div class="table-responsive">
+                            <table class="table table-hover vm-info-table" id="vmTable">
+                                <thead>
+                                    <tr>
+                                        <th>虚拟机名称</th>
+                                        <th>状态</th>
+                                        <th>IP地址</th>
+                                        <th>五码信息</th>
+                                        <th>SSH状态</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="vmTableBody">
+                                    <!-- 虚拟机数据将在这里动态加载 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 页面加载时获取虚拟机数据
+        document.addEventListener('DOMContentLoaded', function() {
+            refreshVMData();
+        });
+
+        // 刷新虚拟机数据
+        function refreshVMData() {
+            showLoading();
+            hideError();
+            
+            fetch('/api/vm_list')
+                .then(response => response.json())
+                .then(data => {
+                    hideLoading();
+                    if (data.success) {
+                        updateVMStats(data.stats);
+                        updateVMTable(data.vms);
+                    } else {
+                        showError(data.message || '获取虚拟机信息失败');
+                    }
+                })
+                .catch(error => {
+                    hideLoading();
+                    showError('网络错误: ' + error.message);
+                });
+        }
+
+        // 更新虚拟机统计信息
+        function updateVMStats(stats) {
+            document.getElementById('totalVMs').textContent = stats.total || 0;
+            document.getElementById('runningVMs').textContent = stats.running || 0;
+            document.getElementById('stoppedVMs').textContent = stats.stopped || 0;
+            document.getElementById('onlineVMs').textContent = stats.online || 0;
+        }
+
+        // 更新虚拟机表格
+        function updateVMTable(vms) {
+            const tbody = document.getElementById('vmTableBody');
+            tbody.innerHTML = '';
+            
+            if (vms.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">暂无虚拟机数据</td></tr>';
+                return;
+            }
+            
+            vms.forEach(vm => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>
+                        <strong>${vm.name}</strong>
+                    </td>
+                    <td>
+                        <span class="badge status-badge ${getStatusClass(vm.status)}">
+                            ${getStatusText(vm.status)}
+                        </span>
+                    </td>
+                    <td>
+                        ${vm.ip || '<span class="text-muted">-</span>'}
+                    </td>
+                    <td>
+                        ${vm.wuma_info || '<span class="text-muted">-</span>'}
+                    </td>
+                    <td>
+                        <span class="badge status-badge ${vm.ssh_status === 'online' ? 'bg-success' : 'bg-secondary'}">
+                            ${vm.ssh_status === 'online' ? '在线' : '离线'}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-primary btn-sm" onclick="startVM('${vm.name}')" ${vm.status === 'running' ? 'disabled' : ''}>
+                                <i class="fas fa-play"></i>
+                            </button>
+                            <button class="btn btn-outline-warning btn-sm" onclick="stopVM('${vm.name}')" ${vm.status === 'stopped' ? 'disabled' : ''}>
+                                <i class="fas fa-stop"></i>
+                            </button>
+                            <button class="btn btn-outline-info btn-sm" onclick="getVMInfo('${vm.name}')">
+                                <i class="fas fa-info-circle"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // 获取状态样式类
+        function getStatusClass(status) {
+            switch (status) {
+                case 'running': return 'bg-success';
+                case 'stopped': return 'bg-secondary';
+                case 'suspended': return 'bg-warning';
+                default: return 'bg-secondary';
+            }
+        }
+
+        // 获取状态文本
+        function getStatusText(status) {
+            switch (status) {
+                case 'running': return '运行中';
+                case 'stopped': return '已停止';
+                case 'suspended': return '已暂停';
+                default: return '未知';
+            }
+        }
+
+        // 显示加载状态
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('vmTable').style.display = 'none';
+        }
+
+        // 隐藏加载状态
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('vmTable').style.display = 'table';
+        }
+
+        // 显示错误信息
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        // 隐藏错误信息
+        function hideError() {
+            document.getElementById('errorMessage').style.display = 'none';
+        }
+
+        // 启动虚拟机
+        function startVM(vmName) {
+            fetch('/api/vm_start', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ vm_name: vmName })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('虚拟机启动成功');
+                    refreshVMData();
+                } else {
+                    alert('启动失败: ' + data.message);
+                }
+            })
+            .catch(error => {
+                alert('操作失败: ' + error.message);
+            });
+        }
+
+        // 停止虚拟机
+        function stopVM(vmName) {
+            fetch('/api/vm_stop', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ vm_name: vmName })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('虚拟机停止成功');
+                    refreshVMData();
+                } else {
+                    alert('停止失败: ' + data.message);
+                }
+            })
+            .catch(error => {
+                alert('操作失败: ' + error.message);
+            });
+        }
+
+        // 获取虚拟机详细信息
+        function getVMInfo(vmName) {
+            fetch(`/api/vm_info/${vmName}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // 显示详细信息（可以弹窗或新页面）
+                    console.log('虚拟机信息:', data.vm_info);
+                    alert('虚拟机详细信息已获取，请查看控制台');
+                } else {
+                    alert('获取信息失败: ' + data.message);
+                }
+            })
+            .catch(error => {
+                alert('操作失败: ' + error.message);
+            });
+        }
+
+        // 菜单处理函数
+        function handleCloneClick() {
+            ensureMenuExpanded('collapseVM', 'collapseVM');
+        }
+
+        function handleVMManagementClick() {
+            ensureMenuExpanded('collapseVM', 'collapseVM');
+        }
+
+        function handleVMInfoClick() {
+            ensureMenuExpanded('collapseVM', 'collapseVM');
+        }
+
+        function handleVMScriptClick() {
+            ensureMenuExpanded('collapseVM', 'collapseVM');
+        }
+
+        function handleVMTrustClick() {
+            ensureMenuExpanded('collapseVM', 'collapseVM');
+        }
+
+        function handleWumaClick() {
+            ensureMenuExpanded('collapseBoot', 'collapseBoot');
+        }
+
+        function handleMupanClick() {
+            ensureMenuExpanded('collapseBoot', 'collapseBoot');
+        }
+
+        function handleEncryptCodeClick() {
+            ensureMenuExpanded('collapseEncrypt', 'collapseEncrypt');
+        }
+
+        function handleEncryptWumaClick() {
+            ensureMenuExpanded('collapseEncrypt', 'collapseEncrypt');
+        }
+
+        function handleEncryptIdClick() {
+            ensureMenuExpanded('collapseEncrypt', 'collapseEncrypt');
+        }
+
+        function handleProxyAssignClick() {
+            ensureMenuExpanded('collapseProxy', 'collapseProxy');
+        }
+
+        function handleSoftVersionClick() {
+            ensureMenuExpanded('collapseSoft', 'collapseSoft');
+        }
+
+        function handleSoftEnvClick() {
+            ensureMenuExpanded('collapseSoft', 'collapseSoft');
+        }
+
+        // 通用函数：确保菜单展开并设置链接激活状态
+        function ensureMenuExpanded(menuId, linkContainerId) {
+            const menuCollapse = document.getElementById(menuId);
+            const menuButton = document.getElementById(menuId.replace('collapse', 'heading')).querySelector('.accordion-button');
+            
+            if (menuCollapse && menuButton) {
+                // 移除折叠类，添加展开类
+                menuCollapse.classList.remove('collapse');
+                menuCollapse.classList.add('show');
+                menuButton.setAttribute('aria-expanded', 'true');
+                menuButton.classList.remove('collapsed');
+            }
+            
+            // 设置当前链接为激活状态
+            const links = document.querySelectorAll(`#${linkContainerId} .nav-link`);
+            links.forEach(link => link.classList.remove('active'));
+            event.target.classList.add('active');
+        }
+    </script>
+</body>
+</html> 

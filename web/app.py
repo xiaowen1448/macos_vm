@@ -136,6 +136,12 @@ def clone_vm_page():
                          template_vms=template_vms, 
                          plist_dirs=plist_dirs)
 
+@app.route('/vm_management')
+@login_required
+def vm_management_page():
+    """虚拟机管理页面"""
+    return render_template('vm_management.html')
+
 @app.route('/api/clone_vm', methods=['POST'])
 @login_required
 def api_clone_vm():
@@ -593,6 +599,275 @@ def api_clone_logs(task_id):
         yield f"data: {json.dumps(complete_data)}\n\n"
     
     return Response(generate(), mimetype='text/event-stream')
+
+@app.route('/api/vm_list')
+@login_required
+def api_vm_list():
+    """获取虚拟机列表"""
+    try:
+        # 扫描虚拟机目录
+        vm_dir = r'D:\macos_vm\NewVM'
+        vms = []
+        stats = {'total': 0, 'running': 0, 'stopped': 0, 'online': 0}
+        
+        if os.path.exists(vm_dir):
+            for root, dirs, files in os.walk(vm_dir):
+                for file in files:
+                    if file.endswith('.vmx'):
+                        vm_path = os.path.join(root, file)
+                        vm_name = os.path.splitext(file)[0]
+                        
+                        # 获取虚拟机状态
+                        vm_status = get_vm_status(vm_path)
+                        
+                        # 获取IP地址
+                        vm_ip = get_vm_ip(vm_name)
+                        
+                        # 获取五码信息
+                        wuma_info = get_wuma_info(vm_name)
+                        
+                        # 检查SSH连接状态
+                        ssh_status = check_ssh_status(vm_ip) if vm_ip else 'offline'
+                        
+                        vm_info = {
+                            'name': vm_name,
+                            'path': vm_path,
+                            'status': vm_status,
+                            'ip': vm_ip,
+                            'wuma_info': wuma_info,
+                            'ssh_status': ssh_status
+                        }
+                        vms.append(vm_info)
+                        
+                        # 更新统计信息
+                        stats['total'] += 1
+                        if vm_status == 'running':
+                            stats['running'] += 1
+                        elif vm_status == 'stopped':
+                            stats['stopped'] += 1
+                        if ssh_status == 'online':
+                            stats['online'] += 1
+        
+        return jsonify({
+            'success': True,
+            'vms': vms,
+            'stats': stats
+        })
+        
+    except Exception as e:
+        print(f"[DEBUG] 获取虚拟机列表失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取虚拟机列表失败: {str(e)}'
+        })
+
+@app.route('/api/vm_start', methods=['POST'])
+@login_required
+def api_vm_start():
+    """启动虚拟机"""
+    try:
+        data = request.get_json()
+        vm_name = data.get('vm_name')
+        
+        if not vm_name:
+            return jsonify({'success': False, 'message': '缺少虚拟机名称'})
+        
+        # 查找虚拟机文件
+        vm_file = find_vm_file(vm_name)
+        if not vm_file:
+            return jsonify({'success': False, 'message': f'找不到虚拟机: {vm_name}'})
+        
+        # 启动虚拟机
+        vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
+        if not os.path.exists(vmrun_path):
+            vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
+        
+        start_cmd = [vmrun_path, 'start', vm_file]
+        result = subprocess.run(start_cmd, capture_output=True, text=True, timeout=60)
+        
+        if result.returncode == 0:
+            return jsonify({'success': True, 'message': '虚拟机启动成功'})
+        else:
+            return jsonify({'success': False, 'message': f'启动失败: {result.stderr}'})
+            
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'启动失败: {str(e)}'})
+
+@app.route('/api/vm_stop', methods=['POST'])
+@login_required
+def api_vm_stop():
+    """停止虚拟机"""
+    try:
+        data = request.get_json()
+        vm_name = data.get('vm_name')
+        
+        if not vm_name:
+            return jsonify({'success': False, 'message': '缺少虚拟机名称'})
+        
+        # 查找虚拟机文件
+        vm_file = find_vm_file(vm_name)
+        if not vm_file:
+            return jsonify({'success': False, 'message': f'找不到虚拟机: {vm_name}'})
+        
+        # 停止虚拟机
+        vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
+        if not os.path.exists(vmrun_path):
+            vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
+        
+        stop_cmd = [vmrun_path, 'stop', vm_file, 'hard']
+        result = subprocess.run(stop_cmd, capture_output=True, text=True, timeout=60)
+        
+        if result.returncode == 0:
+            return jsonify({'success': True, 'message': '虚拟机停止成功'})
+        else:
+            return jsonify({'success': False, 'message': f'停止失败: {result.stderr}'})
+            
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'停止失败: {str(e)}'})
+
+@app.route('/api/vm_info/<vm_name>')
+@login_required
+def api_vm_info(vm_name):
+    """获取虚拟机详细信息"""
+    try:
+        vm_file = find_vm_file(vm_name)
+        if not vm_file:
+            return jsonify({'success': False, 'message': f'找不到虚拟机: {vm_name}'})
+        
+        # 获取详细信息
+        vm_info = {
+            'name': vm_name,
+            'path': vm_file,
+            'status': get_vm_status(vm_file),
+            'ip': get_vm_ip(vm_name),
+            'wuma_info': get_wuma_info(vm_name),
+            'ssh_status': check_ssh_status(get_vm_ip(vm_name)) if get_vm_ip(vm_name) else 'offline',
+            'snapshots': get_vm_snapshots(vm_file),
+            'config': get_vm_config(vm_file)
+        }
+        
+        return jsonify({
+            'success': True,
+            'vm_info': vm_info
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'获取信息失败: {str(e)}'})
+
+def get_vm_status(vm_path):
+    """获取虚拟机状态"""
+    try:
+        vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
+        if not os.path.exists(vmrun_path):
+            vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
+        
+        list_cmd = [vmrun_path, 'list']
+        result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30)
+        
+        if result.returncode == 0:
+            running_vms = result.stdout.strip().split('\n')[1:]  # 跳过标题行
+            vm_name = os.path.splitext(os.path.basename(vm_path))[0]
+            
+            for vm in running_vms:
+                if vm.strip() and vm_name in vm:
+                    return 'running'
+        
+        return 'stopped'
+        
+    except Exception as e:
+        print(f"[DEBUG] 获取虚拟机状态失败: {str(e)}")
+        return 'unknown'
+
+def get_vm_ip(vm_name):
+    """获取虚拟机IP地址"""
+    try:
+        # 这里可以调用现有的IP获取脚本
+        ip_script = os.path.join(os.path.dirname(__file__), '..', 'bat', 'get_vm_ip.bat')
+        if os.path.exists(ip_script):
+            result = subprocess.run([ip_script, vm_name], capture_output=True, text=True, timeout=30)
+            if result.returncode == 0:
+                return result.stdout.strip()
+        
+        return None
+        
+    except Exception as e:
+        print(f"[DEBUG] 获取虚拟机IP失败: {str(e)}")
+        return None
+
+def get_wuma_info(vm_name):
+    """获取虚拟机五码信息"""
+    try:
+        # 这里可以从plist文件或其他地方获取五码信息
+        # 暂时返回占位符
+        return f"五码信息-{vm_name}"
+        
+    except Exception as e:
+        print(f"[DEBUG] 获取五码信息失败: {str(e)}")
+        return None
+
+def check_ssh_status(ip):
+    """检查SSH连接状态"""
+    if not ip:
+        return 'offline'
+    
+    try:
+        # 简单的ping测试
+        result = subprocess.run(['ping', '-n', '1', ip], capture_output=True, text=True, timeout=10)
+        if result.returncode == 0:
+            return 'online'
+        else:
+            return 'offline'
+            
+    except Exception as e:
+        print(f"[DEBUG] SSH状态检查失败: {str(e)}")
+        return 'offline'
+
+def find_vm_file(vm_name):
+    """查找虚拟机文件"""
+    vm_dir = r'D:\macos_vm\NewVM'
+    if os.path.exists(vm_dir):
+        for root, dirs, files in os.walk(vm_dir):
+            for file in files:
+                if file.endswith('.vmx') and vm_name in file:
+                    return os.path.join(root, file)
+    return None
+
+def get_vm_snapshots(vm_path):
+    """获取虚拟机快照列表"""
+    try:
+        vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
+        if not os.path.exists(vmrun_path):
+            vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
+        
+        snapshots_cmd = [vmrun_path, 'listSnapshots', vm_path]
+        result = subprocess.run(snapshots_cmd, capture_output=True, text=True, timeout=30)
+        
+        if result.returncode == 0:
+            return result.stdout.strip().split('\n')
+        else:
+            return []
+            
+    except Exception as e:
+        print(f"[DEBUG] 获取快照列表失败: {str(e)}")
+        return []
+
+def get_vm_config(vm_path):
+    """获取虚拟机配置信息"""
+    try:
+        with open(vm_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        config = {}
+        for line in content.split('\n'):
+            if '=' in line:
+                key, value = line.split('=', 1)
+                config[key.strip()] = value.strip().strip('"')
+        
+        return config
+        
+    except Exception as e:
+        print(f"[DEBUG] 获取虚拟机配置失败: {str(e)}")
+        return {}
 
 @app.route('/logout')
 @login_required

@@ -922,9 +922,9 @@
 		<key>CsrActiveConfig</key>
 		<string>0x3E7</string>
 		<key>MLB</key>
-		<string>FV9817705FLJ2VCDE</string>
+		<string>FV9818506BVJ2V8DK</string>
 		<key>ROM</key>
-		<data>hGh4DPyy</data>
+		<data>hGh4DHbI</data>
 		<key>BooterConfig</key>
 		<string>0x28</string>
 	</dict>
@@ -941,7 +941,7 @@
 		<key>#BiosVendor</key>
 		<string>Apple Inc.</string>
 		<key>SmUUID</key>
-		<string>37e4385d-5d21-4b51-8047-9aae8ea83917</string>
+		<string>845336ce-97c6-420a-b70c-bee07ec595f2</string>
 		<key>LocationInChassis</key>
 		<string>Part Component</string>
 		<key>#ChassisType</key>
@@ -955,7 +955,7 @@
 		<key>#EfiVersion</key>
 		<string>288.0.0.0.0</string>
 		<key>SerialNumber</key>
-		<string>C02TKE87J1WK</string>
+		<string>C02TL10NJ1WK</string>
 		<key>#BoardVersion</key>
 		<string>Proto1</string>
 		<key>#BiosVersion</key>
@@ -1099,7 +1099,7 @@
 		<key>InjectKexts</key>
 		<string>Detect</string>
 		<key>CustomUUID</key>
-		<string>105b7377-a0bc-4951-b66b-f1e27c13ec76</string>
+		<string>4d0e8fc1-559f-4b11-922c-5aad9145ffd8</string>
 		<key>#CustomUUID</key>
 		<string>511CE201-1000-4000-9999-010203040506</string>
 		<key>#NoCaches</key>

@@ -106,6 +106,9 @@
                                     <a class="nav-link" href="{{ url_for('clone_vm_page') }}" onclick="handleCloneClick()">虚拟机批量克隆</a>
                                 </li>
                                 <li class="nav-item">
+                                    <a class="nav-link" href="{{ url_for('vm_management_page') }}" onclick="handleVMManagementClick()">虚拟机管理</a>
+                                </li>
+                                <li class="nav-item">
                                     <a class="nav-link" href="#" onclick="handleVMInfoClick()">虚拟机成品信息</a>
                                 </li>
                                 <li class="nav-item">
@@ -783,6 +786,11 @@ function ensureMenuExpanded(menuId, linkContainerId) {
 
 // 处理克隆链接点击，确保菜单保持展开状态
 function handleCloneClick() {
+  ensureMenuExpanded('collapseVM', 'collapseVM');
+}
+
+// 处理虚拟机管理链接点击，确保菜单保持展开状态
+function handleVMManagementClick() {
   ensureMenuExpanded('collapseVM', 'collapseVM');
 }
 
