@@ -148,6 +148,77 @@ def vm_info_page():
     """虚拟机成品信息页面"""
     return render_template('vm_info.html')
 
+@app.route('/api/vm_info_list')
+@login_required
+def api_vm_info_list():
+    """获取虚拟机信息列表"""
+    try:
+        # 扫描虚拟机目录
+        vm_dir = r'D:\macos_vm\NewVM'
+        vms = []
+        
+        # 批量获取运行中的虚拟机列表
+        running_vms = set()
+        try:
+            vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
+            if not os.path.exists(vmrun_path):
+                vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
+            
+            list_cmd = [vmrun_path, 'list']
+            result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30)
+            
+            if result.returncode == 0:
+                running_vms = set(result.stdout.strip().split('\n')[1:])
+        except Exception as e:
+            print(f"[DEBUG] 获取运行中虚拟机列表失败: {str(e)}")
+        
+        if os.path.exists(vm_dir):
+            for root, dirs, files in os.walk(vm_dir):
+                for file in files:
+                    if file.endswith('.vmx'):
+                        vm_path = os.path.join(root, file)
+                        vm_name = os.path.splitext(file)[0]
+                        
+                        # 获取虚拟机状态
+                        vm_status = 'stopped'
+                        if vm_path in running_vms:
+                            vm_status = 'running'
+                        
+                        # 获取创建时间（使用文件修改时间）
+                        try:
+                            create_time = datetime.datetime.fromtimestamp(os.path.getmtime(vm_path))
+                            create_time_str = create_time.strftime('%Y-%m-%d %H:%M:%S')
+                        except:
+                            create_time_str = '未知'
+                        
+                        # 获取五码信息
+                        wuma_info = get_wuma_info(vm_name)
+                        has_wuma = wuma_info is not None
+                        
+                        # 获取配置信息
+                        config_info = get_vm_config(vm_path)
+                        
+                        vms.append({
+                            'name': vm_name,
+                            'status': vm_status,
+                            'create_time': create_time_str,
+                            'config_info': config_info,
+                            'has_wuma': has_wuma,
+                            'wuma_info': wuma_info
+                        })
+        
+        return jsonify({
+            'success': True,
+            'vms': vms
+        })
+        
+    except Exception as e:
+        print(f"[DEBUG] 获取虚拟机信息列表失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取虚拟机信息失败: {str(e)}'
+        })
+
 @app.route('/vm_script')
 @login_required
 def vm_script_page():
@@ -1242,9 +1313,21 @@ def check_ip_connectivity(ip):
 def get_wuma_info(vm_name):
     """获取虚拟机五码信息"""
     try:
-        # 这里可以从plist文件或其他地方获取五码信息
-        # 暂时返回占位符
-        return f"五码信息-{vm_name}"
+        # 检查plist目录中是否有对应的五码文件
+        plist_dir = os.path.join(os.path.dirname(__file__), '..', 'plist')
+        if os.path.exists(plist_dir):
+            # 查找与虚拟机名称相关的plist文件
+            for file in os.listdir(plist_dir):
+                if file.endswith('.plist') and vm_name.lower() in file.lower():
+                    return f"已配置五码信息"
+            
+            # 检查是否有通用的五码配置文件
+            for file in os.listdir(plist_dir):
+                if file.endswith('.plist') and 'wuma' in file.lower():
+                    return f"通用五码配置"
+        
+        # 如果没有找到五码信息，返回None
+        return None
         
     except Exception as e:
         print(f"[DEBUG] 获取五码信息失败: {str(e)}")

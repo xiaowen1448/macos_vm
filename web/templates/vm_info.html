@@ -67,6 +67,37 @@
             background-color: #f8f9fa;
             font-weight: 600;
         }
+        
+        .wuma-status-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            border: 2px solid transparent;
+            cursor: default;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .wuma-status-icon.success {
+            background-color: #28a745;
+            color: white;
+            border-color: #1e7e34;
+        }
+        
+        .wuma-status-icon.danger {
+            background-color: #dc3545;
+            color: white;
+            border-color: #c82333;
+        }
+        
+        .wuma-status-icon:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
         html, body { width: 100vw; overflow-x: hidden !important; }
         .col-md-9.col-lg-10 { width: calc(100vw - 280px); min-width: 0; margin: 0; height: calc(100vh - 80px); overflow-y: auto; overflow-x: hidden; }
         .main-wrapper { display: flex; height: 100vh; }
@@ -223,7 +254,13 @@
                         <div class="row">
                             <div class="col-md-12">
                                 <h5>虚拟机成品信息</h5>
-                                <p class="text-muted">这里显示虚拟机成品相关的信息，包括虚拟机状态、配置信息、性能数据等。</p>
+                                <p class="text-muted">这里显示虚拟机成品相关的信息，包括虚拟机状态、配置信息、五码信息等。</p>
+                                <div class="alert alert-info" role="alert">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    <strong>五码信息说明：</strong>
+                                    <span class="text-success">🟢 绿色对号</span> 表示已配置五码信息，
+                                    <span class="text-danger">🔴 红色X</span> 表示未配置五码信息
+                                </div>
                                 <div class="table-responsive">
                                     <table class="table table-hover vm-info-table">
                                         <thead>
@@ -232,26 +269,14 @@
                                                 <th>状态</th>
                                                 <th>创建时间</th>
                                                 <th>配置信息</th>
+                                                <th>五码信息</th>
                                                 <th>操作</th>
                                             </tr>
                                         </thead>
-                                        <tbody>
+                                        <tbody id="vmInfoTableBody">
                                             <tr>
-                                                <td>VM_20241201_001</td>
-                                                <td><span class="badge bg-success">运行中</span></td>
-                                                <td>2024-12-01 10:30:00</td>
-                                                <td>macOS 10.12, 4GB RAM, 50GB Disk</td>
-                                                <td>
-                                                    <button class="btn btn-sm btn-outline-primary">查看详情</button>
-                                                </td>
-                                            </tr>
-                                            <tr>
-                                                <td>VM_20241201_002</td>
-                                                <td><span class="badge bg-secondary">已停止</span></td>
-                                                <td>2024-12-01 11:15:00</td>
-                                                <td>macOS 10.12, 4GB RAM, 50GB Disk</td>
-                                                <td>
-                                                    <button class="btn btn-sm btn-outline-primary">查看详情</button>
+                                                <td colspan="6" class="text-center text-muted">
+                                                    <i class="fas fa-spinner fa-spin me-2"></i>加载中...
                                                 </td>
                                             </tr>
                                         </tbody>
@@ -339,9 +364,93 @@
             event.target.classList.add('active');
         }
 
+        // 页面加载时获取数据
+        document.addEventListener('DOMContentLoaded', function() {
+            loadVMInfoData();
+        });
+
+        function loadVMInfoData() {
+            fetch('/api/vm_info_list')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        updateVMInfoTable(data.vms);
+                    } else {
+                        console.error('获取虚拟机信息失败:', data.message);
+                        showError('获取虚拟机信息失败: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('请求失败:', error);
+                    showError('网络请求失败');
+                });
+        }
+
+        function updateVMInfoTable(vms) {
+            const tbody = document.getElementById('vmInfoTableBody');
+            
+            if (vms.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="text-center text-muted">
+                            <i class="fas fa-info-circle me-2"></i>暂无虚拟机信息
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            tbody.innerHTML = vms.map(vm => `
+                <tr>
+                    <td><strong>${vm.name}</strong></td>
+                    <td>
+                        <span class="badge ${vm.status === 'running' ? 'bg-success' : 'bg-secondary'}">
+                            ${vm.status === 'running' ? '运行中' : '已停止'}
+                        </span>
+                    </td>
+                    <td>${vm.create_time}</td>
+                    <td>${vm.config_info || '未知'}</td>
+                    <td>
+                        ${getWumaStatusIcon(vm.has_wuma)}
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" onclick="viewVMDetails('${vm.name}')">
+                            <i class="fas fa-eye me-1"></i>查看详情
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function getWumaStatusIcon(hasWuma) {
+            if (hasWuma) {
+                return '<button class="wuma-status-icon success" disabled title="✅ 已配置五码信息 - 该虚拟机已配置完整的五码信息，可以正常使用"><i class="fas fa-check"></i></button>';
+            } else {
+                return '<button class="wuma-status-icon danger" disabled title="❌ 未配置五码信息 - 该虚拟机尚未配置五码信息，需要先配置五码才能正常使用"><i class="fas fa-times"></i></button>';
+            }
+        }
+
+        function viewVMDetails(vmName) {
+            // 查看虚拟机详情的逻辑
+            console.log('查看虚拟机详情:', vmName);
+            alert('查看虚拟机详情: ' + vmName);
+        }
+
+        function showError(message) {
+            const tbody = document.getElementById('vmInfoTableBody');
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="6" class="text-center text-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>${message}
+                    </td>
+                </tr>
+            `;
+        }
+
         function refreshData() {
             // 刷新数据的逻辑
             console.log('刷新虚拟机成品信息数据');
+            loadVMInfoData();
         }
     </script>
 </body>

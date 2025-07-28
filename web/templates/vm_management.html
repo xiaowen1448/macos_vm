@@ -67,6 +67,39 @@
         background-color: #f8f9fa;
         font-weight: 600;
     }
+    
+    .ju-status-icon {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 8px;
+        border: 1px solid transparent;
+        cursor: default;
+        transition: all 0.2s ease;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        padding: 0;
+        line-height: 1;
+    }
+    
+    .ju-status-icon.success {
+        background-color: #28a745;
+        color: white;
+        border-color: #1e7e34;
+    }
+    
+    .ju-status-icon.danger {
+        background-color: #dc3545;
+        color: white;
+        border-color: #c82333;
+    }
+    
+    .ju-status-icon:hover {
+        transform: scale(1.2);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+    }
     html, body { width: 100vw; overflow-x: hidden !important; }
     .col-md-9.col-lg-10 { width: calc(100vw - 280px); min-width: 0; margin: 0; height: calc(100vh - 80px); overflow: auto; }
     .main-wrapper { display: flex; height: 100vh; }
@@ -282,6 +315,14 @@
                             <p class="mt-2">正在获取虚拟机信息...</p>
                         </div>
                         
+                        <!-- 五码信息说明 -->
+                        <div class="alert alert-info py-2 mb-2" role="alert" style="font-size: 0.9em;">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>JU值信息说明：</strong>
+                            <span class="text-success">🟢 绿色对号</span> 表示已配置JU值信息，
+                            <span class="text-danger">🔴 红色X</span> 表示未配置JU值信息
+                        </div>
+                        
                         <!-- 虚拟机列表 -->
                         <div class="table-responsive">
                             <table class="table table-hover vm-info-table" id="vmTable">
@@ -293,7 +334,7 @@
                                         <th>虚拟机名称</th>
                                         <th>状态</th>
                                         <th>IP地址</th>
-                                        <th>五码信息</th>
+                                        <th>JU值信息</th>
                                         <th>SSH状态</th>
                                         <th>操作</th>
                                     </tr>
@@ -364,7 +405,7 @@
             if (autoPageSize < 20) {
                 // 小分页时，无滚动条
                 tableContainer.style.overflow = 'hidden';
-                tableContainer.style.maxHeight = 'calc(100vh - 400px)';
+                tableContainer.style.maxHeight = 'calc(100vh - 500px)'; // 为分页控件预留更多空间
                 tableContainer.style.height = 'auto';
                 
                 if (mainContent) {
@@ -403,7 +444,7 @@
                             if (newPageSize < 20) {
                                 // 小分页时，无滚动条
                                 tableContainer.style.overflow = 'hidden';
-                                tableContainer.style.maxHeight = 'calc(100vh - 400px)';
+                                tableContainer.style.maxHeight = 'calc(100vh - 500px)'; // 为分页控件预留更多空间
                                 tableContainer.style.height = 'auto';
                                 
                                 if (mainContent) {
@@ -445,11 +486,13 @@
             const topNavHeight = 80; // 顶部导航栏高度
             const cardHeaderHeight = 80; // 卡片头部高度（包含padding）
             const headerHeight = tableHeader.offsetHeight;
-            const paginationHeight = paginationArea.offsetHeight;
+            const paginationAreaHeight = paginationArea.offsetHeight;
             const tableHeaderHeight = 40; // 表格头部高度
-            const padding = 100; // 预留更多空间，确保不出现滚动条
+            const juInfoHeight = 45; // JU值信息说明栏高度（更紧凑）
+            const paginationHeight = 60; // 分页控件高度（包括按钮和间距）
+            const padding = 120; // 预留更多空间，确保分页控件完全显示
             
-            const availableHeight = viewportHeight - topNavHeight - cardHeaderHeight - headerHeight - tableHeaderHeight - paginationHeight - padding;
+            const availableHeight = viewportHeight - topNavHeight - cardHeaderHeight - headerHeight - tableHeaderHeight - paginationHeight - juInfoHeight - padding;
             
             // 估算表格行高（包括边框和内边距）
             const estimatedRowHeight = 52; // 每行大约52px（Bootstrap表格行高）
@@ -504,7 +547,7 @@
             if (autoPageSize < 20) {
                 // 小分页时，无滚动条
                 tableContainer.style.overflow = 'hidden';
-                tableContainer.style.maxHeight = 'calc(100vh - 400px)';
+                tableContainer.style.maxHeight = 'calc(100vh - 500px)'; // 为分页控件预留更多空间
                 tableContainer.style.height = 'auto';
                 
                 if (mainContent) {
@@ -606,8 +649,8 @@
                     <td id="ip-${vm.name}">
                         ${vm.status === 'running' ? '<span id="ip-status-${vm.name}">获取中...</span>' : '<span class="text-muted">-</span>'}
                     </td>
-                    <td id="wuma-${vm.name}">
-                        ${vm.wuma_info || '<span class="text-muted">-</span>'}
+                    <td id="ju-${vm.name}">
+                        ${getJuStatusIcon(vm.ju_info)}
                     </td>
                     <td id="ssh-${vm.name}">
                         <span class="badge status-badge ${vm.ssh_status === 'online' ? 'bg-success' : 'bg-secondary'}">
@@ -713,7 +756,7 @@
             } else {
                 // 小分页时，保持无滚动条
                 tableContainer.style.overflow = 'hidden';
-                tableContainer.style.maxHeight = 'calc(100vh - 400px)';
+                tableContainer.style.maxHeight = 'calc(100vh - 500px)'; // 为分页控件预留更多空间
                 tableContainer.style.height = 'auto';
                 
                 // 小分页时，父容器也隐藏滚动条
@@ -747,6 +790,15 @@
                 default: return '未知';
             }
         }
+        
+        // 获取JU值状态图标
+        function getJuStatusIcon(juInfo) {
+            if (juInfo && juInfo !== '-' && juInfo !== '<span class="text-muted">-</span>') {
+                return '<button class="ju-status-icon success" disabled title="✅ 已配置JU值信息 - 该虚拟机已配置完整的JU值信息，可以正常使用"><i class="fas fa-check"></i></button>';
+            } else {
+                return '<button class="ju-status-icon danger" disabled title="❌ 未配置JU值信息 - 该虚拟机尚未配置JU值信息，需要先配置JU值才能正常使用"><i class="fas fa-times"></i></button>';
+            }
+        }
 
         // 异步加载虚拟机详细信息
         function loadVMDetails(vmName) {
@@ -760,10 +812,10 @@
                             ipCell.innerHTML = data.ip || '<span class="text-muted">-</span>';
                         }
                         
-                        // 更新五码信息
-                        const wumaCell = document.getElementById(`wuma-${vmName}`);
-                        if (wumaCell) {
-                            wumaCell.innerHTML = data.wuma_info || '<span class="text-muted">-</span>';
+                        // 更新JU值信息
+                        const juCell = document.getElementById(`ju-${vmName}`);
+                        if (juCell) {
+                            juCell.innerHTML = getJuStatusIcon(data.ju_info);
                         }
                         
                         // 更新SSH状态
@@ -1115,10 +1167,10 @@
                                                     </span>
                                                 </td>
                                             </tr>
-                                            <tr>
-                                                <td><strong>五码信息:</strong></td>
-                                                <td>${vmInfo.wuma_info || '<span class="text-muted">-</span>'}</td>
-                                            </tr>
+                                                                    <tr>
+                            <td><strong>JU值信息:</strong></td>
+                            <td>${getJuStatusIcon(vmInfo.ju_info)}</td>
+                        </tr>
                                         </table>
                                     </div>
                                     <div class="col-md-6">
