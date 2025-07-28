@@ -58,6 +58,8 @@
             border-radius: 10px 10px 0 0 !important;
             padding: 20px;
         }
+        html, body { width: 100vw; overflow-x: hidden !important; }
+        .col-md-9.col-lg-10 { width: calc(100vw - 280px); min-width: 0; margin: 0; height: calc(100vh - 80px); overflow-y: auto; overflow-x: hidden; }
     </style>
 </head>
 <body>
@@ -197,7 +199,7 @@
             
             <!-- 右侧内容区域 -->
             <div class="col-md-9 col-lg-10">
-                <div class="card">
+                <div class="card mt-0" style="margin-top:0;">
                     <div class="card-header">
                         <div class="d-flex justify-content-between align-items-center">
                             <h4 class="mb-0">

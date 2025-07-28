@@ -67,6 +67,11 @@
             background-color: #f8f9fa;
             font-weight: 600;
         }
+        html, body { width: 100vw; overflow-x: hidden !important; }
+        .col-md-9.col-lg-10 { width: calc(100vw - 280px); min-width: 0; margin: 0; height: calc(100vh - 80px); overflow-y: auto; overflow-x: hidden; }
+        .main-wrapper { display: flex; height: 100vh; }
+        .sidebar { width: 280px; }
+        .main-content { flex: 1; min-width: 0; overflow: auto; }
     </style>
 </head>
 <body>
@@ -93,7 +98,6 @@
     
     <div class="container-fluid" style="margin-left: 280px; margin-top: 80px;">
         <div class="row">
-            <!-- 左侧菜单 -->
             <nav class="col-md-3 col-lg-2 sidebar bg-white p-3">
                 <h5 class="mb-4"><span style="color:#000; font-style:italic; font-weight:bold;">macos_vm</span></h5>
                 <div class="accordion" id="accordionMenu">
@@ -203,10 +207,8 @@
                     </div>
                 </div>
             </nav>
-            
-            <!-- 右侧内容区域 -->
             <div class="col-md-9 col-lg-10">
-                <div class="card">
+                <div class="card mt-0" style="margin-top:0;">
                     <div class="card-header">
                         <div class="d-flex justify-content-between align-items-center">
                             <h4 class="mb-0">
@@ -222,7 +224,6 @@
                             <div class="col-md-12">
                                 <h5>虚拟机成品信息</h5>
                                 <p class="text-muted">这里显示虚拟机成品相关的信息，包括虚拟机状态、配置信息、性能数据等。</p>
-                                
                                 <div class="table-responsive">
                                     <table class="table table-hover vm-info-table">
                                         <thead>
