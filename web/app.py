@@ -879,6 +879,62 @@ def api_vm_info(vm_name):
     except Exception as e:
         return jsonify({'success': False, 'message': f'获取信息失败: {str(e)}'})
 
+@app.route('/api/vm_delete', methods=['POST'])
+@login_required
+def api_vm_delete():
+    """删除虚拟机"""
+    try:
+        data = request.get_json()
+        vm_names = data.get('vm_names', [])
+        
+        if not vm_names:
+            return jsonify({'success': False, 'message': '缺少虚拟机名称'})
+        
+        deleted_vms = []
+        failed_vms = []
+        
+        for vm_name in vm_names:
+            try:
+                # 查找虚拟机文件
+                vm_file = find_vm_file(vm_name)
+                if not vm_file:
+                    failed_vms.append(f'{vm_name} (找不到文件)')
+                    continue
+                
+                # 先停止虚拟机
+                vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
+                if not os.path.exists(vmrun_path):
+                    vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
+                
+                # 停止虚拟机
+                stop_cmd = [vmrun_path, 'stop', vm_file, 'hard']
+                subprocess.run(stop_cmd, capture_output=True, text=True, timeout=30)
+                
+                # 删除虚拟机文件夹
+                vm_dir = os.path.dirname(vm_file)
+                if os.path.exists(vm_dir):
+                    import shutil
+                    shutil.rmtree(vm_dir)
+                    deleted_vms.append(vm_name)
+                    print(f"[DEBUG] 成功删除虚拟机: {vm_name}")
+                else:
+                    failed_vms.append(f'{vm_name} (文件夹不存在)')
+                    
+            except Exception as e:
+                failed_vms.append(f'{vm_name} ({str(e)})')
+                print(f"[DEBUG] 删除虚拟机失败 {vm_name}: {str(e)}")
+        
+        return jsonify({
+            'success': True,
+            'deleted_vms': deleted_vms,
+            'failed_vms': failed_vms,
+            'message': f'成功删除 {len(deleted_vms)} 个虚拟机，失败 {len(failed_vms)} 个'
+        })
+        
+    except Exception as e:
+        print(f"[DEBUG] 删除虚拟机API失败: {str(e)}")
+        return jsonify({'success': False, 'message': f'删除失败: {str(e)}'})
+
 def get_vm_status(vm_path):
     """获取虚拟机状态"""
     try:

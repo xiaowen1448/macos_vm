@@ -287,6 +287,9 @@
                             <table class="table table-hover vm-info-table" id="vmTable">
                                 <thead>
                                     <tr>
+                                        <th>
+                                            <input type="checkbox" id="selectAll" onchange="toggleSelectAll()" title="全选/取消全选">
+                                        </th>
                                         <th>虚拟机名称</th>
                                         <th>状态</th>
                                         <th>IP地址</th>
@@ -301,7 +304,7 @@
                             </table>
                         </div>
                         
-                        <!-- 分页控件 -->
+                        <!-- 批量操作和分页控件 -->
                         <div class="d-flex justify-content-between align-items-center mt-3">
                             <div class="d-flex align-items-center">
                                 <div class="text-muted me-3">
@@ -317,6 +320,11 @@
                                     </select>
                                     <button class="btn btn-outline-secondary btn-sm ms-2" onclick="resetToAuto()" title="重置为自动分页">
                                         <i class="fas fa-magic"></i>
+                                    </button>
+                                </div>
+                                <div class="d-flex align-items-center ms-3">
+                                    <button class="btn btn-danger btn-sm" onclick="deleteSelectedVMs()" id="deleteSelectedBtn" disabled>
+                                        <i class="fas fa-trash me-1"></i>删除选中 (<span id="selectedCount">0</span>)
                                     </button>
                                 </div>
                             </div>
@@ -340,6 +348,7 @@
         let totalVMs = [];
         let totalPages = 0;
         let isAutoCalculated = true; // 标记是否为自动计算的分页大小
+        let selectedVMs = new Set(); // 存储选中的虚拟机
         
         // 页面加载时获取虚拟机数据
         document.addEventListener('DOMContentLoaded', function() {
@@ -560,7 +569,7 @@
             tbody.innerHTML = '';
             
             if (totalVMs.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">暂无虚拟机数据</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">暂无虚拟机数据</td></tr>';
                 return;
             }
             
@@ -581,7 +590,11 @@
             
             totalVMs.forEach(vm => {
                 const row = document.createElement('tr');
+                const isSelected = selectedVMs.has(vm.name);
                 row.innerHTML = `
+                    <td>
+                        <input type="checkbox" class="vm-checkbox" value="${vm.name}" onchange="toggleVMSelection('${vm.name}')" ${isSelected ? 'checked' : ''}>
+                    </td>
                     <td>
                         <strong>${vm.name}</strong>
                     </td>
@@ -612,6 +625,9 @@
                             <button class="btn btn-outline-info btn-sm" onclick="getVMInfo('${vm.name}')">
                                 <i class="fas fa-info-circle"></i>
                             </button>
+                            <button class="btn btn-outline-danger btn-sm" onclick="deleteVM('${vm.name}')" title="删除虚拟机">
+                                <i class="fas fa-trash"></i>
+                            </button>
                         </div>
                     </td>
                 `;
@@ -622,6 +638,9 @@
                     loadVMDetails(vm.name);
                 }
             });
+            
+            // 更新全选状态
+            updateSelectAllState();
         }
 
         // 更新分页控件
@@ -758,6 +777,129 @@
                 .catch(error => {
                     console.log(`获取虚拟机 ${vmName} 详细信息失败:`, error);
                 });
+        }
+
+        // 切换单个虚拟机选择
+        function toggleVMSelection(vmName) {
+            if (selectedVMs.has(vmName)) {
+                selectedVMs.delete(vmName);
+            } else {
+                selectedVMs.add(vmName);
+            }
+            updateSelectedCount();
+            updateSelectAllState();
+        }
+
+        // 切换全选状态
+        function toggleSelectAll() {
+            const selectAllCheckbox = document.getElementById('selectAll');
+            const vmCheckboxes = document.querySelectorAll('.vm-checkbox');
+            
+            if (selectAllCheckbox.checked) {
+                // 全选
+                vmCheckboxes.forEach(checkbox => {
+                    checkbox.checked = true;
+                    selectedVMs.add(checkbox.value);
+                });
+            } else {
+                // 取消全选
+                vmCheckboxes.forEach(checkbox => {
+                    checkbox.checked = false;
+                    selectedVMs.delete(checkbox.value);
+                });
+            }
+            
+            updateSelectedCount();
+        }
+
+        // 更新全选状态
+        function updateSelectAllState() {
+            const selectAllCheckbox = document.getElementById('selectAll');
+            const vmCheckboxes = document.querySelectorAll('.vm-checkbox');
+            
+            if (vmCheckboxes.length === 0) {
+                selectAllCheckbox.checked = false;
+                selectAllCheckbox.indeterminate = false;
+                return;
+            }
+            
+            const checkedCount = Array.from(vmCheckboxes).filter(cb => cb.checked).length;
+            
+            if (checkedCount === 0) {
+                selectAllCheckbox.checked = false;
+                selectAllCheckbox.indeterminate = false;
+            } else if (checkedCount === vmCheckboxes.length) {
+                selectAllCheckbox.checked = true;
+                selectAllCheckbox.indeterminate = false;
+            } else {
+                selectAllCheckbox.checked = false;
+                selectAllCheckbox.indeterminate = true;
+            }
+        }
+
+        // 更新选中数量
+        function updateSelectedCount() {
+            const count = selectedVMs.size;
+            document.getElementById('selectedCount').textContent = count;
+            document.getElementById('deleteSelectedBtn').disabled = count === 0;
+        }
+
+        // 删除单个虚拟机
+        function deleteVM(vmName) {
+            if (confirm(`确定要删除虚拟机 "${vmName}" 吗？此操作不可恢复。`)) {
+                deleteVMs([vmName]);
+            }
+        }
+
+        // 批量删除选中的虚拟机
+        function deleteSelectedVMs() {
+            const selectedArray = Array.from(selectedVMs);
+            if (selectedArray.length === 0) {
+                alert('请先选择要删除的虚拟机');
+                return;
+            }
+            
+            if (confirm(`确定要删除选中的 ${selectedArray.length} 个虚拟机吗？此操作不可恢复。`)) {
+                deleteVMs(selectedArray);
+            }
+        }
+
+        // 执行删除操作
+        function deleteVMs(vmNames) {
+            fetch('/api/vm_delete', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    vm_names: vmNames
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // 从选中列表中移除已删除的虚拟机
+                    data.deleted_vms.forEach(vmName => {
+                        selectedVMs.delete(vmName);
+                    });
+                    
+                    // 显示结果
+                    let message = data.message;
+                    if (data.failed_vms.length > 0) {
+                        message += '\n失败的虚拟机:\n' + data.failed_vms.join('\n');
+                    }
+                    alert(message);
+                    
+                    // 刷新数据
+                    loadVMData(currentPage);
+                } else {
+                    alert('删除失败: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('删除虚拟机失败:', error);
+                alert('删除失败: ' + error.message);
+            });
         }
 
         // 显示加载状态
