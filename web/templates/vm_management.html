@@ -132,6 +132,53 @@
             color: #6c757d;
             font-size: 0.9em;
         }
+        
+        .status-badge {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+        }
+        
+        .online-status-badge {
+            font-size: 0.7rem;
+            padding: 0.2rem 0.4rem;
+            margin-left: 0.25rem;
+        }
+        
+        .stat-card {
+            transition: all 0.3s ease;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .loading-status {
+            color: #17a2b8;
+            font-size: 0.8em;
+        }
+        
+        .error-status {
+            color: #dc3545;
+            font-size: 0.8em;
+        }
+        
+        .status-detecting {
+            background-color: #6c757d !important;
+            color: white !important;
+        }
+        
+        .status-online {
+            background-color: #28a745 !important;
+            color: white !important;
+            font-weight: bold;
+        }
+        
+        .status-trusted {
+            background-color: #28a745 !important;
+            color: white !important;
+            font-weight: bold;
+        }
 
 </style>
 </head>
@@ -278,9 +325,14 @@
                             <h4 class="mb-0">
                                 <i class="fas fa-server me-2"></i>虚拟机信息管理
                             </h4>
-                            <button class="btn btn-primary" onclick="refreshData()">
-                                <i class="fas fa-sync-alt me-2"></i>刷新数据
-                            </button>
+                            <div class="btn-group">
+                                <button class="btn btn-primary" onclick="refreshData()">
+                                    <i class="fas fa-sync-alt me-2"></i>刷新数据
+                                </button>
+                                <button class="btn btn-outline-info" onclick="refreshOnlineStatus()" title="重新检测在线状态">
+                                    <i class="fas fa-wifi me-2"></i>检测在线
+                                </button>
+                            </div>
                         </div>
                     </div>
                     <div class="card-body">
@@ -597,13 +649,26 @@
         function refreshData() {
             loadVMData(1);
         }
+        
+        // 刷新在线状态
+        function refreshOnlineStatus() {
+            console.log('手动刷新在线状态');
+            loadRunningVMOnlineStatus();
+        }
 
         // 更新虚拟机统计信息
         function updateVMStats(stats) {
             document.getElementById('totalVMs').textContent = stats.total || 0;
             document.getElementById('runningVMs').textContent = stats.running || 0;
             document.getElementById('stoppedVMs').textContent = stats.stopped || 0;
-            document.getElementById('onlineVMs').textContent = stats.online || 0;
+            document.getElementById('onlineVMs').textContent = '检测中...';
+            
+            // 初始统计卡片颜色
+            const onlineCard = document.querySelector('.stat-card:nth-child(4)');
+            if (onlineCard) {
+                onlineCard.style.borderColor = '#6c757d';
+                onlineCard.style.color = '#6c757d';
+            }
         }
 
         // 更新虚拟机表格（带分页）
@@ -634,6 +699,7 @@
             totalVMs.forEach(vm => {
                 const row = document.createElement('tr');
                 const isSelected = selectedVMs.has(vm.name);
+                row.setAttribute('data-vm-name', vm.name);
                 row.innerHTML = `
                     <td>
                         <input type="checkbox" class="vm-checkbox" value="${vm.name}" onchange="toggleVMSelection('${vm.name}')" ${isSelected ? 'checked' : ''}>
@@ -642,20 +708,27 @@
                         <strong>${vm.name}</strong>
                     </td>
                     <td>
-                        <span class="badge status-badge ${getStatusClass(vm.status)}">
-                            ${getStatusText(vm.status)}
-                        </span>
+                        <div class="d-flex align-items-center">
+                            <span class="badge status-badge ${getStatusClass(vm.status)} me-2">
+                                ${getStatusText(vm.status)}
+                            </span>
+                            ${vm.online_status && vm.online_status !== 'unknown' ? `
+                                <span class="badge status-badge ${getOnlineStatusClass(vm.online_status)}" title="${vm.online_reason || ''}">
+                                    ${getOnlineStatusText(vm.online_status)}
+                                </span>
+                            ` : ''}
+                        </div>
                     </td>
                     <td id="ip-${vm.name}">
-                        ${vm.status === 'running' ? '<span id="ip-status-${vm.name}">获取中...</span>' : '<span class="text-muted">-</span>'}
+                        ${vm.ip && vm.ip !== '获取中...' ? vm.ip : (vm.status === 'running' ? '<span id="ip-status-${vm.name}">获取中...</span>' : '<span class="text-muted">-</span>')}
                     </td>
                     <td id="ju-${vm.name}">
-                        ${getJuStatusIcon(vm.ju_info)}
+                        ${getJuStatusIcon(vm.wuma_info)}
                     </td>
                     <td id="ssh-${vm.name}">
                         <div class="d-flex align-items-center">
-                            <span class="badge status-badge ${vm.ssh_status === 'online' ? 'bg-success' : 'bg-secondary'} me-2">
-                                ${vm.ssh_status === 'online' ? '在线' : '离线'}
+                            <span class="badge status-badge ${vm.status === 'running' ? 'bg-secondary' : 'bg-danger'} me-2" title="${vm.status === 'running' ? '检测中...' : '虚拟机未运行，无法检测SSH状态'}">
+                                ${vm.status === 'running' ? '检测中...' : '未互信'}
                             </span>
                             <button class="btn btn-outline-primary btn-sm" onclick="setupSSHTrust('${vm.name}')" title="设置SSH互信" style="cursor: pointer;">
                                 <i class="fas fa-key"></i>
@@ -683,15 +756,15 @@
                     </td>
                 `;
                 tbody.appendChild(row);
-                
-                // 异步获取详细信息
-                if (vm.status === 'running') {
-                    loadVMDetails(vm.name);
-                }
             });
             
             // 更新全选状态
             updateSelectAllState();
+            
+            // 异步获取运行中虚拟机的在线状态
+            setTimeout(() => {
+                loadRunningVMOnlineStatus();
+            }, 100);
         }
 
         // 更新分页控件
@@ -796,6 +869,50 @@
             }
         }
         
+        // 获取在线状态样式类
+        function getOnlineStatusClass(onlineStatus) {
+            switch (onlineStatus) {
+                case 'online': return 'bg-success';
+                case 'partial': return 'bg-warning';
+                case 'offline': return 'bg-secondary';
+                case 'error': return 'bg-danger';
+                default: return 'bg-secondary';
+            }
+        }
+        
+        // 获取在线状态文本
+        function getOnlineStatusText(onlineStatus) {
+            switch (onlineStatus) {
+                case 'online': return '完全在线';
+                case 'partial': return '部分在线';
+                case 'offline': return '未在线';
+                case 'error': return '错误';
+                default: return '未知';
+            }
+        }
+        
+        // 获取SSH状态样式类
+        function getSSHStatusClass(sshTrust, sshPortOpen) {
+            if (sshTrust) {
+                return 'bg-success'; // 绿色：已互信
+            } else if (sshPortOpen) {
+                return 'bg-danger'; // 红色：端口开放但未互信
+            } else {
+                return 'bg-secondary'; // 灰色：端口未开放
+            }
+        }
+        
+        // 获取SSH状态文本
+        function getSSHStatusText(sshTrust, sshPortOpen) {
+            if (sshTrust) {
+                return '已互信';
+            } else if (sshPortOpen) {
+                return '未互信';
+            } else {
+                return '端口关闭';
+            }
+        }
+        
         // 获取JU值状态图标
         function getJuStatusIcon(juInfo) {
             if (juInfo && juInfo !== '-' && juInfo !== '<span class="text-muted">-</span>') {
@@ -805,43 +922,176 @@
             }
         }
 
-        // 异步加载虚拟机详细信息
-        function loadVMDetails(vmName) {
-            fetch(`/api/vm_details/${vmName}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        // 更新IP地址
+        // 异步获取运行中虚拟机的在线状态
+        function loadRunningVMOnlineStatus() {
+            // 获取所有运行中的虚拟机
+            const runningVMs = totalVMs.filter(vm => vm.status === 'running');
+            
+            // 为未运行的虚拟机设置SSH状态为未互信
+            totalVMs.forEach(vm => {
+                if (vm.status !== 'running') {
+                    const sshCell = document.getElementById(`ssh-${vm.name}`);
+                    if (sshCell) {
+                        sshCell.innerHTML = `
+                            <div class="d-flex align-items-center">
+                                <span class="badge status-badge bg-danger me-2" title="虚拟机未运行，无法检测SSH状态">
+                                    未互信
+                                </span>
+                                <button class="btn btn-outline-primary btn-sm" onclick="setupSSHTrust('${vm.name}')" title="设置SSH互信" style="cursor: pointer;">
+                                    <i class="fas fa-key"></i>
+                                </button>
+                            </div>
+                        `;
+                    }
+                }
+            });
+            
+            if (runningVMs.length === 0) {
+                console.log('没有运行中的虚拟机需要获取在线状态');
+                return;
+            }
+            
+            const vmNames = runningVMs.map(vm => vm.name);
+            console.log(`开始异步获取 ${vmNames.length} 个运行中虚拟机的在线状态`);
+            
+            // 显示加载状态
+            vmNames.forEach(vmName => {
+                const ipCell = document.getElementById(`ip-${vmName}`);
+                if (ipCell) {
+                    ipCell.innerHTML = '<span class="text-info"><i class="fas fa-spinner fa-spin"></i> 获取中...</span>';
+                }
+                
+                const statusCell = document.querySelector(`tr[data-vm-name="${vmName}"] td:nth-child(3)`);
+                if (statusCell) {
+                    statusCell.innerHTML = `
+                        <div class="d-flex align-items-center">
+                            <span class="badge status-badge bg-success me-2">运行中</span>
+                            <span class="badge status-badge bg-secondary"><i class="fas fa-spinner fa-spin"></i> 检测中</span>
+                        </div>
+                    `;
+                }
+            });
+            
+            // 异步获取在线状态
+            fetch('/api/vm_online_status', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    vm_names: vmNames
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    console.log('异步获取在线状态成功:', data.results);
+                    
+                    // 更新每个虚拟机的状态
+                    Object.keys(data.results).forEach(vmName => {
+                        const result = data.results[vmName];
+                        const vm = totalVMs.find(v => v.name === vmName);
+                        
+                        if (vm) {
+                            // 更新虚拟机数据
+                            vm.online_status = result.online_status;
+                            vm.online_reason = result.online_reason;
+                            vm.ip = result.ip || '-';
+                            vm.ssh_trust = result.ssh_trust;
+                            vm.ssh_port_open = result.ssh_port_open;
+                            
+                            // 更新IP显示
+                            const ipCell = document.getElementById(`ip-${vmName}`);
+                            if (ipCell) {
+                                ipCell.innerHTML = result.ip || '<span class="text-muted">-</span>';
+                            }
+                            
+                            // 更新状态显示
+                            const statusCell = document.querySelector(`tr[data-vm-name="${vmName}"] td:nth-child(3)`);
+                            if (statusCell) {
+                                statusCell.innerHTML = `
+                                    <div class="d-flex align-items-center">
+                                        <span class="badge status-badge ${getStatusClass(vm.status)} me-2">
+                                            ${getStatusText(vm.status)}
+                                        </span>
+                                        <span class="badge status-badge ${getOnlineStatusClass(result.online_status)} ${result.online_status === 'online' ? 'status-online' : ''}" title="${result.online_reason || ''}">
+                                            ${getOnlineStatusText(result.online_status)}
+                                        </span>
+                                    </div>
+                                `;
+                            }
+                            
+                            // 更新SSH状态
+                            const sshCell = document.getElementById(`ssh-${vmName}`);
+                            if (sshCell) {
+                                const sshStatusClass = getSSHStatusClass(result.ssh_trust, result.ssh_port_open);
+                                const sshStatusText = getSSHStatusText(result.ssh_trust, result.ssh_port_open);
+                                const sshTitle = result.ssh_trust ? 'SSH互信已设置，可以无密码登录' : 
+                                               result.ssh_port_open ? 'SSH端口开放但未互信，需要设置SSH互信' : 'SSH端口未开放';
+                                
+                                sshCell.innerHTML = `
+                                    <div class="d-flex align-items-center">
+                                                                        <span class="badge status-badge ${sshStatusClass} ${result.ssh_trust ? 'status-trusted' : ''} me-2" title="${sshTitle}">
+                                    ${sshStatusText}
+                                </span>
+                                        <button class="btn btn-outline-primary btn-sm" onclick="setupSSHTrust('${vmName}')" title="设置SSH互信" style="cursor: pointer;">
+                                            <i class="fas fa-key"></i>
+                                        </button>
+                                    </div>
+                                `;
+                            }
+                        }
+                    });
+                    
+                    // 更新统计信息
+                    updateOnlineStats();
+                    
+                } else {
+                    console.error('异步获取在线状态失败:', data.message);
+                    // 显示错误状态
+                    vmNames.forEach(vmName => {
                         const ipCell = document.getElementById(`ip-${vmName}`);
                         if (ipCell) {
-                            ipCell.innerHTML = data.ip || '<span class="text-muted">-</span>';
+                            ipCell.innerHTML = '<span class="text-danger">获取失败</span>';
                         }
-                        
-                        // 更新JU值信息
-                        const juCell = document.getElementById(`ju-${vmName}`);
-                        if (juCell) {
-                            juCell.innerHTML = getJuStatusIcon(data.ju_info);
-                        }
-                        
-                        // 更新SSH状态
-                        const sshCell = document.getElementById(`ssh-${vmName}`);
-                        if (sshCell) {
-                            sshCell.innerHTML = `
-                                <div class="d-flex align-items-center">
-                                    <span class="badge status-badge ${data.ssh_status === 'online' ? 'bg-success' : 'bg-secondary'} me-2">
-                                        ${data.ssh_status === 'online' ? '在线' : '离线'}
-                                    </span>
-                                    <button class="btn btn-outline-primary btn-sm" onclick="setupSSHTrust('${vmName}')" title="设置SSH互信" style="cursor: pointer;">
-                                        <i class="fas fa-key"></i>
-                                    </button>
-                                </div>
-                            `;
-                        }
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('异步获取在线状态网络错误:', error);
+                // 显示错误状态
+                vmNames.forEach(vmName => {
+                    const ipCell = document.getElementById(`ip-${vmName}`);
+                    if (ipCell) {
+                        ipCell.innerHTML = '<span class="text-danger">网络错误</span>';
                     }
-                })
-                .catch(error => {
-                    console.log(`获取虚拟机 ${vmName} 详细信息失败:`, error);
                 });
+            });
+        }
+        
+        // 更新在线统计信息
+        function updateOnlineStats() {
+            const onlineCount = totalVMs.filter(vm => vm.online_status === 'online').length;
+            const totalCount = totalVMs.length;
+            
+            document.getElementById('onlineVMs').textContent = onlineCount;
+            
+            // 更新统计卡片颜色
+            const onlineCard = document.querySelector('.stat-card:nth-child(4)');
+            if (onlineCard) {
+                const percentage = totalCount > 0 ? (onlineCount / totalCount * 100).toFixed(1) : 0;
+                
+                if (percentage >= 80) {
+                    onlineCard.style.borderColor = '#28a745';
+                    onlineCard.style.color = '#28a745';
+                } else if (percentage >= 50) {
+                    onlineCard.style.borderColor = '#ffc107';
+                    onlineCard.style.color = '#ffc107';
+                } else {
+                    onlineCard.style.borderColor = '#dc3545';
+                    onlineCard.style.color = '#dc3545';
+                }
+            }
         }
 
         // SSH互信设置功能

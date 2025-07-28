@@ -1,0 +1,20 @@
+2025-07-28 22:45:05,790 [INFO] <module>:64 - 启动macos_vm管理平台
+2025-07-28 22:45:05,791 [INFO] <module>:67 - 启动Flask服务
+2025-07-28 22:45:05,796 [INFO] wait_for_flask:49 - 等待Flask服务启动: http://127.0.0.1:5000/login
+2025-07-28 22:45:05,796 [DEBUG] wait_for_flask:52 - 尝试连接Flask服务 (第1次)
+2025-07-28 22:45:05,800 [DEBUG] _new_conn:241 - Starting new HTTP connection (1): 127.0.0.1:5000
+2025-07-28 22:45:07,850 [DEBUG] wait_for_flask:58 - 连接失败: HTTPConnectionPool(host='127.0.0.1', port=5000): Max retries exceeded with url: /login (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000000003937E00>: Failed to establish a new connection: [WinError 10061] 由于目标计算机积极拒绝，无法连接。'))
+2025-07-28 22:45:08,352 [DEBUG] wait_for_flask:52 - 尝试连接Flask服务 (第2次)
+2025-07-28 22:45:08,353 [DEBUG] _new_conn:241 - Starting new HTTP connection (1): 127.0.0.1:5000
+2025-07-28 22:45:10,401 [DEBUG] wait_for_flask:58 - 连接失败: HTTPConnectionPool(host='127.0.0.1', port=5000): Max retries exceeded with url: /login (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000000003BA0690>: Failed to establish a new connection: [WinError 10061] 由于目标计算机积极拒绝，无法连接。'))
+2025-07-28 22:45:10,902 [DEBUG] wait_for_flask:52 - 尝试连接Flask服务 (第3次)
+2025-07-28 22:45:10,903 [DEBUG] _new_conn:241 - Starting new HTTP connection (1): 127.0.0.1:5000
+2025-07-28 22:45:12,951 [DEBUG] wait_for_flask:58 - 连接失败: HTTPConnectionPool(host='127.0.0.1', port=5000): Max retries exceeded with url: /login (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000000003BA0F50>: Failed to establish a new connection: [WinError 10061] 由于目标计算机积极拒绝，无法连接。'))
+2025-07-28 22:45:13,452 [DEBUG] wait_for_flask:52 - 尝试连接Flask服务 (第4次)
+2025-07-28 22:45:13,453 [DEBUG] _new_conn:241 - Starting new HTTP connection (1): 127.0.0.1:5000
+2025-07-28 22:45:15,499 [DEBUG] wait_for_flask:58 - 连接失败: HTTPConnectionPool(host='127.0.0.1', port=5000): Max retries exceeded with url: /login (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000000003BA4E90>: Failed to establish a new connection: [WinError 10061] 由于目标计算机积极拒绝，无法连接。'))
+2025-07-28 22:45:16,000 [DEBUG] wait_for_flask:52 - 尝试连接Flask服务 (第5次)
+2025-07-28 22:45:16,002 [DEBUG] _new_conn:241 - Starting new HTTP connection (1): 127.0.0.1:5000
+2025-07-28 22:45:18,044 [DEBUG] wait_for_flask:58 - 连接失败: HTTPConnectionPool(host='127.0.0.1', port=5000): Max retries exceeded with url: /login (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000000003BA55B0>: Failed to establish a new connection: [WinError 10061] 由于目标计算机积极拒绝，无法连接。'))
+2025-07-28 22:45:18,545 [DEBUG] wait_for_flask:52 - 尝试连接Flask服务 (第6次)
+2025-07-28 22:45:18,546 [DEBUG] _new_conn:241 - Starting new HTTP connection (1): 127.0.0.1:5000

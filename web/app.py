@@ -858,13 +858,16 @@ def api_vm_list():
                         
                         logger.debug(f"找到虚拟机: {vm_name}, 状态: {vm_status}")
                         
-                        # 先添加基本信息，异步获取详细信息
+                        # 构建虚拟机基本信息
                         vm_info = {
                             'name': vm_name,
                             'path': vm_path,
                             'status': vm_status,
-                            'ip': '获取中...',
-                            'wuma_info': f"五码信息-{vm_name}",
+                            'online_status': 'unknown',  # 初始状态为未知
+                            'online_reason': '',
+                            'ip': '获取中...' if vm_status == 'running' else '-',
+                            'ssh_trust': False,
+                            'wuma_info': get_wuma_info(vm_name) or '未配置',
                             'ssh_status': 'unknown'
                         }
                         vms.append(vm_info)
@@ -914,26 +917,27 @@ def api_vm_list():
 @login_required
 def api_vm_details(vm_name):
     """获取单个虚拟机的详细信息"""
+    logger.debug(f"获取虚拟机 {vm_name} 的详细信息")
     try:
-        # 获取IP地址
-        vm_ip = get_vm_ip(vm_name)
+        # 获取虚拟机在线状态（包括IP和SSH互信）
+        online_status = get_vm_online_status(vm_name)
         
         # 获取五码信息
         wuma_info = get_wuma_info(vm_name)
         
-        # 检查SSH连接状态
-        ssh_status = check_ssh_status(vm_ip) if vm_ip else 'offline'
-        
         return jsonify({
             'success': True,
             'vm_name': vm_name,
-            'ip': vm_ip,
+            'ip': online_status['ip'],
             'wuma_info': wuma_info,
-            'ssh_status': ssh_status
+            'online_status': online_status['status'],
+            'online_reason': online_status['reason'],
+            'ssh_trust': online_status['ssh_trust'],
+            'ssh_port_open': online_status.get('ssh_port_open', False)
         })
         
     except Exception as e:
-        print(f"[DEBUG] 获取虚拟机详细信息失败: {str(e)}")
+        logger.error(f"获取虚拟机 {vm_name} 详细信息失败: {str(e)}")
         return jsonify({
             'success': False,
             'message': f'获取虚拟机详细信息失败: {str(e)}'
@@ -957,6 +961,56 @@ def api_vm_ip_status(vm_name):
         return jsonify({
             'success': False,
             'message': f'获取虚拟机IP状态失败: {str(e)}'
+        })
+
+@app.route('/api/vm_online_status', methods=['POST'])
+@login_required
+def api_vm_online_status():
+    """异步获取虚拟机在线状态（只处理运行中的虚拟机）"""
+    logger.info("收到异步获取虚拟机在线状态请求")
+    try:
+        data = request.get_json()
+        vm_names = data.get('vm_names', [])
+        
+        if not vm_names:
+            logger.warning("缺少虚拟机名称")
+            return jsonify({'success': False, 'message': '缺少虚拟机名称'})
+        
+        logger.debug(f"开始异步获取 {len(vm_names)} 个虚拟机的在线状态")
+        
+        results = {}
+        for vm_name in vm_names:
+            try:
+                logger.debug(f"获取虚拟机 {vm_name} 的在线状态")
+                online_status = get_vm_online_status(vm_name)
+                results[vm_name] = {
+                    'online_status': online_status['status'],
+                    'online_reason': online_status['reason'],
+                    'ip': online_status['ip'],
+                    'ssh_trust': online_status['ssh_trust'],
+                    'ssh_port_open': online_status.get('ssh_port_open', False)
+                }
+                logger.debug(f"虚拟机 {vm_name} 在线状态: {online_status['status']}")
+            except Exception as e:
+                logger.error(f"获取虚拟机 {vm_name} 在线状态失败: {str(e)}")
+                results[vm_name] = {
+                    'online_status': 'error',
+                    'online_reason': f'获取状态失败: {str(e)}',
+                    'ip': None,
+                    'ssh_trust': False
+                }
+        
+        logger.info(f"异步获取完成，共处理 {len(results)} 个虚拟机")
+        return jsonify({
+            'success': True,
+            'results': results
+        })
+        
+    except Exception as e:
+        logger.error(f"异步获取虚拟机在线状态失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'异步获取失败: {str(e)}'
         })
 
 @app.route('/api/vm_ip_monitor', methods=['POST'])
@@ -1441,6 +1495,154 @@ def check_ssh_status(ip):
     except Exception as e:
         print(f"[DEBUG] SSH状态检查失败: {str(e)}")
         return 'offline'
+
+def check_ssh_port_open(ip, port=22):
+    """检查SSH端口是否开放"""
+    if not ip:
+        return False
+    
+    try:
+        import socket
+        
+        # 创建socket连接
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(3)  # 3秒超时
+        
+        # 尝试连接SSH端口
+        result = sock.connect_ex((ip, port))
+        sock.close()
+        
+        if result == 0:
+            logger.debug(f"SSH端口 {port} 开放: {ip}")
+            return True
+        else:
+            logger.debug(f"SSH端口 {port} 未开放: {ip}")
+            return False
+            
+    except Exception as e:
+        logger.debug(f"检查SSH端口失败: {str(e)}")
+        return False
+
+def check_ssh_trust_status(ip, username='wx'):
+    """检查SSH互信状态"""
+    if not ip:
+        return False
+    
+    try:
+        import paramiko
+        
+        # 创建SSH客户端
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        
+        # 尝试无密码连接
+        ssh.connect(ip, username=username, timeout=5)
+        ssh.close()
+        return True
+        
+    except Exception as e:
+        logger.debug(f"SSH互信检查失败: {str(e)}")
+        return False
+
+def get_vm_online_status(vm_name):
+    """获取虚拟机在线状态（严格校验：IP获取成功 + SSH端口开放 + SSH互信成功）"""
+    logger.debug(f"检查虚拟机 {vm_name} 的在线状态（严格校验）")
+    
+    try:
+        # 1. 检查虚拟机是否运行
+        vm_file = find_vm_file(vm_name)
+        if not vm_file:
+            logger.warning(f"未找到虚拟机文件: {vm_name}")
+            return {
+                'status': 'offline',
+                'reason': '虚拟机文件不存在',
+                'ip': None,
+                'ssh_trust': False,
+                'ssh_port_open': False
+            }
+        
+        vm_status = get_vm_status(vm_file)
+        if vm_status != 'running':
+            logger.debug(f"虚拟机 {vm_name} 未运行，状态: {vm_status}")
+            return {
+                'status': 'offline',
+                'reason': f'虚拟机未运行 ({vm_status})',
+                'ip': None,
+                'ssh_trust': False,
+                'ssh_port_open': False
+            }
+        
+        # 2. 获取IP地址（条件1：IP地址获取成功）
+        vm_ip = get_vm_ip(vm_name)
+        if not vm_ip:
+            logger.debug(f"虚拟机 {vm_name} 无法获取IP地址")
+            return {
+                'status': 'offline',
+                'reason': '无法获取IP地址',
+                'ip': None,
+                'ssh_trust': False,
+                'ssh_port_open': False
+            }
+        
+        logger.debug(f"虚拟机 {vm_name} IP地址获取成功: {vm_ip}")
+        
+        # 3. 检查IP连通性
+        ip_status = check_ip_connectivity(vm_ip)
+        if not ip_status['success']:
+            logger.debug(f"虚拟机 {vm_name} IP {vm_ip} 不可达")
+            return {
+                'status': 'offline',
+                'reason': f'IP不可达: {ip_status.get("error", "未知错误")}',
+                'ip': vm_ip,
+                'ssh_trust': False,
+                'ssh_port_open': False
+            }
+        
+        # 4. 检查SSH端口是否开放（条件2：SSH端口开放）
+        ssh_port_open = check_ssh_port_open(vm_ip)
+        if not ssh_port_open:
+            logger.debug(f"虚拟机 {vm_name} SSH端口未开放")
+            return {
+                'status': 'partial',
+                'reason': 'IP可达但SSH端口未开放',
+                'ip': vm_ip,
+                'ssh_trust': False,
+                'ssh_port_open': False
+            }
+        
+        logger.debug(f"虚拟机 {vm_name} SSH端口开放")
+        
+        # 5. 检查SSH互信状态（条件3：SSH已添加互信可以成功登录）
+        ssh_trust_status = check_ssh_trust_status(vm_ip)
+        
+        if ssh_trust_status:
+            logger.info(f"虚拟机 {vm_name} 完全在线：IP可达 + SSH端口开放 + SSH互信成功")
+            return {
+                'status': 'online',
+                'reason': 'IP可达 + SSH端口开放 + SSH互信成功',
+                'ip': vm_ip,
+                'ssh_trust': True,
+                'ssh_port_open': True
+            }
+        else:
+            logger.debug(f"虚拟机 {vm_name} IP可达且SSH端口开放，但SSH互信未设置")
+            return {
+                'status': 'offline',
+                'reason': 'IP可达且SSH端口开放，但SSH互信未设置',
+                'ip': vm_ip,
+                'ssh_trust': False,
+                'ssh_port_open': True
+            }
+            
+    except Exception as e:
+        logger.error(f"检查虚拟机 {vm_name} 在线状态时出错: {str(e)}")
+        return {
+            'status': 'error',
+            'reason': f'检查状态时出错: {str(e)}',
+            'ip': None,
+            'ssh_trust': False,
+            'ssh_port_open': False
+        }
 
 def find_vm_file(vm_name):
     """查找虚拟机文件"""
