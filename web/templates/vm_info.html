@@ -414,9 +414,14 @@
                         ${getWumaStatusIcon(vm.has_wuma)}
                     </td>
                     <td>
-                        <button class="btn btn-sm btn-outline-primary" onclick="viewVMDetails('${vm.name}')">
-                            <i class="fas fa-eye me-1"></i>查看详情
-                        </button>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-primary" onclick="viewVMDetails('${vm.name}')" title="查看详情">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button class="btn btn-outline-success" onclick="sendScriptToVM('${vm.name}')" title="发送脚本" ${vm.status === 'stopped' ? 'disabled' : ''}>
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
                     </td>
                 </tr>
             `).join('');

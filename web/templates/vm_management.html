@@ -100,6 +100,113 @@
         transform: scale(1.2);
         box-shadow: 0 2px 4px rgba(0,0,0,0.15);
     }
+    
+    /* 发送脚本按钮样式 */
+    .btn-outline-success:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    
+    .btn-outline-success:disabled:hover {
+        background-color: transparent;
+        color: #198754;
+    }
+    
+    /* 按钮组样式 */
+    .btn-group-sm .btn {
+        margin-right: 2px;
+    }
+    
+    .btn-group-sm .btn:last-child {
+        margin-right: 0;
+    }
+    
+    /* 脚本选择对话框滚动条样式 */
+    .list-group::-webkit-scrollbar {
+        width: 8px;
+    }
+    
+    .list-group::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+    
+    .list-group::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 4px;
+    }
+    
+    .list-group::-webkit-scrollbar-thumb:hover {
+        background: #a8a8a8;
+    }
+    
+    /* 脚本列表项悬停效果 */
+    .list-group-item-action:hover {
+        background-color: #f8f9fa;
+        border-color: #007bff;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        transition: all 0.2s ease;
+    }
+    
+    .list-group-item-action:active {
+        transform: translateY(0);
+    }
+    
+    /* 搜索框样式 */
+    #scriptSearchInput:focus {
+        border-color: #007bff;
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    }
+    
+    /* 脚本列表项样式 */
+    .script-item {
+        transition: all 0.2s ease;
+        border-left: 3px solid transparent;
+    }
+    
+    .script-item:hover {
+        border-left-color: #007bff;
+    }
+    
+    /* 无搜索结果提示 */
+    .no-results {
+        text-align: center;
+        padding: 2rem;
+        color: #6c757d;
+        font-style: italic;
+    }
+    
+    /* 脚本复选框样式 */
+    .script-checkbox:checked {
+        background-color: #007bff;
+        border-color: #007bff;
+    }
+    
+    .script-checkbox:focus {
+        border-color: #007bff;
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    }
+    
+    /* 批量发送按钮样式 */
+    #sendAllScriptsBtn {
+        transition: all 0.2s ease;
+    }
+    
+    #sendAllScriptsBtn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    /* 全选按钮样式 */
+    #selectAllScriptsBtn {
+        transition: all 0.2s ease;
+    }
+    
+    #selectAllScriptsBtn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
     html, body { width: 100vw; overflow-x: hidden !important; }
     .col-md-9.col-lg-10 { width: calc(100vw - 280px); min-width: 0; margin: 0; height: calc(100vh - 80px); overflow: auto; }
     .main-wrapper { display: flex; height: 100vh; }
@@ -489,6 +596,7 @@
         let currentPage = 1;
         let pageSize = 5; // 默认最小分页大小
         let totalVMs = [];
+        let vmDataList = []; // 存储虚拟机数据供发送脚本功能使用
         let totalPages = 0;
         let isAutoCalculated = true; // 标记是否为自动计算的分页大小
         let selectedVMs = new Set(); // 存储选中的虚拟机
@@ -853,6 +961,7 @@
                     hideLoading();
                     if (data.success) {
                         totalVMs = data.vms;
+                        vmDataList = data.vms; // 保存虚拟机数据供发送脚本功能使用
                         totalPages = data.pagination.total_pages;
                         updateVMStats(data.stats);
                         updateVMTableWithPagination(page, data.pagination);
@@ -991,6 +1100,9 @@
                             </button>
                             <button class="btn btn-outline-danger btn-sm" onclick="deleteVM('${vm.name}')" ${vm.status === 'running' ? 'disabled' : ''} title="${vm.status === 'running' ? '无法删除运行中的虚拟机' : '删除虚拟机'}" style="cursor: pointer;">
                                 <i class="fas fa-trash"></i>
+                            </button>
+                            <button class="btn btn-outline-success btn-sm" onclick="sendScriptToVM('${vm.name}')" ${vm.status !== 'running' ? 'disabled' : ''} title="${vm.status !== 'running' ? '虚拟机未运行，无法发送脚本' : '发送脚本'}" style="cursor: pointer;">
+                                <i class="fas fa-paper-plane"></i>
                             </button>
                         </div>
                     </td>
@@ -1669,6 +1781,737 @@
             });
         }
 
+        // 发送脚本到虚拟机
+        function sendScriptToVM(vmName) {
+            // 检查虚拟机状态
+            const vm = getVMByName(vmName);
+            if (!vm) {
+                alert('虚拟机信息不存在');
+                return;
+            }
+            
+            if (vm.status !== 'running') {
+                alert('虚拟机未运行，无法发送脚本');
+                return;
+            }
+            
+            // 获取脚本列表并显示选择对话框
+            fetch('/api/scripts/all')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.scripts.length > 0) {
+                        showScriptSelectionDialog(vmName, data.scripts);
+                    } else {
+                        alert('没有可用的脚本文件');
+                    }
+                })
+                .catch(error => {
+                    console.error('获取脚本列表失败:', error);
+                    alert('获取脚本列表失败: ' + error.message);
+                });
+        }
+
+        // 从当前页面数据中获取虚拟机信息
+        function getVMByName(vmName) {
+            return vmDataList.find(vm => vm.name === vmName) || null;
+        }
+
+        // 显示脚本选择对话框
+        function showScriptSelectionDialog(vmName, scripts) {
+            // 创建脚本选择对话框
+            const dialogHTML = `
+                <div class="modal fade" id="scriptSelectionModal" tabindex="-1">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">
+                                    <i class="fas fa-paper-plane me-2"></i>选择要发送的脚本
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="alert alert-info">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    <strong>目标虚拟机：</strong>${vmName}
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-file-code me-2"></i>可用脚本列表
+                                    </h6>
+                                    <div class="d-flex align-items-center">
+                                        <button class="btn btn-outline-primary btn-sm me-2" onclick="selectAllScripts()" id="selectAllScriptsBtn">
+                                            <i class="fas fa-check-square me-1"></i>全选
+                                        </button>
+                                        <button class="btn btn-success btn-sm me-2" onclick="sendAllSelectedScripts('${vmName}')" id="sendAllScriptsBtn" style="display: none;">
+                                            <i class="fas fa-paper-plane me-1"></i>发送选中
+                                        </button>
+
+                                        <span class="badge bg-primary" id="scriptCountBadge">${scripts.length} 个脚本</span>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <div class="input-group">
+                                        <span class="input-group-text">
+                                            <i class="fas fa-search"></i>
+                                        </span>
+                                        <input type="text" class="form-control" id="scriptSearchInput" placeholder="搜索脚本名称..." onkeyup="filterScripts()">
+                                        <button class="btn btn-outline-secondary" type="button" onclick="clearScriptSearch()" title="清空搜索">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="list-group" id="scriptListGroup" style="max-height: 400px; overflow-y: auto;">
+                                    ${scripts.map(script => `
+                                        <div class="list-group-item list-group-item-action script-item" data-script-name="${script.name.toLowerCase()}" data-script-full-name="${script.name}">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <div class="d-flex align-items-center">
+                                                    <div class="form-check me-3">
+                                                        <input class="form-check-input script-checkbox" type="checkbox" value="${script.name}" id="script_${script.name.replace(/[^a-zA-Z0-9]/g, '_')}" onchange="updateSelectedScripts()">
+                                                        <label class="form-check-label" for="script_${script.name.replace(/[^a-zA-Z0-9]/g, '_')}"></label>
+                                                    </div>
+                                                    <div>
+                                                        <h6 class="mb-1">
+                                                            <i class="fas fa-file-code me-2"></i>${script.name}
+                                                        </h6>
+                                                        <small class="text-muted">
+                                                            大小: ${script.size} | 修改时间: ${script.modified_time}
+                                                        </small>
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <button class="btn btn-outline-secondary btn-sm" onclick="toggleScriptSelection('${script.name}')">
+                                                        <i class="fas fa-check"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // 移除已存在的模态框
+            const existingModal = document.getElementById('scriptSelectionModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+            
+            // 添加模态框到页面
+            document.body.insertAdjacentHTML('beforeend', dialogHTML);
+            
+            // 显示模态框
+            const modal = new bootstrap.Modal(document.getElementById('scriptSelectionModal'));
+            modal.show();
+            
+            // 保存当前虚拟机名称
+            currentVMName = vmName;
+            
+            // 模态框显示后初始化
+            document.getElementById('scriptSelectionModal').addEventListener('shown.bs.modal', function() {
+                const searchInput = document.getElementById('scriptSearchInput');
+                if (searchInput) {
+                    searchInput.focus();
+                }
+                
+                // 初始化选中状态
+                selectedScripts.clear();
+                updateSelectedCount();
+                updateSelectAllButton();
+            });
+            
+            // 模态框关闭时清理
+            document.getElementById('scriptSelectionModal').addEventListener('hidden.bs.modal', function() {
+                this.remove();
+            });
+        }
+
+        // 选择并发送脚本
+        function selectAndSendScript(scriptName, vmName) {
+            // 关闭模态框
+            const modal = bootstrap.Modal.getInstance(document.getElementById('scriptSelectionModal'));
+            if (modal) {
+                modal.hide();
+            }
+            
+            // 确认发送
+            if (confirm(`确定要发送脚本 ${scriptName} 到虚拟机 ${vmName} 吗？\n\n脚本将发送到 /Users/wx/ 目录下`)) {
+                // 显示发送进度
+                showSendProgress(scriptName, vmName);
+                
+                // 调用发送脚本API
+                fetch('/api/vm_send_script', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        vm_name: vmName,
+                        script_name: scriptName
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(`脚本 ${scriptName} 发送成功到虚拟机 ${vmName}！\n\n文件路径: /Users/wx/${scriptName}`);
+                    } else {
+                        alert(`发送失败: ${data.message}`);
+                    }
+                })
+                .catch(error => {
+                    console.error('发送脚本出错:', error);
+                    alert('发送脚本时出错: ' + error.message);
+                });
+            }
+        }
+
+        // 全局变量存储选中的脚本
+        let selectedScripts = new Set();
+        let currentVMName = '';
+
+        // 清空搜索框
+        function clearScriptSearch() {
+            const searchInput = document.getElementById('scriptSearchInput');
+            if (searchInput) {
+                searchInput.value = '';
+                filterScripts();
+                searchInput.focus();
+            }
+        }
+
+        // 全选脚本
+        function selectAllScripts() {
+            const scriptCheckboxes = document.querySelectorAll('.script-checkbox');
+            const selectAllBtn = document.getElementById('selectAllScriptsBtn');
+            const sendAllBtn = document.getElementById('sendAllScriptsBtn');
+            
+            // 检查是否已经全选
+            const allChecked = Array.from(scriptCheckboxes).every(cb => cb.checked);
+            
+            if (allChecked) {
+                // 取消全选
+                scriptCheckboxes.forEach(cb => {
+                    cb.checked = false;
+                    selectedScripts.delete(cb.value);
+                });
+                selectAllBtn.innerHTML = '<i class="fas fa-check-square me-1"></i>全选';
+                sendAllBtn.style.display = 'none';
+            } else {
+                // 全选
+                scriptCheckboxes.forEach(cb => {
+                    cb.checked = true;
+                    selectedScripts.add(cb.value);
+                });
+                selectAllBtn.innerHTML = '<i class="fas fa-square me-1"></i>取消全选';
+                sendAllBtn.style.display = 'inline-block';
+            }
+            
+            updateSelectedCount();
+        }
+
+        // 切换单个脚本选择状态
+        function toggleScriptSelection(scriptName) {
+            const checkbox = document.querySelector(`input[value="${scriptName}"]`);
+            if (checkbox) {
+                checkbox.checked = !checkbox.checked;
+                if (checkbox.checked) {
+                    selectedScripts.add(scriptName);
+                } else {
+                    selectedScripts.delete(scriptName);
+                }
+                updateSelectedScripts();
+            }
+        }
+
+        // 更新选中的脚本
+        function updateSelectedScripts() {
+            const scriptCheckboxes = document.querySelectorAll('.script-checkbox');
+            selectedScripts.clear();
+            
+            scriptCheckboxes.forEach(cb => {
+                if (cb.checked) {
+                    selectedScripts.add(cb.value);
+                }
+            });
+            
+            updateSelectedCount();
+            updateSelectAllButton();
+        }
+
+        // 更新选中数量显示
+        function updateSelectedCount() {
+            const scriptCountBadge = document.getElementById('scriptCountBadge');
+            const sendAllBtn = document.getElementById('sendAllScriptsBtn');
+            
+            if (scriptCountBadge) {
+                const totalScripts = document.querySelectorAll('.script-item').length;
+                const selectedCount = selectedScripts.size;
+                scriptCountBadge.textContent = `${selectedCount}/${totalScripts} 个脚本`;
+                
+                // 显示或隐藏发送选中按钮
+                if (selectedCount > 0) {
+                    sendAllBtn.style.display = 'inline-block';
+                } else {
+                    sendAllBtn.style.display = 'none';
+                }
+            }
+        }
+
+        // 更新全选按钮状态
+        function updateSelectAllButton() {
+            const scriptCheckboxes = document.querySelectorAll('.script-checkbox');
+            const selectAllBtn = document.getElementById('selectAllScriptsBtn');
+            
+            const allChecked = Array.from(scriptCheckboxes).every(cb => cb.checked);
+            const someChecked = Array.from(scriptCheckboxes).some(cb => cb.checked);
+            
+            if (allChecked) {
+                selectAllBtn.innerHTML = '<i class="fas fa-square me-1"></i>取消全选';
+            } else if (someChecked) {
+                selectAllBtn.innerHTML = '<i class="fas fa-minus-square me-1"></i>全选';
+            } else {
+                selectAllBtn.innerHTML = '<i class="fas fa-check-square me-1"></i>全选';
+            }
+        }
+
+        // 批量发送选中的脚本
+        function sendAllSelectedScripts(vmName) {
+            if (selectedScripts.size === 0) {
+                alert('请先选择要发送的脚本');
+                return;
+            }
+            
+            const scriptNames = Array.from(selectedScripts);
+            const confirmMessage = `确定要发送 ${selectedScripts.size} 个脚本到虚拟机 ${vmName} 吗？\n\n选中的脚本：\n${scriptNames.join('\n')}`;
+            
+            if (confirm(confirmMessage)) {
+                showBatchSendProgress(scriptNames, vmName);
+                sendScriptsBatch(scriptNames, vmName);
+            }
+        }
+
+        // 显示批量发送进度
+        function showBatchSendProgress(scriptNames, vmName) {
+            const progressHTML = `
+                <div class="modal fade" id="batchSendProgressModal" tabindex="-1">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">
+                                    <i class="fas fa-paper-plane me-2"></i>批量发送脚本中...
+                                </h5>
+                            </div>
+                            <div class="modal-body">
+                                <div class="mb-3">
+                                    <h6 class="text-primary mb-2">
+                                        <i class="fas fa-paper-plane me-2"></i>发送进度
+                                    </h6>
+                                    <div class="progress mb-2">
+                                        <div class="progress-bar" role="progressbar" style="width: 0%" id="batchSendProgressBar"></div>
+                                    </div>
+                                    <div class="text-center">
+                                        <span id="batchSendProgressText">准备发送...</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-3" id="chmodProgressSection" style="display: none;">
+                                    <h6 class="text-warning mb-2">
+                                        <i class="fas fa-key me-2"></i>权限更改进度
+                                    </h6>
+                                    <div class="progress mb-2">
+                                        <div class="progress-bar bg-warning" role="progressbar" style="width: 0%" id="batchChmodProgressBar"></div>
+                                    </div>
+                                    <div class="text-center">
+                                        <span id="batchChmodProgressText">准备添加权限...</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="table-responsive" style="max-height: 300px;">
+                                    <table class="table table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>脚本名称</th>
+                                                <th>发送状态</th>
+                                                <th>权限状态</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="batchSendDetailsTable">
+                                            ${scriptNames.map(scriptName => `
+                                                <tr id="batch_send_${scriptName.replace(/[^a-zA-Z0-9]/g, '_')}">
+                                                    <td>${scriptName}</td>
+                                                    <td><span class="badge bg-warning">等待中...</span></td>
+                                                    <td><span class="badge bg-secondary">未开始</span></td>
+                                                </tr>
+                                            `).join('')}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // 移除已存在的进度模态框
+            const existingProgressModal = document.getElementById('batchSendProgressModal');
+            if (existingProgressModal) {
+                existingProgressModal.remove();
+            }
+            
+            // 添加进度模态框
+            document.body.insertAdjacentHTML('beforeend', progressHTML);
+            
+            // 显示进度模态框
+            const progressModal = new bootstrap.Modal(document.getElementById('batchSendProgressModal'));
+            progressModal.show();
+        }
+
+        // 批量发送脚本
+        function sendScriptsBatch(scriptNames, vmName) {
+            let completedCount = 0;
+            const totalCount = scriptNames.length;
+            
+            // 初始化进度条
+            const progressBar = document.getElementById('batchSendProgressBar');
+            const progressText = document.getElementById('batchSendProgressText');
+            if (progressBar) {
+                progressBar.style.width = '0%';
+            }
+            if (progressText) {
+                progressText.textContent = '准备发送...';
+            }
+            
+            scriptNames.forEach((scriptName, index) => {
+                // 延迟发送，避免同时发送太多请求
+                setTimeout(() => {
+                    sendSingleScriptInBatch(scriptName, vmName, () => {
+                        completedCount++;
+                        updateBatchProgress(completedCount, totalCount, vmName);
+                    }, totalCount);
+                }, index * 500); // 每500ms发送一个脚本
+            });
+        }
+
+        // 更新批量发送进度
+        function updateBatchProgress(completedCount, totalCount, vmName) {
+            const progressPercentage = Math.round((completedCount / totalCount) * 100);
+            const progressBar = document.getElementById('batchSendProgressBar');
+            const progressText = document.getElementById('batchSendProgressText');
+            
+            if (progressBar) {
+                progressBar.style.width = progressPercentage + '%';
+            }
+            if (progressText) {
+                progressText.textContent = `已发送 ${completedCount}/${totalCount} 个脚本`;
+            }
+            
+            // 检查是否全部发送完成，开始权限更改进度
+            if (completedCount >= totalCount) {
+                // 显示权限更改进度区域
+                const chmodSection = document.getElementById('chmodProgressSection');
+                if (chmodSection) {
+                    chmodSection.style.display = 'block';
+                }
+                
+                // 开始权限更改进度
+                startChmodProgress(totalCount, vmName);
+            }
+        }
+
+        // 开始权限更改进度
+        function startChmodProgress(totalCount, vmName) {
+            let chmodCompletedCount = 0;
+            const chmodProgressBar = document.getElementById('batchChmodProgressBar');
+            const chmodProgressText = document.getElementById('batchChmodProgressText');
+            
+            if (chmodProgressBar) {
+                chmodProgressBar.style.width = '0%';
+            }
+            if (chmodProgressText) {
+                chmodProgressText.textContent = '准备添加权限...';
+            }
+            
+            // 获取所有已成功发送的脚本
+            const successfulScripts = [];
+            const scriptRows = document.querySelectorAll('#batchSendDetailsTable tr');
+            scriptRows.forEach((row, index) => {
+                const sendStatusSpan = row.querySelector('td:nth-child(2) span');
+                if (sendStatusSpan && sendStatusSpan.textContent === '成功') {
+                    const scriptName = row.querySelector('td:first-child').textContent;
+                    successfulScripts.push({ name: scriptName, rowIndex: index });
+                }
+            });
+            
+            if (successfulScripts.length === 0) {
+                // 没有成功发送的脚本，直接完成
+                setTimeout(() => {
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('batchSendProgressModal'));
+                    if (modal) {
+                        modal.hide();
+                    }
+                    alert(`批量操作完成！\n⚠️ 没有成功发送的脚本，无法添加权限`);
+                }, 1000);
+                return;
+            }
+            
+            // 为成功发送的脚本添加权限
+            successfulScripts.forEach((script, index) => {
+                setTimeout(() => {
+                    // 更新权限状态为"处理中"
+                    const chmodStatusSpan = scriptRows[script.rowIndex].querySelector('td:nth-child(3) span');
+                    if (chmodStatusSpan) {
+                        chmodStatusSpan.className = 'badge bg-info';
+                        chmodStatusSpan.textContent = '处理中...';
+                    }
+                    
+                    // 调用权限添加API
+                    fetch('/api/vm_add_permissions', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            vm_name: vmName,
+                            script_names: [script.name],
+                            username: 'wx'
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        chmodCompletedCount++;
+                        const chmodPercentage = Math.round((chmodCompletedCount / successfulScripts.length) * 100);
+                        
+                        if (chmodProgressBar) {
+                            chmodProgressBar.style.width = chmodPercentage + '%';
+                        }
+                        if (chmodProgressText) {
+                            chmodProgressText.textContent = `已添加权限 ${chmodCompletedCount}/${successfulScripts.length} 个脚本`;
+                        }
+                        
+                        // 更新表格中的权限状态
+                        if (chmodStatusSpan) {
+                            if (data.success) {
+                                chmodStatusSpan.className = 'badge bg-success';
+                                chmodStatusSpan.textContent = '已完成';
+                            } else {
+                                chmodStatusSpan.className = 'badge bg-danger';
+                                chmodStatusSpan.textContent = '失败';
+                            }
+                        }
+                        
+                        // 检查权限更改是否全部完成
+                        if (chmodCompletedCount >= successfulScripts.length) {
+                            setTimeout(() => {
+                                const modal = bootstrap.Modal.getInstance(document.getElementById('batchSendProgressModal'));
+                                if (modal) {
+                                    modal.hide();
+                                }
+                                alert(`批量操作完成！\n✅ 成功发送 ${successfulScripts.length} 个脚本到虚拟机 ${vmName}\n✅ 已为所有脚本添加执行权限`);
+                            }, 1000);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('添加权限出错:', error);
+                        chmodCompletedCount++;
+                        
+                        // 更新权限状态为失败
+                        if (chmodStatusSpan) {
+                            chmodStatusSpan.className = 'badge bg-danger';
+                            chmodStatusSpan.textContent = '失败';
+                        }
+                        
+                        // 检查权限更改是否全部完成
+                        if (chmodCompletedCount >= successfulScripts.length) {
+                            setTimeout(() => {
+                                const modal = bootstrap.Modal.getInstance(document.getElementById('batchSendProgressModal'));
+                                if (modal) {
+                                    modal.hide();
+                                }
+                                alert(`批量操作完成！\n✅ 成功发送 ${successfulScripts.length} 个脚本到虚拟机 ${vmName}\n⚠️ 部分脚本权限添加失败`);
+                            }, 1000);
+                        }
+                    });
+                }, index * 500); // 每500ms开始处理一个脚本的权限
+            });
+        }
+
+        // 在批量发送中发送单个脚本
+        function sendSingleScriptInBatch(scriptName, vmName, onComplete, totalCount) {
+            // 立即更新发送状态为"发送中"
+            const statusCell = document.getElementById(`batch_send_${scriptName.replace(/[^a-zA-Z0-9]/g, '_')}`);
+            if (statusCell) {
+                const sendStatusSpan = statusCell.querySelector('td:nth-child(2) span');
+                sendStatusSpan.className = 'badge bg-info';
+                sendStatusSpan.textContent = '发送中...';
+            }
+            
+            fetch('/api/vm_send_script', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    vm_name: vmName,
+                    script_name: scriptName
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                // 更新发送状态表格
+                if (statusCell) {
+                    const sendStatusSpan = statusCell.querySelector('td:nth-child(2) span');
+                    if (data.success) {
+                        sendStatusSpan.className = 'badge bg-success';
+                        sendStatusSpan.textContent = '成功';
+                    } else {
+                        sendStatusSpan.className = 'badge bg-danger';
+                        sendStatusSpan.textContent = '失败';
+                        
+                        // 发送失败，权限状态也标记为失败
+                        const chmodStatusSpan = statusCell.querySelector('td:nth-child(3) span');
+                        if (chmodStatusSpan) {
+                            chmodStatusSpan.className = 'badge bg-danger';
+                            chmodStatusSpan.textContent = '失败';
+                        }
+                    }
+                }
+                
+                // 调用完成回调函数
+                if (onComplete) {
+                    onComplete();
+                }
+            })
+            .catch(error => {
+                console.error('发送脚本出错:', error);
+                
+                // 更新发送状态为失败
+                if (statusCell) {
+                    const sendStatusSpan = statusCell.querySelector('td:nth-child(2) span');
+                    sendStatusSpan.className = 'badge bg-danger';
+                    sendStatusSpan.textContent = '失败';
+                    
+                    // 发送失败，权限状态也标记为失败
+                    const chmodStatusSpan = statusCell.querySelector('td:nth-child(3) span');
+                    if (chmodStatusSpan) {
+                        chmodStatusSpan.className = 'badge bg-danger';
+                        chmodStatusSpan.textContent = '失败';
+                    }
+                }
+                
+                // 调用完成回调函数
+                if (onComplete) {
+                    onComplete();
+                }
+            });
+        }
+
+        // 过滤脚本列表
+        function filterScripts() {
+            const searchInput = document.getElementById('scriptSearchInput');
+            const scriptItems = document.querySelectorAll('.script-item');
+            const scriptCountBadge = document.getElementById('scriptCountBadge');
+            const scriptListGroup = document.getElementById('scriptListGroup');
+            
+            if (!searchInput || !scriptItems.length) return;
+            
+            const searchTerm = searchInput.value.toLowerCase();
+            let visibleCount = 0;
+            let selectedVisibleCount = 0;
+            
+            // 移除现有的无结果提示
+            const existingNoResults = scriptListGroup.querySelector('.no-results');
+            if (existingNoResults) {
+                existingNoResults.remove();
+            }
+            
+            scriptItems.forEach(item => {
+                const scriptName = item.getAttribute('data-script-name');
+                const fullScriptName = item.getAttribute('data-script-full-name');
+                const checkbox = item.querySelector('.script-checkbox');
+                
+                if (scriptName.includes(searchTerm)) {
+                    item.style.display = 'block';
+                    visibleCount++;
+                    // 检查是否在选中列表中
+                    if (checkbox && checkbox.checked) {
+                        selectedVisibleCount++;
+                    }
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+            
+            // 如果没有搜索结果，显示提示
+            if (visibleCount === 0 && searchTerm !== '') {
+                const noResultsDiv = document.createElement('div');
+                noResultsDiv.className = 'no-results';
+                noResultsDiv.innerHTML = `
+                    <i class="fas fa-search me-2"></i>
+                    没有找到匹配的脚本
+                    <br>
+                    <small>请尝试其他关键词</small>
+                `;
+                scriptListGroup.appendChild(noResultsDiv);
+            }
+            
+            // 更新脚本数量显示
+            if (scriptCountBadge) {
+                const totalSelected = selectedScripts.size;
+                scriptCountBadge.textContent = `${selectedVisibleCount}/${visibleCount} 个脚本`;
+            }
+        }
+
+        // 显示发送进度
+        function showSendProgress(scriptName, vmName) {
+            // 显示发送进度提示
+            const progressHTML = `
+                <div class="modal fade" id="sendProgressModal" tabindex="-1">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">
+                                    <i class="fas fa-paper-plane me-2"></i>发送脚本中...
+                                </h5>
+                            </div>
+                            <div class="modal-body text-center">
+                                <div class="spinner-border text-primary mb-3" role="status">
+                                    <span class="visually-hidden">发送中...</span>
+                                </div>
+                                <p>正在发送脚本 <strong>${scriptName}</strong> 到虚拟机 <strong>${vmName}</strong></p>
+                                <p class="text-muted">请稍候...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // 移除已存在的进度模态框
+            const existingProgressModal = document.getElementById('sendProgressModal');
+            if (existingProgressModal) {
+                existingProgressModal.remove();
+            }
+            
+            // 添加进度模态框
+            document.body.insertAdjacentHTML('beforeend', progressHTML);
+            
+            // 显示进度模态框
+            const progressModal = new bootstrap.Modal(document.getElementById('sendProgressModal'));
+            progressModal.show();
+            
+            // 3秒后自动关闭进度模态框
+            setTimeout(() => {
+                const modal = bootstrap.Modal.getInstance(document.getElementById('sendProgressModal'));
+                if (modal) {
+                    modal.hide();
+                }
+            }, 3000);
+        }
+
         // 显示虚拟机信息弹窗
         function showVMInfoModal(vmInfo) {
             // 创建模态框HTML
@@ -1878,6 +2721,220 @@
             const links = document.querySelectorAll(`#${linkContainerId} .nav-link`);
             links.forEach(link => link.classList.remove('active'));
             event.target.classList.add('active');
+        }
+
+        // 添加脚本执行权限
+        function addScriptPermissions(scriptName, vmName) {
+            // 检查虚拟机状态
+            const vm = getVMByName(vmName);
+            if (!vm) {
+                alert('虚拟机信息不存在');
+                return;
+            }
+            
+            if (vm.status !== 'running') {
+                alert('虚拟机未运行，无法添加执行权限');
+                return;
+            }
+            
+            // 显示确认对话框
+            if (!confirm(`确定要为脚本 "${scriptName}" 添加执行权限吗？`)) {
+                return;
+            }
+            
+            // 显示进度提示
+            const progressModal = showChmodProgressModal(scriptName, vmName);
+            
+            // 调用API添加执行权限
+            fetch('/api/vm_chmod_scripts', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    vm_name: vmName,
+                    script_names: [scriptName],
+                    username: 'wx'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                // 隐藏进度模态框
+                const modal = bootstrap.Modal.getInstance(document.getElementById('chmodProgressModal'));
+                if (modal) {
+                    modal.hide();
+                }
+                
+                if (data.success) {
+                    alert(`✅ 执行权限添加成功！\n\n${data.message}`);
+                } else {
+                    alert(`❌ 执行权限添加失败！\n\n${data.message}`);
+                }
+            })
+            .catch(error => {
+                // 隐藏进度模态框
+                const modal = bootstrap.Modal.getInstance(document.getElementById('chmodProgressModal'));
+                if (modal) {
+                    modal.hide();
+                }
+                
+                console.error('添加执行权限失败:', error);
+                alert('添加执行权限失败: ' + error.message);
+            });
+        }
+
+        // 显示添加执行权限进度模态框
+        function showChmodProgressModal(scriptName, vmName) {
+            const modalHTML = `
+                <div class="modal fade" id="chmodProgressModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">
+                                    <i class="fas fa-key me-2"></i>添加执行权限中...
+                                </h5>
+                            </div>
+                            <div class="modal-body text-center">
+                                <div class="mb-3">
+                                    <i class="fas fa-spinner fa-spin fa-2x text-primary"></i>
+                                </div>
+                                <p class="mb-2"><strong>正在为脚本添加执行权限...</strong></p>
+                                <p class="text-muted mb-0">
+                                    脚本: <code>${scriptName}</code><br>
+                                    虚拟机: <code>${vmName}</code>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // 移除已存在的模态框
+            const existingModal = document.getElementById('chmodProgressModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+            
+            // 添加新的模态框到页面
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+            
+            // 显示模态框
+            const modal = new bootstrap.Modal(document.getElementById('chmodProgressModal'));
+            modal.show();
+            
+            return modal;
+        }
+
+        // 批量添加执行权限
+        function addBatchScriptPermissions(scriptNames, vmName) {
+            // 检查虚拟机状态
+            const vm = getVMByName(vmName);
+            if (!vm) {
+                alert('虚拟机信息不存在');
+                return;
+            }
+            
+            if (vm.status !== 'running') {
+                alert('虚拟机未运行，无法添加执行权限');
+                return;
+            }
+            
+            if (!scriptNames || scriptNames.length === 0) {
+                alert('请选择要添加执行权限的脚本');
+                return;
+            }
+            
+            // 显示确认对话框
+            if (!confirm(`确定要为 ${scriptNames.length} 个脚本添加执行权限吗？\n\n脚本列表:\n${scriptNames.join('\n')}`)) {
+                return;
+            }
+            
+            // 显示进度提示
+            const progressModal = showBatchChmodProgressModal(scriptNames, vmName);
+            
+            // 调用API添加执行权限
+            fetch('/api/vm_chmod_scripts', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    vm_name: vmName,
+                    script_names: scriptNames,
+                    username: 'wx'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                // 隐藏进度模态框
+                const modal = bootstrap.Modal.getInstance(document.getElementById('batchChmodProgressModal'));
+                if (modal) {
+                    modal.hide();
+                }
+                
+                if (data.success) {
+                    alert(`✅ 批量执行权限添加成功！\n\n${data.message}`);
+                } else {
+                    alert(`❌ 批量执行权限添加失败！\n\n${data.message}`);
+                }
+            })
+            .catch(error => {
+                // 隐藏进度模态框
+                const modal = bootstrap.Modal.getInstance(document.getElementById('batchChmodProgressModal'));
+                if (modal) {
+                    modal.hide();
+                }
+                
+                console.error('批量添加执行权限失败:', error);
+                alert('批量添加执行权限失败: ' + error.message);
+            });
+        }
+
+        // 显示批量添加执行权限进度模态框
+        function showBatchChmodProgressModal(scriptNames, vmName) {
+            const modalHTML = `
+                <div class="modal fade" id="batchChmodProgressModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">
+                                    <i class="fas fa-key me-2"></i>批量添加执行权限中...
+                                </h5>
+                            </div>
+                            <div class="modal-body text-center">
+                                <div class="mb-3">
+                                    <i class="fas fa-spinner fa-spin fa-2x text-primary"></i>
+                                </div>
+                                <p class="mb-2"><strong>正在为 ${scriptNames.length} 个脚本添加执行权限...</strong></p>
+                                <p class="text-muted mb-0">
+                                    虚拟机: <code>${vmName}</code>
+                                </p>
+                                <div class="mt-3">
+                                    <small class="text-muted">脚本列表:</small>
+                                    <div class="text-start mt-2" style="max-height: 150px; overflow-y: auto;">
+                                        ${scriptNames.map(name => `<div class="text-muted"><small>• ${name}</small></div>`).join('')}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // 移除已存在的模态框
+            const existingModal = document.getElementById('batchChmodProgressModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+            
+            // 添加新的模态框到页面
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+            
+            // 显示模态框
+            const modal = new bootstrap.Modal(document.getElementById('batchChmodProgressModal'));
+            modal.show();
+            
+            return modal;
         }
 
         // 在 updateVMTableWithPagination 渲染表格后调用 fetchAllRunningVMIPs(currentVMs);
