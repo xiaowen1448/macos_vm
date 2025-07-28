@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>虚拟机互信管理 - macOS VM</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .sidebar {
+            background: white;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+            min-height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 1000;
+            width: 280px;
+        }
+        
+        .accordion-button:not(.collapsed) {
+            background-color: #e7f3ff;
+            color: #0d6efd;
+        }
+        
+        .nav-link {
+            color: #495057;
+            padding: 8px 16px;
+            border-radius: 4px;
+            margin: 2px 0;
+            transition: all 0.2s;
+        }
+        
+        .nav-link:hover {
+            background-color: #f8f9fa;
+            color: #0d6efd;
+        }
+        
+        .nav-link.active {
+            background-color: #0d6efd;
+            color: white;
+        }
+        
+        .card {
+            border: none;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border-radius: 10px;
+        }
+        
+        .card-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px 10px 0 0 !important;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+    <!-- 顶部导航栏 -->
+    <div class="navbar navbar-expand-lg navbar-light bg-white shadow-sm" style="position: fixed; top: 0; left: 280px; right: 0; z-index: 1000;">
+        <div class="container-fluid">
+            <span class="navbar-brand mb-0 h1">
+                <i class="fas fa-shield-alt me-2"></i>虚拟机互信管理
+            </span>
+            <div class="d-flex">
+                <div class="dropdown me-3">
+                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="langDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                        语言
+                    </button>
+                    <ul class="dropdown-menu" aria-labelledby="langDropdown">
+                        <li><a class="dropdown-item" href="?lang=zh">中文</a></li>
+                        <li><a class="dropdown-item" href="?lang=en">English</a></li>
+                    </ul>
+                </div>
+                <a href="{{ url_for('logout') }}" class="btn btn-outline-secondary">登出</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="container-fluid" style="margin-left: 280px; margin-top: 80px;">
+        <div class="row">
+            <!-- 左侧菜单 -->
+            <nav class="col-md-3 col-lg-2 sidebar bg-white p-3">
+                <h5 class="mb-4"><span style="color:#000; font-style:italic; font-weight:bold;">macos_vm</span></h5>
+                <div class="accordion" id="accordionMenu">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="headingVM">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseVM" aria-expanded="true" aria-controls="collapseVM">
+                                虚拟机管理
+                            </button>
+                        </h2>
+                        <div id="collapseVM" class="accordion-collapse collapse show" aria-labelledby="headingVM" data-bs-parent="#accordionMenu">
+                            <div class="accordion-body p-0">
+                                <ul class="nav flex-column">
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="{{ url_for('clone_vm_page') }}" onclick="handleCloneClick()">虚拟机批量克隆</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="{{ url_for('vm_management_page') }}" onclick="handleVMManagementClick()">虚拟机克隆列表</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="{{ url_for('vm_info_page') }}" onclick="handleVMInfoClick()">虚拟机成品信息</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="{{ url_for('vm_script_page') }}" onclick="handleVMScriptClick()">虚拟机脚本管理</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link active" href="{{ url_for('vm_trust_page') }}" onclick="handleVMTrustClick()">虚拟机互信管理</a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="headingBoot">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseBoot" aria-expanded="false" aria-controls="collapseBoot">
+                                母盘及五码管理
+                            </button>
+                        </h2>
+                        <div id="collapseBoot" class="accordion-collapse collapse" aria-labelledby="headingBoot" data-bs-parent="#accordionMenu">
+                            <div class="accordion-body p-0">
+                                <ul class="nav flex-column">
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="{{ url_for('wuma_page') }}" onclick="handleWumaClick()">虚拟机五码管理</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="{{ url_for('mupan_page') }}" onclick="handleMupanClick()">虚拟机母盘管理</a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="headingEncrypt">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseEncrypt" aria-expanded="false" aria-controls="collapseEncrypt">
+                                数据加密功能
+                            </button>
+                        </h2>
+                        <div id="collapseEncrypt" class="accordion-collapse collapse" aria-labelledby="headingEncrypt" data-bs-parent="#accordionMenu">
+                            <div class="accordion-body p-0">
+                                <ul class="nav flex-column">
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="{{ url_for('encrypt_code_page') }}" onclick="handleEncryptCodeClick()">代码加密</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="{{ url_for('encrypt_wuma_page') }}" onclick="handleEncryptWumaClick()">五码加密</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="{{ url_for('encrypt_id_page') }}" onclick="handleEncryptIdClick()">id加密</a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="headingProxy">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseProxy" aria-expanded="false" aria-controls="collapseProxy">
+                                代理ip配置
+                            </button>
+                        </h2>
+                        <div id="collapseProxy" class="accordion-collapse collapse" aria-labelledby="headingProxy" data-bs-parent="#accordionMenu">
+                            <div class="accordion-body p-0">
+                                <ul class="nav flex-column">
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="{{ url_for('proxy_assign_page') }}" onclick="handleProxyAssignClick()">代理ip分配</a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="headingSoft">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSoft" aria-expanded="false" aria-controls="collapseSoft">
+                                虚拟机软件管理
+                            </button>
+                        </h2>
+                        <div id="collapseSoft" class="accordion-collapse collapse" aria-labelledby="headingSoft" data-bs-parent="#accordionMenu">
+                            <div class="accordion-body p-0">
+                                <ul class="nav flex-column">
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="{{ url_for('soft_version_page') }}" onclick="handleSoftVersionClick()">版本查看</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="{{ url_for('soft_env_page') }}" onclick="handleSoftEnvClick()">环境变量</a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+            
+            <!-- 右侧内容区域 -->
+            <div class="col-md-9 col-lg-10">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h4 class="mb-0">
+                                <i class="fas fa-shield-alt me-2"></i>虚拟机互信管理
+                            </h4>
+                            <button class="btn btn-primary" onclick="refreshTrustData()">
+                                <i class="fas fa-sync-alt me-2"></i>刷新数据
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-12">
+                                <h5>互信管理</h5>
+                                <p class="text-muted">管理虚拟机之间的SSH互信关系，配置免密登录等安全设置。</p>
+                                
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>虚拟机名称</th>
+                                                <th>SSH状态</th>
+                                                <th>互信状态</th>
+                                                <th>最后更新</th>
+                                                <th>操作</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td>VM_20241201_001</td>
+                                                <td><span class="badge bg-success">已连接</span></td>
+                                                <td><span class="badge bg-success">已配置</span></td>
+                                                <td>2024-12-01 10:30:00</td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-outline-primary">查看详情</button>
+                                                    <button class="btn btn-sm btn-outline-warning">重新配置</button>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td>VM_20241201_002</td>
+                                                <td><span class="badge bg-secondary">未连接</span></td>
+                                                <td><span class="badge bg-warning">未配置</span></td>
+                                                <td>2024-12-01 11:15:00</td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-outline-primary">查看详情</button>
+                                                    <button class="btn btn-sm btn-outline-success">配置互信</button>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 菜单处理函数
+        function handleCloneClick() {
+            ensureMenuExpanded('collapseVM', 'collapseVM');
+        }
+
+        function handleVMManagementClick() {
+            ensureMenuExpanded('collapseVM', 'collapseVM');
+        }
+
+        function handleVMInfoClick() {
+            ensureMenuExpanded('collapseVM', 'collapseVM');
+        }
+
+        function handleVMScriptClick() {
+            ensureMenuExpanded('collapseVM', 'collapseVM');
+        }
+
+        function handleVMTrustClick() {
+            ensureMenuExpanded('collapseVM', 'collapseVM');
+        }
+
+        function handleWumaClick() {
+            ensureMenuExpanded('collapseBoot', 'collapseBoot');
+        }
+
+        function handleMupanClick() {
+            ensureMenuExpanded('collapseBoot', 'collapseBoot');
+        }
+
+        function handleEncryptCodeClick() {
+            ensureMenuExpanded('collapseEncrypt', 'collapseEncrypt');
+        }
+
+        function handleEncryptWumaClick() {
+            ensureMenuExpanded('collapseEncrypt', 'collapseEncrypt');
+        }
+
+        function handleEncryptIdClick() {
+            ensureMenuExpanded('collapseEncrypt', 'collapseEncrypt');
+        }
+
+        function handleProxyAssignClick() {
+            ensureMenuExpanded('collapseProxy', 'collapseProxy');
+        }
+
+        function handleSoftVersionClick() {
+            ensureMenuExpanded('collapseSoft', 'collapseSoft');
+        }
+
+        function handleSoftEnvClick() {
+            ensureMenuExpanded('collapseSoft', 'collapseSoft');
+        }
+
+        // 通用函数：确保菜单展开并设置链接激活状态
+        function ensureMenuExpanded(menuId, linkContainerId) {
+            const menuCollapse = document.getElementById(menuId);
+            const menuButton = document.getElementById(menuId.replace('collapse', 'heading')).querySelector('.accordion-button');
+            
+            if (menuCollapse && menuButton) {
+                // 移除折叠类，添加展开类
+                menuCollapse.classList.remove('collapse');
+                menuCollapse.classList.add('show');
+                menuButton.setAttribute('aria-expanded', 'true');
+                menuButton.classList.remove('collapsed');
+            }
+            
+            // 设置当前链接为激活状态
+            const links = document.querySelectorAll(`#${linkContainerId} .nav-link`);
+            links.forEach(link => link.classList.remove('active'));
+            event.target.classList.add('active');
+        }
+
+        function refreshTrustData() {
+            // 刷新互信数据的逻辑
+            console.log('刷新虚拟机互信数据');
+        }
+    </script>
+</body>
+</html> 

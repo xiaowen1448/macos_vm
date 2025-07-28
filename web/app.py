@@ -142,6 +142,72 @@ def vm_management_page():
     """虚拟机管理页面"""
     return render_template('vm_management.html')
 
+@app.route('/vm_info')
+@login_required
+def vm_info_page():
+    """虚拟机成品信息页面"""
+    return render_template('vm_info.html')
+
+@app.route('/vm_script')
+@login_required
+def vm_script_page():
+    """虚拟机脚本管理页面"""
+    return render_template('vm_script.html')
+
+@app.route('/vm_trust')
+@login_required
+def vm_trust_page():
+    """虚拟机互信管理页面"""
+    return render_template('vm_trust.html')
+
+@app.route('/wuma')
+@login_required
+def wuma_page():
+    """虚拟机五码管理页面"""
+    return render_template('wuma.html')
+
+@app.route('/mupan')
+@login_required
+def mupan_page():
+    """虚拟机母盘管理页面"""
+    return render_template('mupan.html')
+
+@app.route('/encrypt_code')
+@login_required
+def encrypt_code_page():
+    """代码加密页面"""
+    return render_template('encrypt_code.html')
+
+@app.route('/encrypt_wuma')
+@login_required
+def encrypt_wuma_page():
+    """五码加密页面"""
+    return render_template('encrypt_wuma.html')
+
+@app.route('/encrypt_id')
+@login_required
+def encrypt_id_page():
+    """id加密页面"""
+    return render_template('encrypt_id.html')
+
+@app.route('/proxy_assign')
+@login_required
+def proxy_assign_page():
+    """代理ip分配页面"""
+    return render_template('proxy_assign.html')
+
+@app.route('/soft_version')
+@login_required
+def soft_version_page():
+    """版本查看页面"""
+    return render_template('soft_version.html')
+
+@app.route('/soft_env')
+@login_required
+def soft_env_page():
+    """环境变量页面"""
+    return render_template('soft_env.html')
+
 @app.route('/api/clone_vm', methods=['POST'])
 @login_required
 def api_clone_vm():
@@ -605,6 +671,10 @@ def api_clone_logs(task_id):
 def api_vm_list():
     """获取虚拟机列表"""
     try:
+        # 获取分页参数
+        page = request.args.get('page', 1, type=int)
+        page_size = request.args.get('page_size', 10, type=int)
+        
         # 扫描虚拟机目录
         vm_dir = r'D:\macos_vm\NewVM'
         vms = []
@@ -648,10 +718,27 @@ def api_vm_list():
                         if ssh_status == 'online':
                             stats['online'] += 1
         
+        # 计算分页
+        total_count = len(vms)
+        total_pages = (total_count + page_size - 1) // page_size
+        start_index = (page - 1) * page_size
+        end_index = min(start_index + page_size, total_count)
+        
+        # 分页数据
+        paged_vms = vms[start_index:end_index] if vms else []
+        
         return jsonify({
             'success': True,
-            'vms': vms,
-            'stats': stats
+            'vms': paged_vms,
+            'stats': stats,
+            'pagination': {
+                'current_page': page,
+                'page_size': page_size,
+                'total_count': total_count,
+                'total_pages': total_pages,
+                'start_index': start_index,
+                'end_index': end_index
+            }
         })
         
     except Exception as e:

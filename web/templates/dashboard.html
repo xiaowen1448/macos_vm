@@ -106,16 +106,16 @@
                                     <a class="nav-link" href="{{ url_for('clone_vm_page') }}" onclick="handleCloneClick()">虚拟机批量克隆</a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link" href="{{ url_for('vm_management_page') }}" onclick="handleVMManagementClick()">虚拟机管理</a>
+                                    <a class="nav-link" href="{{ url_for('vm_management_page') }}" onclick="handleVMManagementClick()">虚拟机克隆列表</a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link" href="#" onclick="handleVMInfoClick()">虚拟机成品信息</a>
+                                    <a class="nav-link" href="{{ url_for('vm_info_page') }}" onclick="handleVMInfoClick()">虚拟机成品信息</a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link" href="#" onclick="handleVMScriptClick()">虚拟机脚本管理</a>
+                                    <a class="nav-link" href="{{ url_for('vm_script_page') }}" onclick="handleVMScriptClick()">虚拟机脚本管理</a>
                                 </li>
                                 <li class="nav-item">
-                                    <a class="nav-link" href="#" onclick="handleVMTrustClick()">虚拟机互信管理</a>
+                                    <a class="nav-link" href="{{ url_for('vm_trust_page') }}" onclick="handleVMTrustClick()">虚拟机互信管理</a>
                                 </li>
                             </ul>
                         </div>
@@ -130,12 +130,12 @@
                     <div id="collapseBoot" class="accordion-collapse collapse" aria-labelledby="headingBoot" data-bs-parent="#accordionMenu">
                         <div class="accordion-body p-0">
                             <ul class="nav flex-column">
-                                <li class="nav-item">
-                                    <a class="nav-link" href="#" onclick="handleWumaClick()">虚拟机五码管理</a>
-                                </li>
-                                <li class="nav-item">
-                                    <a class="nav-link" href="#" onclick="handleMupanClick()">虚拟机母盘管理</a>
-                                </li>
+                                                                    <li class="nav-item">
+                                        <a class="nav-link" href="{{ url_for('wuma_page') }}" onclick="handleWumaClick()">虚拟机五码管理</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="{{ url_for('mupan_page') }}" onclick="handleMupanClick()">虚拟机母盘管理</a>
+                                    </li>
                             </ul>
                         </div>
                     </div>
@@ -150,15 +150,15 @@
                     <div id="collapseEncrypt" class="accordion-collapse collapse" aria-labelledby="headingEncrypt" data-bs-parent="#accordionMenu">
                         <div class="accordion-body p-0">
                             <ul class="nav flex-column">
-                                <li class="nav-item">
-                                    <a class="nav-link" href="#" onclick="handleEncryptCodeClick()">代码加密</a>
-                                </li>
-                                <li class="nav-item">
-                                    <a class="nav-link" href="#" onclick="handleEncryptWumaClick()">五码加密</a>
-                                </li>
-                                <li class="nav-item">
-                                    <a class="nav-link" href="#" onclick="handleEncryptIdClick()">id加密</a>
-                                </li>
+                                                                    <li class="nav-item">
+                                        <a class="nav-link" href="{{ url_for('encrypt_code_page') }}" onclick="handleEncryptCodeClick()">代码加密</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="{{ url_for('encrypt_wuma_page') }}" onclick="handleEncryptWumaClick()">五码加密</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="{{ url_for('encrypt_id_page') }}" onclick="handleEncryptIdClick()">id加密</a>
+                                    </li>
                             </ul>
                         </div>
                     </div>
@@ -172,9 +172,9 @@
                     <div id="collapseProxy" class="accordion-collapse collapse" aria-labelledby="headingProxy" data-bs-parent="#accordionMenu">
                         <div class="accordion-body p-0">
                             <ul class="nav flex-column">
-                                <li class="nav-item">
-                                    <a class="nav-link" href="#" onclick="handleProxyAssignClick()">代理ip分配</a>
-                                </li>
+                                                                    <li class="nav-item">
+                                        <a class="nav-link" href="{{ url_for('proxy_assign_page') }}" onclick="handleProxyAssignClick()">代理ip分配</a>
+                                    </li>
                             </ul>
                         </div>
                     </div>
@@ -188,12 +188,12 @@
                     <div id="collapseSoft" class="accordion-collapse collapse" aria-labelledby="headingSoft" data-bs-parent="#accordionMenu">
                         <div class="accordion-body p-0">
                             <ul class="nav flex-column">
-                                <li class="nav-item">
-                                    <a class="nav-link" href="#" onclick="handleSoftVersionClick()">版本查看</a>
-                                </li>
-                                <li class="nav-item">
-                                    <a class="nav-link" href="#" onclick="handleSoftEnvClick()">环境变量</a>
-                                </li>
+                                                                    <li class="nav-item">
+                                        <a class="nav-link" href="{{ url_for('soft_version_page') }}" onclick="handleSoftVersionClick()">版本查看</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="{{ url_for('soft_env_page') }}" onclick="handleSoftEnvClick()">环境变量</a>
+                                    </li>
                             </ul>
                         </div>
                     </div>

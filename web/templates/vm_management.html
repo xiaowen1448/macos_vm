@@ -139,7 +139,7 @@
     <div class="navbar navbar-expand-lg navbar-light bg-white shadow-sm" style="position: fixed; top: 0; left: 280px; right: 0; z-index: 1000;">
         <div class="container-fluid">
             <span class="navbar-brand mb-0 h1">
-                <i class="fas fa-server me-2"></i>虚拟机管理
+                <i class="fas fa-server me-2"></i>虚拟机克隆列表
             </span>
             <div class="d-flex">
                 <div class="dropdown me-3">
@@ -151,10 +151,10 @@
                         <li><a class="dropdown-item" href="?lang=en">English</a></li>
                     </ul>
                 </div>
+                <a href="{{ url_for('logout') }}" class="btn btn-outline-secondary">登出</a>
             </div>
         </div>
     </div>
-    <a href="{{ url_for('logout') }}" class="btn btn-outline-secondary position-absolute" style="top: 18px; right: 32px; z-index: 2000;">登出</a>
     
     <div class="container-fluid" style="margin-left: 280px; margin-top: 80px;">
         <div class="row">
@@ -164,9 +164,9 @@
                 <div class="accordion" id="accordionMenu">
                     <div class="accordion-item">
                         <h2 class="accordion-header" id="headingVM">
-                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseVM" aria-expanded="true" aria-controls="collapseVM">
-                                虚拟机管理
-                            </button>
+                                                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseVM" aria-expanded="true" aria-controls="collapseVM">
+                            虚拟机管理
+                        </button>
                         </h2>
                         <div id="collapseVM" class="accordion-collapse collapse show" aria-labelledby="headingVM" data-bs-parent="#accordionMenu">
                             <div class="accordion-body p-0">
@@ -175,16 +175,16 @@
                                         <a class="nav-link" href="{{ url_for('clone_vm_page') }}" onclick="handleCloneClick()">虚拟机批量克隆</a>
                                     </li>
                                     <li class="nav-item">
-                                        <a class="nav-link active" href="{{ url_for('vm_management_page') }}" onclick="handleVMManagementClick()">虚拟机管理</a>
+                                        <a class="nav-link active" href="{{ url_for('vm_management_page') }}" onclick="handleVMManagementClick()">虚拟机克隆列表</a>
                                     </li>
                                     <li class="nav-item">
-                                        <a class="nav-link" href="#" onclick="handleVMInfoClick()">虚拟机成品信息</a>
+                                        <a class="nav-link" href="{{ url_for('vm_info_page') }}" onclick="handleVMInfoClick()">虚拟机成品信息</a>
                                     </li>
                                     <li class="nav-item">
-                                        <a class="nav-link" href="#" onclick="handleVMScriptClick()">虚拟机脚本管理</a>
+                                        <a class="nav-link" href="{{ url_for('vm_script_page') }}" onclick="handleVMScriptClick()">虚拟机脚本管理</a>
                                     </li>
                                     <li class="nav-item">
-                                        <a class="nav-link" href="#" onclick="handleVMTrustClick()">虚拟机互信管理</a>
+                                        <a class="nav-link" href="{{ url_for('vm_trust_page') }}" onclick="handleVMTrustClick()">虚拟机互信管理</a>
                                     </li>
                                 </ul>
                             </div>
@@ -200,10 +200,10 @@
                             <div class="accordion-body p-0">
                                 <ul class="nav flex-column">
                                     <li class="nav-item">
-                                        <a class="nav-link" href="#" onclick="handleWumaClick()">虚拟机五码管理</a>
+                                        <a class="nav-link" href="{{ url_for('wuma_page') }}" onclick="handleWumaClick()">虚拟机五码管理</a>
                                     </li>
                                     <li class="nav-item">
-                                        <a class="nav-link" href="#" onclick="handleMupanClick()">虚拟机母盘管理</a>
+                                        <a class="nav-link" href="{{ url_for('mupan_page') }}" onclick="handleMupanClick()">虚拟机母盘管理</a>
                                     </li>
                                 </ul>
                             </div>
@@ -219,13 +219,13 @@
                             <div class="accordion-body p-0">
                                 <ul class="nav flex-column">
                                     <li class="nav-item">
-                                        <a class="nav-link" href="#" onclick="handleEncryptCodeClick()">代码加密</a>
+                                        <a class="nav-link" href="{{ url_for('encrypt_code_page') }}" onclick="handleEncryptCodeClick()">代码加密</a>
                                     </li>
                                     <li class="nav-item">
-                                        <a class="nav-link" href="#" onclick="handleEncryptWumaClick()">五码加密</a>
+                                        <a class="nav-link" href="{{ url_for('encrypt_wuma_page') }}" onclick="handleEncryptWumaClick()">五码加密</a>
                                     </li>
                                     <li class="nav-item">
-                                        <a class="nav-link" href="#" onclick="handleEncryptIdClick()">id加密</a>
+                                        <a class="nav-link" href="{{ url_for('encrypt_id_page') }}" onclick="handleEncryptIdClick()">id加密</a>
                                     </li>
                                 </ul>
                             </div>
@@ -241,7 +241,7 @@
                             <div class="accordion-body p-0">
                                 <ul class="nav flex-column">
                                     <li class="nav-item">
-                                        <a class="nav-link" href="#" onclick="handleProxyAssignClick()">代理ip分配</a>
+                                        <a class="nav-link" href="{{ url_for('proxy_assign_page') }}" onclick="handleProxyAssignClick()">代理ip分配</a>
                                     </li>
                                 </ul>
                             </div>
@@ -257,10 +257,10 @@
                             <div class="accordion-body p-0">
                                 <ul class="nav flex-column">
                                     <li class="nav-item">
-                                        <a class="nav-link" href="#" onclick="handleSoftVersionClick()">版本查看</a>
+                                        <a class="nav-link" href="{{ url_for('soft_version_page') }}" onclick="handleSoftVersionClick()">版本查看</a>
                                     </li>
                                     <li class="nav-item">
-                                        <a class="nav-link" href="#" onclick="handleSoftEnvClick()">环境变量</a>
+                                        <a class="nav-link" href="{{ url_for('soft_env_page') }}" onclick="handleSoftEnvClick()">环境变量</a>
                                     </li>
                                 </ul>
                             </div>
@@ -332,6 +332,18 @@
                                 </tbody>
                             </table>
                         </div>
+                        
+                        <!-- 分页控件 -->
+                        <div class="d-flex justify-content-between align-items-center mt-3">
+                            <div class="text-muted">
+                                显示 <span id="startRecord">0</span> - <span id="endRecord">0</span> 条，共 <span id="totalRecords">0</span> 条记录
+                            </div>
+                            <nav aria-label="虚拟机列表分页">
+                                <ul class="pagination pagination-sm mb-0" id="pagination">
+                                    <!-- 分页按钮将在这里动态生成 -->
+                                </ul>
+                            </nav>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -340,23 +352,33 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // 分页相关变量
+        let currentPage = 1;
+        let pageSize = 10;
+        let totalVMs = [];
+        let totalPages = 0;
+        
         // 页面加载时获取虚拟机数据
         document.addEventListener('DOMContentLoaded', function() {
-            refreshVMData();
+            loadVMData(1);
         });
 
-        // 刷新虚拟机数据
-        function refreshVMData() {
+        // 加载虚拟机数据
+        function loadVMData(page = 1) {
             showLoading();
             hideError();
+            currentPage = page;
             
-            fetch('/api/vm_list')
+            fetch(`/api/vm_list?page=${page}&page_size=${pageSize}`)
                 .then(response => response.json())
                 .then(data => {
                     hideLoading();
                     if (data.success) {
+                        totalVMs = data.vms;
+                        totalPages = data.pagination.total_pages;
                         updateVMStats(data.stats);
-                        updateVMTable(data.vms);
+                        updateVMTableWithPagination(page, data.pagination);
+                        updatePagination(page);
                     } else {
                         showError(data.message || '获取虚拟机信息失败');
                     }
@@ -367,6 +389,11 @@
                 });
         }
 
+        // 刷新虚拟机数据
+        function refreshVMData() {
+            loadVMData(1);
+        }
+
         // 更新虚拟机统计信息
         function updateVMStats(stats) {
             document.getElementById('totalVMs').textContent = stats.total || 0;
@@ -375,17 +402,32 @@
             document.getElementById('onlineVMs').textContent = stats.online || 0;
         }
 
-        // 更新虚拟机表格
-        function updateVMTable(vms) {
+        // 更新虚拟机表格（带分页）
+        function updateVMTableWithPagination(page, pagination = null) {
             const tbody = document.getElementById('vmTableBody');
             tbody.innerHTML = '';
             
-            if (vms.length === 0) {
+            if (totalVMs.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">暂无虚拟机数据</td></tr>';
                 return;
             }
             
-            vms.forEach(vm => {
+            // 使用后端分页信息或前端计算
+            let startIndex, endIndex;
+            if (pagination) {
+                startIndex = pagination.start_index;
+                endIndex = pagination.end_index;
+            } else {
+                startIndex = (page - 1) * pageSize;
+                endIndex = Math.min(startIndex + pageSize, totalVMs.length);
+            }
+            
+            // 更新记录显示信息
+            document.getElementById('startRecord').textContent = totalVMs.length > 0 ? startIndex + 1 : 0;
+            document.getElementById('endRecord').textContent = endIndex;
+            document.getElementById('totalRecords').textContent = pagination ? pagination.total_count : totalVMs.length;
+            
+            totalVMs.forEach(vm => {
                 const row = document.createElement('tr');
                 row.innerHTML = `
                     <td>
@@ -423,6 +465,47 @@
                 `;
                 tbody.appendChild(row);
             });
+        }
+
+        // 更新分页控件
+        function updatePagination(currentPage) {
+            const pagination = document.getElementById('pagination');
+            pagination.innerHTML = '';
+            
+            if (totalPages <= 1) {
+                return;
+            }
+            
+            // 上一页按钮
+            const prevLi = document.createElement('li');
+            prevLi.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
+            prevLi.innerHTML = `<a class="page-link" href="#" onclick="changePage(${currentPage - 1})">上一页</a>`;
+            pagination.appendChild(prevLi);
+            
+            // 页码按钮
+            const startPage = Math.max(1, currentPage - 2);
+            const endPage = Math.min(totalPages, currentPage + 2);
+            
+            for (let i = startPage; i <= endPage; i++) {
+                const pageLi = document.createElement('li');
+                pageLi.className = `page-item ${i === currentPage ? 'active' : ''}`;
+                pageLi.innerHTML = `<a class="page-link" href="#" onclick="changePage(${i})">${i}</a>`;
+                pagination.appendChild(pageLi);
+            }
+            
+            // 下一页按钮
+            const nextLi = document.createElement('li');
+            nextLi.className = `page-item ${currentPage === totalPages ? 'disabled' : ''}`;
+            nextLi.innerHTML = `<a class="page-link" href="#" onclick="changePage(${currentPage + 1})">下一页</a>`;
+            pagination.appendChild(nextLi);
+        }
+
+        // 切换页面
+        function changePage(page) {
+            if (page < 1 || page > totalPages) {
+                return;
+            }
+            loadVMData(page);
         }
 
         // 获取状态样式类

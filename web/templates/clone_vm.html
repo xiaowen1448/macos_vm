@@ -4,27 +4,124 @@
     <meta charset="UTF-8">
     <title>批量克隆虚拟机</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <style>
-        .clone-form {
-            background: #f8f9fa;
-            border-radius: 12px;
-            padding: 24px;
-            margin-bottom: 24px;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            overflow: hidden;
         }
+        
+        .sidebar {
+            background: white;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 1000;
+            width: 280px;
+            height: 100vh;
+            overflow-y: auto;
+        }
+        
+        .accordion-button:not(.collapsed) {
+            background-color: #e7f3ff;
+            color: #0d6efd;
+        }
+        
+        .nav-link {
+            color: #495057;
+            padding: 8px 16px;
+            border-radius: 4px;
+            margin: 2px 0;
+            transition: all 0.2s;
+        }
+        
+        .nav-link:hover {
+            background-color: #f8f9fa;
+            color: #0d6efd;
+        }
+        
+        .nav-link.active {
+            background-color: #0d6efd;
+            color: white;
+        }
+        
+        /* 紧凑布局样式 */
+        .compact-form .form-label {
+            font-size: 0.875rem;
+            margin-bottom: 0.25rem;
+            font-weight: 500;
+        }
+        
+        .compact-form .form-control,
+        .compact-form .form-select {
+            font-size: 0.875rem;
+            padding: 0.375rem 0.5rem;
+            height: auto;
+        }
+        
+        .compact-form .row {
+            margin-bottom: 0.5rem;
+        }
+        
+        .compact-form .col-md-4 {
+            padding: 0 0.25rem;
+        }
+        
+        /* 主内容区域铺满 */
+        main {
+            margin-left: 280px;
+            margin-top: 80px;
+            width: calc(100% - 280px);
+            height: calc(100vh - 80px);
+            overflow: hidden;
+        }
+        
+        .main-content {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .form-section {
+            flex: 0 0 auto;
+            padding: 1rem;
+        }
+        
+        .log-section {
+            flex: 1;
+            padding: 1rem;
+            overflow: hidden;
+        }
+        
+        .log-card {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .log-card .card-body {
+            flex: 1;
+            overflow: hidden;
+        }
+        
         .log-terminal {
             background: #1e1e1e;
             color: #e0e0e0;
             font-family: 'Fira Mono', 'Consolas', 'Menlo', monospace;
             border-radius: 8px;
             box-shadow: 0 4px 16px rgba(0,0,0,0.2);
-            margin-top: 24px;
-            max-height: 500px;
-            overflow-y: auto;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
         }
         .log-header {
-            padding: 12px 18px;
+            padding: 8px 12px;
             border-bottom: 1px solid #333;
             font-weight: bold;
             background: #2d2d2d;
@@ -33,17 +130,18 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
+            flex-shrink: 0;
         }
         .log-content {
-            padding: 16px 18px;
-            font-size: 14px;
-            line-height: 1.6;
-            max-height: 400px;
+            padding: 12px;
+            font-size: 13px;
+            line-height: 1.4;
+            flex: 1;
             overflow-y: auto;
         }
         .log-line {
-            margin: 2px 0;
-            padding: 2px 0;
+            margin: 1px 0;
+            padding: 1px 0;
         }
         .log-info { color: #00ff88; }
         .log-warning { color: #ffaa00; }
@@ -54,20 +152,21 @@
             border: none;
             color: white;
             font-weight: bold;
-            padding: 12px 32px;
-            border-radius: 25px;
+            padding: 8px 24px;
+            border-radius: 20px;
             transition: all 0.3s ease;
+            font-size: 0.875rem;
         }
         .btn-clone:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
         }
         .status-indicator {
             display: inline-block;
-            width: 12px;
-            height: 12px;
+            width: 10px;
+            height: 10px;
             border-radius: 50%;
-            margin-right: 8px;
+            margin-right: 6px;
         }
         .status-idle { background-color: #6c757d; }
         .status-running { background-color: #ffc107; animation: pulse 1.5s infinite; }
@@ -79,44 +178,66 @@
             100% { opacity: 1; }
         }
         .progress-container {
-            margin-top: 16px;
+            margin-top: 12px;
             display: none;
         }
         .clone-stats {
             background: #e9ecef;
-            border-radius: 8px;
-            padding: 16px;
-            margin-top: 16px;
+            border-radius: 6px;
+            padding: 12px;
+            margin-top: 12px;
         }
     </style>
 </head>
 <body>
-    <div class="container-fluid mt-4">
-        <div class="row">
-            <!-- 左侧菜单 -->
-            <nav class="col-md-3 col-lg-2 sidebar bg-white p-3">
-                <h5 class="mb-4"><span style="color:#000; font-style:italic; font-weight:bold;">macos_vm</span></h5>
-                <div class="accordion" id="accordionMenu">
+    <!-- 顶部导航栏 -->
+    <div class="navbar navbar-expand-lg navbar-light bg-white shadow-sm" style="position: fixed; top: 0; left: 280px; right: 0; z-index: 1000;">
+        <div class="container-fluid">
+            <span class="navbar-brand mb-0 h1">
+                <i class="fas fa-clone me-2"></i>虚拟机批量克隆
+            </span>
+            <div class="d-flex">
+                <div class="dropdown me-3">
+                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="langDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                        语言
+                    </button>
+                    <ul class="dropdown-menu" aria-labelledby="langDropdown">
+                        <li><a class="dropdown-item" href="?lang=zh">中文</a></li>
+                        <li><a class="dropdown-item" href="?lang=en">English</a></li>
+                    </ul>
+                </div>
+                <a href="{{ url_for('logout') }}" class="btn btn-outline-secondary">登出</a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 左侧菜单 -->
+    <nav class="sidebar bg-white p-3" style="position: fixed; left: 0; top: 0; width: 280px; height: 100vh; overflow-y: auto; z-index: 1000;">
+        <h5 class="mb-4"><span style="color:#000; font-style:italic; font-weight:bold;">macos_vm</span></h5>
+        <div class="accordion" id="accordionMenu">
                     <div class="accordion-item">
                         <h2 class="accordion-header" id="headingVM">
-                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseVM" aria-expanded="true" aria-controls="collapseVM">
-                                虚拟机管理
-                            </button>
+                                                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseVM" aria-expanded="true" aria-controls="collapseVM">
+                            虚拟机管理
+                        </button>
                         </h2>
                         <div id="collapseVM" class="accordion-collapse collapse show" aria-labelledby="headingVM" data-bs-parent="#accordionMenu">
                             <div class="accordion-body p-0">
                                 <ul class="nav flex-column">
-                                                                    <li class="nav-item">
-                                    <a class="nav-link active" href="{{ url_for('clone_vm_page') }}" onclick="handleCloneClick()">虚拟机批量克隆</a>
-                                </li>
                                     <li class="nav-item">
-                                        <a class="nav-link" href="{{ url_for('dashboard') }}">虚拟机成品信息</a>
+                                        <a class="nav-link active" href="{{ url_for('clone_vm_page') }}" onclick="handleCloneClick()">虚拟机批量克隆</a>
                                     </li>
                                     <li class="nav-item">
-                                        <a class="nav-link" href="#" onclick="showPanel('script-list')">虚拟机脚本管理</a>
+                                        <a class="nav-link" href="{{ url_for('vm_management_page') }}" onclick="handleVMManagementClick()">虚拟机克隆列表</a>
                                     </li>
                                     <li class="nav-item">
-                                        <a class="nav-link" href="#" onclick="showPanel('trust')">虚拟机互信管理</a>
+                                        <a class="nav-link" href="{{ url_for('vm_info_page') }}" onclick="handleVMInfoClick()">虚拟机成品信息</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="{{ url_for('vm_script_page') }}" onclick="handleVMScriptClick()">虚拟机脚本管理</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="{{ url_for('vm_trust_page') }}" onclick="handleVMTrustClick()">虚拟机互信管理</a>
                                     </li>
                                 </ul>
                             </div>
@@ -125,17 +246,17 @@
                     <div class="accordion-item">
                         <h2 class="accordion-header" id="headingBoot">
                             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseBoot" aria-expanded="false" aria-controls="collapseBoot">
-                                引导管理
+                                母盘及五码管理
                             </button>
                         </h2>
                         <div id="collapseBoot" class="accordion-collapse collapse" aria-labelledby="headingBoot" data-bs-parent="#accordionMenu">
                             <div class="accordion-body p-0">
                                 <ul class="nav flex-column">
                                     <li class="nav-item">
-                                        <a class="nav-link" href="#" onclick="showPanel('wuma')">虚拟机五码管理</a>
+                                        <a class="nav-link" href="{{ url_for('wuma_page') }}" onclick="handleWumaClick()">虚拟机五码管理</a>
                                     </li>
                                     <li class="nav-item">
-                                        <a class="nav-link" href="#" onclick="showPanel('mupan')">虚拟机母盘管理</a>
+                                        <a class="nav-link" href="{{ url_for('mupan_page') }}" onclick="handleMupanClick()">虚拟机母盘管理</a>
                                     </li>
                                 </ul>
                             </div>
@@ -227,9 +348,8 @@
                             </button>
                         </h2>
                         <div id="collapseSystem" class="accordion-collapse collapse" aria-labelledby="headingSystem" data-bs-parent="#accordionMenu">
-                            <div class="accordion-body p-0">
-                                <ul class="nav flex-column">
-                                    <li class="nav-item">
+                        20 <div class="accordion-body p-0">
+                            右侧内容                            <li class="nav-item">
                                         <a class="nav-link" href="#" onclick="showPanel('sys-version')">系统版本</a>
                                     </li>
                                     <li class="nav-item">
@@ -248,186 +368,169 @@
                 </div>
             </nav>
             
-            <!-- 右侧内容 -->
-            <main class="col-md-9 col-lg-10 p-4">
-                <!-- 克隆表单 -->
-                <div class="col-12">
-                <div class="clone-form">
-                    <h4 class="mb-4">批量克隆虚拟机</h4>
-                    <form id="cloneForm">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label for="templateVM" class="form-label">模板虚拟机</label>
-                                    <select class="form-select" id="templateVM" name="templateVM" required>
-                                        <option value="">选择模板虚拟机</option>
-                                        {% for vm in template_vms %}
-                                        <option value="{{ vm.name }}">{{ vm.name }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
+            <!-- 主内容区域 -->
+            <main>
+                <div class="main-content">
+                    <!-- 参数配置区域 -->
+                    <div class="form-section">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="mb-0"><i class="fas fa-cogs me-2"></i>批量克隆参数</h5>
                             </div>
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label for="cloneCount" class="form-label">克隆数量</label>
-                                    <input type="number" class="form-control" id="cloneCount" name="cloneCount" 
-                                           min="1" max="100" value="3" required>
-                                   <!--   <div class="form-text">最多可克隆20个虚拟机</div> -->
-                                    
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label for="targetDir" class="form-label">目标目录</label>
-                                    <input type="text" class="form-control" id="targetDir" name="targetDir" 
+                            <div class="card-body">
+                                <form id="cloneForm" class="compact-form" autocomplete="off">
+                                    <div class="row g-2">
+                                        <div class="col-md-4">
+                                            <label for="templateVM" class="form-label">模板虚拟机</label>
+                                            <select class="form-select" id="templateVM" name="templateVM" style="width: 50%;"  required>
+                                                <option value="">选择模板虚拟机</option>
+                                                {% for vm in template_vms %}
+                                                <option value="{{ vm.name }}">{{ vm.name }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label for="cloneCount" class="form-label">克隆数量</label>
+                                            <input type="number" class="form-control form-control-sm" id="cloneCount" name="cloneCount" min="1" max="100" value="3" style="width: 50%;" required>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label for="targetDir" class="form-label">目标目录</label>
+                                            <input type="text" class="form-control" style="width: 60%;"   id="targetDir" name="targetDir" 
                                            value="D:\macos_vm\NewVM\10.12" required>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label for="namingPattern" class="form-label">命名模式</label>
-                                    <select class="form-select" id="namingPattern" name="namingPattern" required>
-                                        <option value="VM_{timestamp}_{index}" selected>VM_{timestamp}_{index}</option>
-                                        <option value="VM_{index}_{timestamp}">VM_{index}_{timestamp}</option>
-                                        <option value="Clone_{timestamp}_{index}">Clone_{timestamp}_{index}</option>
-                                        <option value="MacOS_{timestamp}_{index}">MacOS_{timestamp}_{index}</option>
-                                        <option value="VM_{vmname}_{timestamp}_{index}">VM_{vmname}_{timestamp}_{index}</option>
-                                        <option value="custom">自定义...</option>
-                                    </select>
-                                    <div class="form-text">支持 {timestamp}、{index} 和 {vmname} 占位符</div>
-                                </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label for="configPlist" class="form-label">配置文件目录</label>
+                                            <select class="form-select" id="configPlist" name="configPlist" style="width: 60%;"   required>
+                                                <option value="">选择配置文件目录</option>
+                                                {% for plist_dir in plist_dirs %}
+                                                <option value="{{ plist_dir.path }}">{{ plist_dir.name }} ({{ plist_dir.count }}个文件)</option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label for="namingPattern" class="form-label">命名模式</label>
+                                            <select class="form-select form-select-sm" id="namingPattern" name="namingPattern" style="width: 50%;" required>
+                                                <option value="VM_{timestamp}_{index}" selected>VM_{timestamp}_{index}</option>
+                                                <option value="{vmname}_clone_{timestamp}">{vmname}_clone_{timestamp}</option>
+                                                <option value="{timestamp}_VM_{index}">{timestamp}_VM_{index}</option>
+                                                <option value="custom">自定义...</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label for="snapshotName" class="form-label">快照命名</label>
+                                            <select class="form-select form-select-sm" id="snapshotName" name="snapshotName" style="width: 50%;" required>
+                                                <option value="{vmname}_snapshot_{timestamp}" selected>{vmname}_snapshot_{timestamp}</option>
+                                                <option value="snapshot_{vmname}_{timestamp}">snapshot_{vmname}_{timestamp}</option>
+                                                <option value="{vmname}_backup_{timestamp}">{vmname}_backup_{timestamp}</option>
+                                                <option value="snapshot_{timestamp}_{vmname}">snapshot_{timestamp}_{vmname}</option>
+                                                <option value="backup_{vmname}_{timestamp}">backup_{vmname}_{timestamp}</option>
+                                                <option value="custom">自定义...</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mt-2">
+                                        <div>
+                                            <span class="status-indicator status-idle" id="statusIndicator"></span>
+                                            <span id="statusText">就绪</span>
+                                        </div>
+                                        <button type="submit" class="btn btn-clone btn-sm" id="cloneBtn">
+                                            开始克隆
+                                        </button>
+                                    </div>
+                                </form>
                             </div>
                         </div>
-                        
+                    </div>
+                  <!-- 克隆统计 -->
+            <div class="col-12">
+                <div class="card log-card" id="cloneStats" style="display: none;">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>克隆统计</h5>
+                    </div>
+                    <div class="card-body py-3">
                         <div class="row">
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label for="configPlist" class="form-label">配置文件目录</label>
-                                    <select class="form-select" id="configPlist" name="configPlist" required>
-                                        <option value="">选择配置文件目录</option>
-                                        {% for plist_dir in plist_dirs %}
-                                        <option value="{{ plist_dir.path }}">{{ plist_dir.name }} ({{ plist_dir.count }}个文件)</option>
-                                        {% endfor %}
-                                    </select>
-                                    <div class="form-text">系统会自动检查plist文件数量是否足够</div>
+                            <div class="col-md-3">
+                                <div class="text-center">
+                                    <div class="h4 text-success" id="successCount">0</div>
+                                    <small>成功</small>
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label for="autoStart" class="form-label">自动启动</label>
-                                    <select class="form-select" id="autoStart" name="autoStart">
-                                        <option value="false">否</option>
-                                        <option value="true">是</option>
-                                    </select>
+                            <div class="col-md-3">
+                                <div class="text-center">
+                                    <div class="h4 text-warning" id="runningCount">0</div>
+                                    <small>运行中</small>
                                 </div>
                             </div>
-                        </div>
-                        
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label for="createSnapshot" class="form-label">创建快照</label>
-                                    <select class="form-select" id="createSnapshot" name="createSnapshot">
-                                        <option value="true">是</option>
-                                        <option value="false">否</option>
-                                    </select>
-                                    <div class="form-text">克隆前为模板虚拟机创建快照备份，并从快照进行克隆</div>
+                            <div class="col-md-3">
+                                <div class="text-center">
+                                    <div class="h4 text-danger" id="errorCount">0</div>
+                                    <small>失败</small>
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <div class="mb-3">
-                                    <label for="snapshotName" class="form-label">快照命名</label>
-                                    <select class="form-select" id="snapshotName" name="snapshotName" required>
-                                        <option value="{vmname}_snapshot_{timestamp}" selected>{vmname}_snapshot_{timestamp}</option>
-                                        <option value="snapshot_{vmname}_{timestamp}">snapshot_{vmname}_{timestamp}</option>
-                                        <option value="{vmname}_backup_{timestamp}">vmname}_backup_{timestamp}</option>
-                                        <option value="snapshot_{timestamp}_{vmname}">snapshot_{timestamp}_{vmname}</option>
-                                        <option value="backup_{vmname}_{timestamp}">backup_{vmname}_{timestamp}</option>
-                                        <option value="custom">自定义...</option>
-                                    </select>
-                                    <div class="form-text">支持 {vmname} 和 {timestamp} 占位符</div>
+                            <div class="col-md-3">
+                                <div class="text-center">
+                                    <div class="h4 text-info" id="totalCount">0</div>
+                                    <small>总计</small>
                                 </div>
-                            </div>
-                        </div>
-                        
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <span class="status-indicator status-idle" id="statusIndicator"></span>
-                                <span id="statusText">就绪</span>
-                            </div>
-                            <button type="submit" class="btn btn-clone" id="cloneBtn">
-                                开始克隆
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-            
-            <!-- 进度条 -->
-            <div class="col-12">
-                <div class="progress-container" id="progressContainer">
-                    <div class="progress mb-2">
-                        <div class="progress-bar" id="progressBar" role="progressbar" style="width: 0%"></div>
-                    </div>
-                    <div class="text-center">
-                        <span id="progressText">0 / 0 完成</span>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- 克隆统计 -->
-            <div class="col-12">
-                <div class="clone-stats" id="cloneStats" style="display: none;">
-                    <h6>克隆统计</h6>
-                    <div class="row">
-                        <div class="col-md-3">
-                            <div class="text-center">
-                                <div class="h4 text-success" id="successCount">0</div>
-                                <small>成功</small>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="text-center">
-                                <div class="h4 text-warning" id="runningCount">0</div>
-                                <small>运行中</small>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="text-center">
-                                <div class="h4 text-danger" id="errorCount">0</div>
-                                <small>失败</small>
-                            </div>
-                        </div>
-                        <div class="col-md-3">
-                            <div class="text-center">
-                                <div class="h4 text-info" id="totalCount">0</div>
-                                <small>总计</small>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-            
-            <!-- 实时日志 -->
-            <div class="col-12">
-                <div class="log-terminal" id="logTerminal">
-                    <div class="log-header">
-                        <span>实时执行日志</span>
-                        <div>
-                            <button class="btn btn-sm btn-outline-light" id="clearLog">清空</button>
-                            <button class="btn btn-sm btn-outline-light" id="copyLog">复制</button>
+                    <!-- 日志显示区域 -->
+                    <div class="log-section">
+                        <div class="card log-card">
+                            <div class="card-header">
+                                <h5 class="mb-0"><i class="fas fa-terminal me-2"></i>实时执行日志</h5>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="log-terminal" id="logTerminal">
+                                    <div class="log-header">
+                                        <span>日志</span>
+                                        <div>
+                                            <button class="btn btn-sm btn-outline-secondary" id="clearLog">清空</button>
+                                            <button class="btn btn-sm btn-outline-secondary" id="copyLog">复制</button>
+                                        </div>
+                                    </div>
+                                    <div class="log-content" id="logContent">
+                                        <div class="log-line log-info">系统就绪，等待开始克隆...</div>
+                                    </div>
+                                </div>
+                                <!-- 进度条和统计 -->
+                                <div class="progress-container p-2" id="progressContainer">
+                                    <div class="progress mb-2">
+                                        <div class="progress-bar" id="progressBar" role="progressbar" style="width: 0%"></div>
+                                    </div>
+                                    <div class="text-center">
+                                        <span id="progressText">0 / 0 完成</span>
+                                    </div>
+                                </div>
+                                <div class="clone-stats p-2" id="cloneStats" style="display: none;">
+                                    <h6>克隆统计</h6>
+                                    <div class="row">
+                                        <div class="col-3 text-center">
+                                            <div class="h4 text-success" id="successCount">0</div>
+                                            <small>成功</small>
+                                        </div>
+                                        <div class="col-3 text-center">
+                                            <div class="h4 text-warning" id="runningCount">0</div>
+                                            <small>运行中</small>
+                                        </div>
+                                        <div class="col-3 text-center">
+                                            <div class="h4 text-danger" id="errorCount">0</div>
+                                            <small>失败</small>
+                                        </div>
+                                        <div class="col-3 text-center">
+                                            <div class="h4 text-info" id="totalCount">0</div>
+                                            <small>总计</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <div class="log-content" id="logContent">
-                        <div class="log-line log-info">系统就绪，等待开始克隆...</div>
-                    </div>
                 </div>
-            </div>
-        </div>
-    </div>
+            </main>
 
     <script>
         let eventSource = null;
@@ -707,22 +810,56 @@
         
         // 处理克隆链接点击，确保菜单保持展开状态
         function handleCloneClick() {
-            // 确保虚拟机管理菜单展开
-            const vmCollapse = document.getElementById('collapseVM');
-            const vmButton = document.getElementById('headingVM').querySelector('.accordion-button');
+            ensureMenuExpanded('collapseVM', 'collapseVM');
+        }
+
+        // 处理虚拟机管理链接点击，确保菜单保持展开状态
+        function handleVMManagementClick() {
+            ensureMenuExpanded('collapseVM', 'collapseVM');
+        }
+
+        // 处理虚拟机成品信息链接点击，确保菜单保持展开状态
+        function handleVMInfoClick() {
+            ensureMenuExpanded('collapseVM', 'collapseVM');
+        }
+
+        // 处理虚拟机脚本管理链接点击，确保菜单保持展开状态
+        function handleVMScriptClick() {
+            ensureMenuExpanded('collapseVM', 'collapseVM');
+        }
+
+        // 处理虚拟机互信管理链接点击，确保菜单保持展开状态
+        function handleVMTrustClick() {
+            ensureMenuExpanded('collapseVM', 'collapseVM');
+        }
+
+        // 通用函数：确保菜单展开并设置链接激活状态
+        function ensureMenuExpanded(menuId, linkContainerId) {
+            const menuCollapse = document.getElementById(menuId);
+            const menuButton = document.getElementById(menuId.replace('collapse', 'heading')).querySelector('.accordion-button');
             
-            if (vmCollapse && vmButton) {
+            if (menuCollapse && menuButton) {
                 // 移除折叠类，添加展开类
-                vmCollapse.classList.remove('collapse');
-                vmCollapse.classList.add('show');
-                vmButton.setAttribute('aria-expanded', 'true');
-                vmButton.classList.remove('collapsed');
+                menuCollapse.classList.remove('collapse');
+                menuCollapse.classList.add('show');
+                menuButton.setAttribute('aria-expanded', 'true');
+                menuButton.classList.remove('collapsed');
             }
             
             // 设置当前链接为激活状态
-            const links = document.querySelectorAll('#collapseVM .nav-link');
+            const links = document.querySelectorAll(`#${linkContainerId} .nav-link`);
             links.forEach(link => link.classList.remove('active'));
             event.target.classList.add('active');
+        }
+
+        // 处理虚拟机五码管理链接点击，确保菜单保持展开状态
+        function handleWumaClick() {
+            ensureMenuExpanded('collapseBoot', 'collapseBoot');
+        }
+
+        // 处理虚拟机母盘管理链接点击，确保菜单保持展开状态
+        function handleMupanClick() {
+            ensureMenuExpanded('collapseBoot', 'collapseBoot');
         }
     </script>
 </body>
