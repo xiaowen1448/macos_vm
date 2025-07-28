@@ -107,6 +107,53 @@
     .main-content { flex: 1; min-width: 0; overflow: auto; }
     .card-body { overflow: visible; }
     .table-responsive { overflow: auto; }
+    
+    /* 表格容器样式 - 确保滚动条显示在数据区域内部 */
+    .table-responsive {
+        border: 1px solid #dee2e6;
+        border-radius: 0.375rem;
+        background: white;
+    }
+    
+    /* 自定义滚动条样式 */
+    .table-responsive::-webkit-scrollbar {
+        width: 8px;
+    }
+    
+    .table-responsive::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+    
+    .table-responsive::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 4px;
+    }
+    
+    .table-responsive::-webkit-scrollbar-thumb:hover {
+        background: #a8a8a8;
+    }
+    
+    /* 确保表格容器有合适的高度和边框 */
+    .table-container {
+        position: relative;
+        background: white;
+        border-radius: 0.375rem;
+        overflow: hidden;
+    }
+    
+    /* 确保表格头部固定在顶部 */
+    .table-responsive thead th {
+        position: sticky;
+        top: 0;
+        background-color: #f8f9fa;
+        z-index: 1;
+    }
+    
+    /* 表格行样式优化 */
+    .table-responsive tbody tr:hover {
+        background-color: #f8f9fa;
+    }
     .vm-stats {
             display: flex;
             gap: 20px;
@@ -376,25 +423,27 @@
                         </div>
                         
                         <!-- 虚拟机列表 -->
-                        <div class="table-responsive">
-                            <table class="table table-hover vm-info-table" id="vmTable">
-                                <thead>
-                                    <tr>
-                                        <th>
-                                            <input type="checkbox" id="selectAll" onchange="toggleSelectAll()" title="全选/取消全选">
-                                        </th>
-                                        <th>虚拟机名称</th>
-                                        <th>状态</th>
-                                        <th>IP地址</th>
-                                        <th>JU值信息</th>
-                                        <th>SSH状态</th>
-                                        <th>操作</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="vmTableBody">
-                                    <!-- 虚拟机数据将在这里动态加载 -->
-                                </tbody>
-                            </table>
+                        <div class="table-container">
+                            <div class="table-responsive">
+                                <table class="table table-hover vm-info-table mb-0" id="vmTable">
+                                    <thead>
+                                        <tr>
+                                            <th>
+                                                <input type="checkbox" id="selectAll" onchange="toggleSelectAll()" title="全选/取消全选">
+                                            </th>
+                                            <th>虚拟机名称</th>
+                                            <th>状态</th>
+                                            <th>IP地址</th>
+                                            <th>JU值信息</th>
+                                            <th>SSH状态</th>
+                                            <th>操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="vmTableBody">
+                                        <!-- 虚拟机数据将在这里动态加载 -->
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                         
                         <!-- 批量操作和分页控件 -->
@@ -406,6 +455,7 @@
                                 <div class="d-flex align-items-center">
                                     <label class="form-label mb-0 me-2">每页显示:</label>
                                     <select class="form-select form-select-sm" id="pageSizeSelect" style="width: auto;" onchange="changePageSize()">
+                                        <option value="5">5</option>
                                         <option value="10">10</option>
                                         <option value="20">20</option>
                                         <option value="50">50</option>
@@ -437,7 +487,7 @@
     <script>
         // 分页相关变量
         let currentPage = 1;
-        let pageSize = 10;
+        let pageSize = 5; // 默认最小分页大小
         let totalVMs = [];
         let totalPages = 0;
         let isAutoCalculated = true; // 标记是否为自动计算的分页大小
@@ -445,34 +495,37 @@
         
         // 页面加载时获取虚拟机数据
         document.addEventListener('DOMContentLoaded', function() {
-            // 自动计算最佳分页大小
-            const autoPageSize = calculateOptimalPageSize();
-            document.getElementById('pageSizeSelect').value = autoPageSize.toString();
-            pageSize = autoPageSize;
+            // 智能计算最佳数据显示量
+            const optimalDataDisplay = calculateOptimalDataDisplay();
+            console.log('页面加载时计算的最佳数据显示量:', optimalDataDisplay);
             
-            // 自动模式下，根据分页大小决定是否显示滚动条
-            const tableContainer = document.querySelector('.table-responsive');
-            const mainContent = document.querySelector('.col-md-9.col-lg-10');
+            // 确保分页大小在可用选项中，优先选择能充分利用空间的大小
+            const pageSizeSelect = document.getElementById('pageSizeSelect');
+            const availableSizes = Array.from(pageSizeSelect.options).map(opt => parseInt(opt.value));
             
-            if (autoPageSize < 20) {
-                // 小分页时，无滚动条
-                tableContainer.style.overflow = 'hidden';
-                tableContainer.style.maxHeight = 'calc(100vh - 500px)'; // 为分页控件预留更多空间
-                tableContainer.style.height = 'auto';
-                
-                if (mainContent) {
-                    mainContent.style.overflow = 'hidden';
-                }
-            } else {
-                // 20条或更多时，允许滚动条
-                tableContainer.style.overflow = 'auto';
-                tableContainer.style.maxHeight = 'none';
-                tableContainer.style.height = 'auto';
-                
-                if (mainContent) {
-                    mainContent.style.overflow = 'auto';
+            // 选择最接近但不超过最佳显示量的分页大小
+            let selectedSize = 5; // 默认值，最小分页大小
+            for (let size of availableSizes) {
+                if (size <= optimalDataDisplay && size > selectedSize) {
+                    selectedSize = size;
                 }
             }
+            
+            console.log('可用的分页大小:', availableSizes);
+            console.log('最佳数据显示量:', optimalDataDisplay);
+            console.log('选择的分页大小:', selectedSize);
+            
+            pageSizeSelect.value = selectedSize.toString();
+            pageSize = selectedSize;
+            
+            // 使用智能判断是否需要滚动条
+            const needsScrollbar = shouldEnableScrollbar(selectedSize);
+            setScrollbarState(needsScrollbar, `页面初始化，分页大小: ${selectedSize}`);
+            
+            // 页面加载完成后调整表格容器高度
+            setTimeout(() => {
+                adjustTableContainerHeight();
+            }, 100);
             
             loadVMData(1);
             
@@ -489,29 +542,14 @@
                             pageSize = newPageSize;
                             currentPage = 1; // 重置到第一页
                             
-                            // 自动调整时，根据分页大小决定是否显示滚动条
-                            const tableContainer = document.querySelector('.table-responsive');
-                            const mainContent = document.querySelector('.col-md-9.col-lg-10');
+                            // 使用智能判断是否需要滚动条
+                            const needsScrollbar = shouldEnableScrollbar(newPageSize);
+                            setScrollbarState(needsScrollbar, `窗口大小变化，分页大小: ${newPageSize}`);
                             
-                            if (newPageSize < 20) {
-                                // 小分页时，无滚动条
-                                tableContainer.style.overflow = 'hidden';
-                                tableContainer.style.maxHeight = 'calc(100vh - 500px)'; // 为分页控件预留更多空间
-                                tableContainer.style.height = 'auto';
-                                
-                                if (mainContent) {
-                                    mainContent.style.overflow = 'hidden';
-                                }
-                            } else {
-                                // 20条或更多时，允许滚动条
-                                tableContainer.style.overflow = 'auto';
-                                tableContainer.style.maxHeight = 'none';
-                                tableContainer.style.height = 'auto';
-                                
-                                if (mainContent) {
-                                    mainContent.style.overflow = 'auto';
-                                }
-                            }
+                            // 监控表格容量变化
+                            setTimeout(() => {
+                                monitorTableCapacity();
+                            }, 100);
                             
                             loadVMData(1);
                         }
@@ -528,7 +566,7 @@
             const paginationArea = document.querySelector('.d-flex.justify-content-between');
             
             if (!cardBody || !tableHeader || !paginationArea) {
-                return 10; // 默认值，保守一些
+                return 5; // 默认值，最小分页大小
             }
             
             // 获取视口高度
@@ -552,12 +590,12 @@
             // 计算可以显示的行数
             const maxRows = Math.floor(availableHeight / estimatedRowHeight);
             
-            // 确保至少显示3行，最多显示30行（更保守）
-            const optimalPageSize = Math.max(3, Math.min(maxRows, 30));
+            // 确保至少显示5行，最多显示30行（更保守）
+            const optimalPageSize = Math.max(5, Math.min(maxRows, 30));
             
             // 如果计算出的值不在预设选项中，选择最接近的选项
-            const options = [10, 20, 50, 100];
-            let closestOption = 10; // 默认值，更保守
+            const options = [5, 10, 20, 50, 100];
+            let closestOption = 5; // 默认值，最小分页大小
             
             // 找到最接近的选项
             for (let i = 0; i < options.length; i++) {
@@ -572,7 +610,7 @@
             
             // 如果计算出的值太小，使用默认值
             if (optimalPageSize < 5) {
-                return 10;
+                return 5;
             }
             
             // 调试信息
@@ -583,7 +621,211 @@
             
             return closestOption;
         }
+        
+        // 获取当前表格数据展示区域的大小并计算最大显示数据量
+        function getTableDisplayCapacity() {
+            const tableContainer = document.querySelector('.table-responsive');
+            const tableContainerWrapper = document.querySelector('.table-container');
+            
+            if (!tableContainer || !tableContainerWrapper) {
+                console.log('无法找到表格容器');
+                return { maxRows: 5, containerHeight: 0, rowHeight: 52 };
+            }
+            
+            // 获取表格容器的实际尺寸
+            const containerRect = tableContainer.getBoundingClientRect();
+            const wrapperRect = tableContainerWrapper.getBoundingClientRect();
+            
+            // 计算表格头部高度
+            const thead = tableContainer.querySelector('thead');
+            const headerHeight = thead ? thead.offsetHeight : 50;
+            
+            // 计算可用数据区域高度
+            const totalContainerHeight = wrapperRect.height;
+            const availableDataHeight = totalContainerHeight - headerHeight - 20; // 预留一些边距
+            
+            // 计算每行数据的高度
+            const rowHeight = 52; // 预估每行高度
+            
+            // 计算最大可显示的数据行数
+            const maxRows = Math.floor(availableDataHeight / rowHeight);
+            
+            console.log('表格数据展示区域容量分析:', {
+                totalContainerHeight: totalContainerHeight,
+                headerHeight: headerHeight,
+                availableDataHeight: availableDataHeight,
+                rowHeight: rowHeight,
+                maxRows: maxRows,
+                containerRect: {
+                    width: containerRect.width,
+                    height: containerRect.height
+                },
+                wrapperRect: {
+                    width: wrapperRect.width,
+                    height: wrapperRect.height
+                }
+            });
+            
+            return {
+                maxRows: Math.max(1, maxRows),
+                containerHeight: totalContainerHeight,
+                rowHeight: rowHeight,
+                availableDataHeight: availableDataHeight
+            };
+        }
+        
+        // 智能计算当前界面能显示的最佳数据量
+        function calculateOptimalDataDisplay() {
+            // 获取当前表格数据展示区域的容量
+            const tableCapacity = getTableDisplayCapacity();
+            const maxVisibleRows = tableCapacity.maxRows;
+            
+            // 考虑分页控件的空间，预留一些空间给分页
+            const optimalRows = Math.max(5, maxVisibleRows - 1);
+            
+            // 确保不超过可用选项的最大值
+            const pageSizeSelect = document.getElementById('pageSizeSelect');
+            const availableSizes = Array.from(pageSizeSelect.options).map(opt => parseInt(opt.value));
+            const maxAvailableSize = Math.max(...availableSizes);
+            
+            const finalOptimalRows = Math.min(optimalRows, maxAvailableSize);
+            
+            console.log('智能计算最佳数据显示量:', {
+                tableCapacity: tableCapacity,
+                maxVisibleRows: maxVisibleRows,
+                optimalRows: optimalRows,
+                maxAvailableSize: maxAvailableSize,
+                finalOptimalRows: finalOptimalRows
+            });
+            
+            return finalOptimalRows;
+        }
 
+        // 判断是否需要启用滚动条
+        function shouldEnableScrollbar(pageSize) {
+            // 获取当前表格数据展示区域的容量
+            const tableCapacity = getTableDisplayCapacity();
+            const maxVisibleRows = tableCapacity.maxRows;
+            
+            // 减少容错空间，更充分地利用可用空间
+            const adjustedMaxRows = maxVisibleRows + 1; // 只增加1行的容错空间
+            
+            // 只有当明显超出时才启用滚动条
+            const needsScrollbar = pageSize > adjustedMaxRows && (pageSize - adjustedMaxRows) >= 1;
+            
+            console.log('判断是否需要启用滚动条:', {
+                pageSize: pageSize,
+                maxVisibleRows: maxVisibleRows,
+                adjustedMaxRows: adjustedMaxRows,
+                needsScrollbar: needsScrollbar,
+                difference: pageSize - adjustedMaxRows,
+                tableCapacity: tableCapacity
+            });
+            
+            // 在控制台显示详细的空间使用信息
+            if (pageSize === 5 || pageSize === 10 || pageSize === 20) {
+                console.log(`=== 分页大小为${pageSize}时的详细分析 ===`);
+                console.log('当前表格数据展示区域容量:', tableCapacity);
+                console.log('当前界面能显示的最大行数:', maxVisibleRows);
+                console.log('调整后的最大行数（含容错空间）:', adjustedMaxRows);
+                console.log('是否需要滚动条:', needsScrollbar);
+                console.log('超出调整后最大行数的数量:', pageSize - adjustedMaxRows);
+                console.log('================================');
+            }
+            
+            return needsScrollbar;
+        }
+        
+        // 统一设置滚动条状态
+        function setScrollbarState(needsScrollbar, context = '') {
+            const tableContainer = document.querySelector('.table-responsive');
+            const mainContent = document.querySelector('.col-md-9.col-lg-10');
+            
+            if (needsScrollbar) {
+                // 需要滚动条时，启用滚动 - 滚动条显示在表格数据区域内部
+                tableContainer.style.overflow = 'auto';
+                
+                // 调整表格容器高度以优化滚动条显示
+                adjustTableContainerHeight();
+                
+                // 确保外层容器不显示滚动条，让滚动条只显示在表格区域
+                if (mainContent) {
+                    mainContent.style.overflow = 'hidden';
+                }
+                
+                // 确保表格头部固定在顶部
+                const thead = tableContainer.querySelector('thead');
+                if (thead) {
+                    thead.style.position = 'sticky';
+                    thead.style.top = '0';
+                    thead.style.zIndex = '1';
+                }
+                
+                console.log(`启用滚动条 (${context}) - 滚动条显示在表格数据区域内部`);
+            } else {
+                // 不需要滚动条时，禁用滚动
+                tableContainer.style.overflow = 'visible';
+                tableContainer.style.maxHeight = 'none';
+                tableContainer.style.height = 'auto';
+                
+                if (mainContent) {
+                    mainContent.style.overflow = 'visible';
+                }
+                
+                // 恢复表格头部样式
+                const thead = tableContainer.querySelector('thead');
+                if (thead) {
+                    thead.style.position = '';
+                    thead.style.top = '';
+                    thead.style.zIndex = '';
+                }
+                
+                console.log(`禁用滚动条 (${context})`);
+            }
+        }
+        
+        // 调整表格容器高度以优化滚动条显示
+        function adjustTableContainerHeight() {
+            const tableContainer = document.querySelector('.table-responsive');
+            const tableContainerWrapper = document.querySelector('.table-container');
+            
+            if (!tableContainer || !tableContainerWrapper) return;
+            
+            // 计算最佳高度
+            const windowHeight = window.innerHeight;
+            const containerTop = tableContainer.getBoundingClientRect().top;
+            const optimalHeight = windowHeight - containerTop - 200; // 预留空间给分页控件等
+            
+            // 设置表格容器高度
+            tableContainer.style.maxHeight = `${Math.max(300, optimalHeight)}px`;
+            
+            console.log('调整表格容器高度:', {
+                windowHeight: windowHeight,
+                containerTop: containerTop,
+                optimalHeight: optimalHeight,
+                maxHeight: tableContainer.style.maxHeight
+            });
+        }
+        
+        // 监控表格容量变化并更新显示
+        function monitorTableCapacity() {
+            const tableCapacity = getTableDisplayCapacity();
+            const currentPageSize = pageSize;
+            
+            console.log('表格容量监控:', {
+                currentCapacity: tableCapacity.maxRows,
+                currentPageSize: currentPageSize,
+                needsScrollbar: currentPageSize > tableCapacity.maxRows,
+                remainingSpace: Math.max(0, tableCapacity.maxRows - currentPageSize)
+            });
+            
+            // 如果容量发生变化，重新评估滚动条状态
+            if (currentPageSize > tableCapacity.maxRows) {
+                const needsScrollbar = shouldEnableScrollbar(currentPageSize);
+                setScrollbarState(needsScrollbar, '容量监控触发');
+            }
+        }
+        
         // 重置为自动分页
         function resetToAuto() {
             isAutoCalculated = true;
@@ -592,29 +834,9 @@
             pageSize = autoPageSize;
             currentPage = 1;
             
-            // 自动模式下，根据分页大小决定是否显示滚动条
-            const tableContainer = document.querySelector('.table-responsive');
-            const mainContent = document.querySelector('.col-md-9.col-lg-10');
-            
-            if (autoPageSize < 20) {
-                // 小分页时，无滚动条
-                tableContainer.style.overflow = 'hidden';
-                tableContainer.style.maxHeight = 'calc(100vh - 500px)'; // 为分页控件预留更多空间
-                tableContainer.style.height = 'auto';
-                
-                if (mainContent) {
-                    mainContent.style.overflow = 'hidden';
-                }
-            } else {
-                // 20条或更多时，允许滚动条
-                tableContainer.style.overflow = 'auto';
-                tableContainer.style.maxHeight = 'none';
-                tableContainer.style.height = 'auto';
-                
-                if (mainContent) {
-                    mainContent.style.overflow = 'auto';
-                }
-            }
+            // 使用智能判断是否需要滚动条
+            const needsScrollbar = shouldEnableScrollbar(autoPageSize);
+            setScrollbarState(needsScrollbar, `重置为自动分页，分页大小: ${autoPageSize}`);
             
             loadVMData(1);
         }
@@ -635,6 +857,24 @@
                         updateVMStats(data.stats);
                         updateVMTableWithPagination(page, data.pagination);
                         updatePagination(page);
+                        
+                        // 数据加载完成后，重新检查滚动条状态
+                        setTimeout(() => {
+                            // 获取当前表格数据展示区域的容量
+                            const tableCapacity = getTableDisplayCapacity();
+                            console.log('数据加载完成后的表格容量分析:', tableCapacity);
+                            
+                            const needsScrollbar = shouldEnableScrollbar(pageSize);
+                            setScrollbarState(needsScrollbar, '数据加载完成后');
+                            
+                            // 显示容量分析结果
+                            console.log(`当前表格最多可显示 ${tableCapacity.maxRows} 条数据，分页大小为 ${pageSize} 条`);
+                            if (pageSize > tableCapacity.maxRows) {
+                                console.log(`数据超出显示区域，启用内部滚动条`);
+                            } else {
+                                console.log(`数据在显示区域内，无需滚动条`);
+                            }
+                        }, 100);
                     } else {
                         showError(data.message || '获取虚拟机信息失败');
                     }
@@ -815,36 +1055,35 @@
             currentPage = 1; // 重置到第一页
             isAutoCalculated = false; // 标记为手动选择
             
-            const tableContainer = document.querySelector('.table-responsive');
+            // 获取当前表格数据展示区域的容量
+            const tableCapacity = getTableDisplayCapacity();
+            console.log('分页大小改变时的表格容量分析:', tableCapacity);
             
-            // 如果是手动选择，允许滚动条显示所有数据
-            if (newPageSize >= 20) {
-                // 手动选择20条或更多时，允许滚动
-                tableContainer.style.overflow = 'auto';
-                tableContainer.style.maxHeight = 'none';
-                tableContainer.style.height = 'auto';
-                
-                // 确保父容器也允许滚动
-                const mainContent = document.querySelector('.col-md-9.col-lg-10');
-                if (mainContent) {
-                    mainContent.style.overflow = 'auto';
-                }
-                
-                console.log('启用滚动条，分页大小:', newPageSize);
+            // 显示智能建议
+            const optimalDisplay = calculateOptimalDataDisplay();
+            
+            console.log(`=== 分页大小改变分析 ===`);
+            console.log(`当前表格数据展示区域容量: ${tableCapacity.maxRows} 条`);
+            console.log(`当前界面最佳显示量: ${optimalDisplay} 条`);
+            console.log(`您选择的分页大小: ${newPageSize} 条`);
+            
+            if (newPageSize > tableCapacity.maxRows) {
+                console.log(`⚠️ 数据将超出显示区域，将启用内部滚动条`);
+                console.log(`超出数量: ${newPageSize - tableCapacity.maxRows} 条`);
             } else {
-                // 小分页时，保持无滚动条
-                tableContainer.style.overflow = 'hidden';
-                tableContainer.style.maxHeight = 'calc(100vh - 500px)'; // 为分页控件预留更多空间
-                tableContainer.style.height = 'auto';
-                
-                // 小分页时，父容器也隐藏滚动条
-                const mainContent = document.querySelector('.col-md-9.col-lg-10');
-                if (mainContent) {
-                    mainContent.style.overflow = 'hidden';
-                }
-                
-                console.log('禁用滚动条，分页大小:', newPageSize);
+                console.log(`✅ 数据在显示区域内，无需滚动条`);
+                console.log(`剩余空间: ${tableCapacity.maxRows - newPageSize} 条`);
             }
+            console.log(`================================`);
+            
+            // 使用智能判断是否需要滚动条
+            const needsScrollbar = shouldEnableScrollbar(newPageSize);
+            setScrollbarState(needsScrollbar, `分页大小改变，分页大小: ${newPageSize}`);
+            
+            // 监控表格容量变化
+            setTimeout(() => {
+                monitorTableCapacity();
+            }, 100);
             
             loadVMData(1);
         }

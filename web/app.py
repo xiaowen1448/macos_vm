@@ -1697,6 +1697,404 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
 
+@app.route('/api/scripts')
+@login_required
+def api_scripts():
+    """获取脚本文件列表（支持分页）"""
+    logger.info("收到获取脚本列表请求")
+    try:
+        # 获取分页参数
+        page = request.args.get('page', 1, type=int)
+        page_size = request.args.get('page_size', 5, type=int)  # 修改默认分页大小为5
+        
+        logger.info(f"收到分页请求: page={page}, page_size={page_size}")
+        logger.info(f"请求参数: {dict(request.args)}")
+        
+        scripts_dir = r'D:\macos_vm\macos_sh'
+        scripts = []
+        
+        if os.path.exists(scripts_dir):
+            for filename in os.listdir(scripts_dir):
+                if filename.endswith('.sh'):
+                    file_path = os.path.join(scripts_dir, filename)
+                    try:
+                        # 获取文件信息
+                        stat = os.stat(file_path)
+                        size = stat.st_size
+                        modified_time = datetime.datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+                        
+                        # 格式化文件大小
+                        if size < 1024:
+                            size_str = f"{size}B"
+                        elif size < 1024 * 1024:
+                            size_str = f"{size // 1024}KB"
+                        else:
+                            size_str = f"{size // (1024 * 1024)}MB"
+                        
+                        # 尝试读取脚本备注（从同名的.txt文件）
+                        note_file = file_path.replace('.sh', '.txt')
+                        note = ""
+                        if os.path.exists(note_file):
+                            try:
+                                with open(note_file, 'r', encoding='utf-8') as f:
+                                    note = f.read().strip()
+                            except Exception as e:
+                                logger.warning(f"读取备注文件失败 {note_file}: {str(e)}")
+                        
+                        scripts.append({
+                            'name': filename,
+                            'size': size_str,
+                            'modified_time': modified_time,
+                            'path': file_path,
+                            'note': note
+                        })
+                        
+                        logger.debug(f"找到脚本文件: {filename}, 大小: {size_str}, 修改时间: {modified_time}")
+                        
+                    except Exception as e:
+                        logger.error(f"处理脚本文件 {filename} 时出错: {str(e)}")
+                        continue
+            
+            # 按文件名排序
+            scripts.sort(key=lambda x: x['name'])
+            
+            # 计算分页信息
+            total_count = len(scripts)
+            total_pages = (total_count + page_size - 1) // page_size
+            start_index = (page - 1) * page_size
+            end_index = min(start_index + page_size, total_count)
+            
+            # 获取当前页的数据
+            current_page_scripts = scripts[start_index:end_index]
+            
+            # 确保end_index反映实际返回的数据数量
+            actual_end_index = start_index + len(current_page_scripts)
+            
+            logger.info(f"分页计算详情: total_count={total_count}, page_size={page_size}, page={page}")
+            logger.info(f"分页索引: start_index={start_index}, end_index={end_index}, actual_end_index={actual_end_index}")
+            logger.info(f"当前页脚本数量: {len(current_page_scripts)}")
+            logger.info(f"脚本文件名列表: {[script['name'] for script in current_page_scripts]}")
+            logger.info(f"成功获取 {len(current_page_scripts)} 个脚本文件（第 {page} 页，共 {total_pages} 页）")
+            logger.info(f"返回的pagination数据: {{'current_page': {page}, 'page_size': {page_size}, 'total_count': {total_count}, 'total_pages': {total_pages}, 'start_index': {start_index}, 'end_index': {actual_end_index}}}")
+            return jsonify({
+                'success': True,
+                'scripts': current_page_scripts,
+                'pagination': {
+                    'current_page': page,
+                    'page_size': page_size,
+                    'total_count': total_count,
+                    'total_pages': total_pages,
+                    'start_index': start_index,
+                    'end_index': actual_end_index
+                }
+            })
+        else:
+            logger.warning(f"脚本目录不存在: {scripts_dir}")
+            return jsonify({
+                'success': False,
+                'message': f'脚本目录不存在: {scripts_dir}'
+            })
+            
+    except Exception as e:
+        logger.error(f"获取脚本列表失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取脚本列表失败: {str(e)}'
+        })
+
+@app.route('/api/script/add', methods=['POST'])
+@login_required
+def api_add_script():
+    """新增脚本内容和备注"""
+    logger.info("收到新增脚本请求")
+    try:
+        data = request.get_json()
+        script_name = data.get('script_name')
+        content = data.get('content')
+        note = data.get('note', '')
+        
+        if not script_name or content is None:
+            return jsonify({
+                'success': False,
+                'message': '缺少必要参数'
+            })
+        
+        # 检查文件名是否以.sh结尾
+        if not script_name.endswith('.sh'):
+            return jsonify({
+                'success': False,
+                'message': '脚本文件名必须以.sh结尾'
+            })
+        
+        # 检查是否包含中文字符
+        import re
+        if re.search(r'[\u4e00-\u9fa5]', script_name):
+            return jsonify({
+                'success': False,
+                'message': '脚本文件名不能包含中文字符'
+            })
+        
+        # 检查文件名是否只包含合法字符（字母、数字、下划线、连字符、点）
+        if not re.match(r'^[a-zA-Z0-9_.-]+\.sh$', script_name):
+            return jsonify({
+                'success': False,
+                'message': '脚本文件名只能包含字母、数字、下划线、连字符和点，且必须以.sh结尾'
+            })
+        
+        scripts_dir = r'D:\macos_vm\macos_sh'
+        script_path = os.path.join(scripts_dir, script_name)
+        note_path = script_path.replace('.sh', '.txt')
+        
+        # 检查文件是否已存在
+        if os.path.exists(script_path):
+            return jsonify({
+                'success': False,
+                'message': f'脚本文件已存在: {script_name}'
+            })
+        
+        # 保存脚本内容
+        try:
+            with open(script_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            logger.info(f"脚本内容已创建: {script_name}")
+        except Exception as e:
+            logger.error(f"创建脚本内容失败: {str(e)}")
+            return jsonify({
+                'success': False,
+                'message': f'创建脚本内容失败: {str(e)}'
+            })
+        
+        # 保存备注
+        try:
+            with open(note_path, 'w', encoding='utf-8') as f:
+                f.write(note)
+            logger.info(f"脚本备注已创建: {script_name}")
+        except Exception as e:
+            logger.error(f"创建脚本备注失败: {str(e)}")
+            return jsonify({
+                'success': False,
+                'message': f'创建脚本备注失败: {str(e)}'
+            })
+        
+        return jsonify({
+            'success': True,
+            'message': '脚本新增成功'
+        })
+        
+    except Exception as e:
+        logger.error(f"新增脚本失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'新增脚本失败: {str(e)}'
+        })
+
+@app.route('/api/script/edit', methods=['POST'])
+@login_required
+def api_edit_script():
+    """编辑脚本内容和备注"""
+    logger.info("收到编辑脚本请求")
+    try:
+        data = request.get_json()
+        script_name = data.get('script_name')
+        content = data.get('content')
+        note = data.get('note', '')
+        
+        if not script_name or content is None:
+            return jsonify({
+                'success': False,
+                'message': '缺少必要参数'
+            })
+        
+        scripts_dir = r'D:\macos_vm\macos_sh'
+        script_path = os.path.join(scripts_dir, script_name)
+        note_path = script_path.replace('.sh', '.txt')
+        
+        if not os.path.exists(script_path):
+            return jsonify({
+                'success': False,
+                'message': f'脚本文件不存在: {script_name}'
+            })
+        
+        # 保存脚本内容
+        try:
+            with open(script_path, 'w', encoding='utf-8') as f:
+                f.write(content)
+            logger.info(f"脚本内容已保存: {script_name}")
+        except Exception as e:
+            logger.error(f"保存脚本内容失败: {str(e)}")
+            return jsonify({
+                'success': False,
+                'message': f'保存脚本内容失败: {str(e)}'
+            })
+        
+        # 保存备注
+        try:
+            with open(note_path, 'w', encoding='utf-8') as f:
+                f.write(note)
+            logger.info(f"脚本备注已保存: {script_name}")
+        except Exception as e:
+            logger.error(f"保存脚本备注失败: {str(e)}")
+            return jsonify({
+                'success': False,
+                'message': f'保存脚本备注失败: {str(e)}'
+            })
+        
+        return jsonify({
+            'success': True,
+            'message': '脚本编辑成功'
+        })
+        
+    except Exception as e:
+        logger.error(f"编辑脚本失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'编辑脚本失败: {str(e)}'
+        })
+
+@app.route('/api/script/content/<script_name>')
+@login_required
+def api_get_script_content(script_name):
+    """获取脚本内容"""
+    logger.info(f"获取脚本内容: {script_name}")
+    try:
+        scripts_dir = r'D:\macos_vm\macos_sh'
+        script_path = os.path.join(scripts_dir, script_name)
+        note_path = script_path.replace('.sh', '.txt')
+        
+        if not os.path.exists(script_path):
+            return jsonify({
+                'success': False,
+                'message': f'脚本文件不存在: {script_name}'
+            })
+        
+        # 读取脚本内容
+        try:
+            with open(script_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+        except Exception as e:
+            logger.error(f"读取脚本内容失败: {str(e)}")
+            return jsonify({
+                'success': False,
+                'message': f'读取脚本内容失败: {str(e)}'
+            })
+        
+        # 读取备注
+        note = ""
+        if os.path.exists(note_path):
+            try:
+                with open(note_path, 'r', encoding='utf-8') as f:
+                    note = f.read().strip()
+            except Exception as e:
+                logger.warning(f"读取备注文件失败: {str(e)}")
+        
+        return jsonify({
+            'success': True,
+            'content': content,
+            'note': note
+        })
+        
+    except Exception as e:
+        logger.error(f"获取脚本内容失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取脚本内容失败: {str(e)}'
+        })
+
+@app.route('/api/script/send', methods=['POST'])
+@login_required
+def api_send_script():
+    """发送脚本到虚拟机"""
+    logger.info("收到发送脚本请求")
+    try:
+        data = request.get_json()
+        script_name = data.get('script_name')
+        vm_names = data.get('vm_names', [])
+        
+        if not script_name or not vm_names:
+            return jsonify({
+                'success': False,
+                'message': '缺少必要参数'
+            })
+        
+        scripts_dir = r'D:\macos_vm\macos_sh'
+        script_path = os.path.join(scripts_dir, script_name)
+        
+        if not os.path.exists(script_path):
+            return jsonify({
+                'success': False,
+                'message': f'脚本文件不存在: {script_name}'
+            })
+        
+        # 检查虚拟机在线状态
+        online_vms = []
+        for vm_name in vm_names:
+            online_status = get_vm_online_status(vm_name)
+            if online_status['status'] == 'online':
+                online_vms.append({
+                    'name': vm_name,
+                    'ip': online_status['ip']
+                })
+        
+        if not online_vms:
+            return jsonify({
+                'success': False,
+                'message': '没有可用的在线虚拟机'
+            })
+        
+        # 发送脚本到每个在线虚拟机
+        results = []
+        for vm in online_vms:
+            try:
+                # 使用scp发送脚本
+                import subprocess
+                scp_cmd = [
+                    'scp',
+                    '-o', 'StrictHostKeyChecking=no',
+                    script_path,
+                    f"wx@{vm['ip']}:/Users/wx/{script_name}"
+                ]
+                
+                logger.debug(f"执行SCP命令: {' '.join(scp_cmd)}")
+                result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=30)
+                
+                if result.returncode == 0:
+                    logger.info(f"脚本发送成功到虚拟机 {vm['name']} ({vm['ip']})")
+                    results.append({
+                        'vm_name': vm['name'],
+                        'ip': vm['ip'],
+                        'status': 'success',
+                        'message': '发送成功'
+                    })
+                else:
+                    logger.error(f"脚本发送失败到虚拟机 {vm['name']}: {result.stderr}")
+                    results.append({
+                        'vm_name': vm['name'],
+                        'ip': vm['ip'],
+                        'status': 'failed',
+                        'message': f'发送失败: {result.stderr}'
+                    })
+                    
+            except Exception as e:
+                logger.error(f"发送脚本到虚拟机 {vm['name']} 时出错: {str(e)}")
+                results.append({
+                    'vm_name': vm['name'],
+                    'ip': vm['ip'],
+                    'status': 'error',
+                    'message': f'发送出错: {str(e)}'
+                })
+        
+        return jsonify({
+            'success': True,
+            'results': results
+        })
+        
+    except Exception as e:
+        logger.error(f"发送脚本失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'发送脚本失败: {str(e)}'
+        })
+
 @app.route('/api/ssh_trust', methods=['POST'])
 @login_required
 def api_ssh_trust():

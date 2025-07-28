@@ -60,6 +60,70 @@
         }
         html, body { width: 100vw; overflow-x: hidden !important; }
         .col-md-9.col-lg-10 { width: calc(100vw - 280px); min-width: 0; margin: 0; height: calc(100vh - 80px); overflow-y: auto; overflow-x: hidden; }
+        
+
+        
+        .table th {
+            background-color: #f8f9fa;
+            border-bottom: 2px solid #dee2e6;
+            font-weight: 600;
+            color: #495057;
+        }
+        
+        .table td {
+            vertical-align: middle;
+        }
+        
+        .btn-group-sm .btn {
+            margin-right: 2px;
+        }
+        
+        /* 表格容器样式 - 确保滚动条显示在数据区域内部 */
+        .table-responsive {
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+            background: white;
+        }
+        
+        /* 自定义滚动条样式 */
+        .table-responsive::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .table-responsive::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        
+        .table-responsive::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+        
+        .table-responsive::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+        
+        /* 确保表格容器有合适的高度和边框 */
+        .table-container {
+            position: relative;
+            background: white;
+            border-radius: 0.375rem;
+            overflow: hidden;
+        }
+        
+        /* 确保表格头部固定在顶部 */
+        .table-responsive thead th {
+            position: sticky;
+            top: 0;
+            background-color: #f8f9fa;
+            z-index: 1;
+        }
+        
+        /* 表格行样式优化 */
+        .table-responsive tbody tr:hover {
+            background-color: #f8f9fa;
+        }
     </style>
 </head>
 <body>
@@ -205,9 +269,14 @@
                             <h4 class="mb-0">
                                 <i class="fas fa-code me-2"></i>虚拟机脚本管理
                             </h4>
-                            <button class="btn btn-primary" onclick="refreshScripts()">
-                                <i class="fas fa-sync-alt me-2"></i>刷新脚本
-                            </button>
+                            <div>
+                                <button class="btn btn-success me-2" onclick="addScript()">
+                                    <i class="fas fa-plus me-2"></i>添加脚本
+                                </button>
+                                <button class="btn btn-primary" onclick="refreshScripts()" title="刷新数据">
+                                    <i class="fas fa-sync-alt me-2"></i>刷新数据
+                                </button>
+                            </div>
                         </div>
                     </div>
                     <div class="card-body">
@@ -216,40 +285,56 @@
                                 <h5>脚本管理</h5>
                                 <p class="text-muted">管理虚拟机相关的脚本文件，包括安装脚本、配置脚本、维护脚本等。</p>
                                 
-                                <div class="table-responsive">
-                                    <table class="table table-hover">
-                                        <thead>
-                                            <tr>
-                                                <th>脚本名称</th>
-                                                <th>类型</th>
-                                                <th>大小</th>
-                                                <th>修改时间</th>
-                                                <th>操作</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <tr>
-                                                <td>install_macos.sh</td>
-                                                <td><span class="badge bg-primary">安装脚本</span></td>
-                                                <td>2.5KB</td>
-                                                <td>2024-12-01 10:30:00</td>
-                                                <td>
-                                                    <button class="btn btn-sm btn-outline-primary">编辑</button>
-                                                    <button class="btn btn-sm btn-outline-success">执行</button>
-                                                </td>
-                                            </tr>
-                                            <tr>
-                                                <td>config_network.sh</td>
-                                                <td><span class="badge bg-info">配置脚本</span></td>
-                                                <td>1.8KB</td>
-                                                <td>2024-12-01 11:15:00</td>
-                                                <td>
-                                                    <button class="btn btn-sm btn-outline-primary">编辑</button>
-                                                    <button class="btn btn-sm btn-outline-success">执行</button>
-                                                </td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
+
+                                
+                                <div class="table-container">
+                                    <div class="table-responsive">
+                                        <table class="table table-hover mb-0">
+                                            <thead>
+                                                <tr>
+                                                    <th>脚本名称</th>
+                                                    <th>脚本备注</th>
+                                                    <th>大小</th>
+                                                    <th>修改时间</th>
+                                                    <th>操作</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="scriptTableBody">
+                                                <tr>
+                                                    <td colspan="5" class="text-center text-muted">
+                                                        <i class="fas fa-spinner fa-spin me-2"></i>加载中...
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                                
+                                <!-- 分页控件 -->
+                                <div class="d-flex justify-content-between align-items-center mt-3">
+                                    <div class="d-flex align-items-center">
+                                        <div class="text-muted me-3">
+                                            显示 <span id="startRecord">0</span> - <span id="endRecord">0</span> 条，共 <span id="totalRecords">0</span> 条记录
+                                        </div>
+                                        <div class="d-flex align-items-center">
+                                            <label class="form-label mb-0 me-2">每页显示:</label>
+                                            <select class="form-select form-select-sm" id="pageSizeSelect" style="width: auto;" onchange="changePageSize()" oninput="console.log('分页大小选择器值变化:', this.value)">
+                                                <option value="5">5</option>
+                                                <option value="10">10</option>
+                                                <option value="20">20</option>
+                                                <option value="50">50</option>
+                                                <option value="100">100</option>
+                                            </select>
+                                            <button class="btn btn-outline-secondary btn-sm ms-2" onclick="resetToAuto()" title="重置为自动分页">
+                                                <i class="fas fa-magic"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <nav aria-label="脚本列表分页">
+                                        <ul class="pagination pagination-sm mb-0" id="pagination">
+                                            <!-- 分页按钮将在这里动态生成 -->
+                                        </ul>
+                                    </nav>
                                 </div>
                             </div>
                         </div>
@@ -258,9 +343,89 @@
             </div>
         </div>
     </div>
+    
+    <!-- 编辑脚本弹窗 -->
+    <div class="modal fade" id="editScriptModal" tabindex="-1" aria-labelledby="editScriptModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editScriptModalLabel">编辑脚本</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3" id="scriptNameGroup" style="display: none;">
+                        <label for="scriptName" class="form-label">脚本名称 <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="scriptName" placeholder="请输入脚本名称（以.sh结尾，不能包含中文）" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="scriptNote" class="form-label">脚本备注</label>
+                        <textarea class="form-control" id="scriptNote" rows="3" placeholder="请输入脚本备注..."></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="scriptContent" class="form-label">脚本内容</label>
+                        <textarea class="form-control" id="scriptContent" rows="8" placeholder="请输入脚本内容..." style="font-family: 'Courier New', monospace;"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" id="saveScriptBtn" onclick="saveScript()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 发送脚本弹窗 -->
+    <div class="modal fade" id="sendScriptModal" tabindex="-1" aria-labelledby="sendScriptModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="sendScriptModalLabel">发送脚本到虚拟机</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">选择目标虚拟机（已在线的虚拟机）</label>
+                        <div id="vmList" class="border rounded p-3" style="max-height: 300px; overflow-y: auto;">
+                            <div class="text-center text-muted">
+                                <i class="fas fa-spinner fa-spin me-2"></i>加载虚拟机列表...
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="selectAllVMs()">
+                            <i class="fas fa-check-square me-1"></i>全选
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm ms-2" onclick="deselectAllVMs()">
+                            <i class="fas fa-square me-1"></i>取消全选
+                        </button>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="confirmSendScript()">确认发送</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // 弹窗关闭时重置脚本名称输入框
+        document.getElementById('editScriptModal').addEventListener('hidden.bs.modal', function () {
+            document.getElementById('scriptNameGroup').style.display = 'none';
+        });
+
+        // 脚本名称输入验证 - 防止输入中文字符
+        document.getElementById('scriptName').addEventListener('input', function(e) {
+            const value = e.target.value;
+            // 移除中文字符
+            const filteredValue = value.replace(/[\u4e00-\u9fa5]/g, '');
+            if (value !== filteredValue) {
+                e.target.value = filteredValue;
+                alert('脚本名称不能包含中文字符');
+            }
+        });
+
         // 菜单处理函数
         function handleCloneClick() {
             ensureMenuExpanded('collapseVM', 'collapseVM');
@@ -333,9 +498,959 @@
             event.target.classList.add('active');
         }
 
+        // 分页相关变量
+        let currentPage = 1;
+        let pageSize = 5; // 修改默认分页大小为5
+        let totalScripts = []; // 存储所有脚本数据
+        let totalPages = 0;
+        let isAutoCalculated = true; // 标记是否为自动计算的分页大小
+        
+        // 页面加载时获取脚本列表
+        document.addEventListener('DOMContentLoaded', function() {
+            // 智能计算最佳数据显示量
+            const optimalDataDisplay = calculateOptimalDataDisplay();
+            console.log('页面加载时计算的最佳数据显示量:', optimalDataDisplay);
+            
+            // 确保分页大小在可用选项中，优先选择能充分利用空间的大小
+            const pageSizeSelect = document.getElementById('pageSizeSelect');
+            const availableSizes = Array.from(pageSizeSelect.options).map(opt => parseInt(opt.value));
+            
+            // 选择最接近但不超过最佳显示量的分页大小
+            let selectedSize = 5; // 默认值
+            for (let size of availableSizes) {
+                if (size <= optimalDataDisplay && size > selectedSize) {
+                    selectedSize = size;
+                }
+            }
+            
+            console.log('可用的分页大小:', availableSizes);
+            console.log('最佳数据显示量:', optimalDataDisplay);
+            console.log('选择的分页大小:', selectedSize);
+            
+            pageSizeSelect.value = selectedSize.toString();
+            pageSize = selectedSize;
+            
+            // 自动模式下，根据分页大小智能决定是否显示滚动条
+            const tableContainer = document.querySelector('.table-responsive');
+            const mainContent = document.querySelector('.col-md-9.col-lg-10');
+            
+            // 使用智能判断是否需要滚动条
+            const needsScrollbar = shouldEnableScrollbar(selectedSize);
+            setScrollbarState(needsScrollbar, `页面初始化，分页大小: ${selectedSize}`);
+            
+            // 页面加载完成后调整表格容器高度
+            setTimeout(() => {
+                adjustTableContainerHeight();
+            }, 100);
+            
+            loadScripts(1);
+            
+            // 监听窗口大小变化，自动调整分页大小
+            let resizeTimeout;
+            window.addEventListener('resize', function() {
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(function() {
+                    // 只有在自动模式下才自动调整
+                    if (isAutoCalculated) {
+                        const newPageSize = calculateOptimalPageSize();
+                        if (newPageSize !== pageSize) {
+                            document.getElementById('pageSizeSelect').value = newPageSize.toString();
+                            pageSize = newPageSize;
+                            currentPage = 1; // 重置到第一页
+                            
+                            // 自动调整时，根据分页大小智能决定是否显示滚动条
+                            const tableContainer = document.querySelector('.table-responsive');
+                            const mainContent = document.querySelector('.col-md-9.col-lg-10');
+                            
+                            // 使用智能判断是否需要滚动条
+                            const needsScrollbar = shouldEnableScrollbar(newPageSize);
+                            setScrollbarState(needsScrollbar, `窗口大小变化，分页大小: ${newPageSize}`);
+                            
+                            // 监控表格容量变化
+                            setTimeout(() => {
+                                monitorTableCapacity();
+                            }, 100);
+                            
+                            loadScripts(1);
+                        }
+                    }
+                }, 300);
+            });
+        });
+        
+        function loadScripts(page = 1) {
+            console.log(`加载脚本列表... (第 ${page} 页，每页 ${pageSize} 条)`);
+            console.log(`全局pageSize变量值: ${pageSize}`);
+            console.log(`请求URL: /api/scripts?page=${page}&page_size=${pageSize}`);
+            console.log(`当前分页选择器值: ${document.getElementById('pageSizeSelect').value}`);
+            console.log(`分页选择器是否与全局变量一致: ${document.getElementById('pageSizeSelect').value == pageSize}`);
+            
+            // 显示加载状态
+            const tbody = document.getElementById('scriptTableBody');
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted"><i class="fas fa-spinner fa-spin me-2"></i>加载中...</td></tr>';
+            
+            const requestUrl = `/api/scripts?page=${page}&page_size=${pageSize}&_t=${Date.now()}`;
+            console.log(`发送请求: ${requestUrl}`);
+            fetch(requestUrl)
+                .then(response => {
+                    console.log('API响应状态:', response.status);
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('API响应数据:', data);
+                    if (data.success) {
+                        console.log('更新表格数据:', {
+                            page: page,
+                            pagination: data.pagination,
+                            scriptsCount: data.scripts.length
+                        });
+                        
+                        // 存储分页信息
+                        totalPages = data.pagination.total_pages;
+                        currentPage = page;
+                        
+                        console.log('分页数据存储:', {
+                            totalPages: totalPages,
+                            currentPage: currentPage,
+                            scriptsCount: data.scripts.length,
+                            pagination: data.pagination
+                        });
+                        
+                        updateScriptTableWithPagination(page, data.pagination, data.scripts);
+                        
+                        // 数据加载完成后，重新检查滚动条状态
+                        setTimeout(() => {
+                            // 先禁用滚动条，让内容自然展开
+                            const tableContainer = document.querySelector('.table-responsive');
+                            const mainContent = document.querySelector('.col-md-9.col-lg-10');
+                            
+                            tableContainer.style.overflow = 'visible';
+                            tableContainer.style.maxHeight = 'none';
+                            if (mainContent) mainContent.style.overflow = 'visible';
+                            
+                            // 等待内容完全展开后再判断
+                            setTimeout(() => {
+                                // 获取当前表格数据展示区域的容量
+                                const tableCapacity = getTableDisplayCapacity();
+                                console.log('数据加载完成后的表格容量分析:', tableCapacity);
+                                
+                                const needsScrollbar = shouldEnableScrollbar(pageSize);
+                                setScrollbarState(needsScrollbar, '数据加载完成后');
+                                
+                                // 显示容量分析结果
+                                console.log(`当前表格最多可显示 ${tableCapacity.maxRows} 条数据，分页大小为 ${pageSize} 条`);
+                                if (pageSize > tableCapacity.maxRows) {
+                                    console.log(`数据超出显示区域，启用内部滚动条`);
+                                } else {
+                                    console.log(`数据在显示区域内，无需滚动条`);
+                                }
+                            }, 50);
+                        }, 100);
+                    } else {
+                        console.error('加载脚本失败:', data.message);
+                        showError('加载脚本失败: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('加载脚本出错:', error);
+                    showError('加载脚本出错: ' + error.message);
+                });
+        }
+        
+        function updateScriptTableWithPagination(page, pagination = null, scripts = []) {
+            const tbody = document.getElementById('scriptTableBody');
+            tbody.innerHTML = '';
+            
+            console.log('更新脚本表格:', { page, pagination, scriptsCount: scripts.length });
+            
+            if (!pagination || pagination.total_count === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">暂无脚本文件</td></tr>';
+                // 清空分页信息
+                document.getElementById('startRecord').textContent = '0';
+                document.getElementById('endRecord').textContent = '0';
+                document.getElementById('totalRecords').textContent = '0';
+                document.getElementById('pagination').innerHTML = '';
+                return;
+            }
+            
+            // 更新记录显示信息 - 使用实际显示的记录数量
+            const actualStart = pagination.start_index + 1;
+            const actualEnd = pagination.start_index + scripts.length;
+            document.getElementById('startRecord').textContent = actualStart;
+            document.getElementById('endRecord').textContent = actualEnd;
+            document.getElementById('totalRecords').textContent = pagination.total_count;
+            
+            console.log('分页显示信息更新:', {
+                actualStart: actualStart,
+                actualEnd: actualEnd,
+                scriptsLength: scripts.length,
+                paginationStart: pagination.start_index,
+                paginationEnd: pagination.end_index,
+                totalCount: pagination.total_count
+            });
+            
+            console.log('更新分页信息:', {
+                start: pagination.start_index + 1,
+                end: pagination.end_index,
+                total: pagination.total_count,
+                pageSize: pageSize
+            });
+            
+            // 直接使用传入的脚本数据
+            scripts.forEach(script => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><strong>${script.name}</strong></td>
+                    <td>${script.note || '<span class="text-muted">无备注</span>'}</td>
+                    <td>${script.size}</td>
+                    <td>${script.modified_time}</td>
+                    <td>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-primary" title="编辑脚本" onclick="editScript('${script.name}')">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-outline-info" title="发送脚本" onclick="sendScript('${script.name}')">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+            
+            // 更新分页控件
+            updatePagination(page);
+        }
+        
         function refreshScripts() {
-            // 刷新脚本列表的逻辑
-            console.log('刷新脚本列表');
+            console.log('刷新脚本数据...');
+            
+            // 显示加载状态
+            const tbody = document.getElementById('scriptTableBody');
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted"><i class="fas fa-spinner fa-spin me-2"></i>刷新中...</td></tr>';
+            
+            // 重置分页信息
+            document.getElementById('startRecord').textContent = '0';
+            document.getElementById('endRecord').textContent = '0';
+            document.getElementById('totalRecords').textContent = '0';
+            
+            // 清空分页控件
+            document.getElementById('pagination').innerHTML = '';
+            
+            // 异步重新加载当前页数据
+            loadScripts(currentPage);
+        }
+        
+        function addScript() {
+            console.log('添加脚本');
+            
+            // 清空表单
+            document.getElementById('scriptName').value = '';
+            document.getElementById('scriptNote').value = '';
+            document.getElementById('scriptContent').value = '';
+            
+            // 显示脚本名称输入框
+            document.getElementById('scriptNameGroup').style.display = 'block';
+            
+            // 更新弹窗标题和按钮文本
+            document.getElementById('editScriptModalLabel').textContent = '脚本新增';
+            document.getElementById('saveScriptBtn').textContent = '新增';
+            
+            // 显示弹窗
+            const modal = new bootstrap.Modal(document.getElementById('editScriptModal'));
+            modal.show();
+        }
+        
+        let currentScriptName = '';
+        let currentVMs = [];
+        
+        function editScript(scriptName) {
+            console.log('编辑脚本:', scriptName);
+            currentScriptName = scriptName;
+            
+            // 获取脚本内容
+            fetch(`/api/script/content/${scriptName}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('scriptContent').value = data.content;
+                        document.getElementById('scriptNote').value = data.note || '';
+                        
+                        // 隐藏脚本名称输入框
+                        document.getElementById('scriptNameGroup').style.display = 'none';
+                        
+                        // 更新弹窗标题和按钮文本
+                        document.getElementById('editScriptModalLabel').textContent = '编辑脚本';
+                        document.getElementById('saveScriptBtn').textContent = '保存';
+                        
+                        // 显示弹窗
+                        const modal = new bootstrap.Modal(document.getElementById('editScriptModal'));
+                        modal.show();
+                    } else {
+                        alert('获取脚本内容失败: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('获取脚本内容出错:', error);
+                    alert('获取脚本内容出错: ' + error.message);
+                });
+        }
+        
+        function saveScript() {
+            const content = document.getElementById('scriptContent').value;
+            const note = document.getElementById('scriptNote').value;
+            const modalTitle = document.getElementById('editScriptModalLabel').textContent;
+            
+            if (!content.trim()) {
+                alert('脚本内容不能为空');
+                return;
+            }
+            
+            // 判断是新增还是编辑
+            if (modalTitle === '脚本新增') {
+                // 新增脚本
+                const scriptName = document.getElementById('scriptName').value.trim();
+                if (!scriptName) {
+                    alert('脚本名称为必填项，请输入脚本名称');
+                    document.getElementById('scriptName').focus();
+                    return;
+                }
+                
+                // 检查是否包含中文字符
+                if (/[\u4e00-\u9fa5]/.test(scriptName)) {
+                    alert('脚本名称不能包含中文字符');
+                    document.getElementById('scriptName').focus();
+                    return;
+                }
+                
+                // 检查文件名格式
+                if (!scriptName.endsWith('.sh')) {
+                    alert('脚本文件名必须以.sh结尾');
+                    document.getElementById('scriptName').focus();
+                    return;
+                }
+                
+                // 检查文件名是否只包含合法字符（字母、数字、下划线、连字符、点）
+                if (!/^[a-zA-Z0-9_.-]+\.sh$/.test(scriptName)) {
+                    alert('脚本名称只能包含字母、数字、下划线、连字符和点，且必须以.sh结尾');
+                    document.getElementById('scriptName').focus();
+                    return;
+                }
+                
+                fetch('/api/script/add', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        script_name: scriptName,
+                        content: content,
+                        note: note
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('脚本新增成功');
+                        // 关闭弹窗
+                        const modal = bootstrap.Modal.getInstance(document.getElementById('editScriptModal'));
+                        modal.hide();
+                        // 刷新脚本列表
+                        loadScripts(currentPage);
+                    } else {
+                        alert('新增失败: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('新增脚本出错:', error);
+                    alert('新增脚本出错: ' + error.message);
+                });
+            } else {
+                // 编辑脚本
+                fetch('/api/script/edit', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        script_name: currentScriptName,
+                        content: content,
+                        note: note
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('脚本保存成功');
+                        // 关闭弹窗
+                        const modal = bootstrap.Modal.getInstance(document.getElementById('editScriptModal'));
+                        modal.hide();
+                        // 刷新脚本列表
+                        loadScripts(currentPage);
+                    } else {
+                        alert('保存失败: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('保存脚本出错:', error);
+                    alert('保存脚本出错: ' + error.message);
+                });
+            }
+        }
+        
+        function sendScript(scriptName) {
+            console.log('发送脚本:', scriptName);
+            currentScriptName = scriptName;
+            
+            // 获取在线虚拟机列表
+            fetch('/api/vm_list')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // 过滤出在线虚拟机
+                        const onlineVMs = data.vms.filter(vm => vm.online_status === 'online');
+                        currentVMs = onlineVMs;
+                        
+                        if (onlineVMs.length === 0) {
+                            alert('没有在线的虚拟机，无法发送脚本');
+                            return;
+                        }
+                        
+                        // 更新虚拟机列表
+                        updateVMList(onlineVMs);
+                        
+                        // 显示弹窗
+                        const modal = new bootstrap.Modal(document.getElementById('sendScriptModal'));
+                        modal.show();
+                    } else {
+                        alert('获取虚拟机列表失败: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('获取虚拟机列表出错:', error);
+                    alert('获取虚拟机列表出错: ' + error.message);
+                });
+        }
+        
+        function updateVMList(vms) {
+            const vmList = document.getElementById('vmList');
+            vmList.innerHTML = '';
+            
+            vms.forEach(vm => {
+                const vmItem = document.createElement('div');
+                vmItem.className = 'form-check mb-2';
+                vmItem.innerHTML = `
+                    <input class="form-check-input vm-checkbox" type="checkbox" value="${vm.name}" id="vm_${vm.name}">
+                    <label class="form-check-label" for="vm_${vm.name}">
+                        <strong>${vm.name}</strong> (${vm.ip})
+                        <span class="badge bg-success ms-2">在线</span>
+                    </label>
+                `;
+                vmList.appendChild(vmItem);
+            });
+        }
+        
+        function selectAllVMs() {
+            document.querySelectorAll('.vm-checkbox').forEach(checkbox => {
+                checkbox.checked = true;
+            });
+        }
+        
+        function deselectAllVMs() {
+            document.querySelectorAll('.vm-checkbox').forEach(checkbox => {
+                checkbox.checked = false;
+            });
+        }
+        
+        function confirmSendScript() {
+            const selectedVMs = Array.from(document.querySelectorAll('.vm-checkbox:checked')).map(cb => cb.value);
+            
+            if (selectedVMs.length === 0) {
+                alert('请选择至少一个虚拟机');
+                return;
+            }
+            
+            if (!confirm(`确定要发送脚本 ${currentScriptName} 到 ${selectedVMs.length} 个虚拟机吗？`)) {
+                return;
+            }
+            
+            fetch('/api/script/send', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    script_name: currentScriptName,
+                    vm_names: selectedVMs
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    let message = '脚本发送完成:\n';
+                    data.results.forEach(result => {
+                        const status = result.status === 'success' ? '✅' : '❌';
+                        message += `${status} ${result.vm_name} (${result.ip}): ${result.message}\n`;
+                    });
+                    alert(message);
+                    
+                    // 关闭弹窗
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('sendScriptModal'));
+                    modal.hide();
+                } else {
+                    alert('发送失败: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('发送脚本出错:', error);
+                alert('发送脚本出错: ' + error.message);
+            });
+        }
+        
+        function showError(message) {
+            const tbody = document.getElementById('scriptTableBody');
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">
+                <i class="fas fa-exclamation-triangle me-2"></i>${message}
+            </td></tr>`;
+        }
+        
+        // 计算最佳分页大小
+        function calculateOptimalPageSize() {
+            const windowHeight = window.innerHeight;
+            const availableHeight = windowHeight - 300; // 减去头部、导航等高度
+            const rowHeight = 60; // 每行大约高度
+            const optimalRows = Math.floor(availableHeight / rowHeight);
+            
+            // 确保在合理范围内，默认返回5
+            if (optimalRows < 5) return 5;
+            if (optimalRows > 50) return 50;
+            return Math.max(5, Math.min(50, optimalRows));
+        }
+        
+        // 智能计算当前界面能显示的最佳数据量
+        function calculateOptimalDataDisplay() {
+            // 获取当前表格数据展示区域的容量
+            const tableCapacity = getTableDisplayCapacity();
+            const maxVisibleRows = tableCapacity.maxRows;
+            
+            // 考虑分页控件的空间，预留一些空间给分页
+            const optimalRows = Math.max(5, maxVisibleRows - 1);
+            
+            // 确保不超过可用选项的最大值
+            const pageSizeSelect = document.getElementById('pageSizeSelect');
+            const availableSizes = Array.from(pageSizeSelect.options).map(opt => parseInt(opt.value));
+            const maxAvailableSize = Math.max(...availableSizes);
+            
+            const finalOptimalRows = Math.min(optimalRows, maxAvailableSize);
+            
+            console.log('智能计算最佳数据显示量:', {
+                tableCapacity: tableCapacity,
+                maxVisibleRows: maxVisibleRows,
+                optimalRows: optimalRows,
+                maxAvailableSize: maxAvailableSize,
+                finalOptimalRows: finalOptimalRows
+            });
+            
+            return finalOptimalRows;
+        }
+        
+        // 计算当前界面能显示的最大行数
+        function calculateMaxVisibleRows() {
+            // 获取页面可用高度
+            const windowHeight = window.innerHeight;
+            
+            // 估算其他元素占用的高度
+            const headerHeight = 200; // 头部区域
+            const footerHeight = 100; // 底部区域
+            const paginationHeight = 50; // 分页控件
+            const tableHeaderHeight = 50; // 表格头部
+            const paddingHeight = 40; // 各种间距
+            
+            // 计算表格容器的可用高度
+            const availableHeight = windowHeight - headerHeight - footerHeight - paginationHeight - tableHeaderHeight - paddingHeight;
+            const rowHeight = 60; // 预估每行高度
+            const maxRows = Math.floor(availableHeight / rowHeight);
+            
+            console.log('计算当前界面能显示的最大行数:', {
+                windowHeight: windowHeight,
+                availableHeight: availableHeight,
+                rowHeight: rowHeight,
+                maxRows: maxRows,
+                headerHeight: headerHeight,
+                footerHeight: footerHeight,
+                paginationHeight: paginationHeight,
+                tableHeaderHeight: tableHeaderHeight,
+                paddingHeight: paddingHeight
+            });
+            
+            return Math.max(1, maxRows); // 至少显示1行
+        }
+        
+        // 判断是否需要启用滚动条
+        function shouldEnableScrollbar(pageSize) {
+            // 获取当前表格数据展示区域的容量
+            const tableCapacity = getTableDisplayCapacity();
+            const maxVisibleRows = tableCapacity.maxRows;
+            
+            // 减少容错空间，更充分地利用可用空间
+            const adjustedMaxRows = maxVisibleRows + 1; // 只增加1行的容错空间
+            
+            // 只有当明显超出时才启用滚动条
+            const needsScrollbar = pageSize > adjustedMaxRows && (pageSize - adjustedMaxRows) >= 1;
+            
+            console.log('判断是否需要启用滚动条:', {
+                pageSize: pageSize,
+                maxVisibleRows: maxVisibleRows,
+                adjustedMaxRows: adjustedMaxRows,
+                needsScrollbar: needsScrollbar,
+                difference: pageSize - adjustedMaxRows,
+                tableCapacity: tableCapacity
+            });
+            
+            // 在控制台显示详细的空间使用信息
+            if (pageSize === 10 || pageSize === 20) {
+                console.log(`=== 分页大小为${pageSize}时的详细分析 ===`);
+                console.log('当前表格数据展示区域容量:', tableCapacity);
+                console.log('当前界面能显示的最大行数:', maxVisibleRows);
+                console.log('调整后的最大行数（含容错空间）:', adjustedMaxRows);
+                console.log('是否需要滚动条:', needsScrollbar);
+                console.log('超出调整后最大行数的数量:', pageSize - adjustedMaxRows);
+                console.log('================================');
+            }
+            
+            return needsScrollbar;
+        }
+        
+        // 统一设置滚动条状态
+        function setScrollbarState(needsScrollbar, context = '') {
+            const tableContainer = document.querySelector('.table-responsive');
+            const mainContent = document.querySelector('.col-md-9.col-lg-10');
+            
+            if (needsScrollbar) {
+                // 需要滚动条时，启用滚动 - 滚动条显示在表格数据区域内部
+                tableContainer.style.overflow = 'auto';
+                
+                // 调整表格容器高度以优化滚动条显示
+                adjustTableContainerHeight();
+                
+                // 确保外层容器不显示滚动条，让滚动条只显示在表格区域
+                if (mainContent) {
+                    mainContent.style.overflow = 'hidden';
+                }
+                
+                // 确保表格头部固定在顶部
+                const thead = tableContainer.querySelector('thead');
+                if (thead) {
+                    thead.style.position = 'sticky';
+                    thead.style.top = '0';
+                    thead.style.zIndex = '1';
+                }
+                
+                console.log(`启用滚动条 (${context}) - 滚动条显示在表格数据区域内部`);
+            } else {
+                // 不需要滚动条时，禁用滚动
+                tableContainer.style.overflow = 'visible';
+                tableContainer.style.maxHeight = 'none';
+                tableContainer.style.height = 'auto';
+                
+                if (mainContent) {
+                    mainContent.style.overflow = 'visible';
+                }
+                
+                // 恢复表格头部样式
+                const thead = tableContainer.querySelector('thead');
+                if (thead) {
+                    thead.style.position = '';
+                    thead.style.top = '';
+                    thead.style.zIndex = '';
+                }
+                
+                console.log(`禁用滚动条 (${context})`);
+            }
+        }
+        
+        // 动态测量实际可用空间
+        function measureActualAvailableSpace() {
+            const tableContainer = document.querySelector('.table-responsive');
+            const mainContent = document.querySelector('.col-md-9.col-lg-10');
+            
+            if (!tableContainer || !mainContent) {
+                console.log('无法找到表格容器，使用估算值');
+                return calculateMaxVisibleRows();
+            }
+            
+            // 临时设置容器为可见状态以测量实际高度
+            const originalOverflow = tableContainer.style.overflow;
+            const originalMaxHeight = tableContainer.style.maxHeight;
+            
+            tableContainer.style.overflow = 'visible';
+            tableContainer.style.maxHeight = 'none';
+            
+            // 获取实际可用高度
+            const containerRect = tableContainer.getBoundingClientRect();
+            const mainContentRect = mainContent.getBoundingClientRect();
+            
+            // 计算实际可用高度 - 更精确的计算
+            const distanceToBottom = window.innerHeight - containerRect.top;
+            const mainContentAvailable = mainContentRect.height - 60; // 进一步减少边距
+            
+            // 使用更精确的值，充分利用空间
+            const availableHeight = Math.max(distanceToBottom - 20, mainContentAvailable);
+            
+            const rowHeight = 55; // 每行高度
+            const maxRows = Math.floor(availableHeight / rowHeight);
+            
+            // 恢复原始状态
+            tableContainer.style.overflow = originalOverflow;
+            tableContainer.style.maxHeight = originalMaxHeight;
+            
+            console.log('动态测量实际可用空间:', {
+                containerTop: containerRect.top,
+                distanceToBottom: distanceToBottom,
+                mainContentHeight: mainContentRect.height,
+                mainContentAvailable: mainContentAvailable,
+                availableHeight: availableHeight,
+                maxRows: maxRows,
+                windowHeight: window.innerHeight
+            });
+            
+            return Math.max(1, maxRows);
+        }
+        
+        // 获取当前表格数据展示区域的大小并计算最大显示数据量
+        function getTableDisplayCapacity() {
+            const tableContainer = document.querySelector('.table-responsive');
+            const tableContainerWrapper = document.querySelector('.table-container');
+            
+            if (!tableContainer || !tableContainerWrapper) {
+                console.log('无法找到表格容器');
+                return { maxRows: 10, containerHeight: 0, rowHeight: 55 };
+            }
+            
+            // 获取表格容器的实际尺寸
+            const containerRect = tableContainer.getBoundingClientRect();
+            const wrapperRect = tableContainerWrapper.getBoundingClientRect();
+            
+            // 计算表格头部高度
+            const thead = tableContainer.querySelector('thead');
+            const headerHeight = thead ? thead.offsetHeight : 50;
+            
+            // 计算可用数据区域高度
+            const totalContainerHeight = wrapperRect.height;
+            const availableDataHeight = totalContainerHeight - headerHeight - 20; // 预留一些边距
+            
+            // 计算每行数据的高度
+            const rowHeight = 55; // 预估每行高度
+            
+            // 计算最大可显示的数据行数
+            const maxRows = Math.floor(availableDataHeight / rowHeight);
+            
+            console.log('表格数据展示区域容量分析:', {
+                totalContainerHeight: totalContainerHeight,
+                headerHeight: headerHeight,
+                availableDataHeight: availableDataHeight,
+                rowHeight: rowHeight,
+                maxRows: maxRows,
+                containerRect: {
+                    width: containerRect.width,
+                    height: containerRect.height
+                },
+                wrapperRect: {
+                    width: wrapperRect.width,
+                    height: wrapperRect.height
+                }
+            });
+            
+            return {
+                maxRows: Math.max(1, maxRows),
+                containerHeight: totalContainerHeight,
+                rowHeight: rowHeight,
+                availableDataHeight: availableDataHeight
+            };
+        }
+        
+        // 调整表格容器高度以优化滚动条显示
+        function adjustTableContainerHeight() {
+            const tableContainer = document.querySelector('.table-responsive');
+            const tableContainerWrapper = document.querySelector('.table-container');
+            
+            if (!tableContainer || !tableContainerWrapper) return;
+            
+            // 计算最佳高度
+            const windowHeight = window.innerHeight;
+            const containerTop = tableContainer.getBoundingClientRect().top;
+            const optimalHeight = windowHeight - containerTop - 200; // 预留空间给分页控件等
+            
+            // 设置表格容器高度
+            tableContainer.style.maxHeight = `${Math.max(300, optimalHeight)}px`;
+            
+            console.log('调整表格容器高度:', {
+                windowHeight: windowHeight,
+                containerTop: containerTop,
+                optimalHeight: optimalHeight,
+                maxHeight: tableContainer.style.maxHeight
+            });
+        }
+        
+        // 监控表格容量变化并更新显示
+        function monitorTableCapacity() {
+            const tableCapacity = getTableDisplayCapacity();
+            const currentPageSize = pageSize;
+            
+            console.log('表格容量监控:', {
+                currentCapacity: tableCapacity.maxRows,
+                currentPageSize: currentPageSize,
+                needsScrollbar: currentPageSize > tableCapacity.maxRows,
+                remainingSpace: Math.max(0, tableCapacity.maxRows - currentPageSize)
+            });
+            
+            // 如果容量发生变化，重新评估滚动条状态
+            if (currentPageSize > tableCapacity.maxRows) {
+                const needsScrollbar = shouldEnableScrollbar(currentPageSize);
+                setScrollbarState(needsScrollbar, '容量监控触发');
+            }
+        }
+        
+        // 更新分页控件
+        function updatePagination(currentPage) {
+            const pagination = document.getElementById('pagination');
+            pagination.innerHTML = '';
+            
+            // 获取总页数
+            const totalRecords = parseInt(document.getElementById('totalRecords').textContent) || 0;
+            const totalPages = Math.ceil(totalRecords / pageSize);
+            
+            console.log('更新分页控件:', { currentPage, totalRecords, totalPages, pageSize });
+            
+            if (totalPages <= 1) {
+                console.log('总页数小于等于1，不显示分页控件');
+                return;
+            }
+            
+            // 上一页按钮
+            const prevLi = document.createElement('li');
+            prevLi.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
+            prevLi.innerHTML = `<a class="page-link" href="#" onclick="goToPage(${currentPage - 1})">上一页</a>`;
+            pagination.appendChild(prevLi);
+            
+            // 页码按钮
+            const startPage = Math.max(1, currentPage - 2);
+            const endPage = Math.min(totalPages, currentPage + 2);
+            
+            for (let i = startPage; i <= endPage; i++) {
+                const pageLi = document.createElement('li');
+                pageLi.className = `page-item ${i === currentPage ? 'active' : ''}`;
+                pageLi.innerHTML = `<a class="page-link" href="#" onclick="goToPage(${i})">${i}</a>`;
+                pagination.appendChild(pageLi);
+            }
+            
+            // 下一页按钮
+            const nextLi = document.createElement('li');
+            nextLi.className = `page-item ${currentPage === totalPages ? 'disabled' : ''}`;
+            nextLi.innerHTML = `<a class="page-link" href="#" onclick="goToPage(${currentPage + 1})">下一页</a>`;
+            pagination.appendChild(nextLi);
+            
+            console.log('分页控件更新完成');
+        }
+        
+        // 跳转到指定页
+        function goToPage(page) {
+            console.log('跳转到页面:', page);
+            
+            if (page < 1 || page > totalPages) {
+                console.log('页码超出范围，忽略');
+                return;
+            }
+            
+            currentPage = page;
+            loadScripts(page);
+        }
+        
+        // 改变分页大小
+        function changePageSize() {
+            const newPageSize = parseInt(document.getElementById('pageSizeSelect').value);
+            console.log('改变分页大小:', { oldSize: pageSize, newSize: newPageSize });
+            
+            if (newPageSize !== pageSize) {
+                console.log('分页大小发生变化，重新加载数据...');
+                
+                // 更新全局变量
+                pageSize = newPageSize;
+                currentPage = 1; // 重置到第一页
+                isAutoCalculated = false; // 标记为手动设置
+                
+                // 显示加载状态
+                const tbody = document.getElementById('scriptTableBody');
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted"><i class="fas fa-spinner fa-spin me-2"></i>加载中...</td></tr>';
+                
+                // 清空分页信息
+                document.getElementById('startRecord').textContent = '0';
+                document.getElementById('endRecord').textContent = '0';
+                document.getElementById('totalRecords').textContent = '0';
+                document.getElementById('pagination').innerHTML = '';
+                
+                // 根据分页大小智能调整滚动条设置
+                const tableContainer = document.querySelector('.table-responsive');
+                const mainContent = document.querySelector('.col-md-9.col-lg-10');
+                
+                // 使用智能判断是否需要滚动条
+                const needsScrollbar = shouldEnableScrollbar(newPageSize);
+                setScrollbarState(needsScrollbar, `分页大小改变，分页大小: ${newPageSize}`);
+                
+                // 显示智能建议
+                const optimalDisplay = calculateOptimalDataDisplay();
+                const tableCapacity = getTableDisplayCapacity();
+                
+                console.log(`=== 分页大小改变分析 ===`);
+                console.log(`当前表格数据展示区域容量: ${tableCapacity.maxRows} 条`);
+                console.log(`当前界面最佳显示量: ${optimalDisplay} 条`);
+                console.log(`您选择的分页大小: ${newPageSize} 条`);
+                
+                if (newPageSize > tableCapacity.maxRows) {
+                    console.log(`⚠️ 数据将超出显示区域，将启用内部滚动条`);
+                    console.log(`超出数量: ${newPageSize - tableCapacity.maxRows} 条`);
+                } else {
+                    console.log(`✅ 数据在显示区域内，无需滚动条`);
+                    console.log(`剩余空间: ${tableCapacity.maxRows - newPageSize} 条`);
+                }
+                console.log(`================================`);
+                
+                // 重新加载数据
+                console.log('调用 loadScripts(1) 重新加载数据，当前pageSize:', pageSize);
+                console.log('强制刷新缓存，使用新的时间戳');
+                
+                // 强制延迟一下，确保pageSize变量已经更新
+                setTimeout(() => {
+                    console.log('延迟后重新检查pageSize:', pageSize);
+                    loadScripts(1);
+                }, 100);
+            } else {
+                console.log('分页大小未发生变化，跳过重新加载');
+            }
+        }
+        
+        // 重置为自动分页
+        function resetToAuto() {
+            const autoPageSize = calculateOptimalPageSize();
+            console.log('重置为自动分页:', { autoPageSize });
+            
+            // 确保分页大小在可用选项中
+            const pageSizeSelect = document.getElementById('pageSizeSelect');
+            const availableSizes = Array.from(pageSizeSelect.options).map(opt => parseInt(opt.value));
+            const closestSize = availableSizes.reduce((prev, curr) => 
+                Math.abs(curr - autoPageSize) < Math.abs(prev - autoPageSize) ? curr : prev
+            );
+            
+            console.log('可用的分页大小:', availableSizes);
+            console.log('计算的分页大小:', closestSize);
+            console.log('强制设置为5');
+            
+            // 强制设置为5
+            pageSizeSelect.value = '5';
+            pageSize = 5;
+            currentPage = 1;
+            isAutoCalculated = true;
+            loadScripts(1);
         }
     </script>
 </body>
