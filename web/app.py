@@ -39,7 +39,7 @@ def login():
         if username == USERNAME and password == PASSWORD:
             session['logged_in'] = True
             session['username'] = username
-            return redirect(url_for('dashboard'))
+            return redirect(url_for('clone_vm_page'))
         else:
             flash('用户名或密码错误')
     return render_template('login.html')
@@ -680,6 +680,21 @@ def api_vm_list():
         vms = []
         stats = {'total': 0, 'running': 0, 'stopped': 0, 'online': 0}
         
+        # 批量获取运行中的虚拟机列表（只执行一次vmrun命令）
+        running_vms = set()
+        try:
+            vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
+            if not os.path.exists(vmrun_path):
+                vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
+            
+            list_cmd = [vmrun_path, 'list']
+            result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30)
+            
+            if result.returncode == 0:
+                running_vms = set(result.stdout.strip().split('\n')[1:])  # 跳过标题行
+        except Exception as e:
+            print(f"[DEBUG] 获取运行中虚拟机列表失败: {str(e)}")
+        
         if os.path.exists(vm_dir):
             for root, dirs, files in os.walk(vm_dir):
                 for file in files:
@@ -687,25 +702,21 @@ def api_vm_list():
                         vm_path = os.path.join(root, file)
                         vm_name = os.path.splitext(file)[0]
                         
-                        # 获取虚拟机状态
-                        vm_status = get_vm_status(vm_path)
+                        # 快速判断虚拟机状态（基于文件名匹配）
+                        vm_status = 'stopped'
+                        for running_vm in running_vms:
+                            if vm_name in running_vm:
+                                vm_status = 'running'
+                                break
                         
-                        # 获取IP地址
-                        vm_ip = get_vm_ip(vm_name)
-                        
-                        # 获取五码信息
-                        wuma_info = get_wuma_info(vm_name)
-                        
-                        # 检查SSH连接状态
-                        ssh_status = check_ssh_status(vm_ip) if vm_ip else 'offline'
-                        
+                        # 先添加基本信息，异步获取详细信息
                         vm_info = {
                             'name': vm_name,
                             'path': vm_path,
                             'status': vm_status,
-                            'ip': vm_ip,
-                            'wuma_info': wuma_info,
-                            'ssh_status': ssh_status
+                            'ip': '获取中...',
+                            'wuma_info': f"五码信息-{vm_name}",
+                            'ssh_status': 'unknown'
                         }
                         vms.append(vm_info)
                         
@@ -715,8 +726,6 @@ def api_vm_list():
                             stats['running'] += 1
                         elif vm_status == 'stopped':
                             stats['stopped'] += 1
-                        if ssh_status == 'online':
-                            stats['online'] += 1
         
         # 计算分页
         total_count = len(vms)
@@ -746,6 +755,35 @@ def api_vm_list():
         return jsonify({
             'success': False,
             'message': f'获取虚拟机列表失败: {str(e)}'
+        })
+
+@app.route('/api/vm_details/<vm_name>')
+@login_required
+def api_vm_details(vm_name):
+    """获取单个虚拟机的详细信息"""
+    try:
+        # 获取IP地址
+        vm_ip = get_vm_ip(vm_name)
+        
+        # 获取五码信息
+        wuma_info = get_wuma_info(vm_name)
+        
+        # 检查SSH连接状态
+        ssh_status = check_ssh_status(vm_ip) if vm_ip else 'offline'
+        
+        return jsonify({
+            'success': True,
+            'vm_name': vm_name,
+            'ip': vm_ip,
+            'wuma_info': wuma_info,
+            'ssh_status': ssh_status
+        })
+        
+    except Exception as e:
+        print(f"[DEBUG] 获取虚拟机详细信息失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取虚拟机详细信息失败: {str(e)}'
         })
 
 @app.route('/api/vm_start', methods=['POST'])
