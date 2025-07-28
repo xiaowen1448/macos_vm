@@ -323,7 +323,7 @@
                                     </button>
                                 </div>
                                 <div class="d-flex align-items-center ms-3">
-                                    <button class="btn btn-danger btn-sm" onclick="deleteSelectedVMs()" id="deleteSelectedBtn" disabled>
+                                    <button class="btn btn-danger btn-sm" onclick="deleteSelectedVMs()" id="deleteSelectedBtn" disabled style="cursor: pointer;">
                                         <i class="fas fa-trash me-1"></i>删除选中 (<span id="selectedCount">0</span>)
                                     </button>
                                 </div>
@@ -616,16 +616,19 @@
                     </td>
                     <td>
                         <div class="btn-group btn-group-sm">
-                            <button class="btn btn-outline-primary btn-sm" onclick="startVM('${vm.name}')" ${vm.status === 'running' ? 'disabled' : ''}>
+                            <button class="btn btn-outline-primary btn-sm" onclick="startVM('${vm.name}')" ${vm.status === 'running' ? 'disabled' : ''} title="启动虚拟机" style="cursor: pointer;">
                                 <i class="fas fa-play"></i>
                             </button>
-                            <button class="btn btn-outline-warning btn-sm" onclick="stopVM('${vm.name}')" ${vm.status === 'stopped' ? 'disabled' : ''}>
+                            <button class="btn btn-outline-warning btn-sm" onclick="stopVM('${vm.name}')" ${vm.status === 'stopped' ? 'disabled' : ''} title="停止虚拟机" style="cursor: pointer;">
                                 <i class="fas fa-stop"></i>
                             </button>
-                            <button class="btn btn-outline-info btn-sm" onclick="getVMInfo('${vm.name}')">
+                            <button class="btn btn-outline-secondary btn-sm" onclick="restartVM('${vm.name}')" ${vm.status === 'running' ? '' : 'disabled'} title="重启虚拟机" style="cursor: pointer;">
+                                <i class="fas fa-redo"></i>
+                            </button>
+                            <button class="btn btn-outline-info btn-sm" onclick="getVMInfo('${vm.name}')" title="详细信息" style="cursor: pointer;">
                                 <i class="fas fa-info-circle"></i>
                             </button>
-                            <button class="btn btn-outline-danger btn-sm" onclick="deleteVM('${vm.name}')" title="删除虚拟机">
+                            <button class="btn btn-outline-danger btn-sm" onclick="deleteVM('${vm.name}')" ${vm.status === 'running' ? 'disabled' : ''} title="${vm.status === 'running' ? '无法删除运行中的虚拟机' : '删除虚拟机'}" style="cursor: pointer;">
                                 <i class="fas fa-trash"></i>
                             </button>
                         </div>
@@ -841,11 +844,38 @@
         function updateSelectedCount() {
             const count = selectedVMs.size;
             document.getElementById('selectedCount').textContent = count;
-            document.getElementById('deleteSelectedBtn').disabled = count === 0;
+            
+            // 检查选中的虚拟机状态
+            const runningVMs = [];
+            selectedVMs.forEach(vmName => {
+                const vm = totalVMs.find(v => v.name === vmName);
+                if (vm && vm.status === 'running') {
+                    runningVMs.push(vmName);
+                }
+            });
+            
+            // 如果有运行中的虚拟机，禁用批量删除按钮
+            const hasRunningVMs = runningVMs.length > 0;
+            const deleteBtn = document.getElementById('deleteSelectedBtn');
+            deleteBtn.disabled = count === 0 || hasRunningVMs;
+            
+            // 更新按钮提示
+            if (hasRunningVMs) {
+                deleteBtn.title = `选中的虚拟机中有 ${runningVMs.length} 个正在运行，无法删除`;
+            } else {
+                deleteBtn.title = '删除选中的虚拟机';
+            }
         }
 
         // 删除单个虚拟机
         function deleteVM(vmName) {
+            // 检查虚拟机状态
+            const vm = totalVMs.find(v => v.name === vmName);
+            if (vm && vm.status === 'running') {
+                alert(`无法删除虚拟机 "${vmName}"，该虚拟机正在运行中。请先停止虚拟机，然后执行删除操作。`);
+                return;
+            }
+            
             if (confirm(`确定要删除虚拟机 "${vmName}" 吗？此操作不可恢复。`)) {
                 deleteVMs([vmName]);
             }
@@ -856,6 +886,31 @@
             const selectedArray = Array.from(selectedVMs);
             if (selectedArray.length === 0) {
                 alert('请先选择要删除的虚拟机');
+                return;
+            }
+            
+            // 检查选中的虚拟机状态
+            const runningVMs = [];
+            const stoppedVMs = [];
+            
+            selectedArray.forEach(vmName => {
+                const vm = totalVMs.find(v => v.name === vmName);
+                if (vm) {
+                    if (vm.status === 'running') {
+                        runningVMs.push(vmName);
+                    } else {
+                        stoppedVMs.push(vmName);
+                    }
+                }
+            });
+            
+            // 如果有运行中的虚拟机，提示用户
+            if (runningVMs.length > 0) {
+                let message = `以下虚拟机正在运行中，无法删除：\n${runningVMs.join('\n')}\n\n请先停止这些虚拟机，然后执行删除操作。`;
+                if (stoppedVMs.length > 0) {
+                    message += `\n\n可以删除的虚拟机：\n${stoppedVMs.join('\n')}`;
+                }
+                alert(message);
                 return;
             }
             
@@ -972,15 +1027,42 @@
             });
         }
 
+        // 重启虚拟机
+        function restartVM(vmName) {
+            if (confirm(`确定要重启虚拟机 "${vmName}" 吗？`)) {
+                fetch('/api/vm_restart', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ vm_name: vmName })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('虚拟机重启中...');
+                        // 延迟刷新数据，给虚拟机一些启动时间
+                        setTimeout(() => {
+                            loadVMData(currentPage);
+                        }, 3000);
+                    } else {
+                        alert('重启失败: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('重启虚拟机失败:', error);
+                    alert('重启失败: ' + error.message);
+                });
+            }
+        }
+
         // 获取虚拟机详细信息
         function getVMInfo(vmName) {
             fetch(`/api/vm_info/${vmName}`)
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    // 显示详细信息（可以弹窗或新页面）
-                    console.log('虚拟机信息:', data.vm_info);
-                    alert('虚拟机详细信息已获取，请查看控制台');
+                    showVMInfoModal(data.vm_info);
                 } else {
                     alert('获取信息失败: ' + data.message);
                 }
@@ -988,6 +1070,145 @@
             .catch(error => {
                 alert('操作失败: ' + error.message);
             });
+        }
+
+        // 显示虚拟机信息弹窗
+        function showVMInfoModal(vmInfo) {
+            // 创建模态框HTML
+            const modalHTML = `
+                <div class="modal fade" id="vmInfoModal" tabindex="-1" aria-labelledby="vmInfoModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="vmInfoModalLabel">
+                                    <i class="fas fa-info-circle me-2"></i>虚拟机详细信息
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6 class="text-primary mb-3">基本信息</h6>
+                                        <table class="table table-sm">
+                                            <tr>
+                                                <td><strong>虚拟机名称:</strong></td>
+                                                <td>${vmInfo.name}</td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>状态:</strong></td>
+                                                <td>
+                                                    <span class="badge status-badge ${getStatusClass(vmInfo.status)}">
+                                                        ${getStatusText(vmInfo.status)}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>IP地址:</strong></td>
+                                                <td>${vmInfo.ip || '<span class="text-muted">-</span>'}</td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>SSH状态:</strong></td>
+                                                <td>
+                                                    <span class="badge status-badge ${vmInfo.ssh_status === 'online' ? 'bg-success' : 'bg-secondary'}">
+                                                        ${vmInfo.ssh_status === 'online' ? '在线' : '离线'}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>五码信息:</strong></td>
+                                                <td>${vmInfo.wuma_info || '<span class="text-muted">-</span>'}</td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6 class="text-primary mb-3">文件信息</h6>
+                                        <table class="table table-sm">
+                                            <tr>
+                                                <td><strong>文件路径:</strong></td>
+                                                <td>
+                                                    <small class="text-muted">${vmInfo.path || '-'}</small>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td><strong>快照数量:</strong></td>
+                                                <td>${vmInfo.snapshots ? vmInfo.snapshots.length : 0}</td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                </div>
+                                
+                                ${vmInfo.snapshots && vmInfo.snapshots.length > 0 ? `
+                                <div class="row mt-3">
+                                    <div class="col-12">
+                                        <h6 class="text-primary mb-3">快照列表</h6>
+                                        <div class="table-responsive" style="max-height: 200px;">
+                                            <table class="table table-sm table-striped">
+                                                <thead>
+                                                    <tr>
+                                                        <th>快照名称</th>
+                                                        <th>描述</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    ${vmInfo.snapshots.map(snapshot => `
+                                                        <tr>
+                                                            <td>${snapshot.name || '-'}</td>
+                                                            <td>${snapshot.description || '-'}</td>
+                                                        </tr>
+                                                    `).join('')}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                                ` : ''}
+                                
+                                ${vmInfo.config ? `
+                                <div class="row mt-3">
+                                    <div class="col-12">
+                                        <h6 class="text-primary mb-3">配置信息</h6>
+                                        <div class="table-responsive" style="max-height: 200px;">
+                                            <table class="table table-sm table-striped">
+                                                <thead>
+                                                    <tr>
+                                                        <th>配置项</th>
+                                                        <th>值</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    ${Object.entries(vmInfo.config).map(([key, value]) => `
+                                                        <tr>
+                                                            <td><code>${key}</code></td>
+                                                            <td><small>${value || '-'}</small></td>
+                                                        </tr>
+                                                    `).join('')}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                                ` : ''}
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // 移除已存在的模态框
+            const existingModal = document.getElementById('vmInfoModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+            
+            // 添加新的模态框到页面
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+            
+            // 显示模态框
+            const modal = new bootstrap.Modal(document.getElementById('vmInfoModal'));
+            modal.show();
         }
 
         // 菜单处理函数

@@ -850,6 +850,48 @@ def api_vm_stop():
     except Exception as e:
         return jsonify({'success': False, 'message': f'停止失败: {str(e)}'})
 
+@app.route('/api/vm_restart', methods=['POST'])
+@login_required
+def api_vm_restart():
+    """重启虚拟机"""
+    try:
+        data = request.get_json()
+        vm_name = data.get('vm_name')
+        
+        if not vm_name:
+            return jsonify({'success': False, 'message': '缺少虚拟机名称'})
+        
+        # 查找虚拟机文件
+        vm_file = find_vm_file(vm_name)
+        if not vm_file:
+            return jsonify({'success': False, 'message': f'找不到虚拟机: {vm_name}'})
+        
+        # 重启虚拟机
+        vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
+        if not os.path.exists(vmrun_path):
+            vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
+        
+        # 先停止虚拟机
+        stop_cmd = [vmrun_path, 'stop', vm_file, 'hard']
+        stop_result = subprocess.run(stop_cmd, capture_output=True, text=True, timeout=60)
+        
+        # 等待一下再启动
+        import time
+        time.sleep(2)
+        
+        # 启动虚拟机
+        start_cmd = [vmrun_path, 'start', vm_file]
+        start_result = subprocess.run(start_cmd, capture_output=True, text=True, timeout=60)
+        
+        if start_result.returncode == 0:
+            return jsonify({'success': True, 'message': '虚拟机重启成功'})
+        else:
+            return jsonify({'success': False, 'message': f'重启失败: {start_result.stderr}'})
+            
+    except Exception as e:
+        print(f"[DEBUG] 重启虚拟机失败: {str(e)}")
+        return jsonify({'success': False, 'message': f'重启失败: {str(e)}'})
+
 @app.route('/api/vm_info/<vm_name>')
 @login_required
 def api_vm_info(vm_name):
