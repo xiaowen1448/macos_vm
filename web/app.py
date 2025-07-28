@@ -251,6 +251,8 @@ def vm_script_page():
     """虚拟机脚本管理页面"""
     return render_template('vm_script.html')
 
+
+
 @app.route('/vm_trust')
 @login_required
 def vm_trust_page():
@@ -2000,100 +2002,7 @@ def api_get_script_content(script_name):
             'message': f'获取脚本内容失败: {str(e)}'
         })
 
-@app.route('/api/script/send', methods=['POST'])
-@login_required
-def api_send_script():
-    """发送脚本到虚拟机"""
-    logger.info("收到发送脚本请求")
-    try:
-        data = request.get_json()
-        script_name = data.get('script_name')
-        vm_names = data.get('vm_names', [])
-        
-        if not script_name or not vm_names:
-            return jsonify({
-                'success': False,
-                'message': '缺少必要参数'
-            })
-        
-        scripts_dir = r'D:\macos_vm\macos_sh'
-        script_path = os.path.join(scripts_dir, script_name)
-        
-        if not os.path.exists(script_path):
-            return jsonify({
-                'success': False,
-                'message': f'脚本文件不存在: {script_name}'
-            })
-        
-        # 检查虚拟机在线状态
-        online_vms = []
-        for vm_name in vm_names:
-            online_status = get_vm_online_status(vm_name)
-            if online_status['status'] == 'online':
-                online_vms.append({
-                    'name': vm_name,
-                    'ip': online_status['ip']
-                })
-        
-        if not online_vms:
-            return jsonify({
-                'success': False,
-                'message': '没有可用的在线虚拟机'
-            })
-        
-        # 发送脚本到每个在线虚拟机
-        results = []
-        for vm in online_vms:
-            try:
-                # 使用scp发送脚本
-                import subprocess
-                scp_cmd = [
-                    'scp',
-                    '-o', 'StrictHostKeyChecking=no',
-                    script_path,
-                    f"wx@{vm['ip']}:/Users/wx/{script_name}"
-                ]
-                
-                logger.debug(f"执行SCP命令: {' '.join(scp_cmd)}")
-                result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=30)
-                
-                if result.returncode == 0:
-                    logger.info(f"脚本发送成功到虚拟机 {vm['name']} ({vm['ip']})")
-                    results.append({
-                        'vm_name': vm['name'],
-                        'ip': vm['ip'],
-                        'status': 'success',
-                        'message': '发送成功'
-                    })
-                else:
-                    logger.error(f"脚本发送失败到虚拟机 {vm['name']}: {result.stderr}")
-                    results.append({
-                        'vm_name': vm['name'],
-                        'ip': vm['ip'],
-                        'status': 'failed',
-                        'message': f'发送失败: {result.stderr}'
-                    })
-                    
-            except Exception as e:
-                logger.error(f"发送脚本到虚拟机 {vm['name']} 时出错: {str(e)}")
-                results.append({
-                    'vm_name': vm['name'],
-                    'ip': vm['ip'],
-                    'status': 'error',
-                    'message': f'发送出错: {str(e)}'
-                })
-        
-        return jsonify({
-            'success': True,
-            'results': results
-        })
-        
-    except Exception as e:
-        logger.error(f"发送脚本失败: {str(e)}")
-        return jsonify({
-            'success': False,
-            'message': f'发送脚本失败: {str(e)}'
-        })
+
 
 @app.route('/api/ssh_trust', methods=['POST'])
 @login_required

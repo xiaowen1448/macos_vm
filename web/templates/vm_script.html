@@ -124,6 +124,12 @@
         .table-responsive tbody tr:hover {
             background-color: #f8f9fa;
         }
+        
+
+        
+
+        
+
     </style>
 </head>
 <body>
@@ -373,40 +379,8 @@
             </div>
         </div>
     </div>
-    
-    <!-- 发送脚本弹窗 -->
-    <div class="modal fade" id="sendScriptModal" tabindex="-1" aria-labelledby="sendScriptModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="sendScriptModalLabel">发送脚本到虚拟机</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">选择目标虚拟机（已在线的虚拟机）</label>
-                        <div id="vmList" class="border rounded p-3" style="max-height: 300px; overflow-y: auto;">
-                            <div class="text-center text-muted">
-                                <i class="fas fa-spinner fa-spin me-2"></i>加载虚拟机列表...
-                            </div>
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="selectAllVMs()">
-                            <i class="fas fa-check-square me-1"></i>全选
-                        </button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm ms-2" onclick="deselectAllVMs()">
-                            <i class="fas fa-square me-1"></i>取消全选
-                        </button>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                    <button type="button" class="btn btn-primary" onclick="confirmSendScript()">确认发送</button>
-                </div>
-            </div>
-        </div>
-    </div>
+
+
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
@@ -414,6 +388,10 @@
         document.getElementById('editScriptModal').addEventListener('hidden.bs.modal', function () {
             document.getElementById('scriptNameGroup').style.display = 'none';
         });
+        
+
+        
+
 
         // 脚本名称输入验证 - 防止输入中文字符
         document.getElementById('scriptName').addEventListener('input', function(e) {
@@ -709,9 +687,7 @@
                             <button class="btn btn-outline-primary" title="编辑脚本" onclick="editScript('${script.name}')">
                                 <i class="fas fa-edit"></i>
                             </button>
-                            <button class="btn btn-outline-info" title="发送脚本" onclick="sendScript('${script.name}')">
-                                <i class="fas fa-paper-plane"></i>
-                            </button>
+
                         </div>
                     </td>
                 `;
@@ -898,79 +874,149 @@
             }
         }
         
-        function sendScript(scriptName) {
-            console.log('发送脚本:', scriptName);
-            currentScriptName = scriptName;
-            
-            // 获取在线虚拟机列表
-            fetch('/api/vm_list')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        // 过滤出在线虚拟机
-                        const onlineVMs = data.vms.filter(vm => vm.online_status === 'online');
-                        currentVMs = onlineVMs;
-                        
-                        if (onlineVMs.length === 0) {
-                            alert('没有在线的虚拟机，无法发送脚本');
-                            return;
-                        }
-                        
-                        // 更新虚拟机列表
-                        updateVMList(onlineVMs);
-                        
-                        // 显示弹窗
-                        const modal = new bootstrap.Modal(document.getElementById('sendScriptModal'));
-                        modal.show();
-                    } else {
-                        alert('获取虚拟机列表失败: ' + data.message);
-                    }
-                })
-                .catch(error => {
-                    console.error('获取虚拟机列表出错:', error);
-                    alert('获取虚拟机列表出错: ' + error.message);
-                });
-        }
+
         
-        function updateVMList(vms) {
+
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+
+        
+        function updateVMList(vms, trustedVMs = []) {
             const vmList = document.getElementById('vmList');
             vmList.innerHTML = '';
             
-            vms.forEach(vm => {
-                const vmItem = document.createElement('div');
-                vmItem.className = 'form-check mb-2';
-                vmItem.innerHTML = `
-                    <input class="form-check-input vm-checkbox" type="checkbox" value="${vm.name}" id="vm_${vm.name}">
-                    <label class="form-check-label" for="vm_${vm.name}">
-                        <strong>${vm.name}</strong> (${vm.ip})
-                        <span class="badge bg-success ms-2">在线</span>
-                    </label>
+            if (vms.length === 0) {
+                vmList.innerHTML = `
+                    <div class="text-center text-muted py-3">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        没有可用的虚拟机
+                    </div>
                 `;
-                vmList.appendChild(vmItem);
-            });
+                return;
+            }
+            
+            // 创建互信虚拟机组
+            if (trustedVMs.length > 0) {
+                const trustedGroup = document.createElement('div');
+                trustedGroup.className = 'mb-3';
+                trustedGroup.innerHTML = `
+                    <h6 class="text-success mb-2">
+                        <i class="fas fa-check-circle me-2"></i>SSH互信虚拟机 (${trustedVMs.length})
+                    </h6>
+                `;
+                vmList.appendChild(trustedGroup);
+                
+                trustedVMs.forEach(vm => {
+                    const vmItem = document.createElement('div');
+                    vmItem.className = 'form-check mb-2 ms-3';
+                    vmItem.innerHTML = `
+                        <input class="form-check-input vm-checkbox trusted-vm" type="checkbox" value="${vm.name}" id="vm_${vm.name}" onchange="updateSelectedCount()">
+                        <label class="form-check-label" for="vm_${vm.name}">
+                            <strong>${vm.name}</strong> 
+                            <small class="text-muted">(${vm.ip})</small>
+                            <span class="badge bg-success ms-2">
+                                <i class="fas fa-shield-alt me-1"></i>已互信
+                            </span>
+                        </label>
+                    `;
+                    trustedGroup.appendChild(vmItem);
+                });
+            }
+            
+            // 创建部分在线虚拟机组
+            const partialVMs = vms.filter(vm => !trustedVMs.some(tvm => tvm.name === vm.name));
+            if (partialVMs.length > 0) {
+                const partialGroup = document.createElement('div');
+                partialGroup.className = 'mb-3';
+                partialGroup.innerHTML = `
+                    <h6 class="text-warning mb-2">
+                        <i class="fas fa-exclamation-triangle me-2"></i>部分在线虚拟机 (${partialVMs.length})
+                        <small class="text-muted">- 端口开放但未互信，可能无法发送脚本</small>
+                    </h6>
+                `;
+                vmList.appendChild(partialGroup);
+                
+                partialVMs.forEach(vm => {
+                    const vmItem = document.createElement('div');
+                    vmItem.className = 'form-check mb-2 ms-3';
+                    vmItem.innerHTML = `
+                        <input class="form-check-input vm-checkbox partial-vm" type="checkbox" value="${vm.name}" id="vm_${vm.name}" onchange="updateSelectedCount()">
+                        <label class="form-check-label" for="vm_${vm.name}">
+                            <strong>${vm.name}</strong> 
+                            <small class="text-muted">(${vm.ip})</small>
+                            <span class="badge bg-warning ms-2">
+                                <i class="fas fa-exclamation-triangle me-1"></i>未互信
+                            </span>
+                        </label>
+                    `;
+                    partialGroup.appendChild(vmItem);
+                });
+            }
         }
         
         function selectAllVMs() {
             document.querySelectorAll('.vm-checkbox').forEach(checkbox => {
                 checkbox.checked = true;
             });
+            updateSelectedCount();
+        }
+        
+        function selectAllTrustedVMs() {
+            // 只选择SSH互信的虚拟机
+            document.querySelectorAll('.vm-checkbox.trusted-vm').forEach(checkbox => {
+                checkbox.checked = true;
+            });
+            // 取消选择部分在线的虚拟机
+            document.querySelectorAll('.vm-checkbox.partial-vm').forEach(checkbox => {
+                checkbox.checked = false;
+            });
+            updateSelectedCount();
+        }
+        
+        function updateSelectedCount() {
+            const selectedCount = document.querySelectorAll('.vm-checkbox:checked').length;
+            document.getElementById('selectedCount').textContent = selectedCount;
         }
         
         function deselectAllVMs() {
             document.querySelectorAll('.vm-checkbox').forEach(checkbox => {
                 checkbox.checked = false;
             });
+            updateSelectedCount();
         }
         
         function confirmSendScript() {
             const selectedVMs = Array.from(document.querySelectorAll('.vm-checkbox:checked')).map(cb => cb.value);
+            const selectedTrustedVMs = Array.from(document.querySelectorAll('.vm-checkbox.trusted-vm:checked')).map(cb => cb.value);
+            const selectedPartialVMs = Array.from(document.querySelectorAll('.vm-checkbox.partial-vm:checked')).map(cb => cb.value);
             
             if (selectedVMs.length === 0) {
                 alert('请选择至少一个虚拟机');
                 return;
             }
             
-            if (!confirm(`确定要发送脚本 ${currentScriptName} 到 ${selectedVMs.length} 个虚拟机吗？`)) {
+            // 检查是否选择了未互信的虚拟机
+            if (selectedPartialVMs.length > 0) {
+                const warningMessage = `⚠️ 警告：您选择了 ${selectedPartialVMs.length} 个未互信的虚拟机。\n\n这些虚拟机可能无法成功接收脚本。\n\n建议只选择SSH互信的虚拟机以确保脚本发送成功。\n\n是否继续发送？`;
+                if (!confirm(warningMessage)) {
+                    return;
+                }
+            }
+            
+            const confirmMessage = `确定要发送脚本 ${currentScriptName} 到 ${selectedVMs.length} 个虚拟机吗？\n\n` +
+                `• SSH互信虚拟机：${selectedTrustedVMs.length} 个\n` +
+                `• 部分在线虚拟机：${selectedPartialVMs.length} 个`;
+            
+            if (!confirm(confirmMessage)) {
                 return;
             }
             
@@ -987,11 +1033,28 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    let message = '脚本发送完成:\n';
+                    let message = '脚本发送完成:\n\n';
+                    let successCount = 0;
+                    let failCount = 0;
+                    
                     data.results.forEach(result => {
                         const status = result.status === 'success' ? '✅' : '❌';
-                        message += `${status} ${result.vm_name} (${result.ip}): ${result.message}\n`;
+                        const statusText = result.status === 'success' ? '成功' : '失败';
+                        message += `${status} ${result.vm_name} (${result.ip}): ${statusText}\n`;
+                        message += `   原因: ${result.message}\n\n`;
+                        
+                        if (result.status === 'success') {
+                            successCount++;
+                        } else {
+                            failCount++;
+                        }
                     });
+                    
+                    message += `\n总结:\n`;
+                    message += `• 成功: ${successCount} 个虚拟机\n`;
+                    message += `• 失败: ${failCount} 个虚拟机\n`;
+                    message += `• 总计: ${data.results.length} 个虚拟机`;
+                    
                     alert(message);
                     
                     // 关闭弹窗

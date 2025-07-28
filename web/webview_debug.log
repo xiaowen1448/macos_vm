@@ -1,0 +1,29 @@
+2025-07-29 01:19:04,752 [INFO] <module>:64 - 启动macos_vm管理平台
+2025-07-29 01:19:04,752 [INFO] <module>:67 - 启动Flask服务
+2025-07-29 01:19:04,760 [INFO] wait_for_flask:49 - 等待Flask服务启动: http://127.0.0.1:5000/login
+2025-07-29 01:19:04,761 [DEBUG] wait_for_flask:52 - 尝试连接Flask服务 (第1次)
+2025-07-29 01:19:04,766 [DEBUG] _new_conn:241 - Starting new HTTP connection (1): 127.0.0.1:5000
+2025-07-29 01:19:05,876 [DEBUG] _make_request:544 - http://127.0.0.1:5000 "GET /login HTTP/1.1" 200 1342
+2025-07-29 01:19:05,876 [INFO] wait_for_flask:55 - Flask服务启动成功
+2025-07-29 01:19:05,877 [INFO] <module>:77 - 启动桌面窗口
+2025-07-29 01:19:06,283 [INFO] __init__:28 - 初始化主窗口
+2025-07-29 01:19:06,284 [WARNING] __init__:39 - 窗口图标文件不存在: EFI/Clover/CLOVER/themes/logo_main.png
+2025-07-29 01:19:06,286 [DEBUG] __init__:43 - 加载登录页面: http://127.0.0.1:5000/login
+2025-07-29 01:19:07,493 [INFO] __init__:46 - 主窗口初始化完成
+2025-07-29 01:19:07,581 [INFO] <module>:81 - 桌面窗口显示完成
+2025-07-29 01:19:07,592 [INFO] <module>:84 - 开始运行应用
+2025-07-29 01:20:28,046 [INFO] <module>:88 - 应用退出，清理资源
+2025-07-29 01:20:36,973 [INFO] <module>:64 - 启动macos_vm管理平台
+2025-07-29 01:20:36,973 [INFO] <module>:67 - 启动Flask服务
+2025-07-29 01:20:36,981 [INFO] wait_for_flask:49 - 等待Flask服务启动: http://127.0.0.1:5000/login
+2025-07-29 01:20:36,982 [DEBUG] wait_for_flask:52 - 尝试连接Flask服务 (第1次)
+2025-07-29 01:20:36,985 [DEBUG] _new_conn:241 - Starting new HTTP connection (1): 127.0.0.1:5000
+2025-07-29 01:20:36,989 [DEBUG] _make_request:544 - http://127.0.0.1:5000 "GET /login HTTP/1.1" 200 1342
+2025-07-29 01:20:36,990 [INFO] wait_for_flask:55 - Flask服务启动成功
+2025-07-29 01:20:36,990 [INFO] <module>:77 - 启动桌面窗口
+2025-07-29 01:20:37,123 [INFO] __init__:28 - 初始化主窗口
+2025-07-29 01:20:37,124 [WARNING] __init__:39 - 窗口图标文件不存在: EFI/Clover/CLOVER/themes/logo_main.png
+2025-07-29 01:20:37,125 [DEBUG] __init__:43 - 加载登录页面: http://127.0.0.1:5000/login
+2025-07-29 01:20:37,448 [INFO] __init__:46 - 主窗口初始化完成
+2025-07-29 01:20:37,533 [INFO] <module>:81 - 桌面窗口显示完成
+2025-07-29 01:20:37,536 [INFO] <module>:84 - 开始运行应用
