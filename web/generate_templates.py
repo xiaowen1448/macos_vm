@@ -2,6 +2,18 @@
 # -*- coding: utf-8 -*-
 
 import os
+import logging
+
+# 配置日志
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s [%(levelname)s] %(funcName)s:%(lineno)d - %(message)s',
+    handlers=[
+        logging.FileHandler('generate_templates_debug.log', encoding='utf-8'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 # 定义所有需要的模板文件
 templates = {
@@ -369,28 +381,39 @@ def create_template_content(template_info):
 
 def main():
     """主函数"""
+    logger.info("开始生成模板文件")
     templates_dir = 'templates'
     
     # 确保templates目录存在
     if not os.path.exists(templates_dir):
         os.makedirs(templates_dir)
+        logger.info(f"创建templates目录: {templates_dir}")
+    else:
+        logger.debug(f"templates目录已存在: {templates_dir}")
     
     # 创建所有模板文件
+    created_count = 0
+    skipped_count = 0
+    
     for filename, template_info in templates.items():
         filepath = os.path.join(templates_dir, filename)
         
         # 检查文件是否已存在
         if os.path.exists(filepath):
-            print(f"文件 {filename} 已存在，跳过...")
+            logger.debug(f"文件 {filename} 已存在，跳过...")
+            skipped_count += 1
             continue
         
         # 创建模板文件
+        logger.debug(f"创建模板文件: {filename}")
         content = create_template_content(template_info)
         with open(filepath, 'w', encoding='utf-8') as f:
             f.write(content)
         
-        print(f"已创建模板文件: {filename}")
+        logger.info(f"已创建模板文件: {filename}")
+        created_count += 1
     
+    logger.info(f"模板文件生成完成 - 创建: {created_count}, 跳过: {skipped_count}")
     print("所有模板文件创建完成！")
 
 if __name__ == '__main__':

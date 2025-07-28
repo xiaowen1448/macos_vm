@@ -1,4 +1,5 @@
 import json
+import logging
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, Response
 from functools import wraps
 import os
@@ -7,6 +8,18 @@ import uuid
 import threading
 import time
 import subprocess
+import paramiko
+
+# 配置日志
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s [%(levelname)s] %(funcName)s:%(lineno)d - %(message)s',
+    handlers=[
+        logging.FileHandler('app_debug.log', encoding='utf-8'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'  # 用于会话加密
@@ -33,25 +46,32 @@ def login_required(f):
 @app.route('/', methods=['GET', 'POST'])
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    logger.debug("登录页面访问")
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
+        logger.debug(f"用户尝试登录: {username}")
         if username == USERNAME and password == PASSWORD:
             session['logged_in'] = True
             session['username'] = username
+            logger.info(f"用户 {username} 登录成功")
             return redirect(url_for('clone_vm_page'))
         else:
+            logger.warning(f"用户 {username} 登录失败")
             flash('用户名或密码错误')
     return render_template('login.html')
     
 @app.route('/dashboard')
 @login_required
 def dashboard():
+    logger.debug("访问dashboard页面")
     #获取虚拟机名称
     vm_temp_dir = r'D:\macos_vm\NewVM\10.12'
     vm_chengpin_dir = r'D:\macos_vm\NewVM\chengpin_vm'
     vms = []
     vm_data=[]
+    
+    logger.debug(f"扫描成品虚拟机目录: {vm_chengpin_dir}")
     for root, dirs, files in os.walk(vm_chengpin_dir):
         for fname in files:
             if fname.endswith('.vmx'):
@@ -61,9 +81,9 @@ def dashboard():
                     'status': '已关闭',
                     'imessage': '未知'
                     })
-                #{'name': fname,'ip': '未获取到'，'status': '已关闭'，'imessage': '未知'}
+                logger.debug(f"找到成品虚拟机: {fname}")
     
-
+    logger.debug(f"扫描临时虚拟机目录: {vm_temp_dir}")
     for root, dirs, files2 in os.walk(vm_temp_dir):
         for fname2 in files2:
             if fname2.endswith('.vmx'):
@@ -75,6 +95,7 @@ def dashboard():
                     'cl_status': '未执行',
                     'sh_status': '未执行'
                 })
+                logger.debug(f"找到临时虚拟机: {fname2}")
 
     #成品vm路径：D:\macos_vm\NewVM\10.12
     vm_list=vms
@@ -85,9 +106,11 @@ def dashboard():
         {'name': 'macOS-10.15', 'available': 3, 'used': 1},
         {'name': 'macOS-11.0', 'available': 8, 'used': 4},
     ]
+    
     # 读取 macos_sh 目录下脚本文件
     script_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'macos_sh')
     script_list = []
+    logger.debug(f"扫描脚本目录: {script_dir}")
     if os.path.exists(script_dir):
         for fname in os.listdir(script_dir):
             fpath = os.path.join(script_dir, fname)
@@ -96,7 +119,10 @@ def dashboard():
                 mtime = datetime.datetime.fromtimestamp(stat.st_mtime).strftime('%Y/%m/%d %H:%M')
                 size = stat.st_size
                 script_list.append({'name': fname, 'mtime': mtime, 'size': size})
+                logger.debug(f"找到脚本文件: {fname}, 大小: {size} bytes")
     script_list.sort(key=lambda x: x['name'])
+    
+    logger.info(f"Dashboard数据准备完成 - 成品VM: {len(vm_list)}, 临时VM: {len(vm_data)}, 脚本: {len(script_list)}")
     return render_template('dashboard.html', username=session.get('username'), vm_list=vm_list,vm_data=vm_data, script_list=script_list, wuma_list=wuma_list)
 
 @app.route('/clone_vm')
@@ -283,24 +309,25 @@ def soft_env_page():
 @login_required
 def api_clone_vm():
     """启动克隆虚拟机任务"""
+    logger.info("收到克隆虚拟机API请求")
     try:
         data = request.get_json()
-        print(f"[DEBUG] API收到克隆请求: {data}")
+        logger.debug(f"API收到克隆请求参数: {data}")
         
         # 验证必要参数
         required_fields = ['templateVM', 'cloneCount', 'targetDir', 'namingPattern', 'configPlist']
         for field in required_fields:
             if not data.get(field):
-                print(f"[DEBUG] 缺少必要参数: {field}")
+                logger.warning(f"缺少必要参数: {field}")
                 return jsonify({'success': False, 'message': f'缺少必要参数: {field}'})
         
         # 验证plist文件数量
         plist_dir = data.get('configPlist')
         clone_count = int(data.get('cloneCount'))
         
-        print(f"[DEBUG] plist目录: {plist_dir}")
-        print(f"[DEBUG] 克隆数量: {clone_count}")
-        print(f"[DEBUG] plist目录是否存在: {os.path.exists(plist_dir)}")
+        logger.debug(f"plist目录: {plist_dir}")
+        logger.debug(f"克隆数量: {clone_count}")
+        logger.debug(f"plist目录是否存在: {os.path.exists(plist_dir)}")
         
         if os.path.exists(plist_dir):
             plist_files = []
@@ -308,21 +335,21 @@ def api_clone_vm():
                 if fname.endswith('.plist') or fname.endswith('.txt'):
                     plist_files.append(fname)
             
-            print(f"[DEBUG] 找到plist文件数量: {len(plist_files)}")
+            logger.debug(f"找到plist文件数量: {len(plist_files)}")
             
             if len(plist_files) < clone_count:
-                print(f"[DEBUG] plist文件不足: 需要{clone_count}个，只有{len(plist_files)}个")
+                logger.warning(f"plist文件不足: 需要{clone_count}个，只有{len(plist_files)}个")
                 return jsonify({
                     'success': False, 
                     'message': f'plist文件不足：目录中有 {len(plist_files)} 个文件，但需要克隆 {clone_count} 个虚拟机。请增加plist文件或减少克隆数量。'
                 })
         else:
-            print(f"[DEBUG] plist目录不存在: {plist_dir}")
+            logger.error(f"plist目录不存在: {plist_dir}")
             return jsonify({'success': False, 'message': f'配置文件目录不存在: {plist_dir}'})
         
         # 生成任务ID
         task_id = str(uuid.uuid4())
-        print(f"[DEBUG] 生成任务ID: {task_id}")
+        logger.info(f"生成克隆任务ID: {task_id}")
         
         # 创建任务对象
         task = {
@@ -336,18 +363,18 @@ def api_clone_vm():
         }
         
         clone_tasks[task_id] = task
-        print(f"[DEBUG] 任务已创建并存储")
+        logger.debug(f"克隆任务已创建并存储")
         
         # 启动克隆线程
         thread = threading.Thread(target=clone_vm_worker, args=(task_id,))
         thread.daemon = True
         thread.start()
-        print(f"[DEBUG] 克隆线程已启动")
+        logger.info(f"克隆线程已启动，任务ID: {task_id}")
         
         return jsonify({'success': True, 'task_id': task_id})
         
     except Exception as e:
-        print(f"[DEBUG] API异常: {str(e)}")
+        logger.error(f"克隆虚拟机API异常: {str(e)}")
         return jsonify({'success': False, 'message': str(e)})
 
 def clone_vm_worker(task_id):
@@ -782,15 +809,19 @@ def api_clone_logs(task_id):
 @login_required
 def api_vm_list():
     """获取虚拟机列表"""
+    logger.info("收到获取虚拟机列表API请求")
     try:
         # 获取分页参数
         page = request.args.get('page', 1, type=int)
         page_size = request.args.get('page_size', 10, type=int)
+        logger.debug(f"分页参数 - 页码: {page}, 每页大小: {page_size}")
         
         # 扫描虚拟机目录
         vm_dir = r'D:\macos_vm\NewVM'
         vms = []
         stats = {'total': 0, 'running': 0, 'stopped': 0, 'online': 0}
+        
+        logger.debug(f"开始扫描虚拟机目录: {vm_dir}")
         
         # 批量获取运行中的虚拟机列表（只执行一次vmrun命令）
         running_vms = set()
@@ -800,12 +831,16 @@ def api_vm_list():
                 vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
             
             list_cmd = [vmrun_path, 'list']
+            logger.debug(f"执行vmrun命令: {list_cmd}")
             result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30)
             
             if result.returncode == 0:
                 running_vms = set(result.stdout.strip().split('\n')[1:])  # 跳过标题行
+                logger.debug(f"获取到运行中虚拟机: {len(running_vms)} 个")
+            else:
+                logger.warning(f"vmrun命令执行失败: {result.stderr}")
         except Exception as e:
-            print(f"[DEBUG] 获取运行中虚拟机列表失败: {str(e)}")
+            logger.error(f"获取运行中虚拟机列表失败: {str(e)}")
         
         if os.path.exists(vm_dir):
             for root, dirs, files in os.walk(vm_dir):
@@ -820,6 +855,8 @@ def api_vm_list():
                             if vm_name in running_vm:
                                 vm_status = 'running'
                                 break
+                        
+                        logger.debug(f"找到虚拟机: {vm_name}, 状态: {vm_status}")
                         
                         # 先添加基本信息，异步获取详细信息
                         vm_info = {
@@ -838,6 +875,8 @@ def api_vm_list():
                             stats['running'] += 1
                         elif vm_status == 'stopped':
                             stats['stopped'] += 1
+        else:
+            logger.warning(f"虚拟机目录不存在: {vm_dir}")
         
         # 计算分页
         total_count = len(vms)
@@ -847,6 +886,8 @@ def api_vm_list():
         
         # 分页数据
         paged_vms = vms[start_index:end_index] if vms else []
+        
+        logger.info(f"虚拟机列表获取完成 - 总数: {total_count}, 运行中: {stats['running']}, 已停止: {stats['stopped']}")
         
         return jsonify({
             'success': True,
@@ -863,7 +904,7 @@ def api_vm_list():
         })
         
     except Exception as e:
-        print(f"[DEBUG] 获取虚拟机列表失败: {str(e)}")
+        logger.error(f"获取虚拟机列表失败: {str(e)}")
         return jsonify({
             'success': False,
             'message': f'获取虚拟机列表失败: {str(e)}'
@@ -1170,32 +1211,63 @@ def get_vm_status(vm_path):
 
 def get_vm_ip(vm_name):
     """获取虚拟机IP地址，优先用vmrun getGuestIPAddress"""
+    logger.debug(f"开始获取虚拟机 {vm_name} 的IP地址")
     try:
         # 1. 通过vmrun getGuestIPAddress
         vm_file = find_vm_file(vm_name)
         if vm_file:
+            logger.debug(f"找到虚拟机文件: {vm_file}")
             vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
             if not os.path.exists(vmrun_path):
                 vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
-            try:
-                cmd = [vmrun_path, 'getGuestIPAddress', vm_file, '-wait']
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-                if result.returncode == 0:
-                    ip = result.stdout.strip()
-                    if is_valid_ip(ip):
-                        return ip
-            except Exception as e:
-                print(f"[DEBUG] vmrun getGuestIPAddress 获取IP失败: {str(e)}")
+                logger.debug(f"使用备用vmrun路径: {vmrun_path}")
+            
+            if os.path.exists(vmrun_path):
+                try:
+                    cmd = [vmrun_path, 'getGuestIPAddress', vm_file, '-wait']
+                    logger.debug(f"执行vmrun命令: {cmd}")
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                    if result.returncode == 0:
+                        ip = result.stdout.strip()
+                        logger.debug(f"vmrun返回IP: {ip}")
+                        if is_valid_ip(ip):
+                            logger.info(f"通过vmrun成功获取IP: {ip}")
+                            return ip
+                        else:
+                            logger.warning(f"vmrun返回的IP格式无效: {ip}")
+                    else:
+                        logger.warning(f"vmrun命令执行失败，返回码: {result.returncode}, 错误: {result.stderr}")
+                except Exception as e:
+                    logger.error(f"vmrun getGuestIPAddress 获取IP失败: {str(e)}")
+            else:
+                logger.warning(f"vmrun路径不存在: {vmrun_path}")
+        else:
+            logger.warning(f"未找到虚拟机文件: {vm_name}")
+        
         # 2. 兜底：调用现有的IP获取脚本
         ip_script = os.path.join(os.path.dirname(__file__), '..', 'bat', 'get_vm_ip.bat')
         if os.path.exists(ip_script):
-            result = subprocess.run([ip_script, vm_name], capture_output=True, text=True, timeout=30)
-            if result.returncode == 0 and result.stdout.strip():
-                ip = result.stdout.strip()
-                if is_valid_ip(ip):
-                    return ip
+            logger.debug(f"尝试使用IP获取脚本: {ip_script}")
+            try:
+                result = subprocess.run([ip_script, vm_name], capture_output=True, text=True, timeout=30)
+                if result.returncode == 0 and result.stdout.strip():
+                    ip = result.stdout.strip()
+                    logger.debug(f"脚本返回IP: {ip}")
+                    if is_valid_ip(ip):
+                        logger.info(f"通过脚本成功获取IP: {ip}")
+                        return ip
+                    else:
+                        logger.warning(f"脚本返回的IP格式无效: {ip}")
+                else:
+                    logger.warning(f"IP获取脚本执行失败，返回码: {result.returncode}")
+            except Exception as e:
+                logger.error(f"IP获取脚本执行异常: {str(e)}")
+        else:
+            logger.debug(f"IP获取脚本不存在: {ip_script}")
+        
         # 3. 兜底：从VMX文件读取
         if vm_file and os.path.exists(vm_file):
+            logger.debug(f"尝试从VMX文件读取IP: {vm_file}")
             try:
                 with open(vm_file, 'r', encoding='utf-8', errors='ignore') as f:
                     content = f.read()
@@ -1203,13 +1275,19 @@ def get_vm_ip(vm_name):
                     for line in lines:
                         if 'ip=' in line.lower() or 'ipaddress=' in line.lower():
                             ip = line.split('=')[1].strip().strip('"')
+                            logger.debug(f"从VMX文件找到IP配置: {ip}")
                             if is_valid_ip(ip):
+                                logger.info(f"从VMX文件成功获取IP: {ip}")
                                 return ip
+                            else:
+                                logger.warning(f"VMX文件中的IP格式无效: {ip}")
             except Exception as e:
-                print(f"[DEBUG] 从VMX文件读取IP失败: {str(e)}")
+                logger.error(f"从VMX文件读取IP失败: {str(e)}")
+        
+        logger.warning(f"无法获取虚拟机 {vm_name} 的IP地址")
         return None
     except Exception as e:
-        print(f"[DEBUG] 获取虚拟机IP失败: {str(e)}")
+        logger.error(f"获取虚拟机IP失败: {str(e)}")
         return None
 
 def is_valid_ip(ip):
@@ -1235,19 +1313,24 @@ def is_valid_ip(ip):
 
 def get_vm_ip_status(vm_name):
     """获取虚拟机IP状态信息"""
+    logger.debug(f"开始获取虚拟机 {vm_name} 的IP状态")
     try:
         ip = get_vm_ip(vm_name)
         if not ip:
+            logger.warning(f"虚拟机 {vm_name} 未获取到IP地址")
             return {
                 'ip': None,
                 'status': 'no_ip',
                 'message': '未获取到IP地址'
             }
         
+        logger.debug(f"虚拟机 {vm_name} IP地址: {ip}")
+        
         # 检查IP连通性
         ping_result = check_ip_connectivity(ip)
         
         if ping_result['success']:
+            logger.info(f"虚拟机 {vm_name} IP {ip} 可达")
             return {
                 'ip': ip,
                 'status': 'online',
@@ -1255,6 +1338,7 @@ def get_vm_ip_status(vm_name):
                 'response_time': ping_result.get('response_time')
             }
         else:
+            logger.warning(f"虚拟机 {vm_name} IP {ip} 不可达: {ping_result.get('error')}")
             return {
                 'ip': ip,
                 'status': 'offline',
@@ -1263,7 +1347,7 @@ def get_vm_ip_status(vm_name):
             }
             
     except Exception as e:
-        print(f"[DEBUG] 获取IP状态失败: {str(e)}")
+        logger.error(f"获取虚拟机 {vm_name} IP状态失败: {str(e)}")
         return {
             'ip': None,
             'status': 'error',
@@ -1272,10 +1356,12 @@ def get_vm_ip_status(vm_name):
 
 def check_ip_connectivity(ip):
     """检查IP地址连通性"""
+    logger.debug(f"开始检查IP连通性: {ip}")
     try:
         # 使用ping命令检查连通性
-        result = subprocess.run(['ping', '-n', '1', '-w', '3000', ip], 
-                              capture_output=True, text=True, timeout=10)
+        ping_cmd = ['ping', '-n', '1', '-w', '3000', ip]
+        logger.debug(f"执行ping命令: {ping_cmd}")
+        result = subprocess.run(ping_cmd, capture_output=True, text=True, timeout=10)
         
         if result.returncode == 0:
             # 解析响应时间
@@ -1285,26 +1371,32 @@ def check_ip_connectivity(ip):
                     try:
                         time_str = line.split('时间=')[1].split('ms')[0].strip()
                         response_time = int(time_str)
+                        logger.debug(f"解析到响应时间: {response_time}ms")
                     except:
+                        logger.debug("响应时间解析失败")
                         pass
                     break
             
+            logger.debug(f"IP {ip} 连通性检查成功，响应时间: {response_time}ms")
             return {
                 'success': True,
                 'response_time': response_time
             }
         else:
+            logger.warning(f"IP {ip} ping失败，返回码: {result.returncode}")
             return {
                 'success': False,
                 'error': 'ping失败'
             }
             
     except subprocess.TimeoutExpired:
+        logger.error(f"IP {ip} 连接超时")
         return {
             'success': False,
             'error': '连接超时'
         }
     except Exception as e:
+        logger.error(f"IP {ip} 连通性检查异常: {str(e)}")
         return {
             'success': False,
             'error': str(e)
@@ -1403,6 +1495,142 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
 
+@app.route('/api/ssh_trust', methods=['POST'])
+@login_required
+def api_ssh_trust():
+    """设置SSH互信"""
+    logger.info("收到SSH互信设置API请求")
+    try:
+        data = request.get_json()
+        vm_name = data.get('vm_name')
+        username = data.get('username', 'wx')
+        password = data.get('password', '123456')
+        
+        logger.debug(f"SSH互信参数 - 虚拟机: {vm_name}, 用户: {username}")
+        
+        if not vm_name:
+            logger.warning("虚拟机名称不能为空")
+            return jsonify({'success': False, 'message': '虚拟机名称不能为空'})
+        
+        logger.info(f"开始为虚拟机 {vm_name} 设置SSH互信")
+        
+        # 获取虚拟机IP地址
+        vm_ip = get_vm_ip(vm_name)
+        if not vm_ip:
+            logger.error(f"无法获取虚拟机 {vm_name} 的IP地址")
+            return jsonify({'success': False, 'message': '无法获取虚拟机IP地址，请确保虚拟机正在运行'})
+        
+        logger.debug(f"虚拟机IP: {vm_ip}")
+        
+        # 检查IP连通性
+        ip_status = check_ip_connectivity(vm_ip)
+        if not ip_status['success']:
+            logger.warning(f"虚拟机IP {vm_ip} 无法连接: {ip_status.get('error', '未知错误')}")
+            return jsonify({'success': False, 'message': f'虚拟机IP {vm_ip} 无法连接，请检查网络状态'})
+        
+        logger.debug("IP连通性检查通过")
+        
+        # 设置SSH互信
+        success, message = setup_ssh_trust(vm_ip, username, password)
+        
+        if success:
+            logger.info(f"SSH互信设置成功: {message}")
+            return jsonify({'success': True, 'message': message})
+        else:
+            logger.error(f"SSH互信设置失败: {message}")
+            return jsonify({'success': False, 'message': message})
+            
+    except Exception as e:
+        logger.error(f"SSH互信设置异常: {str(e)}")
+        return jsonify({'success': False, 'message': f'设置SSH互信时发生错误: {str(e)}'})
+
+def setup_ssh_trust(ip, username, password):
+    """设置SSH互信的具体实现"""
+    logger.info(f"开始设置SSH互信 - IP: {ip}, 用户: {username}")
+    try:
+        # 1. 生成SSH密钥对（如果不存在）
+        ssh_key_path = os.path.expanduser('~/.ssh/id_rsa')
+        ssh_pub_key_path = os.path.expanduser('~/.ssh/id_rsa.pub')
+        
+        # 确保.ssh目录存在
+        ssh_dir = os.path.expanduser('~/.ssh')
+        if not os.path.exists(ssh_dir):
+            os.makedirs(ssh_dir, mode=0o700)
+            logger.debug(f"创建SSH目录: {ssh_dir}")
+        
+        if not os.path.exists(ssh_key_path):
+            logger.info("生成SSH密钥对")
+            # 生成SSH密钥对
+            keygen_cmd = ['ssh-keygen', '-t', 'rsa', '-b', '2048', '-f', ssh_key_path, '-N', '']
+            logger.debug(f"执行ssh-keygen命令: {keygen_cmd}")
+            result = subprocess.run(keygen_cmd, capture_output=True, text=True, timeout=30)
+            if result.returncode != 0:
+                logger.error(f"生成SSH密钥失败: {result.stderr}")
+                return False, f"生成SSH密钥失败: {result.stderr}"
+            else:
+                logger.debug("SSH密钥生成成功")
+        
+        # 2. 读取公钥
+        if not os.path.exists(ssh_pub_key_path):
+            logger.error("SSH公钥文件不存在")
+            return False, "SSH公钥文件不存在"
+        
+        with open(ssh_pub_key_path, 'r') as f:
+            public_key = f.read().strip()
+        
+        logger.debug("读取公钥成功")
+        
+        # 3. 使用paramiko库设置SSH互信（推荐方法）
+        try:
+            import paramiko
+            
+            # 创建SSH客户端
+            ssh = paramiko.SSHClient()
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            
+            # 连接到远程主机
+            logger.debug(f"尝试连接到 {ip}")
+            ssh.connect(ip, username=username, password=password, timeout=10)
+            logger.debug("SSH连接成功")
+            
+            # 创建.ssh目录
+            stdin, stdout, stderr = ssh.exec_command('mkdir -p ~/.ssh')
+            exit_status = stdout.channel.recv_exit_status()
+            logger.debug(f"创建.ssh目录状态: {exit_status}")
+            
+            # 添加公钥到authorized_keys
+            stdin, stdout, stderr = ssh.exec_command(f'echo "{public_key}" >> ~/.ssh/authorized_keys')
+            exit_status = stdout.channel.recv_exit_status()
+            logger.debug(f"添加公钥状态: {exit_status}")
+            
+            # 设置正确的权限
+            stdin, stdout, stderr = ssh.exec_command('chmod 700 ~/.ssh')
+            stdin, stdout, stderr = ssh.exec_command('chmod 600 ~/.ssh/authorized_keys')
+            logger.debug("设置SSH目录权限完成")
+            
+            # 验证设置是否成功
+            stdin, stdout, stderr = ssh.exec_command('cat ~/.ssh/authorized_keys')
+            authorized_keys_content = stdout.read().decode().strip()
+            
+            ssh.close()
+            
+            if public_key in authorized_keys_content:
+                logger.info("SSH互信设置成功（使用paramiko）")
+                return True, "SSH互信设置成功"
+            else:
+                logger.error("公钥未正确添加到authorized_keys")
+                return False, "公钥未正确添加到authorized_keys"
+            
+        except ImportError:
+            logger.error("paramiko库未安装")
+            return False, "需要安装paramiko库: pip install paramiko"
+        except Exception as e:
+            logger.error(f"paramiko方法失败: {str(e)}")
+            return False, f"SSH连接失败: {str(e)}"
+        
+    except Exception as e:
+        logger.error(f"setup_ssh_trust异常: {str(e)}")
+        return False, f"设置SSH互信时发生错误: {str(e)}"
+
 if __name__ == '__main__':
-    app.run(debug=True) 
-   #dashboard()
+    app.run(debug=True, host='0.0.0.0', port=5000)

@@ -653,9 +653,14 @@
                         ${getJuStatusIcon(vm.ju_info)}
                     </td>
                     <td id="ssh-${vm.name}">
-                        <span class="badge status-badge ${vm.ssh_status === 'online' ? 'bg-success' : 'bg-secondary'}">
-                            ${vm.ssh_status === 'online' ? '在线' : '离线'}
-                        </span>
+                        <div class="d-flex align-items-center">
+                            <span class="badge status-badge ${vm.ssh_status === 'online' ? 'bg-success' : 'bg-secondary'} me-2">
+                                ${vm.ssh_status === 'online' ? '在线' : '离线'}
+                            </span>
+                            <button class="btn btn-outline-primary btn-sm" onclick="setupSSHTrust('${vm.name}')" title="设置SSH互信" style="cursor: pointer;">
+                                <i class="fas fa-key"></i>
+                            </button>
+                        </div>
                     </td>
                     <td>
                         <div class="btn-group btn-group-sm">
@@ -822,9 +827,14 @@
                         const sshCell = document.getElementById(`ssh-${vmName}`);
                         if (sshCell) {
                             sshCell.innerHTML = `
-                                <span class="badge status-badge ${data.ssh_status === 'online' ? 'bg-success' : 'bg-secondary'}">
-                                    ${data.ssh_status === 'online' ? '在线' : '离线'}
-                                </span>
+                                <div class="d-flex align-items-center">
+                                    <span class="badge status-badge ${data.ssh_status === 'online' ? 'bg-success' : 'bg-secondary'} me-2">
+                                        ${data.ssh_status === 'online' ? '在线' : '离线'}
+                                    </span>
+                                    <button class="btn btn-outline-primary btn-sm" onclick="setupSSHTrust('${vmName}')" title="设置SSH互信" style="cursor: pointer;">
+                                        <i class="fas fa-key"></i>
+                                    </button>
+                                </div>
                             `;
                         }
                     }
@@ -832,6 +842,51 @@
                 .catch(error => {
                     console.log(`获取虚拟机 ${vmName} 详细信息失败:`, error);
                 });
+        }
+
+        // SSH互信设置功能
+        function setupSSHTrust(vmName) {
+            // 显示确认对话框
+            if (!confirm(`确定要为虚拟机 "${vmName}" 设置SSH互信吗？\n\n用户名: wx\n密码: 123456`)) {
+                return;
+            }
+            
+            // 显示加载状态
+            const button = event.target.closest('button');
+            const originalContent = button.innerHTML;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            button.disabled = true;
+            
+            // 调用API
+            fetch('/api/ssh_trust', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    vm_name: vmName,
+                    username: 'wx',
+                    password: '123456'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(`SSH互信设置成功！\n\n虚拟机: ${vmName}\n状态: ${data.message}`);
+                    // 刷新SSH状态
+                    loadVMDetails(vmName);
+                } else {
+                    alert(`SSH互信设置失败！\n\n错误: ${data.message}`);
+                }
+            })
+            .catch(error => {
+                alert(`网络错误: ${error.message}`);
+            })
+            .finally(() => {
+                // 恢复按钮状态
+                button.innerHTML = originalContent;
+                button.disabled = false;
+            });
         }
 
         // 切换单个虚拟机选择
