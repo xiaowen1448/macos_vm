@@ -28,6 +28,17 @@
             overflow-y: auto;
         }
         
+        /* 调整顶部导航栏 */
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 280px;
+            right: 0;
+            z-index: 999;
+            background: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
         .accordion-button:not(.collapsed) {
             background-color: #e7f3ff;
             color: #0d6efd;
@@ -77,9 +88,9 @@
         /* 主内容区域铺满 */
         main {
             margin-left: 280px;
-            margin-top: 80px;
+            margin-top: 56px;
             width: calc(100% - 280px);
-            height: calc(100vh - 80px);
+            height: calc(100vh - 56px);
             overflow: hidden;
         }
         
@@ -91,12 +102,12 @@
         
         .form-section {
             flex: 0 0 auto;
-            padding: 1rem;
+            padding: 0.5rem;
         }
         
         .log-section {
             flex: 1;
-            padding: 1rem;
+            padding: 0.5rem;
             overflow: hidden;
         }
         
@@ -461,26 +472,14 @@
                         </div>
                         
                         <!-- 统计数字 -->
-                        <div class="row">
-                            <div class="col-md-3">
+                        <div class="row" style="display: none;">
+                            <div class="col-md-6">
                                 <div class="text-center">
                                     <div class="h4 text-success" id="successCount">0</div>
                                     <small>成功</small>
                                 </div>
                             </div>
-                            <div class="col-md-3">
-                                <div class="text-center">
-                                    <div class="h4 text-warning" id="runningCount">0</div>
-                                    <small>运行中</small>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="text-center">
-                                    <div class="h4 text-danger" id="errorCount">0</div>
-                                    <small>失败</small>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
+                            <div class="col-md-6">
                                 <div class="text-center">
                                     <div class="h4 text-info" id="totalCount">0</div>
                                     <small>总计</small>
@@ -524,6 +523,7 @@
                                         <div>
                                             <button class="btn btn-sm btn-outline-secondary" id="clearLog">清空</button>
                                             <button class="btn btn-sm btn-outline-secondary" id="copyLog">复制</button>
+                                            <button class="btn btn-sm btn-outline-warning" onclick="clearHistory()">清除历史</button>
                                         </div>
                                     </div>
                                     <div class="log-content" id="logContent">
@@ -541,20 +541,12 @@
                                 </div>
                                 <div class="clone-stats p-2" id="cloneStats" style="display: none;">
                                     <h6>克隆统计</h6>
-                                    <div class="row">
-                                        <div class="col-3 text-center">
+                                    <div class="row" style="display: none;">
+                                        <div class="col-6 text-center">
                                             <div class="h4 text-success" id="successCount">0</div>
                                             <small>成功</small>
                                         </div>
-                                        <div class="col-3 text-center">
-                                            <div class="h4 text-warning" id="runningCount">0</div>
-                                            <small>运行中</small>
-                                        </div>
-                                        <div class="col-3 text-center">
-                                            <div class="h4 text-danger" id="errorCount">0</div>
-                                            <small>失败</small>
-                                        </div>
-                                        <div class="col-3 text-center">
+                                        <div class="col-6 text-center">
                                             <div class="h4 text-info" id="totalCount">0</div>
                                             <small>总计</small>
                                         </div>
@@ -635,7 +627,19 @@
             
             eventSource.onmessage = function(event) {
                 try {
+                    // 检查消息是否为空或无效
+                    if (!event.data || event.data.trim() === '') {
+                        console.warn('收到空消息，跳过处理');
+                        return;
+                    }
+                    
+                    console.log('收到EventSource消息:', event.data);
+                    console.log('消息类型:', typeof event.data);
+                    console.log('消息长度:', event.data.length);
+                    
+                    // 尝试解析JSON
                     const data = JSON.parse(event.data);
+                    console.log('JSON解析成功:', data);
                     
                     if (data.type === 'log') {
                         addLog(data.level, data.message);
@@ -649,16 +653,43 @@
                             updateEstimatedTime(data.estimated_remaining);
                         }
                     } else if (data.type === 'stats') {
+                        console.log('处理统计数据:', data.stats);
                         updateStats(data.stats);
                     } else if (data.type === 'complete') {
+                        console.log('处理完成信号:', data);
                         handleComplete(data);
                     } else if (data.type === 'error') {
                         addLog('error', data.message);
                         console.error('服务器错误:', data.message);
+                    } else {
+                        console.warn('未知消息类型:', data.type);
                     }
                 } catch (error) {
                     console.error('解析EventSource消息失败:', error);
-                    addLog('error', '解析服务器消息失败');
+                    console.error('原始消息数据:', event.data);
+                    console.error('消息长度:', event.data.length);
+                    console.error('消息类型:', typeof event.data);
+                    
+                    // 尝试显示原始消息内容
+                    try {
+                        // 检查是否是有效的JSON格式
+                        const trimmedData = event.data.trim();
+                        if (trimmedData.startsWith('{') && trimmedData.endsWith('}')) {
+                            // 可能是JSON格式，尝试重新解析
+                            try {
+                                const parsedData = JSON.parse(trimmedData);
+                                console.log('重新解析成功:', parsedData);
+                                // 如果重新解析成功，说明是有效的JSON，可能是其他问题
+                                addLog('error', `消息处理异常，但JSON格式正确: ${trimmedData.substring(0, 50)}...`);
+                            } catch (reparseError) {
+                                addLog('error', `消息解析失败: ${trimmedData.substring(0, 100)}...`);
+                            }
+                        } else {
+                            addLog('error', `消息格式异常: ${event.data.substring(0, 100)}...`);
+                        }
+                    } catch (e) {
+                        addLog('error', '解析服务器消息失败');
+                    }
                 }
             };
             
@@ -713,15 +744,21 @@
         
         // 更新进度
         function updateProgress(current, total) {
-            const progressBar = document.getElementById('progressBar');
-            const progressText = document.getElementById('progressText');
-            const percentage = total > 0 ? (current / total) * 100 : 0;
-            
-            progressBar.style.width = percentage + '%';
-            progressText.textContent = `${current} / ${total} 完成`;
-            
-            // 更新克隆统计区域的进度条
-            updateCloneProgress(current, total);
+            try {
+                console.log('更新进度:', current, total);
+                const progressBar = document.getElementById('progressBar');
+                const progressText = document.getElementById('progressText');
+                const percentage = total > 0 ? (current / total) * 100 : 0;
+                
+                if (progressBar) progressBar.style.width = percentage + '%';
+                if (progressText) progressText.textContent = `${current} / ${total} 完成`;
+                
+                // 更新克隆统计区域的进度条
+                updateCloneProgress(current, total);
+            } catch (error) {
+                console.error('更新进度失败:', error);
+                addLog('error', `进度更新失败: ${error.message}`);
+            }
         }
         
         // 更新克隆进度条
@@ -770,33 +807,65 @@
         
         // 更新统计
         function updateStats(stats) {
-            document.getElementById('successCount').textContent = stats.success || 0;
-            document.getElementById('runningCount').textContent = stats.running || 0;
-            document.getElementById('errorCount').textContent = stats.error || 0;
-            document.getElementById('totalCount').textContent = stats.total || 0;
+            try {
+                console.log('更新统计数据:', stats);
+                const successElement = document.getElementById('successCount');
+                const runningElement = document.getElementById('runningCount');
+                const errorElement = document.getElementById('errorCount');
+                const totalElement = document.getElementById('totalCount');
+                
+                if (successElement) successElement.textContent = stats.success || 0;
+                if (runningElement) runningElement.textContent = stats.running || 0;
+                if (errorElement) errorElement.textContent = stats.error || 0;
+                if (totalElement) totalElement.textContent = stats.total || 0;
+                
+                console.log('统计更新完成');
+            } catch (error) {
+                console.error('更新统计数据失败:', error);
+                addLog('error', `统计更新失败: ${error.message}`);
+            }
         }
         
         // 处理完成
         function handleComplete(data) {
-            isCloning = false;
-            
-            if (eventSource) {
-                eventSource.close();
+            try {
+                console.log('处理完成信号:', data);
+                isCloning = false;
+                
+                if (eventSource) {
+                    eventSource.close();
+                }
+                
+                // 保存任务完成状态和统计信息到localStorage
+                const taskInfo = {
+                    taskId: localStorage.getItem('currentCloneTaskId'),
+                    completed: true,
+                    success: data.success,
+                    stats: data.stats,
+                    completedAt: new Date().toISOString()
+                };
+                localStorage.setItem('lastCompletedTask', JSON.stringify(taskInfo));
+                
+                // 添加完成日志到文件
+                addLog('info', '任务已完成，日志已保存到文件');
+                
+                // 不清除localStorage中的任务ID，保留用于显示历史记录
+                console.log('保存任务完成信息到localStorage');
+                
+                if (data.success) {
+                    updateStatus('success', '准备就绪');
+                    addLog('success', `克隆任务完成！成功: ${data.stats.success}, 失败: ${data.stats.error}`);
+                } else {
+                    updateStatus('error', '克隆失败');
+                    addLog('error', '克隆任务失败');
+                }
+                
+                // 重置表单但保留日志
+                resetFormKeepLogs();
+            } catch (error) {
+                console.error('处理完成信号失败:', error);
+                addLog('error', `处理完成信号失败: ${error.message}`);
             }
-            
-            // 清除localStorage中的任务ID
-            localStorage.removeItem('currentCloneTaskId');
-            console.log('清除localStorage中的任务ID');
-            
-            if (data.success) {
-                updateStatus('success', '克隆完成');
-                addLog('success', `克隆任务完成！成功: ${data.stats.success}, 失败: ${data.stats.error}`);
-            } else {
-                updateStatus('error', '克隆失败');
-                addLog('error', '克隆任务失败');
-            }
-            
-            resetForm();
         }
         
         // 重置表单
@@ -810,10 +879,164 @@
             document.getElementById('detailedProgress').style.display = 'none';
         }
         
+        // 重置表单但保留日志
+        function resetFormKeepLogs() {
+            isCloning = false;
+            const cloneBtn = document.getElementById('cloneBtn');
+            if (cloneBtn) {
+                cloneBtn.disabled = false;
+                cloneBtn.textContent = '开始克隆';
+            }
+            
+            // 不隐藏进度容器，保留显示历史记录
+            // const progressContainer = document.getElementById('progressContainer');
+            // if (progressContainer) {
+            //     progressContainer.style.display = 'none';
+            // }
+            
+            // 不隐藏克隆统计区域，保留显示历史记录
+            // const cloneStats = document.getElementById('cloneStats');
+            // if (cloneStats) {
+            //     cloneStats.style.display = 'none';
+            // }
+            
+            // 重置详细进度信息
+            const detailedProgress = document.getElementById('detailedProgress');
+            if (detailedProgress) {
+                detailedProgress.style.display = 'none';
+            }
+        }
+        
+        // 显示已完成的任务
+        function displayCompletedTask(completedTask) {
+            console.log('显示已完成的任务:', completedTask);
+            
+            // 显示进度容器
+            const progressContainer = document.getElementById('progressContainer');
+            if (progressContainer) {
+                progressContainer.style.display = 'block';
+            }
+            
+            // 显示克隆统计区域
+            const cloneStats = document.getElementById('cloneStats');
+            if (cloneStats) {
+                cloneStats.style.display = 'block';
+            }
+            
+            // 更新统计信息
+            if (completedTask.stats) {
+                updateStats(completedTask.stats);
+            }
+            
+            // 设置进度条为100%
+            const progressBar = document.getElementById('progressBar');
+            const progressText = document.getElementById('progressText');
+            if (progressBar) {
+                progressBar.style.width = '100%';
+            }
+            if (progressText) {
+                progressText.textContent = '任务已完成';
+            }
+            
+            // 更新状态
+            if (completedTask.success) {
+                updateStatus('success', '准备就绪');
+            } else {
+                updateStatus('error', '克隆失败');
+            }
+            
+            // 只重置按钮状态，保持进度容器和统计区域显示
+            isCloning = false;
+            const cloneBtn = document.getElementById('cloneBtn');
+            if (cloneBtn) {
+                cloneBtn.disabled = false;
+                cloneBtn.textContent = '开始克隆';
+            }
+            
+            // 从文件加载日志
+            loadTaskLogsFromFile(completedTask.taskId);
+        }
+        
         // 清空日志
         document.getElementById('clearLog').addEventListener('click', function() {
             document.getElementById('logContent').innerHTML = '<div class="log-line log-info">日志已清空...</div>';
         });
+        
+        // 清除历史记录
+        function clearHistory() {
+            localStorage.removeItem('currentCloneTaskId');
+            localStorage.removeItem('lastCompletedTask');
+            console.log('已清除历史记录');
+            
+            // 清空日志内容
+            const logContent = document.getElementById('logContent');
+            logContent.innerHTML = '<div class="log-line log-info">系统就绪，等待开始克隆...</div>';
+            
+            addLog('info', '历史记录已清除');
+            
+            // 重置页面状态
+            resetForm();
+            updateStatus('idle', '准备就绪');
+        }
+        
+        // 从文件加载任务日志
+        function loadTaskLogsFromFile(taskId) {
+            console.log('从文件加载任务日志:', taskId);
+            
+            fetch(`/api/task_logs/${taskId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success' && data.logs) {
+                        console.log('成功加载日志文件');
+                        
+                        // 清空当前日志内容
+                        const logContent = document.getElementById('logContent');
+                        logContent.innerHTML = '';
+                        
+                        // 解析日志内容并添加到界面
+                        const logLines = data.logs.split('\n');
+                        logLines.forEach(line => {
+                            if (line.trim()) {
+                                // 解析日志格式: [时间] [级别] 消息
+                                const match = line.match(/\[(.*?)\] \[(.*?)\] (.*)/);
+                                if (match) {
+                                    const timestamp = match[1];
+                                    const level = match[2].toLowerCase();
+                                    const message = match[3];
+                                    
+                                    const logLine = document.createElement('div');
+                                    logLine.className = `log-line log-${level}`;
+                                    logLine.innerHTML = `[${timestamp}] ${message}`;
+                                    logContent.appendChild(logLine);
+                                } else {
+                                    // 如果无法解析格式，直接显示原始行
+                                    const logLine = document.createElement('div');
+                                    logLine.className = 'log-line log-info';
+                                    logLine.innerHTML = line;
+                                    logContent.appendChild(logLine);
+                                }
+                            }
+                        });
+                        
+                        // 滚动到底部
+                        logContent.scrollTop = logContent.scrollHeight;
+                        
+                        // 添加加载完成信息
+                        const loadInfo = document.createElement('div');
+                        loadInfo.className = 'log-line log-info';
+                        loadInfo.innerHTML = '[系统] 已从文件加载历史日志';
+                        logContent.appendChild(loadInfo);
+                        logContent.scrollTop = logContent.scrollHeight;
+                    } else {
+                        console.log('日志文件不存在或为空');
+                        addLog('info', '未找到历史日志文件');
+                    }
+                })
+                .catch(error => {
+                    console.error('加载日志文件失败:', error);
+                    addLog('error', `加载日志文件失败: ${error.message}`);
+                });
+        }
         
         // 复制日志
         document.getElementById('copyLog').addEventListener('click', function() {
@@ -918,11 +1141,54 @@
             // 从localStorage获取任务ID
             const taskId = localStorage.getItem('currentCloneTaskId');
             if (taskId) {
+                console.log('发现任务ID:', taskId);
+                
+                // 检查是否有已完成的任务信息
+                const lastCompletedTask = localStorage.getItem('lastCompletedTask');
+                if (lastCompletedTask) {
+                    try {
+                        const completedTask = JSON.parse(lastCompletedTask);
+                        if (completedTask.taskId === taskId && completedTask.completed) {
+                            console.log('发现已完成的任务，显示历史记录');
+                            displayCompletedTask(completedTask);
+                            // 从文件加载日志
+                            loadTaskLogsFromFile(taskId);
+                            return;
+                        }
+                    } catch (error) {
+                        console.error('解析已完成任务信息失败:', error);
+                    }
+                }
+                
                 console.log('发现正在运行的任务:', taskId);
+                
+                // 设置克隆状态为true
+                isCloning = true;
+                
+                // 显示进度容器
+                const progressContainer = document.getElementById('progressContainer');
+                if (progressContainer) {
+                    progressContainer.style.display = 'block';
+                }
+                
+                // 显示克隆统计区域
+                const cloneStats = document.getElementById('cloneStats');
+                if (cloneStats) {
+                    cloneStats.style.display = 'block';
+                }
+                
+                // 禁用克隆按钮
+                const cloneButton = document.getElementById('cloneButton');
+                if (cloneButton) {
+                    cloneButton.disabled = true;
+                    cloneButton.textContent = '克隆进行中...';
+                }
                 
                 // 更新状态为运行中
                 updateStatus('running', '重新连接任务...');
-                document.getElementById('progressContainer').style.display = 'block';
+                
+                // 从文件加载日志
+                loadTaskLogsFromFile(taskId);
                 
                 // 重新连接EventSource
                 connectToTask(taskId);

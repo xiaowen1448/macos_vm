@@ -251,8 +251,6 @@ def vm_script_page():
     """虚拟机脚本管理页面"""
     return render_template('vm_script.html')
 
-
-
 @app.route('/vm_trust')
 @login_required
 def vm_trust_page():
@@ -454,17 +452,39 @@ def clone_vm_worker(task_id):
             ]
             
             print(f"[DEBUG] 快照命令: {' '.join(snapshot_cmd)}")
-            add_task_log(task_id, 'info', f'执行快照命令: {" ".join(snapshot_cmd)}')
+            # 只在后台打印命令详情，不发送到前端
+            print(f"[DEBUG] 执行快照命令: {' '.join(snapshot_cmd)}")
             
             try:
                 # 执行快照命令
                 print(f"[DEBUG] 开始执行快照命令...")
+                
+                # 记录详细的快照命令执行信息
+                add_task_log(task_id, 'info', f'执行快照命令: {" ".join(snapshot_cmd)}')
+                
+                # 记录命令开始时间
+                start_time = datetime.datetime.now()
+                print(f"[DEBUG] 快照命令开始时间: {start_time}")
+                
                 result = subprocess.run(snapshot_cmd, capture_output=True, text=True, timeout=120)
+                
+                # 记录命令结束时间
+                end_time = datetime.datetime.now()
+                duration = (end_time - start_time).total_seconds()
+                print(f"[DEBUG] 快照命令结束时间: {end_time}")
+                print(f"[DEBUG] 快照命令执行时长: {duration} 秒")
                 
                 print(f"[DEBUG] 快照命令返回码: {result.returncode}")
                 print(f"[DEBUG] 快照命令输出: {result.stdout}")
                 if result.stderr:
                     print(f"[DEBUG] 快照命令错误: {result.stderr}")
+                
+                # 记录详细的快照执行结果
+                add_task_log(task_id, 'info', f'快照命令执行完成，返回码: {result.returncode}, 耗时: {duration:.2f}秒')
+                if result.stdout:
+                    add_task_log(task_id, 'info', f'快照命令输出: {result.stdout.strip()}')
+                if result.stderr:
+                    add_task_log(task_id, 'warning', f'快照命令错误: {result.stderr.strip()}')
                 
                 if result.returncode == 0:
                     add_task_log(task_id, 'success', f'虚拟机快照创建成功: {snapshot_name}')
@@ -603,16 +623,36 @@ def clone_vm_worker(task_id):
                     print(f"[DEBUG] 直接从模板克隆")
                 
                 print(f"[DEBUG] 克隆命令: {' '.join(clone_cmd)}")
-                add_task_log(task_id, 'info', f'执行命令: {" ".join(clone_cmd)}')
+                # 只在后台打印命令详情，不发送到前端
+                print(f"[DEBUG] 执行命令: {' '.join(clone_cmd)}")
                 
-                # 执行克隆
+                # 记录详细的命令执行信息
+                add_task_log(task_id, 'info', f'执行克隆命令: {" ".join(clone_cmd)}')
                 print(f"[DEBUG] 开始执行克隆命令...")
+                
+                # 记录命令开始时间
+                start_time = datetime.datetime.now()
+                print(f"[DEBUG] 命令开始时间: {start_time}")
+                
                 result = subprocess.run(clone_cmd, capture_output=True, text=True, timeout=300)
+                
+                # 记录命令结束时间
+                end_time = datetime.datetime.now()
+                duration = (end_time - start_time).total_seconds()
+                print(f"[DEBUG] 命令结束时间: {end_time}")
+                print(f"[DEBUG] 命令执行时长: {duration} 秒")
                 
                 print(f"[DEBUG] 克隆命令返回码: {result.returncode}")
                 print(f"[DEBUG] 克隆命令输出: {result.stdout}")
                 if result.stderr:
                     print(f"[DEBUG] 克隆命令错误: {result.stderr}")
+                
+                # 记录详细的执行结果
+                add_task_log(task_id, 'info', f'克隆命令执行完成，返回码: {result.returncode}, 耗时: {duration:.2f}秒')
+                if result.stdout:
+                    add_task_log(task_id, 'info', f'命令输出: {result.stdout.strip()}')
+                if result.stderr:
+                    add_task_log(task_id, 'warning', f'命令错误: {result.stderr.strip()}')
                 
                 if result.returncode == 0:
                     add_task_log(task_id, 'success', f'虚拟机 {vm_name} 克隆成功')
@@ -631,8 +671,36 @@ def clone_vm_worker(task_id):
                     # 如果配置了自动启动
                     if params.get('autoStart') == 'true':
                         start_cmd = [vmrun_path, 'start', vm_file_path]
-                        subprocess.run(start_cmd, capture_output=True, text=True)
-                        add_task_log(task_id, 'info', f'虚拟机 {vm_name} 已启动')
+                        print(f"[DEBUG] 自动启动命令: {' '.join(start_cmd)}")
+                        add_task_log(task_id, 'info', f'执行启动命令: {" ".join(start_cmd)}')
+                        
+                        # 记录启动命令开始时间
+                        start_time = datetime.datetime.now()
+                        print(f"[DEBUG] 启动命令开始时间: {start_time}")
+                        
+                        result = subprocess.run(start_cmd, capture_output=True, text=True, timeout=60)
+                        
+                        # 记录启动命令结束时间
+                        end_time = datetime.datetime.now()
+                        duration = (end_time - start_time).total_seconds()
+                        print(f"[DEBUG] 启动命令结束时间: {end_time}")
+                        print(f"[DEBUG] 启动命令执行时长: {duration} 秒")
+                        print(f"[DEBUG] 启动命令返回码: {result.returncode}")
+                        print(f"[DEBUG] 启动命令输出: {result.stdout}")
+                        if result.stderr:
+                            print(f"[DEBUG] 启动命令错误: {result.stderr}")
+                        
+                        # 记录详细的启动执行结果
+                        add_task_log(task_id, 'info', f'启动命令执行完成，返回码: {result.returncode}, 耗时: {duration:.2f}秒')
+                        if result.stdout:
+                            add_task_log(task_id, 'info', f'启动命令输出: {result.stdout.strip()}')
+                        if result.stderr:
+                            add_task_log(task_id, 'warning', f'启动命令错误: {result.stderr.strip()}')
+                        
+                        if result.returncode == 0:
+                            add_task_log(task_id, 'success', f'虚拟机 {vm_name} 启动成功')
+                        else:
+                            add_task_log(task_id, 'error', f'虚拟机 {vm_name} 启动失败: {result.stderr}')
                 else:
                     add_task_log(task_id, 'error', f'虚拟机 {vm_name} 克隆失败: {result.stderr}')
                     print(f"[DEBUG] 虚拟机 {vm_name} 克隆失败: {result.stderr}")
@@ -747,6 +815,16 @@ def add_task_log(task_id, level, message):
             'message': message
         }
         task['logs'].append(log_entry)
+        
+        # 同时写入日志文件
+        log_file_path = f'logs/task_{task_id}.log'
+        os.makedirs('logs', exist_ok=True)
+        try:
+            with open(log_file_path, 'a', encoding='utf-8') as f:
+                timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                f.write(f'[{timestamp}] [{level.upper()}] {message}\n')
+        except Exception as e:
+            print(f"[DEBUG] 写入日志文件失败: {str(e)}")
 
 @app.route('/api/clone_logs/<task_id>')
 @login_required
@@ -771,41 +849,83 @@ def api_clone_logs(task_id):
                     # 检查是否是进度数据
                     if isinstance(log_entry, dict) and log_entry.get('type') == 'progress':
                         # 发送进度数据
-                        yield f"data: {json.dumps(log_entry)}\n\n"
+                        try:
+                            yield f"data: {json.dumps(log_entry, ensure_ascii=False)}\n\n"
+                        except Exception as e:
+                            print(f"[DEBUG] 进度数据序列化失败: {str(e)}")
+                            yield f"data: {json.dumps({'type': 'error', 'message': '进度数据序列化失败'})}\n\n"
                     else:
                         # 发送普通日志
-                        log_data = {
-                            'type': 'log',
-                            'level': log_entry['level'],
-                            'message': log_entry['message']
-                        }
-                        yield f"data: {json.dumps(log_data)}\n\n"
+                        try:
+                            # 确保消息是字符串类型
+                            message = str(log_entry.get('message', ''))
+                            log_data = {
+                                'type': 'log',
+                                'level': log_entry.get('level', 'info'),
+                                'message': message
+                            }
+                            yield f"data: {json.dumps(log_data, ensure_ascii=False)}\n\n"
+                        except Exception as e:
+                            print(f"[DEBUG] 日志数据序列化失败: {str(e)}")
+                            yield f"data: {json.dumps({'type': 'error', 'message': '日志数据序列化失败'})}\n\n"
                     
                     last_log_index += 1
                 
                 # 发送统计更新
-                stats_data = {
-                    'type': 'stats',
-                    'stats': task['stats']
-                }
-                yield f"data: {json.dumps(stats_data)}\n\n"
+                try:
+                    stats_data = {
+                        'type': 'stats',
+                        'stats': task['stats']
+                    }
+                    yield f"data: {json.dumps(stats_data, ensure_ascii=False)}\n\n"
+                except Exception as e:
+                    print(f"[DEBUG] 统计数据序列化失败: {str(e)}")
+                    yield f"data: {json.dumps({'type': 'error', 'message': '统计数据序列化失败'})}\n\n"
                 
                 timeout_counter += 1
                 time.sleep(1)
             
             # 发送完成信号
-            complete_data = {
-                'type': 'complete',
-                'success': task['status'] == 'completed',
-                'stats': task['stats']
-            }
-            yield f"data: {json.dumps(complete_data)}\n\n"
+            try:
+                complete_data = {
+                    'type': 'complete',
+                    'success': task['status'] == 'completed',
+                    'stats': task['stats']
+                }
+                yield f"data: {json.dumps(complete_data, ensure_ascii=False)}\n\n"
+            except Exception as e:
+                print(f"[DEBUG] 完成信号序列化失败: {str(e)}")
+                yield f"data: {json.dumps({'type': 'error', 'message': '完成信号序列化失败'})}\n\n"
             
         except Exception as e:
             print(f"[DEBUG] 日志流生成错误: {str(e)}")
             yield f"data: {json.dumps({'type': 'error', 'message': f'日志流错误: {str(e)}'})}\n\n"
     
     return Response(generate(), mimetype='text/event-stream')
+
+@app.route('/api/task_logs/<task_id>')
+@login_required
+def api_get_task_logs(task_id):
+    """获取任务日志文件内容"""
+    try:
+        log_file_path = f'logs/task_{task_id}.log'
+        if os.path.exists(log_file_path):
+            with open(log_file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return jsonify({
+                'status': 'success',
+                'logs': content
+            })
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': '日志文件不存在'
+            })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': f'读取日志文件失败: {str(e)}'
+        })
 
 @app.route('/api/vm_list')
 @login_required
@@ -1071,12 +1191,34 @@ def api_vm_start():
         if not os.path.exists(vmrun_path):
             vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
         
+        print(f"[DEBUG] 启动虚拟机 {vm_name}")
+        print(f"[DEBUG] 虚拟机文件路径: {vm_file}")
+        print(f"[DEBUG] vmrun路径: {vmrun_path}")
+        
         start_cmd = [vmrun_path, 'start', vm_file]
+        print(f"[DEBUG] 启动命令: {' '.join(start_cmd)}")
+        
+        # 记录命令开始时间
+        start_time = datetime.datetime.now()
+        print(f"[DEBUG] 启动命令开始时间: {start_time}")
+        
         result = subprocess.run(start_cmd, capture_output=True, text=True, timeout=60)
         
+        # 记录命令结束时间
+        end_time = datetime.datetime.now()
+        duration = (end_time - start_time).total_seconds()
+        print(f"[DEBUG] 启动命令结束时间: {end_time}")
+        print(f"[DEBUG] 启动命令执行时长: {duration} 秒")
+        print(f"[DEBUG] 启动命令返回码: {result.returncode}")
+        print(f"[DEBUG] 启动命令输出: {result.stdout}")
+        if result.stderr:
+            print(f"[DEBUG] 启动命令错误: {result.stderr}")
+        
         if result.returncode == 0:
+            print(f"[DEBUG] 虚拟机 {vm_name} 启动成功")
             return jsonify({'success': True, 'message': '虚拟机启动成功'})
         else:
+            print(f"[DEBUG] 虚拟机 {vm_name} 启动失败: {result.stderr}")
             return jsonify({'success': False, 'message': f'启动失败: {result.stderr}'})
             
     except Exception as e:
@@ -1103,12 +1245,34 @@ def api_vm_stop():
         if not os.path.exists(vmrun_path):
             vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
         
+        print(f"[DEBUG] 停止虚拟机 {vm_name}")
+        print(f"[DEBUG] 虚拟机文件路径: {vm_file}")
+        print(f"[DEBUG] vmrun路径: {vmrun_path}")
+        
         stop_cmd = [vmrun_path, 'stop', vm_file, 'hard']
+        print(f"[DEBUG] 停止命令: {' '.join(stop_cmd)}")
+        
+        # 记录命令开始时间
+        start_time = datetime.datetime.now()
+        print(f"[DEBUG] 停止命令开始时间: {start_time}")
+        
         result = subprocess.run(stop_cmd, capture_output=True, text=True, timeout=60)
         
+        # 记录命令结束时间
+        end_time = datetime.datetime.now()
+        duration = (end_time - start_time).total_seconds()
+        print(f"[DEBUG] 停止命令结束时间: {end_time}")
+        print(f"[DEBUG] 停止命令执行时长: {duration} 秒")
+        print(f"[DEBUG] 停止命令返回码: {result.returncode}")
+        print(f"[DEBUG] 停止命令输出: {result.stdout}")
+        if result.stderr:
+            print(f"[DEBUG] 停止命令错误: {result.stderr}")
+        
         if result.returncode == 0:
+            print(f"[DEBUG] 虚拟机 {vm_name} 停止成功")
             return jsonify({'success': True, 'message': '虚拟机停止成功'})
         else:
+            print(f"[DEBUG] 虚拟机 {vm_name} 停止失败: {result.stderr}")
             return jsonify({'success': False, 'message': f'停止失败: {result.stderr}'})
             
     except Exception as e:
@@ -1135,21 +1299,60 @@ def api_vm_restart():
         if not os.path.exists(vmrun_path):
             vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
         
+        print(f"[DEBUG] 重启虚拟机 {vm_name}")
+        print(f"[DEBUG] 虚拟机文件路径: {vm_file}")
+        print(f"[DEBUG] vmrun路径: {vmrun_path}")
+        
         # 先停止虚拟机
         stop_cmd = [vmrun_path, 'stop', vm_file, 'hard']
+        print(f"[DEBUG] 重启-停止命令: {' '.join(stop_cmd)}")
+        
+        # 记录停止命令开始时间
+        stop_start_time = datetime.datetime.now()
+        print(f"[DEBUG] 重启-停止命令开始时间: {stop_start_time}")
+        
         stop_result = subprocess.run(stop_cmd, capture_output=True, text=True, timeout=60)
+        
+        # 记录停止命令结束时间
+        stop_end_time = datetime.datetime.now()
+        stop_duration = (stop_end_time - stop_start_time).total_seconds()
+        print(f"[DEBUG] 重启-停止命令结束时间: {stop_end_time}")
+        print(f"[DEBUG] 重启-停止命令执行时长: {stop_duration} 秒")
+        print(f"[DEBUG] 重启-停止命令返回码: {stop_result.returncode}")
+        print(f"[DEBUG] 重启-停止命令输出: {stop_result.stdout}")
+        if stop_result.stderr:
+            print(f"[DEBUG] 重启-停止命令错误: {stop_result.stderr}")
         
         # 等待一下再启动
         import time
+        print(f"[DEBUG] 等待2秒后启动...")
         time.sleep(2)
         
         # 启动虚拟机
         start_cmd = [vmrun_path, 'start', vm_file]
+        print(f"[DEBUG] 重启-启动命令: {' '.join(start_cmd)}")
+        
+        # 记录启动命令开始时间
+        start_start_time = datetime.datetime.now()
+        print(f"[DEBUG] 重启-启动命令开始时间: {start_start_time}")
+        
         start_result = subprocess.run(start_cmd, capture_output=True, text=True, timeout=60)
         
+        # 记录启动命令结束时间
+        start_end_time = datetime.datetime.now()
+        start_duration = (start_end_time - start_start_time).total_seconds()
+        print(f"[DEBUG] 重启-启动命令结束时间: {start_end_time}")
+        print(f"[DEBUG] 重启-启动命令执行时长: {start_duration} 秒")
+        print(f"[DEBUG] 重启-启动命令返回码: {start_result.returncode}")
+        print(f"[DEBUG] 重启-启动命令输出: {start_result.stdout}")
+        if start_result.stderr:
+            print(f"[DEBUG] 重启-启动命令错误: {start_result.stderr}")
+        
         if start_result.returncode == 0:
+            print(f"[DEBUG] 虚拟机 {vm_name} 重启成功")
             return jsonify({'success': True, 'message': '虚拟机重启成功'})
         else:
+            print(f"[DEBUG] 虚拟机 {vm_name} 重启失败: {start_result.stderr}")
             return jsonify({'success': False, 'message': f'重启失败: {start_result.stderr}'})
             
     except Exception as e:
@@ -1282,19 +1485,41 @@ def get_vm_ip(vm_name):
                 try:
                     cmd = [vmrun_path, 'getGuestIPAddress', vm_file, '-wait']
                     logger.debug(f"执行vmrun命令: {cmd}")
+                    print(f"[DEBUG] 执行vmrun getGuestIPAddress命令: {' '.join(cmd)}")
+                    
+                    # 记录命令开始时间
+                    start_time = datetime.datetime.now()
+                    print(f"[DEBUG] getGuestIPAddress命令开始时间: {start_time}")
+                    
                     result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                    
+                    # 记录命令结束时间
+                    end_time = datetime.datetime.now()
+                    duration = (end_time - start_time).total_seconds()
+                    print(f"[DEBUG] getGuestIPAddress命令结束时间: {end_time}")
+                    print(f"[DEBUG] getGuestIPAddress命令执行时长: {duration} 秒")
+                    print(f"[DEBUG] getGuestIPAddress命令返回码: {result.returncode}")
+                    print(f"[DEBUG] getGuestIPAddress命令输出: {result.stdout}")
+                    if result.stderr:
+                        print(f"[DEBUG] getGuestIPAddress命令错误: {result.stderr}")
+                    
                     if result.returncode == 0:
                         ip = result.stdout.strip()
                         logger.debug(f"vmrun返回IP: {ip}")
+                        print(f"[DEBUG] vmrun返回IP: {ip}")
                         if is_valid_ip(ip):
                             logger.info(f"通过vmrun成功获取IP: {ip}")
+                            print(f"[DEBUG] IP格式有效: {ip}")
                             return ip
                         else:
                             logger.warning(f"vmrun返回的IP格式无效: {ip}")
+                            print(f"[DEBUG] IP格式无效: {ip}")
                     else:
                         logger.warning(f"vmrun命令执行失败，返回码: {result.returncode}, 错误: {result.stderr}")
+                        print(f"[DEBUG] vmrun命令执行失败，返回码: {result.returncode}, 错误: {result.stderr}")
                 except Exception as e:
                     logger.error(f"vmrun getGuestIPAddress 获取IP失败: {str(e)}")
+                    print(f"[DEBUG] vmrun getGuestIPAddress 获取IP失败: {str(e)}")
             else:
                 logger.warning(f"vmrun路径不存在: {vmrun_path}")
         else:
@@ -1804,6 +2029,79 @@ def api_scripts():
             'message': f'获取脚本列表失败: {str(e)}'
         })
 
+@app.route('/api/scripts/all')
+@login_required
+def api_all_scripts():
+    """获取所有脚本文件列表（不分页）"""
+    logger.info("收到获取所有脚本列表请求")
+    try:
+        scripts_dir = r'D:\macos_vm\macos_sh'
+        scripts = []
+        
+        if os.path.exists(scripts_dir):
+            for filename in os.listdir(scripts_dir):
+                if filename.endswith('.sh'):
+                    file_path = os.path.join(scripts_dir, filename)
+                    try:
+                        # 获取文件信息
+                        stat = os.stat(file_path)
+                        size = stat.st_size
+                        modified_time = datetime.datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+                        
+                        # 格式化文件大小
+                        if size < 1024:
+                            size_str = f"{size}B"
+                        elif size < 1024 * 1024:
+                            size_str = f"{size // 1024}KB"
+                        else:
+                            size_str = f"{size // (1024 * 1024)}MB"
+                        
+                        # 尝试读取脚本备注（从同名的.txt文件）
+                        note_file = file_path.replace('.sh', '.txt')
+                        note = ""
+                        if os.path.exists(note_file):
+                            try:
+                                with open(note_file, 'r', encoding='utf-8') as f:
+                                    note = f.read().strip()
+                            except Exception as e:
+                                logger.warning(f"读取备注文件失败 {note_file}: {str(e)}")
+                        
+                        scripts.append({
+                            'name': filename,
+                            'size': size_str,
+                            'modified_time': modified_time,
+                            'path': file_path,
+                            'note': note
+                        })
+                        
+                        logger.debug(f"找到脚本文件: {filename}, 大小: {size_str}, 修改时间: {modified_time}")
+                        
+                    except Exception as e:
+                        logger.error(f"处理脚本文件 {filename} 时出错: {str(e)}")
+                        continue
+            
+            # 按文件名排序
+            scripts.sort(key=lambda x: x['name'])
+            
+            logger.info(f"成功获取 {len(scripts)} 个脚本文件")
+            return jsonify({
+                'success': True,
+                'scripts': scripts
+            })
+        else:
+            logger.warning(f"脚本目录不存在: {scripts_dir}")
+            return jsonify({
+                'success': False,
+                'message': f'脚本目录不存在: {scripts_dir}'
+            })
+            
+    except Exception as e:
+        logger.error(f"获取所有脚本列表失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取所有脚本列表失败: {str(e)}'
+        })
+
 @app.route('/api/script/add', methods=['POST'])
 @login_required
 def api_add_script():
@@ -2002,7 +2300,161 @@ def api_get_script_content(script_name):
             'message': f'获取脚本内容失败: {str(e)}'
         })
 
+@app.route('/api/vm_send_script', methods=['POST'])
+@login_required
+def api_vm_send_script():
+    """发送脚本到指定虚拟机（仅发送，不添加权限）"""
+    logger.info("收到发送脚本到虚拟机请求")
+    try:
+        data = request.get_json()
+        vm_name = data.get('vm_name')
+        script_name = data.get('script_name')
+        
+        if not vm_name or not script_name:
+            return jsonify({
+                'success': False,
+                'message': '缺少必要参数'
+            })
+        
+        # 检查脚本文件是否存在
+        scripts_dir = r'D:\macos_vm\macos_sh'
+        script_path = os.path.join(scripts_dir, script_name)
+        
+        if not os.path.exists(script_path):
+            return jsonify({
+                'success': False,
+                'message': f'脚本文件不存在: {script_name}'
+            })
+        
+        # 检查虚拟机状态和SSH互信
+        try:
+            vm_info = get_vm_online_status(vm_name)
+            
+            if vm_info['status'] != 'online' or not vm_info.get('ssh_trust', False):
+                return jsonify({
+                    'success': False,
+                    'message': f'虚拟机 {vm_name} 未在线或未建立SSH互信'
+                })
+            
+            # 使用scp发送脚本
+            import subprocess
+            scp_cmd = [
+                'scp',
+                '-o', 'StrictHostKeyChecking=no',
+                '-o', 'ConnectTimeout=10',
+                script_path,
+                f"wx@{vm_info['ip']}:/Users/wx/{script_name}"
+            ]
+            
+            logger.debug(f"执行SCP命令: {' '.join(scp_cmd)}")
+            result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=30)
+            
+            if result.returncode == 0:
+                logger.info(f"脚本发送成功到虚拟机 {vm_name} ({vm_info['ip']})")
+                return jsonify({
+                    'success': True,
+                    'message': f'脚本 {script_name} 发送成功到虚拟机 {vm_name}',
+                    'file_path': f'/Users/wx/{script_name}'
+                })
+            else:
+                error_msg = result.stderr.strip() if result.stderr else result.stdout.strip()
+                logger.error(f"脚本发送失败到虚拟机 {vm_name}: {error_msg}")
+                
+                # 根据错误类型提供更详细的错误信息
+                if 'Permission denied' in error_msg:
+                    error_detail = 'SSH认证失败，请检查SSH互信设置'
+                elif 'Connection refused' in error_msg:
+                    error_detail = 'SSH连接被拒绝，请检查SSH服务是否运行'
+                elif 'No route to host' in error_msg:
+                    error_detail = '无法连接到主机，请检查网络连接'
+                else:
+                    error_detail = f'SCP传输失败: {error_msg}'
+                
+                return jsonify({
+                    'success': False,
+                    'message': error_detail
+                })
+                
+        except subprocess.TimeoutExpired:
+            logger.error(f"发送脚本到虚拟机 {vm_name} 超时")
+            return jsonify({
+                'success': False,
+                'message': 'SCP传输超时（30秒）'
+            })
+        except Exception as e:
+            logger.error(f"发送脚本到虚拟机 {vm_name} 时出错: {str(e)}")
+            return jsonify({
+                'success': False,
+                'message': f'发送出错: {str(e)}'
+            })
+            
+    except Exception as e:
+        logger.error(f"发送脚本到虚拟机失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'发送脚本失败: {str(e)}'
+        })
 
+@app.route('/api/vm_add_permissions', methods=['POST'])
+@login_required
+def api_vm_add_permissions():
+    """为虚拟机上的脚本添加执行权限"""
+    logger.info("收到添加脚本执行权限API请求")
+    try:
+        data = request.get_json()
+        vm_name = data.get('vm_name')
+        script_names = data.get('script_names', [])
+        username = data.get('username', 'wx')
+        
+        logger.debug(f"添加执行权限参数 - 虚拟机: {vm_name}, 脚本: {script_names}, 用户: {username}")
+        
+        if not vm_name:
+            logger.warning("虚拟机名称不能为空")
+            return jsonify({'success': False, 'message': '虚拟机名称不能为空'})
+        
+        if not script_names or len(script_names) == 0:
+            logger.warning("脚本名称列表不能为空")
+            return jsonify({'success': False, 'message': '脚本名称列表不能为空'})
+        
+        logger.info(f"开始为虚拟机 {vm_name} 的脚本添加执行权限")
+        
+        # 获取虚拟机IP地址
+        vm_ip = get_vm_ip(vm_name)
+        if not vm_ip:
+            logger.error(f"无法获取虚拟机 {vm_name} 的IP地址")
+            return jsonify({'success': False, 'message': '无法获取虚拟机IP地址，请确保虚拟机正在运行'})
+        
+        logger.debug(f"虚拟机IP: {vm_ip}")
+        
+        # 检查IP连通性
+        ip_status = check_ip_connectivity(vm_ip)
+        if not ip_status['success']:
+            logger.warning(f"虚拟机IP {vm_ip} 无法连接: {ip_status.get('error', '未知错误')}")
+            return jsonify({'success': False, 'message': f'虚拟机IP {vm_ip} 无法连接，请检查网络状态'})
+        
+        logger.debug("IP连通性检查通过")
+        
+        # 检查SSH互信状态
+        ssh_trust_status = check_ssh_trust_status(vm_ip, username)
+        if not ssh_trust_status:
+            logger.warning(f"SSH互信未建立")
+            return jsonify({'success': False, 'message': f'SSH互信未建立，请先设置SSH互信'})
+        
+        logger.debug("SSH互信检查通过")
+        
+        # 执行chmod命令
+        success, message = execute_chmod_scripts(vm_ip, username, script_names)
+        
+        if success:
+            logger.info(f"脚本执行权限设置成功: {message}")
+            return jsonify({'success': True, 'message': message})
+        else:
+            logger.error(f"脚本执行权限设置失败: {message}")
+            return jsonify({'success': False, 'message': message})
+            
+    except Exception as e:
+        logger.error(f"添加脚本执行权限异常: {str(e)}")
+        return jsonify({'success': False, 'message': f'添加脚本执行权限时发生错误: {str(e)}'})
 
 @app.route('/api/ssh_trust', methods=['POST'])
 @login_required
@@ -2140,6 +2592,164 @@ def setup_ssh_trust(ip, username, password):
     except Exception as e:
         logger.error(f"setup_ssh_trust异常: {str(e)}")
         return False, f"设置SSH互信时发生错误: {str(e)}"
+
+@app.route('/api/vm_chmod_scripts', methods=['POST'])
+@login_required
+def api_vm_chmod_scripts():
+    """为虚拟机上的指定脚本或所有sh脚本添加执行权限"""
+    logger.info("收到为脚本添加执行权限API请求")
+    try:
+        data = request.get_json()
+        vm_name = data.get('vm_name')
+        script_names = data.get('script_names', [])  # 可以传入单个脚本名或脚本名列表
+        username = data.get('username', 'wx')
+        
+        logger.debug(f"添加执行权限参数 - 虚拟机: {vm_name}, 脚本: {script_names}, 用户: {username}")
+        
+        if not vm_name:
+            logger.warning("虚拟机名称不能为空")
+            return jsonify({'success': False, 'message': '虚拟机名称不能为空'})
+        
+        logger.info(f"开始为虚拟机 {vm_name} 的脚本添加执行权限")
+        
+        # 获取虚拟机IP地址
+        vm_ip = get_vm_ip(vm_name)
+        if not vm_ip:
+            logger.error(f"无法获取虚拟机 {vm_name} 的IP地址")
+            return jsonify({'success': False, 'message': '无法获取虚拟机IP地址，请确保虚拟机正在运行'})
+        
+        logger.debug(f"虚拟机IP: {vm_ip}")
+        
+        # 检查IP连通性
+        ip_status = check_ip_connectivity(vm_ip)
+        if not ip_status['success']:
+            logger.warning(f"虚拟机IP {vm_ip} 无法连接: {ip_status.get('error', '未知错误')}")
+            return jsonify({'success': False, 'message': f'虚拟机IP {vm_ip} 无法连接，请检查网络状态'})
+        
+        logger.debug("IP连通性检查通过")
+        
+        # 检查SSH互信状态
+        ssh_trust_status = check_ssh_trust_status(vm_ip, username)
+        if not ssh_trust_status:
+            logger.warning(f"SSH互信未建立")
+            return jsonify({'success': False, 'message': f'SSH互信未建立，请先设置SSH互信'})
+        
+        logger.debug("SSH互信检查通过")
+        
+        # 执行chmod命令
+        success, message = execute_chmod_scripts(vm_ip, username, script_names)
+        
+        if success:
+            logger.info(f"脚本执行权限设置成功: {message}")
+            return jsonify({'success': True, 'message': message})
+        else:
+            logger.error(f"脚本执行权限设置失败: {message}")
+            return jsonify({'success': False, 'message': message})
+            
+    except Exception as e:
+        logger.error(f"添加脚本执行权限异常: {str(e)}")
+        return jsonify({'success': False, 'message': f'添加脚本执行权限时发生错误: {str(e)}'})
+
+def execute_chmod_scripts(ip, username, script_names=None):
+    """远程执行chmod +x命令"""
+    logger.info(f"开始为IP {ip} 的用户 {username} 添加脚本执行权限")
+    try:
+        import paramiko
+        
+        # 创建SSH客户端
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        
+        # 连接到远程主机（使用SSH互信，无需密码）
+        logger.debug(f"尝试连接到 {ip}")
+        ssh.connect(ip, username=username, timeout=10)
+        logger.debug("SSH连接成功")
+        
+        # 根据传入的脚本名决定执行方式
+        if script_names and len(script_names) > 0:
+            # 为指定脚本添加执行权限
+            commands = ["cd ~"]  # 切换到用户家目录
+            
+            for script_name in script_names:
+                # 确保脚本名以.sh结尾
+                if not script_name.endswith('.sh'):
+                    script_name += '.sh'
+                commands.append(f"chmod +x {script_name}")
+            
+            # 列出指定脚本的权限
+            script_list = " ".join([name if name.endswith('.sh') else name + '.sh' for name in script_names])
+            commands.append(f"ls -la {script_list} 2>/dev/null || echo '没有找到指定的脚本文件'")
+            
+            logger.debug(f"为指定脚本添加执行权限: {script_names}")
+        else:
+            # 为所有sh脚本添加执行权限
+            commands = [
+                "cd ~",  # 切换到用户家目录
+                "chmod +x *.sh",  # 为所有sh脚本添加执行权限
+                "ls -la *.sh 2>/dev/null || echo '没有找到.sh文件'"  # 列出所有sh文件及其权限
+            ]
+            logger.debug("为所有.sh文件添加执行权限")
+        
+        results = []
+        for cmd in commands:
+            logger.debug(f"执行命令: {cmd}")
+            stdin, stdout, stderr = ssh.exec_command(cmd)
+            exit_status = stdout.channel.recv_exit_status()
+            output = stdout.read().decode().strip()
+            error = stderr.read().decode().strip()
+            
+            logger.debug(f"命令 '{cmd}' 执行状态: {exit_status}")
+            if output:
+                logger.debug(f"输出: {output}")
+            if error:
+                logger.debug(f"错误: {error}")
+            
+            results.append({
+                'command': cmd,
+                'exit_status': exit_status,
+                'output': output,
+                'error': error
+            })
+        
+        ssh.close()
+        
+        # 检查执行结果
+        chmod_commands = [r for r in results if r['command'].startswith('chmod')]
+        ls_result = results[-1]  # 最后一个命令是ls
+        
+        # 检查所有chmod命令是否成功
+        failed_chmods = [r for r in chmod_commands if r['exit_status'] != 0]
+        
+        if not failed_chmods:
+            logger.info("chmod命令执行成功")
+            if script_names and len(script_names) > 0:
+                message = f"成功为指定脚本添加执行权限: {', '.join(script_names)}\n"
+            else:
+                message = "成功为家目录下的所有.sh文件添加执行权限\n"
+            
+            if ls_result['output'] and ls_result['output'] != '没有找到.sh文件' and ls_result['output'] != '没有找到指定的脚本文件':
+                message += f"文件列表:\n{ls_result['output']}"
+            else:
+                message += "未找到指定的脚本文件"
+            return True, message
+        else:
+            logger.error(f"部分chmod命令执行失败: {failed_chmods}")
+            error_messages = [f"{r['command']}: {r['error']}" for r in failed_chmods]
+            return False, f"部分脚本执行权限设置失败: {'; '.join(error_messages)}"
+        
+    except ImportError:
+        logger.error("paramiko库未安装")
+        return False, "需要安装paramiko库: pip install paramiko"
+    except Exception as e:
+        logger.error(f"execute_chmod_scripts异常: {str(e)}")
+        return False, f"远程执行chmod命令时发生错误: {str(e)}"
+
+@app.route('/vm_script_send')
+@login_required
+def vm_script_send_page():
+    """发送脚本页面"""
+    logger.debug("访问发送脚本页面")
+    return render_template('vm_script_send.html')
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
