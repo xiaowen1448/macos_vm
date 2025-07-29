@@ -990,6 +990,8 @@ def api_vm_list():
                             'ip': '获取中...' if vm_status == 'running' else '-',
                             'ssh_trust': False,
                             'wuma_info': get_wuma_info(vm_name) or '未配置',
+                            'ju_info': '未获取到ju值信息',  # JU值信息初始状态
+                            'wuma_view_status': '未获取',  # 五码查看状态初始状态
                             'ssh_status': 'unknown'
                         }
                         vms.append(vm_info)
@@ -1002,6 +1004,9 @@ def api_vm_list():
                             stats['stopped'] += 1
         else:
             logger.warning(f"虚拟机目录不存在: {vm_dir}")
+        
+        # 对虚拟机进行排序：运行中的虚拟机排在前面
+        vms.sort(key=lambda vm: (vm['status'] != 'running', vm['name']))
         
         # 计算分页
         total_count = len(vms)
@@ -2750,6 +2755,118 @@ def vm_script_send_page():
     """发送脚本页面"""
     logger.debug("访问发送脚本页面")
     return render_template('vm_script_send.html')
+
+@app.route('/api/get_wuma_info', methods=['POST'])
+@login_required
+def api_get_wuma_info():
+    """获取五码信息API - 通过SSH互信执行家目录脚本"""
+    try:
+        data = request.get_json()
+        vm_name = data.get('vm_name')
+        
+        if not vm_name:
+            return jsonify({'success': False, 'error': '缺少虚拟机名称参数'})
+        
+        logger.debug(f"开始获取虚拟机 {vm_name} 的五码信息")
+        
+        # 获取虚拟机IP地址
+        vm_ip = get_vm_ip(vm_name)
+        if not vm_ip or vm_ip == '获取中...' or vm_ip == '-':
+            return jsonify({'success': False, 'error': f'无法获取虚拟机 {vm_name} 的IP地址'})
+        
+        logger.debug(f"虚拟机 {vm_name} 的IP地址: {vm_ip}")
+        
+        # 通过SSH互信执行家目录脚本
+        success, output = execute_remote_script(vm_ip, 'wx', 'run_debug_wuma.sh')
+        
+        if success:
+            logger.info(f"成功获取虚拟机 {vm_name} 的五码信息")
+            return jsonify({'success': True, 'output': output})
+        else:
+            logger.error(f"获取虚拟机 {vm_name} 的五码信息失败: {output}")
+            return jsonify({'success': False, 'error': output})
+            
+    except Exception as e:
+        logger.error(f"获取五码信息时发生异常: {str(e)}")
+        return jsonify({'success': False, 'error': f'获取五码信息时发生异常: {str(e)}'})
+
+@app.route('/api/get_ju_info', methods=['POST'])
+@login_required
+def api_get_ju_info():
+    """获取JU值信息API - 通过SSH互信执行家目录脚本"""
+    try:
+        data = request.get_json()
+        vm_name = data.get('vm_name')
+        
+        if not vm_name:
+            return jsonify({'success': False, 'error': '缺少虚拟机名称参数'})
+        
+        logger.debug(f"开始获取虚拟机 {vm_name} 的JU值信息")
+        
+        # 获取虚拟机IP地址
+        vm_ip = get_vm_ip(vm_name)
+        if not vm_ip or vm_ip == '获取中...' or vm_ip == '-':
+            return jsonify({'success': False, 'error': f'无法获取虚拟机 {vm_name} 的IP地址'})
+        
+        logger.debug(f"虚拟机 {vm_name} 的IP地址: {vm_ip}")
+        
+        # 通过SSH互信执行家目录脚本
+        success, output = execute_remote_script(vm_ip, 'wx', 'run_debug_ju.sh')
+        
+        if success:
+            logger.info(f"成功获取虚拟机 {vm_name} 的JU值信息")
+            return jsonify({'success': True, 'output': output})
+        else:
+            logger.error(f"获取虚拟机 {vm_name} 的JU值信息失败: {output}")
+            return jsonify({'success': False, 'error': output})
+            
+    except Exception as e:
+        logger.error(f"获取JU值信息时发生异常: {str(e)}")
+        return jsonify({'success': False, 'error': f'获取JU值信息时发生异常: {str(e)}'})
+
+def execute_remote_script(ip, username, script_name):
+    """通过SSH互信执行家目录脚本并获取输出"""
+    try:
+        import paramiko
+        
+        # 创建SSH客户端
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        
+        # 通过SSH互信连接到远程主机（无需密码）
+        logger.debug(f"通过SSH互信连接到 {ip} 执行脚本 {script_name}")
+        ssh.connect(ip, username=username, timeout=10)
+        logger.debug("SSH互信连接成功")
+        
+        # 执行家目录脚本命令
+        command = f"cd ~ && ./{script_name}"
+        logger.debug(f"执行家目录脚本命令: {command}")
+        
+        stdin, stdout, stderr = ssh.exec_command(command)
+        exit_status = stdout.channel.recv_exit_status()
+        output = stdout.read().decode().strip()
+        error = stderr.read().decode().strip()
+        
+        logger.debug(f"脚本 {script_name} 执行状态: {exit_status}")
+        if output:
+            logger.debug(f"脚本输出: {output}")
+        if error:
+            logger.debug(f"脚本错误: {error}")
+        
+        ssh.close()
+        
+        if exit_status == 0:
+            return True, output
+        else:
+            error_msg = error if error else f"脚本 {script_name} 执行失败，退出状态: {exit_status}"
+            return False, error_msg
+            
+    except ImportError:
+        logger.error("paramiko库未安装")
+        return False, "需要安装paramiko库: pip install paramiko"
+    except Exception as e:
+        logger.error(f"execute_remote_script异常: {str(e)}")
+        return False, f"通过SSH互信执行脚本时发生错误: {str(e)}"
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

@@ -291,7 +291,28 @@
                                 <h5>脚本管理</h5>
                                 <p class="text-muted">管理虚拟机相关的脚本文件，包括安装脚本、配置脚本、维护脚本等。</p>
                                 
-
+                                <!-- 脚本搜索区域 -->
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <div class="input-group">
+                                            <span class="input-group-text">
+                                                <i class="fas fa-search"></i>
+                                            </span>
+                                            <input type="text" class="form-control" id="scriptSearchInput" 
+                                                   placeholder="搜索脚本名称..." 
+                                                   oninput="searchScripts()" 
+                                                   onkeyup="if(event.key === 'Enter') searchScripts()">
+                                            <button class="btn btn-outline-secondary" type="button" onclick="clearScriptSearch()" title="清空搜索">
+                                                <i class="fas fa-times"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 text-end">
+                                        <span class="text-muted" id="searchResultInfo">
+                                            共找到 <span id="searchResultCount">0</span> 个脚本
+                                        </span>
+                                    </div>
+                                </div>
                                 
                                 <div class="table-container">
                                     <div class="table-responsive">
@@ -556,6 +577,138 @@
             });
         });
         
+        // 全局变量存储所有脚本数据
+        let allScripts = [];
+        let filteredScripts = [];
+        let isSearchMode = false;
+        
+        // 搜索脚本
+        function searchScripts() {
+            const searchInput = document.getElementById('scriptSearchInput');
+            const searchTerm = searchInput.value.trim().toLowerCase();
+            const searchResultCount = document.getElementById('searchResultCount');
+            const searchResultInfo = document.getElementById('searchResultInfo');
+            
+            if (searchTerm === '') {
+                // 清空搜索，显示所有脚本
+                isSearchMode = false;
+                searchResultInfo.style.display = 'none';
+                // 清空所有脚本数据，重新加载分页数据
+                allScripts = [];
+                filteredScripts = [];
+                loadScripts(1);
+                return;
+            }
+            
+            // 总是加载所有脚本数据进行搜索
+            loadAllScriptsForSearch(searchTerm);
+        }
+        
+        // 加载所有脚本数据用于搜索
+        function loadAllScriptsForSearch(searchTerm) {
+            console.log('加载所有脚本数据用于搜索...');
+            
+            fetch('/api/scripts/all')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // 存储所有脚本数据
+                        allScripts = data.scripts;
+                        console.log(`成功加载 ${allScripts.length} 个脚本用于搜索`);
+                        
+                        // 执行搜索
+                        isSearchMode = true;
+                        filteredScripts = allScripts.filter(script => 
+                            script.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                            (script.note && script.note.toLowerCase().includes(searchTerm.toLowerCase()))
+                        );
+                        
+                        // 更新搜索结果信息
+                        const searchResultCount = document.getElementById('searchResultCount');
+                        const searchResultInfo = document.getElementById('searchResultInfo');
+                        searchResultCount.textContent = filteredScripts.length;
+                        searchResultInfo.style.display = 'inline';
+                        
+                        // 更新表格显示搜索结果
+                        updateScriptTableWithSearch(filteredScripts);
+                    } else {
+                        console.error('加载所有脚本失败:', data.message);
+                        alert('加载脚本数据失败: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('加载所有脚本出错:', error);
+                    alert('加载脚本数据出错: ' + error.message);
+                });
+        }
+        
+        // 清空搜索
+        function clearScriptSearch() {
+            const searchInput = document.getElementById('scriptSearchInput');
+            const searchResultInfo = document.getElementById('searchResultInfo');
+            
+            searchInput.value = '';
+            isSearchMode = false;
+            searchResultInfo.style.display = 'none';
+            
+            // 清空所有脚本数据，重新加载分页数据
+            allScripts = [];
+            filteredScripts = [];
+            
+            // 重新加载分页脚本
+            loadScripts(1);
+        }
+        
+
+        
+        // 更新搜索结果的表格显示
+        function updateScriptTableWithSearch(scripts) {
+            const tbody = document.getElementById('scriptTableBody');
+            tbody.innerHTML = '';
+            
+            if (scripts.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">未找到匹配的脚本</td></tr>';
+                // 清空分页信息
+                document.getElementById('startRecord').textContent = '0';
+                document.getElementById('endRecord').textContent = '0';
+                document.getElementById('totalRecords').textContent = '0';
+                return;
+            }
+            
+            // 计算分页
+            const startIndex = 0;
+            const endIndex = Math.min(pageSize, scripts.length);
+            
+            // 更新记录显示信息
+            document.getElementById('startRecord').textContent = scripts.length > 0 ? startIndex + 1 : 0;
+            document.getElementById('endRecord').textContent = endIndex;
+            document.getElementById('totalRecords').textContent = scripts.length;
+            
+            // 显示搜索结果
+            scripts.slice(startIndex, endIndex).forEach(script => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>
+                        <strong>${script.name}</strong>
+                    </td>
+                    <td>${script.note || '<span class="text-muted">-</span>'}</td>
+                    <td>${script.size}</td>
+                    <td>${script.modified_time}</td>
+                    <td>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-primary btn-sm" onclick="editScript('${script.name}')" title="编辑脚本" style="cursor: pointer;">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-outline-danger btn-sm" onclick="deleteScript('${script.name}')" title="删除脚本" style="cursor: pointer;">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+        
         function loadScripts(page = 1) {
             console.log(`加载脚本列表... (第 ${page} 页，每页 ${pageSize} 条)`);
             console.log(`全局pageSize变量值: ${pageSize}`);
@@ -583,6 +736,13 @@
                             scriptsCount: data.scripts.length
                         });
                         
+                        // 存储分页脚本数据用于搜索（如果还没有加载所有数据且不在搜索模式）
+                        // 注意：这里只存储当前分页数据，搜索时会加载所有数据
+                        if (allScripts.length === 0 && !isSearchMode) {
+                            allScripts = data.scripts;
+                            filteredScripts = [...allScripts];
+                        }
+                        
                         // 存储分页信息
                         totalPages = data.pagination.total_pages;
                         currentPage = page;
@@ -593,6 +753,15 @@
                             scriptsCount: data.scripts.length,
                             pagination: data.pagination
                         });
+                        
+                        // 如果当前在搜索模式，更新搜索结果
+                        if (isSearchMode) {
+                            const searchInput = document.getElementById('scriptSearchInput');
+                            if (searchInput.value.trim() !== '') {
+                                searchScripts();
+                                return;
+                            }
+                        }
                         
                         updateScriptTableWithPagination(page, data.pagination, data.scripts);
                         
@@ -687,7 +856,9 @@
                             <button class="btn btn-outline-primary" title="编辑脚本" onclick="editScript('${script.name}')">
                                 <i class="fas fa-edit"></i>
                             </button>
-
+                            <button class="btn btn-outline-danger" title="删除脚本" onclick="deleteScript('${script.name}')">
+                                <i class="fas fa-trash"></i>
+                            </button>
                         </div>
                     </td>
                 `;
@@ -712,6 +883,19 @@
             
             // 清空分页控件
             document.getElementById('pagination').innerHTML = '';
+            
+            // 清空搜索状态
+            isSearchMode = false;
+            allScripts = [];
+            filteredScripts = [];
+            const searchInput = document.getElementById('scriptSearchInput');
+            if (searchInput) {
+                searchInput.value = '';
+            }
+            const searchResultInfo = document.getElementById('searchResultInfo');
+            if (searchResultInfo) {
+                searchResultInfo.style.display = 'none';
+            }
             
             // 异步重新加载当前页数据
             loadScripts(currentPage);
@@ -739,6 +923,34 @@
         
         let currentScriptName = '';
         let currentVMs = [];
+        
+        function deleteScript(scriptName) {
+            if (confirm(`确定要删除脚本 "${scriptName}" 吗？\n\n此操作不可恢复！`)) {
+                fetch('/api/script/delete', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        script_name: scriptName
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(`脚本 "${scriptName}" 删除成功！`);
+                        // 刷新脚本列表
+                        refreshScripts();
+                    } else {
+                        alert(`删除失败: ${data.message}`);
+                    }
+                })
+                .catch(error => {
+                    console.error('删除脚本出错:', error);
+                    alert('删除脚本出错: ' + error.message);
+                });
+            }
+        }
         
         function editScript(scriptName) {
             console.log('编辑脚本:', scriptName);

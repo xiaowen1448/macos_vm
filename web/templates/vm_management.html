@@ -101,6 +101,39 @@
         box-shadow: 0 2px 4px rgba(0,0,0,0.15);
     }
     
+    .wuma-view-status-icon {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 8px;
+        border: 1px solid transparent;
+        cursor: default;
+        transition: all 0.2s ease;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        padding: 0;
+        line-height: 1;
+    }
+    
+    .wuma-view-status-icon.success {
+        background-color: #28a745;
+        color: white;
+        border-color: #1e7e34;
+    }
+    
+    .wuma-view-status-icon.danger {
+        background-color: #dc3545;
+        color: white;
+        border-color: #c82333;
+    }
+    
+    .wuma-view-status-icon:hover {
+        transform: scale(1.2);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+    }
+    
     /* 发送脚本按钮样式 */
     .btn-outline-success:disabled {
         opacity: 0.5;
@@ -524,9 +557,10 @@
                         <!-- 五码信息说明 -->
                         <div class="alert alert-info py-2 mb-2" role="alert" style="font-size: 0.9em;">
                             <i class="fas fa-info-circle me-2"></i>
-                            <strong>JU值信息说明：</strong>
-                            <span class="text-success">🟢 绿色对号</span> 表示已配置JU值信息，
-                            <span class="text-danger">🔴 红色X</span> 表示未配置JU值信息
+                            <strong>五码信息和JU值信息说明：</strong>
+                            <span class="text-success">🟢 绿色对号</span> 表示已获取信息，
+                            <span class="text-danger">🔴 红色X</span> 表示未获取信息，
+                            <span class="text-info">👁️ 眼睛图标</span> 表示查看详细信息
                         </div>
                         
                         <!-- 虚拟机列表 -->
@@ -541,6 +575,7 @@
                                             <th>虚拟机名称</th>
                                             <th>状态</th>
                                             <th>IP地址</th>
+                                            <th>五码信息</th>
                                             <th>JU值信息</th>
                                             <th>SSH状态</th>
                                             <th>操作</th>
@@ -960,8 +995,21 @@
                 .then(data => {
                     hideLoading();
                     if (data.success) {
-                        totalVMs = data.vms;
-                        vmDataList = data.vms; // 保存虚拟机数据供发送脚本功能使用
+                        // 对虚拟机数据进行排序：运行中的虚拟机排在前面
+                        const sortedVMs = data.vms.sort((a, b) => {
+                            // 运行中的虚拟机排在前面
+                            if (a.status === 'running' && b.status !== 'running') {
+                                return -1;
+                            }
+                            if (a.status !== 'running' && b.status === 'running') {
+                                return 1;
+                            }
+                            // 如果状态相同，按名称排序
+                            return a.name.localeCompare(b.name);
+                        });
+                        
+                        totalVMs = sortedVMs;
+                        vmDataList = sortedVMs; // 保存虚拟机数据供发送脚本功能使用
                         totalPages = data.pagination.total_pages;
                         updateVMStats(data.stats);
                         updateVMTableWithPagination(page, data.pagination);
@@ -996,6 +1044,7 @@
 
         // 刷新虚拟机数据
         function refreshData() {
+            console.log('刷新虚拟机数据，运行中的虚拟机将排序到最前面');
             loadVMData(1);
         }
         
@@ -1026,7 +1075,7 @@
             tbody.innerHTML = '';
             
             if (totalVMs.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">暂无虚拟机数据</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">暂无虚拟机数据</td></tr>';
                 return;
             }
             
@@ -1071,8 +1120,21 @@
                     <td id="ip-${vm.name}">
                         ${vm.ip && vm.ip !== '获取中...' ? vm.ip : (vm.status === 'running' ? '<span id="ip-status-${vm.name}">获取中...</span>' : '<span class="text-muted">-</span>')}
                     </td>
+                    <td id="wuma-view-${vm.name}">
+                        <div class="d-flex align-items-center">
+                            ${getWumaViewStatusIcon(vm.wuma_view_status)}
+                            <button class="btn btn-outline-info btn-sm ms-2" onclick="viewWumaInfo('${vm.name}')" title="查看五码信息" style="cursor: pointer;">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </td>
                     <td id="ju-${vm.name}">
-                        ${getJuStatusIcon(vm.wuma_info)}
+                        <div class="d-flex align-items-center">
+                            ${getJuStatusIcon(vm.ju_info)}
+                            <button class="btn btn-outline-info btn-sm ms-2" onclick="viewJuInfo('${vm.name}')" title="查看JU值信息" style="cursor: pointer;">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
                     </td>
                     <td id="ssh-${vm.name}">
                         <div class="d-flex align-items-center">
@@ -1117,6 +1179,18 @@
             setTimeout(() => {
                 loadRunningVMOnlineStatus();
             }, 100);
+            
+            // 异步获取五码信息和JU值信息状态
+            setTimeout(() => {
+                loadWumaAndJuStatus();
+            }, 200);
+            
+            // 设置定时器，每30秒自动刷新五码信息和JU值信息状态
+            setInterval(() => {
+                if (totalVMs.length > 0) {
+                    loadWumaAndJuStatus();
+                }
+            }, 30000); // 30秒刷新一次
         }
 
         // 更新分页控件
@@ -1264,13 +1338,353 @@
             }
         }
         
+        // 获取五码查看状态图标
+        function getWumaViewStatusIcon(wumaViewStatus) {
+            if (wumaViewStatus && wumaViewStatus === '已获取') {
+                return '<button class="wuma-view-status-icon success" disabled title="✅ 已获取五码信息 - 该虚拟机已获取五码信息"><i class="fas fa-check"></i></button>';
+            } else {
+                return '<button class="wuma-view-status-icon danger" disabled title="❌ 未获取五码信息 - 该虚拟机尚未获取五码信息"><i class="fas fa-times"></i></button>';
+            }
+        }
+
         // 获取JU值状态图标
         function getJuStatusIcon(juInfo) {
-            if (juInfo && juInfo !== '-' && juInfo !== '<span class="text-muted">-</span>') {
-                return '<button class="ju-status-icon success" disabled title="✅ 已配置JU值信息 - 该虚拟机已配置完整的JU值信息，可以正常使用"><i class="fas fa-check"></i></button>';
+            if (juInfo && juInfo !== '-' && juInfo !== '<span class="text-muted">-</span>' && juInfo !== '未获取' && juInfo !== '未获取到ju值信息' && juInfo !== '未配置') {
+                return '<button class="ju-status-icon success" disabled title="✅ 已获取JU值信息 - 该虚拟机已获取JU值信息"><i class="fas fa-check"></i></button>';
             } else {
-                return '<button class="ju-status-icon danger" disabled title="❌ 未配置JU值信息 - 该虚拟机尚未配置JU值信息，需要先配置JU值才能正常使用"><i class="fas fa-times"></i></button>';
+                return '<button class="ju-status-icon danger" disabled title="❌ 未获取到ju值信息 - 该虚拟机尚未获取JU值信息"><i class="fas fa-times"></i></button>';
             }
+        }
+
+        // 查看五码信息
+        function viewWumaInfo(vmName) {
+            console.log('查看五码信息:', vmName);
+            
+            // 显示加载状态
+            const modalHTML = `
+                <div class="modal fade" id="wumaInfoModal" tabindex="-1" aria-labelledby="wumaInfoModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="wumaInfoModalLabel">
+                                    <i class="fas fa-info-circle me-2"></i>虚拟机 ${vmName} 的五码信息
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="text-center">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">正在获取五码信息...</span>
+                                    </div>
+                                    <p class="mt-2">正在通过SSH获取五码信息...</p>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // 移除已存在的模态框
+            const existingModal = document.getElementById('wumaInfoModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+            
+            // 添加新的模态框到页面
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+            
+            // 显示模态框
+            const modal = new bootstrap.Modal(document.getElementById('wumaInfoModal'));
+            modal.show();
+            
+            // 调用后端API获取五码信息
+            fetch('/api/get_wuma_info', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    vm_name: vmName
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                const modalBody = document.querySelector('#wumaInfoModal .modal-body');
+                if (data.success) {
+                    modalBody.innerHTML = `
+                        <div class="alert alert-success">
+                            <i class="fas fa-check-circle me-2"></i>成功获取五码信息
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="mb-0"><i class="fas fa-terminal me-2"></i>脚本输出</h6>
+                            </div>
+                            <div class="card-body">
+                                <pre class="bg-light p-3 rounded" style="max-height: 400px; overflow-y: auto; font-size: 0.9em;">${data.output}</pre>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // 更新五码信息状态图标为绿色对号
+                    updateWumaStatusIcon(vmName, true, true);
+                } else {
+                    modalBody.innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-triangle me-2"></i>获取五码信息失败
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>错误信息</h6>
+                            </div>
+                            <div class="card-body">
+                                <pre class="bg-light p-3 rounded text-danger" style="max-height: 400px; overflow-y: auto; font-size: 0.9em;">${data.error || '未知错误'}</pre>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // 更新五码信息状态图标为红色X号
+                    updateWumaStatusIcon(vmName, false, true);
+                }
+            })
+            .catch(error => {
+                console.error('获取五码信息失败:', error);
+                const modalBody = document.querySelector('#wumaInfoModal .modal-body');
+                modalBody.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>网络请求失败
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>错误信息</h6>
+                        </div>
+                        <div class="card-body">
+                            <pre class="bg-light p-3 rounded text-danger" style="max-height: 400px; overflow-y: auto; font-size: 0.9em;">${error.message}</pre>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        // 更新五码信息状态图标
+        function updateWumaStatusIcon(vmName, success, showModal = false) {
+            const wumaCell = document.getElementById(`wuma-view-${vmName}`);
+            if (wumaCell) {
+                const statusIcon = success ? 
+                    '<button class="wuma-view-status-icon success" disabled title="✅ 已获取五码信息 - 该虚拟机已获取五码信息"><i class="fas fa-check"></i></button>' :
+                    '<button class="wuma-view-status-icon danger" disabled title="❌ 未获取五码信息 - 该虚拟机尚未获取五码信息"><i class="fas fa-times"></i></button>';
+                
+                wumaCell.innerHTML = `
+                    <div class="d-flex align-items-center">
+                        ${statusIcon}
+                        <button class="btn btn-outline-info btn-sm ms-2" onclick="viewWumaInfo('${vmName}')" title="查看五码信息" style="cursor: pointer;">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                `;
+            }
+            
+            // 更新虚拟机数据中的五码查看状态
+            const vm = totalVMs.find(v => v.name === vmName);
+            if (vm) {
+                vm.wuma_view_status = success ? '已获取' : '未获取';
+            }
+        }
+
+        // 更新JU值信息状态图标
+        function updateJuStatusIcon(vmName, success, showModal = false) {
+            const juCell = document.getElementById(`ju-${vmName}`);
+            if (juCell) {
+                const statusIcon = success ? 
+                    '<button class="ju-status-icon success" disabled title="✅ 已获取JU值信息 - 该虚拟机已获取JU值信息"><i class="fas fa-check"></i></button>' :
+                    '<button class="ju-status-icon danger" disabled title="❌ 未获取JU值信息 - 该虚拟机尚未获取JU值信息"><i class="fas fa-times"></i></button>';
+                
+                juCell.innerHTML = `
+                    <div class="d-flex align-items-center">
+                        ${statusIcon}
+                        <button class="btn btn-outline-info btn-sm ms-2" onclick="viewJuInfo('${vmName}')" title="查看JU值信息" style="cursor: pointer;">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                `;
+            }
+            
+            // 更新虚拟机数据中的JU值信息状态
+            const vm = totalVMs.find(v => v.name === vmName);
+            if (vm) {
+                vm.ju_info = success ? '已获取JU值信息' : '未获取到ju值信息';
+            }
+        }
+
+        // 查看JU值信息
+        function viewJuInfo(vmName) {
+            console.log('查看JU值信息:', vmName);
+            
+            // 显示加载状态
+            const modalHTML = `
+                <div class="modal fade" id="juInfoModal" tabindex="-1" aria-labelledby="juInfoModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="juInfoModalLabel">
+                                    <i class="fas fa-info-circle me-2"></i>虚拟机 ${vmName} 的JU值信息
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="text-center">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">正在获取JU值信息...</span>
+                                    </div>
+                                    <p class="mt-2">正在通过SSH获取JU值信息...</p>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // 移除已存在的模态框
+            const existingModal = document.getElementById('juInfoModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+            
+            // 添加新的模态框到页面
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+            
+            // 显示模态框
+            const modal = new bootstrap.Modal(document.getElementById('juInfoModal'));
+            modal.show();
+            
+            // 调用后端API获取JU值信息
+            fetch('/api/get_ju_info', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    vm_name: vmName
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                const modalBody = document.querySelector('#juInfoModal .modal-body');
+                if (data.success) {
+                    modalBody.innerHTML = `
+                        <div class="alert alert-success">
+                            <i class="fas fa-check-circle me-2"></i>成功获取JU值信息
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="mb-0"><i class="fas fa-terminal me-2"></i>脚本输出</h6>
+                            </div>
+                            <div class="card-body">
+                                <pre class="bg-light p-3 rounded" style="max-height: 400px; overflow-y: auto; font-size: 0.9em;">${data.output}</pre>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // 更新JU值信息状态图标为绿色对号
+                    updateJuStatusIcon(vmName, true, true);
+                } else {
+                    modalBody.innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-triangle me-2"></i>获取JU值信息失败
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>错误信息</h6>
+                            </div>
+                            <div class="card-body">
+                                <pre class="bg-light p-3 rounded text-danger" style="max-height: 400px; overflow-y: auto; font-size: 0.9em;">${data.error || '未知错误'}</pre>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // 更新JU值信息状态图标为红色X号
+                    updateJuStatusIcon(vmName, false, true);
+                }
+            })
+            .catch(error => {
+                console.error('获取JU值信息失败:', error);
+                const modalBody = document.querySelector('#juInfoModal .modal-body');
+                modalBody.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>网络请求失败
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>错误信息</h6>
+                        </div>
+                        <div class="card-body">
+                            <pre class="bg-light p-3 rounded text-danger" style="max-height: 400px; overflow-y: auto; font-size: 0.9em;">${error.message}</pre>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        // 异步获取五码信息和JU值信息状态
+        function loadWumaAndJuStatus() {
+            // 获取所有运行中的虚拟机
+            const runningVMs = totalVMs.filter(vm => vm.status === 'running');
+            
+            if (runningVMs.length === 0) {
+                console.log('没有运行中的虚拟机需要获取五码信息和JU值信息状态');
+                return;
+            }
+            
+            const vmNames = runningVMs.map(vm => vm.name);
+            console.log(`开始异步获取 ${vmNames.length} 个运行中虚拟机的五码信息和JU值信息状态`);
+            
+            // 为每个运行中的虚拟机异步获取五码信息和JU值信息
+            vmNames.forEach(vmName => {
+                // 获取五码信息
+                fetch('/api/get_wuma_info', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        vm_name: vmName
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log(`虚拟机 ${vmName} 五码信息获取结果:`, data.success);
+                    updateWumaStatusIcon(vmName, data.success);
+                })
+                .catch(error => {
+                    console.error(`获取虚拟机 ${vmName} 五码信息失败:`, error);
+                    updateWumaStatusIcon(vmName, false);
+                });
+                
+                // 获取JU值信息
+                fetch('/api/get_ju_info', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        vm_name: vmName
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log(`虚拟机 ${vmName} JU值信息获取结果:`, data.success);
+                    updateJuStatusIcon(vmName, data.success);
+                })
+                .catch(error => {
+                    console.error(`获取虚拟机 ${vmName} JU值信息失败:`, error);
+                    updateJuStatusIcon(vmName, false);
+                });
+            });
         }
 
         // 异步获取运行中虚拟机的在线状态
@@ -2095,6 +2509,8 @@
             }
         }
 
+
+
         // 显示批量发送进度
         function showBatchSendProgress(scriptNames, vmName) {
             const progressHTML = `
@@ -2340,6 +2756,8 @@
             });
         }
 
+
+
         // 在批量发送中发送单个脚本
         function sendSingleScriptInBatch(scriptName, vmName, onComplete, totalCount) {
             // 立即更新发送状态为"发送中"
@@ -2466,6 +2884,7 @@
             }
         }
 
+
         // 显示发送进度
         function showSendProgress(scriptName, vmName) {
             // 显示发送进度提示
@@ -2555,8 +2974,26 @@
                                                 </td>
                                             </tr>
                                                                     <tr>
+                            <td><strong>五码信息:</strong></td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    ${getWumaViewStatusIcon(vmInfo.wuma_view_status)}
+                                    <button class="btn btn-outline-info btn-sm ms-2" onclick="viewWumaInfo('${vmInfo.name}')" title="查看五码信息" style="cursor: pointer;">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
                             <td><strong>JU值信息:</strong></td>
-                            <td>${getJuStatusIcon(vmInfo.ju_info)}</td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    ${getJuStatusIcon(vmInfo.ju_info)}
+                                    <button class="btn btn-outline-info btn-sm ms-2" onclick="viewJuInfo('${vmInfo.name}')" title="查看JU值信息" style="cursor: pointer;">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                            </td>
                         </tr>
                                         </table>
                                     </div>
