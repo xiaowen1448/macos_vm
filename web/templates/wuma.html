@@ -201,7 +201,7 @@
             font-weight: 600;
             box-shadow: 0 2px 4px rgba(23, 162, 184, 0.3);
             transition: all 0.3s ease;
-            min-width: 180px;
+            min-width: 200px;
             white-space: nowrap;
         }
         
@@ -226,8 +226,8 @@
             border-radius: 8px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
             padding: 8px 0;
-            min-width: 200px;
-            max-width: 250px;
+            min-width: 220px;
+            max-width: 280px;
             overflow: hidden;
         }
         
@@ -242,26 +242,39 @@
             text-overflow: ellipsis;
         }
         
-        .config-dropdown-menu .dropdown-item:hover {
-            background-color: #e3f2fd;
-            color: #1976d2;
-            transform: translateX(3px);
+        /* 下拉菜单项基础样式 */
+        .config-dropdown-menu .dropdown-item {
+            color: #333 !important;
+            background-color: white !important;
+            font-weight: normal !important;
+            border: none !important;
+            box-shadow: none !important;
+            transform: none !important;
+            transition: all 0.3s ease;
         }
         
-        /* 最高优先级样式，确保激活状态始终显示 */
-        .config-dropdown-menu .dropdown-item.active,
-        .config-dropdown-menu .dropdown-item.active:focus,
-        .config-dropdown-menu .dropdown-item.active:hover {
+        /* 激活状态样式 */
+        .config-dropdown-menu .dropdown-item.active {
             background: linear-gradient(135deg, #007bff 0%, #0056b3 100%) !important;
             color: white !important;
             border: 1px solid #0056b3 !important;
             box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3) !important;
             transform: translateX(3px) !important;
+            font-weight: 600 !important;
         }
         
+        /* 激活状态hover效果 */
         .config-dropdown-menu .dropdown-item.active:hover {
             background: linear-gradient(135deg, #0056b3 0%, #004085 100%) !important;
             box-shadow: 0 4px 8px rgba(0, 123, 255, 0.4) !important;
+        }
+        
+        /* 未激活状态hover效果 */
+        .config-dropdown-menu .dropdown-item:not(.active):hover {
+            background-color: #f8f9fa !important;
+            color: #495057 !important;
+            transform: translateX(3px) !important;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
         }
         
         .wuma-table tbody tr:hover {
@@ -474,7 +487,7 @@
                             <div class="btn-group">
                                 <div class="dropdown me-2">
                                     <button class="btn btn-info dropdown-toggle config-dropdown-btn" type="button" id="configDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                                        <i class="fas fa-cog me-2"></i>已选择：配置
+                                        <i class="fas fa-cog me-2"></i>已选择：config.txt
                                     </button>
                                     <ul class="dropdown-menu config-dropdown-menu" id="configDropdownMenu" aria-labelledby="configDropdown">
                                         <!-- 配置文件选项将在这里动态加载 -->
@@ -587,21 +600,27 @@
                 <div class="modal-body">
                     <div class="mb-3">
                         <label for="wumaFile" class="form-label">选择五码文本文件</label>
-                        <input type="file" class="form-control" id="wumaFile" accept=".txt,.csv">
+                        <input type="file" class="form-control" id="wumaFile" accept=".txt,.csv" onchange="validateFile()">
                         <div class="form-text">支持 .txt 和 .csv 格式的文件</div>
+                        <div id="fileValidationMessage" class="mt-2"></div>
+                    </div>
+                    <div class="mb-3" id="filenameSection" style="display: none;">
+                        <label for="customFilename" class="form-label">重新修改文件名（可选）</label>
+                        <input type="text" class="form-control" id="customFilename" placeholder="输入自定义文件名，不包含.txt扩展名">
+                        <div class="form-text">留空将使用原文件名</div>
                     </div>
                     <div class="alert alert-info">
                         <i class="fas fa-info-circle me-2"></i>
                         <strong>文件格式说明：</strong>
-                        <br>每行一个五码信息，支持以下两种格式：
-                        <br>格式1：ROM:MLB值:SerialNumber:BoardID:产品型号
-                        <br>格式2：:ROM:MLB值:SerialNumber:BoardID:产品型号:
+                        <br>每行一个五码信息，必须符合以下格式：
+                        <br>格式：:ROM:MLB值:SerialNumber:BoardID:产品型号:
                         <br>示例：:8468780C43FE:FV9818603EVJ2V8DC:C02TVJ3GJ1WK:Mac-4B682C642B45593E:iMac18,1:
+                        <br><strong>注意：</strong>每行必须以冒号开头和结尾，中间用冒号分隔5个字段
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                    <button type="button" class="btn btn-primary" onclick="submitUpload()">上传</button>
+                    <button type="button" class="btn btn-primary" id="uploadBtn" onclick="submitUpload()" disabled>上传</button>
                 </div>
             </div>
         </div>
@@ -620,7 +639,53 @@
         document.addEventListener('DOMContentLoaded', function() {
             loadConfigList();
             loadWumaData(1);
+            
+            // 监听下拉框打开事件
+            const configDropdown = document.getElementById('configDropdown');
+            configDropdown.addEventListener('shown.bs.dropdown', function() {
+                // 下拉时动态刷新配置文件列表
+                loadConfigList();
+            });
         });
+        
+        // 更新下拉框样式
+        function updateDropdownStyles() {
+            document.querySelectorAll('#configDropdownMenu .dropdown-item').forEach(item => {
+                const itemConfigName = item.getAttribute('onclick').match(/'([^']+)'/)[1];
+                const isActive = itemConfigName === currentConfig;
+                
+                // 更新class
+                item.classList.remove('active');
+                if (isActive) {
+                    item.classList.add('active');
+                }
+                
+                // 强制应用样式，使用!important
+                if (isActive) {
+                    // 激活状态：蓝色样式
+                    item.setAttribute('style', `
+                        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%) !important;
+                        color: white !important;
+                        border: 1px solid #0056b3 !important;
+                        box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3) !important;
+                        transform: translateX(3px) !important;
+                        font-weight: 600 !important;
+                        font-size: 14px !important;
+                    `);
+                } else {
+                    // 未激活状态：白色样式
+                    item.setAttribute('style', `
+                        color: #333 !important;
+                        background-color: white !important;
+                        font-weight: normal !important;
+                        border: none !important;
+                        box-shadow: none !important;
+                        transform: none !important;
+                        font-size: 14px !important;
+                    `);
+                }
+            });
+        }
         
         // 加载配置文件列表
         function loadConfigList() {
@@ -629,6 +694,8 @@
                 .then(data => {
                     if (data.success) {
                         updateConfigDropdown(data.configs);
+                        // 更新下拉框样式
+                        updateDropdownStyles();
                     } else {
                         console.error('获取配置文件列表失败:', data.message);
                     }
@@ -643,26 +710,51 @@
             const dropdownMenu = document.getElementById('configDropdownMenu');
             dropdownMenu.innerHTML = '';
             
+            if (configs.length === 0) {
+                // 如果没有配置文件，显示提示信息
+                const li = document.createElement('li');
+                li.innerHTML = `<a class="dropdown-item disabled" href="#" style="color: #6c757d !important; font-style: italic;">暂无合规的五码配置文件</a>`;
+                dropdownMenu.appendChild(li);
+                return;
+            }
+            
             configs.forEach(config => {
                 const li = document.createElement('li');
                 const isActive = config.name === currentConfig;
                 li.innerHTML = `<a class="dropdown-item ${isActive ? 'active' : ''}" href="#" onclick="selectConfig('${config.name}')">${config.display_name}</a>`;
                 dropdownMenu.appendChild(li);
                 
-                // 如果是激活状态，强制应用样式
-                if (isActive) {
-                    setTimeout(() => {
-                        const activeItem = li.querySelector('.dropdown-item');
-                        if (activeItem) {
-                            activeItem.style.background = 'linear-gradient(135deg, #007bff 0%, #0056b3 100%)';
-                            activeItem.style.color = 'white';
-                            activeItem.style.border = '1px solid #0056b3';
-                            activeItem.style.boxShadow = '0 2px 4px rgba(0, 123, 255, 0.3)';
-                            activeItem.style.transform = 'translateX(3px)';
-                        }
-                    }, 10);
+                // 强制应用样式，使用!important
+                const item = li.querySelector('.dropdown-item');
+                if (item) {
+                    if (isActive) {
+                        // 激活状态：蓝色样式
+                        item.setAttribute('style', `
+                            background: linear-gradient(135deg, #007bff 0%, #0056b3 100%) !important;
+                            color: white !important;
+                            border: 1px solid #0056b3 !important;
+                            box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3) !important;
+                            transform: translateX(3px) !important;
+                            font-weight: 600 !important;
+                            font-size: 14px !important;
+                        `);
+                    } else {
+                        // 未激活状态：白色样式
+                        item.setAttribute('style', `
+                            color: #333 !important;
+                            background-color: white !important;
+                            font-weight: normal !important;
+                            border: none !important;
+                            box-shadow: none !important;
+                            transform: none !important;
+                            font-size: 14px !important;
+                        `);
+                    }
                 }
             });
+            
+            // 更新下拉框按钮显示
+            updateDropdownButtonText();
         }
         
         // 选择配置文件
@@ -673,36 +765,93 @@
             
             // 更新下拉框显示
             const dropdownButton = document.getElementById('configDropdown');
-            const configs = Array.from(document.querySelectorAll('#configDropdownMenu .dropdown-item')).map(item => ({
-                name: item.getAttribute('onclick').match(/'([^']+)'/)[1],
-                display_name: item.textContent
-            }));
+            const configs = Array.from(document.querySelectorAll('#configDropdownMenu .dropdown-item')).map(item => {
+                const onclick = item.getAttribute('onclick');
+                if (onclick) {
+                    const match = onclick.match(/'([^']+)'/);
+                    if (match) {
+                        return {
+                            name: match[1],
+                            display_name: item.textContent
+                        };
+                    }
+                }
+                return null;
+            }).filter(config => config !== null);
             
             const selectedConfig = configs.find(c => c.name === configName);
             if (selectedConfig) {
                 dropdownButton.innerHTML = `<i class="fas fa-cog me-2"></i>已选择：${selectedConfig.display_name}`;
             }
             
-            // 更新下拉框选项的激活状态
+            // 立即更新所有下拉框选项的样式
             document.querySelectorAll('#configDropdownMenu .dropdown-item').forEach(item => {
+                const onclick = item.getAttribute('onclick');
+                if (!onclick) return; // 跳过没有onclick的元素（如提示信息）
+                
+                const match = onclick.match(/'([^']+)'/);
+                if (!match) return;
+                
+                const itemConfigName = match[1];
+                const isActive = itemConfigName === configName;
+                
+                // 更新class
                 item.classList.remove('active');
-                if (item.getAttribute('onclick').includes(configName)) {
+                if (isActive) {
                     item.classList.add('active');
                 }
+                
+                // 强制应用样式，使用!important
+                if (isActive) {
+                    // 激活状态：蓝色样式
+                    item.setAttribute('style', `
+                        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%) !important;
+                        color: white !important;
+                        border: 1px solid #0056b3 !important;
+                        box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3) !important;
+                        transform: translateX(3px) !important;
+                        font-weight: 600 !important;
+                        font-size: 14px !important;
+                    `);
+                } else {
+                    // 未激活状态：白色样式
+                    item.setAttribute('style', `
+                        color: #333 !important;
+                        background-color: white !important;
+                        font-weight: normal !important;
+                        border: none !important;
+                        box-shadow: none !important;
+                        transform: none !important;
+                        font-size: 14px !important;
+                    `);
+                }
             });
+                }
+        
+        // 更新下拉框按钮文本
+        function updateDropdownButtonText() {
+            const dropdownButton = document.getElementById('configDropdown');
+            const configs = Array.from(document.querySelectorAll('#configDropdownMenu .dropdown-item')).map(item => ({
+                name: item.getAttribute('onclick') ? item.getAttribute('onclick').match(/'([^']+)'/)[1] : null,
+                display_name: item.textContent
+            })).filter(config => config.name !== null);
             
-            // 强制重新应用样式
-            setTimeout(() => {
-                document.querySelectorAll('.config-dropdown-menu .dropdown-item.active').forEach(item => {
-                    item.style.background = 'linear-gradient(135deg, #007bff 0%, #0056b3 100%)';
-                    item.style.color = 'white';
-                    item.style.border = '1px solid #0056b3';
-                    item.style.boxShadow = '0 2px 4px rgba(0, 123, 255, 0.3)';
-                    item.style.transform = 'translateX(3px)';
-                });
-            }, 10);
+            if (configs.length === 0) {
+                dropdownButton.innerHTML = `<i class="fas fa-cog me-2"></i>暂无配置文件`;
+                return;
+            }
+            
+            // 查找当前选中的配置
+            const selectedConfig = configs.find(c => c.name === currentConfig);
+            if (selectedConfig) {
+                dropdownButton.innerHTML = `<i class="fas fa-cog me-2"></i>已选择：${selectedConfig.display_name}`;
+            } else {
+                // 如果没有找到当前配置，选择第一个
+                currentConfig = configs[0].name;
+                dropdownButton.innerHTML = `<i class="fas fa-cog me-2"></i>已选择：${configs[0].display_name}`;
+            }
         }
-
+        
         // 加载五码数据
         function loadWumaData(page = 1) {
             showLoading();
@@ -880,20 +1029,126 @@
         function uploadWumaFile() {
             const modal = new bootstrap.Modal(document.getElementById('uploadModal'));
             modal.show();
+            // 重置表单
+            document.getElementById('wumaFile').value = '';
+            document.getElementById('customFilename').value = '';
+            document.getElementById('fileValidationMessage').innerHTML = '';
+            document.getElementById('filenameSection').style.display = 'none';
+            document.getElementById('uploadBtn').disabled = true;
         }
-
+        
+        // 文件校验
+        function validateFile() {
+            const fileInput = document.getElementById('wumaFile');
+            const file = fileInput.files[0];
+            const validationMessage = document.getElementById('fileValidationMessage');
+            const filenameSection = document.getElementById('filenameSection');
+            const uploadBtn = document.getElementById('uploadBtn');
+            
+            if (!file) {
+                validationMessage.innerHTML = '';
+                filenameSection.style.display = 'none';
+                uploadBtn.disabled = true;
+                return;
+            }
+            
+            // 检查文件类型
+            if (!file.name.toLowerCase().endsWith('.txt') && !file.name.toLowerCase().endsWith('.csv')) {
+                validationMessage.innerHTML = '<div class="alert alert-danger"><i class="fas fa-exclamation-triangle me-2"></i>文件类型不正确，请选择.txt或.csv文件</div>';
+                filenameSection.style.display = 'none';
+                uploadBtn.disabled = true;
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const content = e.target.result;
+                const lines = content.split('\n').filter(line => line.trim() !== '');
+                
+                if (lines.length === 0) {
+                    validationMessage.innerHTML = '<div class="alert alert-danger"><i class="fas fa-exclamation-triangle me-2"></i>文件为空，请选择包含数据的文件</div>';
+                    filenameSection.style.display = 'none';
+                    uploadBtn.disabled = true;
+                    return;
+                }
+                
+                // 校验每行格式
+                let validLines = 0;
+                let invalidLines = 0;
+                const errors = [];
+                
+                lines.forEach((line, index) => {
+                    const trimmedLine = line.trim();
+                    if (trimmedLine === '') return;
+                    
+                    // 检查格式：:ROM:MLB:SN:BoardID:Model:
+                    const parts = trimmedLine.split(':');
+                    if (parts.length !== 7 || trimmedLine.startsWith(':') === false || trimmedLine.endsWith(':') === false) {
+                        invalidLines++;
+                        errors.push(`第${index + 1}行格式错误：${trimmedLine}`);
+                    } else {
+                        validLines++;
+                    }
+                });
+                
+                if (invalidLines > 0) {
+                    validationMessage.innerHTML = `<div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>文件格式校验失败</strong><br>
+                        有效行数：${validLines}<br>
+                        无效行数：${invalidLines}<br>
+                        错误详情：<br>
+                        <small>${errors.slice(0, 3).join('<br>')}${errors.length > 3 ? '<br>...' : ''}</small>
+                    </div>`;
+                    filenameSection.style.display = 'none';
+                    uploadBtn.disabled = true;
+                } else {
+                    validationMessage.innerHTML = `<div class="alert alert-success">
+                        <i class="fas fa-check-circle me-2"></i>
+                        <strong>文件格式校验通过</strong><br>
+                        有效行数：${validLines}<br>
+                        文件大小：${(file.size / 1024).toFixed(2)} KB
+                    </div>`;
+                    filenameSection.style.display = 'block';
+                    uploadBtn.disabled = false;
+                    
+                    // 设置默认文件名
+                    const customFilename = document.getElementById('customFilename');
+                    if (!customFilename.value) {
+                        const originalName = file.name.replace(/\.(txt|csv)$/i, '');
+                        customFilename.value = originalName;
+                    }
+                }
+            };
+            
+            reader.readAsText(file);
+        }
+        
         // 提交上传
         function submitUpload() {
             const fileInput = document.getElementById('wumaFile');
+            const customFilename = document.getElementById('customFilename');
             const file = fileInput.files[0];
             
             if (!file) {
-                alert('请选择要上传的文件');
+                alert('请选择文件');
                 return;
             }
             
             const formData = new FormData();
             formData.append('file', file);
+            
+            // 添加自定义文件名
+            const filename = customFilename.value.trim();
+            if (filename) {
+                formData.append('custom_filename', filename);
+            }
+            
+            // 显示上传进度
+            const uploadBtn = document.getElementById('uploadBtn');
+            const originalText = uploadBtn.innerHTML;
+            uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>上传中...';
+            uploadBtn.disabled = true;
             
             fetch('/api/wuma_upload', {
                 method: 'POST',
@@ -901,17 +1156,27 @@
             })
             .then(response => response.json())
             .then(data => {
+                uploadBtn.innerHTML = originalText;
+                uploadBtn.disabled = false;
+                
                 if (data.success) {
-                    alert('五码文件上传成功');
+                    alert('上传成功！文件已保存到config目录');
                     const modal = bootstrap.Modal.getInstance(document.getElementById('uploadModal'));
                     modal.hide();
-                    loadWumaData(1); // 刷新数据
+                    fileInput.value = '';
+                    customFilename.value = '';
+                    document.getElementById('fileValidationMessage').innerHTML = '';
+                    document.getElementById('filenameSection').style.display = 'none';
+                    loadConfigList();
+                    loadWumaData(1);
                 } else {
                     alert('上传失败: ' + data.message);
                 }
             })
             .catch(error => {
-                alert('上传失败: ' + error.message);
+                uploadBtn.innerHTML = originalText;
+                uploadBtn.disabled = false;
+                alert('网络错误: ' + error.message);
             });
         }
 

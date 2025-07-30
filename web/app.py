@@ -4213,7 +4213,7 @@ def api_wuma_list():
         config_name = request.args.get('config', 'config')  # 默认使用config.txt
         
         # 根据选择的配置文件读取五码数据
-        config_file_path = os.path.join(os.path.dirname(__file__), f'{config_name}.txt')
+        config_file_path = os.path.join(os.path.dirname(__file__), 'config', f'{config_name}.txt')
         wuma_data = []
         
         if os.path.exists(config_file_path):
@@ -4282,19 +4282,34 @@ def api_wuma_configs():
     logger.info("收到获取配置文件列表请求")
     try:
         configs = []
-        web_dir = os.path.dirname(__file__)
+        config_dir = os.path.join(os.path.dirname(__file__), 'config')
         
-        # 查找所有config*.txt文件
-        for filename in os.listdir(web_dir):
-            if filename.startswith('config') and filename.endswith('.txt'):
-                config_name = filename[:-4]  # 去掉.txt后缀
-                configs.append({
-                    'name': config_name,
-                    'display_name': config_name.replace('config', '配置').replace('1', '一').replace('2', '二')
-                })
+        # 确保config目录存在
+        if not os.path.exists(config_dir):
+            os.makedirs(config_dir, exist_ok=True)
+            logger.info("创建config目录")
+        
+        # 查找config目录下的所有.txt文件
+        if os.path.exists(config_dir):
+            for filename in os.listdir(config_dir):
+                if filename.endswith('.txt'):
+                    file_path = os.path.join(config_dir, filename)
+                    
+                    # 检查文件是否为合规的五码文本文件
+                    if is_valid_wuma_file(file_path):
+                        config_name = filename[:-4]  # 去掉.txt后缀
+                        configs.append({
+                            'name': config_name,
+                            'display_name': filename  # 直接显示文件名
+                        })
+                        logger.info(f"发现合规的五码文件: {filename}")
+                    else:
+                        logger.warning(f"跳过不合规的文件: {filename}")
         
         # 按名称排序
         configs.sort(key=lambda x: x['name'])
+        
+        logger.info(f"找到 {len(configs)} 个合规的五码配置文件")
         
         return jsonify({
             'success': True,
@@ -4307,6 +4322,45 @@ def api_wuma_configs():
             'success': False,
             'message': f'获取配置文件列表失败: {str(e)}'
         })
+
+def is_valid_wuma_file(file_path):
+    """检查文件是否为合规的五码文本文件"""
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read().strip()
+        
+        if not content:
+            return False
+        
+        lines = content.split('\n')
+        valid_lines = 0
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            
+            # 检查格式：:ROM:MLB:SN:BoardID:Model:
+            if not (line.startswith(':') and line.endswith(':')):
+                continue
+            
+            # 分割并检查字段数量
+            parts = line.split(':')
+            if len(parts) != 7:  # 包括首尾的空字符串
+                continue
+            
+            # 检查中间5个字段是否不为空
+            if any(not parts[i].strip() for i in range(1, 6)):
+                continue
+            
+            valid_lines += 1
+        
+        # 文件至少包含1行有效数据才认为是合规的
+        return valid_lines > 0
+        
+    except Exception as e:
+        logger.error(f"检查文件合规性失败 {file_path}: {str(e)}")
+        return False
 
 @app.route('/api/wuma_upload', methods=['POST'])
 @login_required
@@ -4328,69 +4382,99 @@ def api_wuma_upload():
             })
         
         # 检查文件类型
-        if not file.filename.endswith(('.txt', '.csv')):
+        if not file.filename.lower().endswith(('.txt', '.csv')):
             return jsonify({
                 'success': False,
-                'message': '只支持 .txt 和 .csv 格式的文件'
+                'message': '文件类型不正确，请选择.txt或.csv文件'
             })
         
-        # 读取文件内容
+        # 获取自定义文件名
+        custom_filename = request.form.get('custom_filename', '').strip()
+        if custom_filename:
+            # 清理文件名，移除特殊字符
+            import re
+            custom_filename = re.sub(r'[<>:"/\\|?*]', '', custom_filename)
+            filename = f"{custom_filename}.txt"
+        else:
+            # 使用原文件名
+            filename = file.filename
+            if not filename.lower().endswith('.txt'):
+                filename = filename.rsplit('.', 1)[0] + '.txt'
+        
+        # 确保config目录存在
+        config_dir = os.path.join(os.path.dirname(__file__), 'config')
+        os.makedirs(config_dir, exist_ok=True)
+        
+        # 构建文件路径
+        file_path = os.path.join(config_dir, filename)
+        
+        # 读取文件内容进行校验
         content = file.read().decode('utf-8')
         lines = content.strip().split('\n')
         
-        # 解析五码数据并写入config.txt
-        config_file_path = os.path.join(os.path.dirname(__file__), 'config.txt')
-        processed_count = 0
+        if not lines or all(line.strip() == '' for line in lines):
+            return jsonify({
+                'success': False,
+                'message': '文件为空，请选择包含数据的文件'
+            })
+        
+        # 校验文件格式
         valid_lines = []
+        invalid_lines = 0
+        errors = []
         
         for line_num, line in enumerate(lines, 1):
             line = line.strip()
             if not line:
                 continue
             
-            # 支持两种格式：
-            # 1. 冒号分隔的5列数据
-            # 2. 以冒号开头和结尾的格式
+            # 严格校验格式：:ROM:MLB:SN:BoardID:Model:
+            if not (line.startswith(':') and line.endswith(':')):
+                invalid_lines += 1
+                errors.append(f"第{line_num}行格式错误：{line}")
+                continue
             
-            if line.startswith(':') and line.endswith(':'):
-                # 格式2：去掉首尾冒号，然后分割
-                content = line[1:-1]
-                parts = content.split(':')
-            else:
-                # 格式1：直接按冒号分割
-                parts = line.split(':')
+            # 分割并检查字段数量
+            parts = line.split(':')
+            if len(parts) != 7:  # 包括首尾的空字符串
+                invalid_lines += 1
+                errors.append(f"第{line_num}行字段数量错误：{line}")
+                continue
             
-            if len(parts) >= 5:
-                # 确保数据格式正确
-                rom = parts[0].strip()
-                mlb = parts[1].strip()
-                serial_number = parts[2].strip()
-                board_id = parts[3].strip()
-                model_identifier = parts[4].strip()
-                
-                # 构建标准格式的行（以冒号开头和结尾）
-                formatted_line = f":{rom}:{mlb}:{serial_number}:{board_id}:{model_identifier}:"
-                valid_lines.append(formatted_line)
-                processed_count += 1
-            else:
-                logger.warning(f"第{line_num}行格式错误: {line}")
+            # 检查中间5个字段是否为空
+            if any(not parts[i].strip() for i in range(1, 6)):
+                invalid_lines += 1
+                errors.append(f"第{line_num}行包含空字段：{line}")
+                continue
+            
+            valid_lines.append(line)
         
-        # 写入config.txt文件
-        if valid_lines:
-            with open(config_file_path, 'w', encoding='utf-8') as f:
+        if invalid_lines > 0:
+            return jsonify({
+                'success': False,
+                'message': f'文件格式校验失败，发现{invalid_lines}行格式错误',
+                'errors': errors[:5]  # 只返回前5个错误
+            })
+        
+        # 保存文件到config目录
+        try:
+            with open(file_path, 'w', encoding='utf-8') as f:
                 f.write('\n'.join(valid_lines))
             
-            logger.info(f"成功解析并保存 {processed_count} 条五码数据到config.txt")
+            logger.info(f"成功保存 {len(valid_lines)} 条五码数据到 {filename}")
             
             return jsonify({
                 'success': True,
-                'message': f'成功上传并保存 {processed_count} 条五码数据',
-                'uploaded_count': processed_count
+                'message': f'上传成功！文件已保存到config目录，共{len(valid_lines)}条有效数据',
+                'filename': filename,
+                'valid_count': len(valid_lines)
             })
-        else:
+            
+        except Exception as e:
+            logger.error(f"保存文件失败: {str(e)}")
             return jsonify({
                 'success': False,
-                'message': '文件中没有找到有效的五码数据格式'
+                'message': f'保存文件失败: {str(e)}'
             })
         
     except Exception as e:
