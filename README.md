@@ -1,5 +1,10 @@
 新版控制台开发
+
+虚拟机批量克隆，实时和历史日志信息
+
 <img width="1841" height="972" alt="image" src="https://github.com/user-attachments/assets/0b8743d9-a070-4bb4-a327-27942f28d95e" />
+
+虚拟机管理界面，增加图标状态监控，开机关机，重启挂起，脚本发送和脚本执行按钮
 
 <img width="1841" height="972" alt="image" src="https://github.com/user-attachments/assets/b317c465-4412-4874-9412-d1b7671ceefa" />
 
