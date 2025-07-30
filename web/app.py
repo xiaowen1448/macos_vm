@@ -28,11 +28,573 @@ app.secret_key = 'your_secret_key_here'  # 用于会话加密
 USERNAME = 'admin'
 PASSWORD = '123456'
 
+# 虚拟机目录配置
+VM_DIRS = {
+    '10_12': r'D:\macos_vm\NewVM\10.12',
+    'chengpin': r'D:\macos_vm\NewVM\chengpin_vm'
+}
+
 #模板虚拟机路径
 template_dir = r'D:\macos_vm\TemplateVM\macos10.12'
 
 # 全局任务存储
 clone_tasks = {}
+
+# 通用函数 - 获取虚拟机列表
+def get_vm_list_from_directory(vm_dir, vm_type_name):
+    """从指定目录获取虚拟机列表"""
+    logger.info(f"收到获取{vm_type_name}虚拟机列表API请求")
+    try:
+        # 获取分页参数
+        page = request.args.get('page', 1, type=int)
+        page_size = request.args.get('page_size', 10, type=int)
+        logger.debug(f"分页参数 - 页码: {page}, 每页大小: {page_size}")
+        
+        vms = []
+        stats = {'total': 0, 'running': 0, 'stopped': 0, 'online': 0}
+        
+        logger.debug(f"开始扫描{vm_type_name}虚拟机目录: {vm_dir}")
+        
+        # 批量获取运行中的虚拟机列表（只执行一次vmrun命令）
+        running_vms = set()
+        try:
+            vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
+            if not os.path.exists(vmrun_path):
+                vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
+            
+            list_cmd = [vmrun_path, 'list']
+            logger.debug(f"执行vmrun命令: {list_cmd}")
+            result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30)
+            
+            if result.returncode == 0:
+                running_vms = set(result.stdout.strip().split('\n')[1:])  # 跳过标题行
+                logger.debug(f"获取到运行中虚拟机: {len(running_vms)} 个")
+            else:
+                logger.warning(f"vmrun命令执行失败: {result.stderr}")
+        except Exception as e:
+            logger.error(f"获取运行中虚拟机列表失败: {str(e)}")
+        
+        if os.path.exists(vm_dir):
+            for root, dirs, files in os.walk(vm_dir):
+                for file in files:
+                    if file.endswith('.vmx'):
+                        vm_path = os.path.join(root, file)
+                        vm_name = os.path.splitext(file)[0]
+                        
+                        # 快速判断虚拟机状态（基于文件名匹配）
+                        vm_status = 'stopped'
+                        for running_vm in running_vms:
+                            if vm_name in running_vm:
+                                vm_status = 'running'
+                                break
+                        
+                        logger.debug(f"找到{vm_type_name}虚拟机: {vm_name}, 状态: {vm_status}")
+                        
+                        # 构建虚拟机基本信息
+                        vm_info = {
+                            'name': vm_name,
+                            'path': vm_path,
+                            'status': vm_status,
+                            'online_status': 'unknown',  # 初始状态为未知
+                            'online_reason': '',
+                            'ip': '获取中...' if vm_status == 'running' else '-',
+                            'ssh_trust': False,
+                            'wuma_info': get_wuma_info(vm_name) or '未配置',
+                            'ju_info': '未获取到ju值信息',  # JU值信息初始状态
+                            'wuma_view_status': '未获取',  # 五码查看状态初始状态
+                            'ssh_status': 'unknown',
+                            'vm_status': vm_status  # 添加虚拟机状态字段
+                        }
+                        vms.append(vm_info)
+                        
+                        # 更新统计信息
+                        stats['total'] += 1
+                        if vm_status == 'running':
+                            stats['running'] += 1
+                        elif vm_status == 'stopped':
+                            stats['stopped'] += 1
+        else:
+            logger.warning(f"{vm_type_name}虚拟机目录不存在: {vm_dir}")
+        
+        # 对虚拟机进行排序：运行中的虚拟机排在前面
+        vms.sort(key=lambda vm: (vm['status'] != 'running', vm['name']))
+        
+        # 计算分页
+        total_count = len(vms)
+        total_pages = (total_count + page_size - 1) // page_size
+        start_index = (page - 1) * page_size
+        end_index = min(start_index + page_size, total_count)
+        
+        # 分页数据
+        paged_vms = vms[start_index:end_index] if vms else []
+        
+        logger.info(f"{vm_type_name}虚拟机列表获取完成 - 总数: {total_count}, 运行中: {stats['running']}, 已停止: {stats['stopped']}")
+        
+        return jsonify({
+            'success': True,
+            'vms': paged_vms,
+            'stats': stats,
+            'pagination': {
+                'current_page': page,
+                'page_size': page_size,
+                'total_count': total_count,
+                'total_pages': total_pages,
+                'start_index': start_index,
+                'end_index': end_index
+            }
+        })
+    except Exception as e:
+        logger.error(f"获取{vm_type_name}虚拟机列表失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取{vm_type_name}虚拟机列表失败: {str(e)}'
+        })
+
+# 通用函数 - 获取五码信息
+def get_wuma_info_generic(vm_type_name):
+    """获取虚拟机五码信息的通用函数"""
+    logger.info(f"收到获取{vm_type_name}虚拟机五码信息请求")
+    try:
+        data = request.get_json()
+        vm_name = data.get('vm_name')
+        
+        if not vm_name:
+            return jsonify({
+                'success': False,
+                'message': '缺少虚拟机名称参数'
+            })
+        
+        # 获取虚拟机IP
+        vm_ip = get_vm_ip(vm_name)
+        if not vm_ip:
+            return jsonify({
+                'success': False,
+                'message': f'无法获取虚拟机 {vm_name} 的IP地址'
+            })
+        
+        # 执行远程脚本获取五码信息
+        result = execute_remote_script(vm_ip, 'wx', 'run_debug_wuma.sh')
+        if len(result) == 3:
+            success, output, ssh_log = result
+        elif len(result) == 2:
+            success, output = result
+        else:
+            success, output = False, "未知错误"
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'output': output
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': output
+            })
+    except Exception as e:
+        logger.error(f"获取{vm_type_name}虚拟机五码信息失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取{vm_type_name}虚拟机五码信息失败: {str(e)}'
+        })
+
+# 通用函数 - 获取JU值信息
+def get_ju_info_generic(vm_type_name):
+    """获取虚拟机JU值信息的通用函数"""
+    logger.info(f"收到获取{vm_type_name}虚拟机JU值信息请求")
+    try:
+        data = request.get_json()
+        vm_name = data.get('vm_name')
+        
+        if not vm_name:
+            return jsonify({
+                'success': False,
+                'message': '缺少虚拟机名称参数'
+            })
+        
+        # 获取虚拟机IP
+        vm_ip = get_vm_ip(vm_name)
+        if not vm_ip:
+            return jsonify({
+                'success': False,
+                'message': f'无法获取虚拟机 {vm_name} 的IP地址'
+            })
+        
+        # 执行远程脚本获取JU值信息
+        result = execute_remote_script(vm_ip, 'wx', 'run_debug_ju.sh')
+        if len(result) == 3:
+            success, output, ssh_log = result
+        elif len(result) == 2:
+            success, output = result
+        else:
+            success, output = False, "未知错误"
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'output': output
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': output
+            })
+    except Exception as e:
+        logger.error(f"获取{vm_type_name}虚拟机JU值信息失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取{vm_type_name}虚拟机JU值信息失败: {str(e)}'
+        })
+
+# 通用函数 - 虚拟机操作（启动、停止、重启）
+def vm_operation_generic(operation, vm_type_name, vm_dir):
+    """虚拟机操作的通用函数"""
+    logger.info(f"收到{operation}{vm_type_name}虚拟机请求")
+    try:
+        data = request.get_json()
+        vm_name = data.get('vm_name')
+        
+        if not vm_name:
+            return jsonify({
+                'success': False,
+                'message': '缺少虚拟机名称参数'
+            })
+        
+        # 查找虚拟机文件
+        vm_file = find_vm_file(vm_name)
+        if not vm_file:
+            return jsonify({
+                'success': False,
+                'message': f'虚拟机 {vm_name} 文件不存在'
+            })
+        
+        # 检查是否在指定目录中
+        if not vm_file.startswith(vm_dir):
+            return jsonify({
+                'success': False,
+                'message': f'虚拟机 {vm_name} 不在{vm_type_name}目录中'
+            })
+        
+        # 执行虚拟机操作
+        vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
+        if not os.path.exists(vmrun_path):
+            vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
+        
+        if operation == 'start':
+            cmd = [vmrun_path, 'start', vm_file]
+        elif operation == 'stop':
+            cmd = [vmrun_path, 'stop', vm_file, 'hard']
+        elif operation == 'restart':
+            cmd = [vmrun_path, 'reset', vm_file, 'hard']
+        else:
+            return jsonify({
+                'success': False,
+                'message': f'不支持的操作: {operation}'
+            })
+        
+        logger.info(f"执行{operation}命令: {cmd}")
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        
+        if result.returncode == 0:
+            logger.info(f"{vm_type_name}虚拟机 {vm_name} {operation}成功")
+            return jsonify({
+                'success': True,
+                'message': f'{vm_type_name}虚拟机 {vm_name} {operation}成功'
+            })
+        else:
+            logger.error(f"{vm_type_name}虚拟机 {vm_name} {operation}失败: {result.stderr}")
+            return jsonify({
+                'success': False,
+                'message': f'{vm_type_name}虚拟机 {vm_name} {operation}失败: {result.stderr}'
+            })
+    except Exception as e:
+        logger.error(f"{operation}{vm_type_name}虚拟机失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'{operation}{vm_type_name}虚拟机失败: {str(e)}'
+        })
+
+# 通用函数 - 删除虚拟机
+def delete_vm_generic(vm_type_name, vm_dir):
+    """删除虚拟机的通用函数"""
+    logger.info(f"收到删除{vm_type_name}虚拟机请求")
+    try:
+        data = request.get_json()
+        vm_names = data.get('vm_names', [])
+        
+        if not vm_names:
+            return jsonify({
+                'success': False,
+                'message': '缺少虚拟机名称列表'
+            })
+        
+        deleted_count = 0
+        errors = []
+        
+        for vm_name in vm_names:
+            try:
+                # 查找虚拟机文件
+                vm_file = find_vm_file(vm_name)
+                if not vm_file:
+                    errors.append(f'虚拟机 {vm_name} 文件不存在')
+                    continue
+                
+                # 检查是否在指定目录中
+                if not vm_file.startswith(vm_dir):
+                    errors.append(f'虚拟机 {vm_name} 不在{vm_type_name}目录中')
+                    continue
+                
+                # 删除虚拟机文件
+                vm_dir_path = os.path.dirname(vm_file)
+                if os.path.exists(vm_dir_path):
+                    import shutil
+                    shutil.rmtree(vm_dir_path)
+                    logger.info(f"成功删除{vm_type_name}虚拟机: {vm_name}")
+                    deleted_count += 1
+                else:
+                    errors.append(f'虚拟机目录不存在: {vm_dir_path}')
+                    
+            except Exception as e:
+                logger.error(f"删除{vm_type_name}虚拟机 {vm_name} 失败: {str(e)}")
+                errors.append(f'删除虚拟机 {vm_name} 失败: {str(e)}')
+        
+        if deleted_count > 0:
+            message = f'成功删除 {deleted_count} 个{vm_type_name}虚拟机'
+            if errors:
+                message += f'，但有 {len(errors)} 个错误: ' + '; '.join(errors)
+            return jsonify({
+                'success': True,
+                'message': message
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': '删除失败: ' + '; '.join(errors)
+            })
+    except Exception as e:
+        logger.error(f"删除{vm_type_name}虚拟机失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'删除{vm_type_name}虚拟机失败: {str(e)}'
+        })
+
+# 通用函数 - 获取虚拟机详细信息
+def get_vm_info_generic(vm_name, vm_type_name, vm_dir):
+    """获取虚拟机详细信息的通用函数"""
+    logger.info(f"收到获取{vm_type_name}虚拟机详细信息请求: {vm_name}")
+    try:
+        # 查找虚拟机文件
+        vm_file = find_vm_file(vm_name)
+        if not vm_file:
+            return jsonify({
+                'success': False,
+                'message': f'虚拟机 {vm_name} 文件不存在'
+            })
+        
+        # 检查是否在指定目录中
+        if not vm_file.startswith(vm_dir):
+            return jsonify({
+                'success': False,
+                'message': f'虚拟机 {vm_name} 不在{vm_type_name}目录中'
+            })
+        
+        # 获取虚拟机状态
+        vm_status = get_vm_status(vm_file)
+        
+        # 获取虚拟机快照
+        snapshots = get_vm_snapshots(vm_file)
+        
+        # 获取虚拟机配置
+        config = get_vm_config(vm_file)
+        
+        return jsonify({
+            'success': True,
+            'vm_info': {
+                'name': vm_name,
+                'path': vm_file,
+                'status': vm_status,
+                'snapshots': snapshots,
+                'config': config
+            }
+        })
+    except Exception as e:
+        logger.error(f"获取{vm_type_name}虚拟机详细信息失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取{vm_type_name}虚拟机详细信息失败: {str(e)}'
+        })
+
+# 通用函数 - 发送脚本到虚拟机
+def send_script_generic(vm_type_name):
+    """向虚拟机发送脚本的通用函数"""
+    logger.info(f"收到向{vm_type_name}虚拟机发送脚本请求")
+    try:
+        data = request.get_json()
+        vm_name = data.get('vm_name')
+        script_name = data.get('script_name')
+        
+        if not vm_name or not script_name:
+            return jsonify({
+                'success': False,
+                'message': '缺少虚拟机名称或脚本名称参数'
+            })
+        
+        # 获取虚拟机IP
+        vm_ip = get_vm_ip(vm_name)
+        if not vm_ip:
+            return jsonify({
+                'success': False,
+                'message': f'无法获取虚拟机 {vm_name} 的IP地址'
+            })
+        
+        # 检查脚本文件是否存在
+        script_path = os.path.join(r'D:\macos_vm\macos_sh', script_name)
+        if not os.path.exists(script_path):
+            return jsonify({
+                'success': False,
+                'message': f'脚本文件 {script_name} 不存在'
+            })
+        
+        # 检查虚拟机状态和SSH互信
+        try:
+            vm_info = get_vm_online_status(vm_name)
+            
+            if vm_info['status'] != 'online' or not vm_info.get('ssh_trust', False):
+                return jsonify({
+                    'success': False,
+                    'message': f'虚拟机 {vm_name} 未在线或未建立SSH互信'
+                })
+            
+            # 使用scp发送脚本
+            import subprocess
+            scp_cmd = [
+                'scp',
+                '-o', 'StrictHostKeyChecking=no',
+                '-o', 'ConnectTimeout=10',
+                script_path,
+                f"wx@{vm_info['ip']}:/Users/wx/{script_name}"
+            ]
+            
+            logger.debug(f"执行SCP命令: {' '.join(scp_cmd)}")
+            result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=30)
+            
+            if result.returncode == 0:
+                logger.info(f"脚本发送成功到虚拟机 {vm_name} ({vm_info['ip']})")
+                return jsonify({
+                    'success': True,
+                    'message': f'脚本 {script_name} 发送成功到虚拟机 {vm_name}',
+                    'file_path': f'/Users/wx/{script_name}'
+                })
+            else:
+                error_msg = result.stderr.strip() if result.stderr else result.stdout.strip()
+                logger.error(f"脚本发送失败到虚拟机 {vm_name}: {error_msg}")
+                
+                # 根据错误类型提供更详细的错误信息
+                if 'Permission denied' in error_msg:
+                    error_detail = 'SSH认证失败，请检查SSH互信设置'
+                elif 'Connection refused' in error_msg:
+                    error_detail = 'SSH连接被拒绝，请检查SSH服务是否运行'
+                elif 'No route to host' in error_msg:
+                    error_detail = '无法连接到主机，请检查网络连接'
+                else:
+                    error_detail = f'SCP传输失败: {error_msg}'
+                
+                return jsonify({
+                    'success': False,
+                    'message': error_detail
+                })
+                
+        except subprocess.TimeoutExpired:
+            logger.error(f"发送脚本到虚拟机 {vm_name} 超时")
+            return jsonify({
+                'success': False,
+                'message': 'SCP传输超时（30秒）'
+            })
+        except Exception as e:
+            logger.error(f"发送脚本到虚拟机 {vm_name} 时出错: {str(e)}")
+            return jsonify({
+                'success': False,
+                'message': f'发送出错: {str(e)}'
+            })
+    except Exception as e:
+        logger.error(f"向{vm_type_name}虚拟机发送脚本失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'向{vm_type_name}虚拟机发送脚本失败: {str(e)}'
+        })
+
+# 通用函数 - 添加脚本执行权限
+def add_permissions_generic(vm_type_name):
+    """为虚拟机添加脚本执行权限的通用函数"""
+    logger.info(f"收到为{vm_type_name}虚拟机添加脚本执行权限请求")
+    try:
+        data = request.get_json()
+        vm_name = data.get('vm_name')
+        script_names = data.get('script_names', [])
+        username = data.get('username', 'wx')
+        
+        if not vm_name or not script_names:
+            return jsonify({
+                'success': False,
+                'message': '缺少虚拟机名称或脚本名称列表参数'
+            })
+        
+        # 获取虚拟机IP
+        vm_ip = get_vm_ip(vm_name)
+        if not vm_ip:
+            return jsonify({
+                'success': False,
+                'message': f'无法获取虚拟机 {vm_name} 的IP地址'
+            })
+        
+        # 添加执行权限
+        success, message = execute_chmod_scripts(vm_ip, username, script_names)
+        
+        return jsonify({
+            'success': success,
+            'message': message
+        })
+    except Exception as e:
+        logger.error(f"为{vm_type_name}虚拟机添加脚本执行权限失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'为{vm_type_name}虚拟机添加脚本执行权限失败: {str(e)}'
+        })
+
+# 通用函数 - 获取IP状态
+def get_ip_status_generic(vm_name, vm_type_name, vm_dir):
+    """获取虚拟机IP状态的通用函数"""
+    logger.info(f"收到获取{vm_type_name}虚拟机IP状态请求: {vm_name}")
+    try:
+        # 查找虚拟机文件
+        vm_file = find_vm_file(vm_name)
+        if not vm_file:
+            return jsonify({
+                'success': False,
+                'message': f'虚拟机 {vm_name} 文件不存在'
+            })
+        
+        # 检查是否在指定目录中
+        if not vm_file.startswith(vm_dir):
+            return jsonify({
+                'success': False,
+                'message': f'虚拟机 {vm_name} 不在{vm_type_name}目录中'
+            })
+        
+        # 获取IP状态
+        ip_status = get_vm_ip_status(vm_name)
+        
+        return jsonify({
+            'success': True,
+            'ip_status': ip_status
+        })
+    except Exception as e:
+        logger.error(f"获取{vm_type_name}虚拟机IP状态失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取{vm_type_name}虚拟机IP状态失败: {str(e)}'
+        })
 
 # 确保 web/templates/ 目录下有 login.html 和 dashboard.html 文件，否则会报错。
 def login_required(f):
@@ -1456,16 +2018,30 @@ def get_vm_status(vm_path):
         if not os.path.exists(vmrun_path):
             vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
         
+        print(f"[DEBUG] 使用vmrun路径: {vmrun_path}")
         list_cmd = [vmrun_path, 'list']
+        print(f"[DEBUG] 执行命令: {' '.join(list_cmd)}")
+        
         result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30)
+        
+        print(f"[DEBUG] vmrun list命令返回码: {result.returncode}")
+        print(f"[DEBUG] vmrun list命令输出: {result.stdout}")
+        if result.stderr:
+            print(f"[DEBUG] vmrun list命令错误: {result.stderr}")
         
         if result.returncode == 0:
             running_vms = result.stdout.strip().split('\n')[1:]  # 跳过标题行
             vm_name = os.path.splitext(os.path.basename(vm_path))[0]
+            print(f"[DEBUG] 查找虚拟机名称: {vm_name}")
+            print(f"[DEBUG] 运行中的虚拟机列表: {running_vms}")
             
             for vm in running_vms:
                 if vm.strip() and vm_name in vm:
+                    print(f"[DEBUG] 找到运行中的虚拟机: {vm}")
                     return 'running'
+            
+            print(f"[DEBUG] 未找到运行中的虚拟机: {vm_name}")
+            return 'stopped'
         
         return 'stopped'
         
@@ -1777,8 +2353,8 @@ def check_ssh_trust_status(ip, username='wx'):
         return False
 
 def get_vm_online_status(vm_name):
-    """获取虚拟机在线状态（严格校验：IP获取成功 + SSH端口开放 + SSH互信成功）"""
-    logger.debug(f"检查虚拟机 {vm_name} 的在线状态（严格校验）")
+    """获取虚拟机在线状态（新逻辑：根据虚拟机状态和网络连接情况综合判断）"""
+    logger.debug(f"检查虚拟机 {vm_name} 的在线状态（新逻辑）")
     
     try:
         # 1. 检查虚拟机是否运行
@@ -1790,80 +2366,162 @@ def get_vm_online_status(vm_name):
                 'reason': '虚拟机文件不存在',
                 'ip': None,
                 'ssh_trust': False,
-                'ssh_port_open': False
+                'ssh_port_open': False,
+                'vm_status': 'unknown'
             }
         
         vm_status = get_vm_status(vm_file)
-        if vm_status != 'running':
-            logger.debug(f"虚拟机 {vm_name} 未运行，状态: {vm_status}")
+        logger.debug(f"虚拟机 {vm_name} 状态: {vm_status}")
+        print(f"[DEBUG] 虚拟机 {vm_name} 状态检测结果: {vm_status}")
+        
+        # 2. 根据虚拟机状态进行初步判断
+        if vm_status == 'stopped':
+            logger.debug(f"虚拟机 {vm_name} 已关机")
             return {
                 'status': 'offline',
-                'reason': f'虚拟机未运行 ({vm_status})',
+                'reason': '虚拟机关机',
                 'ip': None,
                 'ssh_trust': False,
-                'ssh_port_open': False
+                'ssh_port_open': False,
+                'vm_status': vm_status
+            }
+        elif vm_status in ['suspended', 'paused']:
+            logger.debug(f"虚拟机 {vm_name} 处于挂起状态")
+            return {
+                'status': 'unknown',
+                'reason': f'虚拟机{vm_status}状态',
+                'ip': None,
+                'ssh_trust': False,
+                'ssh_port_open': False,
+                'vm_status': vm_status
+            }
+        elif vm_status == 'unknown':
+            logger.debug(f"虚拟机 {vm_name} 状态未知，继续检查网络连接")
+            # 状态未知时，继续检查网络连接情况
+        elif vm_status != 'running':
+            logger.debug(f"虚拟机 {vm_name} 状态异常: {vm_status}")
+            return {
+                'status': 'unknown',
+                'reason': f'虚拟机状态异常: {vm_status}',
+                'ip': None,
+                'ssh_trust': False,
+                'ssh_port_open': False,
+                'vm_status': vm_status
             }
         
-        # 2. 获取IP地址（条件1：IP地址获取成功）
+        # 3. 虚拟机运行中或状态未知，检查网络连接情况
         vm_ip = get_vm_ip(vm_name)
         if not vm_ip:
             logger.debug(f"虚拟机 {vm_name} 无法获取IP地址")
+            print(f"[DEBUG] 虚拟机 {vm_name} IP地址获取失败")
             return {
-                'status': 'offline',
+                'status': 'unknown',
                 'reason': '无法获取IP地址',
                 'ip': None,
                 'ssh_trust': False,
-                'ssh_port_open': False
+                'ssh_port_open': False,
+                'vm_status': vm_status
             }
         
         logger.debug(f"虚拟机 {vm_name} IP地址获取成功: {vm_ip}")
+        print(f"[DEBUG] 虚拟机 {vm_name} IP地址获取成功: {vm_ip}")
         
-        # 3. 检查IP连通性
+        # 4. 检查IP连通性
         ip_status = check_ip_connectivity(vm_ip)
+        print(f"[DEBUG] 虚拟机 {vm_name} IP连通性检查结果: {ip_status}")
         if not ip_status['success']:
             logger.debug(f"虚拟机 {vm_name} IP {vm_ip} 不可达")
+            print(f"[DEBUG] 虚拟机 {vm_name} IP {vm_ip} 不可达: {ip_status.get('error', '未知错误')}")
             return {
                 'status': 'offline',
                 'reason': f'IP不可达: {ip_status.get("error", "未知错误")}',
                 'ip': vm_ip,
                 'ssh_trust': False,
-                'ssh_port_open': False
+                'ssh_port_open': False,
+                'vm_status': vm_status
             }
         
-        # 4. 检查SSH端口是否开放（条件2：SSH端口开放）
+        # 5. 检查SSH端口是否开放
         ssh_port_open = check_ssh_port_open(vm_ip)
-        if not ssh_port_open:
-            logger.debug(f"虚拟机 {vm_name} SSH端口未开放")
-            return {
-                'status': 'partial',
-                'reason': 'IP可达但SSH端口未开放',
-                'ip': vm_ip,
-                'ssh_trust': False,
-                'ssh_port_open': False
-            }
+        print(f"[DEBUG] 虚拟机 {vm_name} SSH端口检查结果: {ssh_port_open}")
         
-        logger.debug(f"虚拟机 {vm_name} SSH端口开放")
-        
-        # 5. 检查SSH互信状态（条件3：SSH已添加互信可以成功登录）
+        # 6. 检查SSH互信状态
         ssh_trust_status = check_ssh_trust_status(vm_ip)
+        print(f"[DEBUG] 虚拟机 {vm_name} SSH互信检查结果: {ssh_trust_status}")
         
+        # 7. 根据三个条件综合判断在线状态
+        conditions_met = 0
+        total_conditions = 3
+        
+        if ip_status['success']:
+            conditions_met += 1
+        if ssh_port_open:
+            conditions_met += 1
         if ssh_trust_status:
-            logger.info(f"虚拟机 {vm_name} 完全在线：IP可达 + SSH端口开放 + SSH互信成功")
+            conditions_met += 1
+        
+        logger.debug(f"虚拟机 {vm_name} 条件满足情况: {conditions_met}/{total_conditions}")
+        print(f"[DEBUG] 虚拟机 {vm_name} 条件满足情况: {conditions_met}/{total_conditions}")
+        
+        if conditions_met == total_conditions:
+            # 三个条件都满足：完全在线
+            status_text = '完全在线'
+            reason_text = 'IP可达 + SSH端口开放 + SSH互信成功'
+            if vm_status == 'unknown':
+                status_text = '完全在线（状态未知）'
+                reason_text = 'IP可达 + SSH端口开放 + SSH互信成功（虚拟机状态未知）'
+            
+            logger.info(f"虚拟机 {vm_name} {status_text}：{reason_text}")
+            print(f"[DEBUG] 虚拟机 {vm_name} 三个条件都满足，返回online状态")
             return {
                 'status': 'online',
-                'reason': 'IP可达 + SSH端口开放 + SSH互信成功',
+                'reason': reason_text,
                 'ip': vm_ip,
                 'ssh_trust': True,
-                'ssh_port_open': True
+                'ssh_port_open': True,
+                'vm_status': vm_status
+            }
+        elif conditions_met > 0:
+            # 部分条件满足：部分在线
+            missing_conditions = []
+            if not ip_status['success']:
+                missing_conditions.append('IP不可达')
+            if not ssh_port_open:
+                missing_conditions.append('SSH端口未开放')
+            if not ssh_trust_status:
+                missing_conditions.append('SSH互信未设置')
+            
+            status_text = '部分在线'
+            reason = f'部分在线（缺少: {", ".join(missing_conditions)}）'
+            if vm_status == 'unknown':
+                status_text = '部分在线（状态未知）'
+                reason = f'部分在线（缺少: {", ".join(missing_conditions)}，虚拟机状态未知）'
+            
+            logger.debug(f"虚拟机 {vm_name} {reason}")
+            return {
+                'status': 'partial',
+                'reason': reason,
+                'ip': vm_ip,
+                'ssh_trust': ssh_trust_status,
+                'ssh_port_open': ssh_port_open,
+                'vm_status': vm_status
             }
         else:
-            logger.debug(f"虚拟机 {vm_name} IP可达且SSH端口开放，但SSH互信未设置")
+            # 没有条件满足：未在线
+            status_text = '未在线'
+            reason_text = '所有网络条件都不满足'
+            if vm_status == 'unknown':
+                status_text = '未在线（状态未知）'
+                reason_text = '所有网络条件都不满足（虚拟机状态未知）'
+            
+            logger.debug(f"虚拟机 {vm_name} {status_text}：{reason_text}")
             return {
                 'status': 'offline',
-                'reason': 'IP可达且SSH端口开放，但SSH互信未设置',
+                'reason': reason_text,
                 'ip': vm_ip,
                 'ssh_trust': False,
-                'ssh_port_open': True
+                'ssh_port_open': False,
+                'vm_status': vm_status
             }
             
     except Exception as e:
@@ -1873,7 +2531,8 @@ def get_vm_online_status(vm_name):
             'reason': f'检查状态时出错: {str(e)}',
             'ip': None,
             'ssh_trust': False,
-            'ssh_port_open': False
+            'ssh_port_open': False,
+            'vm_status': 'unknown'
         }
 
 def find_vm_file(vm_name):
@@ -2777,7 +3436,13 @@ def api_get_wuma_info():
         logger.debug(f"虚拟机 {vm_name} 的IP地址: {vm_ip}")
         
         # 通过SSH互信执行家目录脚本
-        success, output = execute_remote_script(vm_ip, 'wx', 'run_debug_wuma.sh')
+        result = execute_remote_script(vm_ip, 'wx', 'run_debug_wuma.sh')
+        if len(result) == 3:
+            success, output, ssh_log = result
+        elif len(result) == 2:
+            success, output = result
+        else:
+            success, output = False, "未知错误"
         
         if success:
             logger.info(f"成功获取虚拟机 {vm_name} 的五码信息")
@@ -2811,7 +3476,13 @@ def api_get_ju_info():
         logger.debug(f"虚拟机 {vm_name} 的IP地址: {vm_ip}")
         
         # 通过SSH互信执行家目录脚本
-        success, output = execute_remote_script(vm_ip, 'wx', 'run_debug_ju.sh')
+        result = execute_remote_script(vm_ip, 'wx', 'run_debug_ju.sh')
+        if len(result) == 3:
+            success, output, ssh_log = result
+        elif len(result) == 2:
+            success, output = result
+        else:
+            success, output = False, "未知错误"
         
         if success:
             logger.info(f"成功获取虚拟机 {vm_name} 的JU值信息")
@@ -2829,44 +3500,691 @@ def execute_remote_script(ip, username, script_name):
     try:
         import paramiko
         
+        # 构建详细的SSH调用日志
+        ssh_log = []
+        ssh_log.append(f"[SSH] 开始连接到远程主机: {ip}")
+        ssh_log.append(f"[SSH] 用户名: {username}")
+        ssh_log.append(f"[SSH] 目标脚本: {script_name}")
+        
         # 创建SSH客户端
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh_log.append("[SSH] SSH客户端创建成功")
         
         # 通过SSH互信连接到远程主机（无需密码）
-        logger.debug(f"通过SSH互信连接到 {ip} 执行脚本 {script_name}")
+        ssh_log.append(f"[SSH] 正在建立SSH连接...")
         ssh.connect(ip, username=username, timeout=10)
-        logger.debug("SSH互信连接成功")
+        ssh_log.append("[SSH] SSH连接建立成功")
+        
+        # 检查脚本是否存在
+        check_command = f"ls -la ~/{script_name}"
+        ssh_log.append(f"[SSH] 检查脚本是否存在: {check_command}")
+        stdin, stdout, stderr = ssh.exec_command(check_command)
+        check_output = stdout.read().decode().strip()
+        check_error = stderr.read().decode().strip()
+        
+        if not check_output:
+            ssh_log.append(f"[SSH] 脚本不存在: ~/{script_name}")
+            ssh.close()
+            return False, f"脚本 ~/{script_name} 不存在", "\n".join(ssh_log)
+        
+        ssh_log.append(f"[SSH] 脚本存在: {check_output}")
+        
+        # 检查脚本执行权限
+        chmod_command = f"chmod +x ~/{script_name}"
+        ssh_log.append(f"[SSH] 添加执行权限: {chmod_command}")
+        stdin, stdout, stderr = ssh.exec_command(chmod_command)
+        chmod_error = stderr.read().decode().strip()
+        if chmod_error:
+            ssh_log.append(f"[SSH] 添加执行权限失败: {chmod_error}")
+        else:
+            ssh_log.append("[SSH] 执行权限添加成功")
         
         # 执行家目录脚本命令
         command = f"cd ~ && ./{script_name}"
-        logger.debug(f"执行家目录脚本命令: {command}")
+        ssh_log.append(f"[SSH] 执行脚本命令: {command}")
         
         stdin, stdout, stderr = ssh.exec_command(command)
         exit_status = stdout.channel.recv_exit_status()
         output = stdout.read().decode().strip()
         error = stderr.read().decode().strip()
         
-        logger.debug(f"脚本 {script_name} 执行状态: {exit_status}")
+        ssh_log.append(f"[SSH] 脚本执行完成，退出状态: {exit_status}")
+        
         if output:
-            logger.debug(f"脚本输出: {output}")
+            ssh_log.append(f"[SSH] 脚本输出长度: {len(output)} 字符")
         if error:
-            logger.debug(f"脚本错误: {error}")
+            ssh_log.append(f"[SSH] 脚本错误输出长度: {len(error)} 字符")
         
         ssh.close()
+        ssh_log.append("[SSH] SSH连接已关闭")
+        
+        # 构建完整的执行日志
+        full_log = "\n".join(ssh_log)
         
         if exit_status == 0:
-            return True, output
+            logger.info(f"脚本 {script_name} 执行成功，输出长度: {len(output)}")
+            return True, output, full_log
         else:
             error_msg = error if error else f"脚本 {script_name} 执行失败，退出状态: {exit_status}"
-            return False, error_msg
+            logger.error(f"脚本 {script_name} 执行失败: {error_msg}")
+            return False, error_msg, full_log
             
     except ImportError:
         logger.error("paramiko库未安装")
-        return False, "需要安装paramiko库: pip install paramiko"
+        return False, "需要安装paramiko库: pip install paramiko", "paramiko库未安装"
     except Exception as e:
         logger.error(f"execute_remote_script异常: {str(e)}")
-        return False, f"通过SSH互信执行脚本时发生错误: {str(e)}"
+        error_msg = f"通过SSH互信执行脚本时发生错误: {str(e)}"
+        return False, error_msg, f"[SSH] 连接异常: {str(e)}"
+
+# 成品虚拟机API端点 - 使用通用函数
+
+@app.route('/api/vm_chengpin_list')
+@login_required
+def api_vm_chengpin_list():
+    """获取成品虚拟机列表"""
+    return get_vm_list_from_directory(VM_DIRS['chengpin'], '成品虚拟机')
+
+@app.route('/api/get_chengpin_wuma_info', methods=['POST'])
+@login_required
+def api_get_chengpin_wuma_info():
+    """获取成品虚拟机五码信息"""
+    return get_wuma_info_generic('成品虚拟机')
+
+@app.route('/api/get_chengpin_ju_info', methods=['POST'])
+@login_required
+def api_get_chengpin_ju_info():
+    """获取成品虚拟机JU值信息"""
+    return get_ju_info_generic('成品虚拟机')
+
+@app.route('/api/vm_chengpin_online_status', methods=['POST'])
+@login_required
+def api_vm_chengpin_online_status():
+    """获取成品虚拟机在线状态"""
+    logger.info("收到获取成品虚拟机在线状态请求")
+    try:
+        data = request.get_json()
+        vm_names = data.get('vm_names', [])
+        
+        if not vm_names:
+            return jsonify({
+                'success': False,
+                'message': '缺少虚拟机名称列表'
+            })
+        
+        results = {}
+        for vm_name in vm_names:
+            try:
+                online_status = get_vm_online_status(vm_name)
+                results[vm_name] = online_status
+                print(f"[DEBUG] 成品虚拟机 {vm_name} 在线状态结果: {online_status}")
+            except Exception as e:
+                logger.error(f"获取虚拟机 {vm_name} 在线状态失败: {str(e)}")
+                print(f"[DEBUG] 成品虚拟机 {vm_name} 获取状态失败: {str(e)}")
+                results[vm_name] = {
+                    'status': 'error',
+                    'reason': f'获取状态失败: {str(e)}',
+                    'ip': None,
+                    'ssh_trust': False,
+                    'ssh_port_open': False,
+                    'vm_status': 'unknown'
+                }
+        
+        return jsonify({
+            'success': True,
+            'results': results
+        })
+    except Exception as e:
+        logger.error(f"获取成品虚拟机在线状态失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取成品虚拟机在线状态失败: {str(e)}'
+        })
+
+@app.route('/api/ssh_chengpin_trust', methods=['POST'])
+@login_required
+def api_ssh_chengpin_trust():
+    """设置成品虚拟机SSH互信"""
+    logger.info("收到设置成品虚拟机SSH互信请求")
+    try:
+        data = request.get_json()
+        vm_name = data.get('vm_name')
+        username = data.get('username', 'wx')
+        password = data.get('password', '123456')
+        
+        if not vm_name:
+            return jsonify({
+                'success': False,
+                'message': '缺少虚拟机名称参数'
+            })
+        
+        # 获取虚拟机IP
+        vm_ip = get_vm_ip(vm_name)
+        if not vm_ip:
+            return jsonify({
+                'success': False,
+                'message': f'无法获取虚拟机 {vm_name} 的IP地址'
+            })
+        
+        # 设置SSH互信
+        success, message = setup_ssh_trust(vm_ip, username, password)
+        
+        return jsonify({
+            'success': success,
+            'message': message
+        })
+    except Exception as e:
+        logger.error(f"设置成品虚拟机SSH互信失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'设置成品虚拟机SSH互信失败: {str(e)}'
+        })
+
+@app.route('/api/vm_chengpin_delete', methods=['POST'])
+@login_required
+def api_vm_chengpin_delete():
+    """删除成品虚拟机"""
+    return delete_vm_generic('成品虚拟机', VM_DIRS['chengpin'])
+
+@app.route('/api/vm_chengpin_start', methods=['POST'])
+@login_required
+def api_vm_chengpin_start():
+    """启动成品虚拟机"""
+    return vm_operation_generic('start', '成品虚拟机', VM_DIRS['chengpin'])
+
+@app.route('/api/vm_chengpin_stop', methods=['POST'])
+@login_required
+def api_vm_chengpin_stop():
+    """停止成品虚拟机"""
+    return vm_operation_generic('stop', '成品虚拟机', VM_DIRS['chengpin'])
+
+@app.route('/api/vm_chengpin_restart', methods=['POST'])
+@login_required
+def api_vm_chengpin_restart():
+    """重启成品虚拟机"""
+    return vm_operation_generic('restart', '成品虚拟机', VM_DIRS['chengpin'])
+
+@app.route('/api/vm_chengpin_info/<vm_name>')
+@login_required
+def api_vm_chengpin_info(vm_name):
+    """获取成品虚拟机详细信息"""
+    return get_vm_info_generic(vm_name, '成品虚拟机', VM_DIRS['chengpin'])
+
+@app.route('/api/vm_chengpin_send_script', methods=['POST'])
+@login_required
+def api_vm_chengpin_send_script():
+    """向成品虚拟机发送脚本"""
+    return send_script_generic('成品虚拟机')
+
+@app.route('/api/vm_chengpin_add_permissions', methods=['POST'])
+@login_required
+def api_vm_chengpin_add_permissions():
+    """为成品虚拟机添加脚本执行权限"""
+    return add_permissions_generic('成品虚拟机')
+
+@app.route('/api/vm_chengpin_chmod_scripts', methods=['POST'])
+@login_required
+def api_vm_chengpin_chmod_scripts():
+    """为成品虚拟机脚本添加执行权限"""
+    logger.info("收到为成品虚拟机脚本添加执行权限请求")
+    try:
+        data = request.get_json()
+        vm_name = data.get('vm_name')
+        script_names = data.get('script_names', [])
+        username = data.get('username', 'wx')
+        
+        if not vm_name or not script_names:
+            return jsonify({
+                'success': False,
+                'message': '缺少虚拟机名称或脚本名称列表参数'
+            })
+        
+        # 获取虚拟机IP
+        vm_ip = get_vm_ip(vm_name)
+        if not vm_ip:
+            return jsonify({
+                'success': False,
+                'message': f'无法获取虚拟机 {vm_name} 的IP地址'
+            })
+        
+        # 添加执行权限
+        success, message = execute_chmod_scripts(vm_ip, username, script_names)
+        
+        return jsonify({
+            'success': True,
+            'message': message
+        })
+    except Exception as e:
+        logger.error(f"为成品虚拟机脚本添加执行权限失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'为成品虚拟机脚本添加执行权限失败: {str(e)}'
+        })
+
+@app.route('/api/vm_chengpin_ip_status/<vm_name>')
+@login_required
+def api_vm_chengpin_ip_status(vm_name):
+    """获取成品虚拟机IP状态"""
+    return get_ip_status_generic(vm_name, '成品虚拟机', VM_DIRS['chengpin'])
+
+@app.route('/api/vm_chengpin_execute_script', methods=['POST'])
+@login_required
+def api_vm_chengpin_execute_script():
+    """执行脚本在成品虚拟机上"""
+    logger.info("收到执行脚本在成品虚拟机请求")
+    try:
+        data = request.get_json()
+        vm_name = data.get('vm_name')
+        script_name = data.get('script_name')
+        
+        if not vm_name or not script_name:
+            return jsonify({
+                'success': False,
+                'message': '缺少虚拟机名称或脚本名称参数'
+            })
+        
+        # 检查虚拟机状态和SSH互信
+        vm_info = get_vm_online_status(vm_name)
+        
+        if vm_info['status'] != 'online' or not vm_info.get('ssh_trust', False):
+            return jsonify({
+                'success': False,
+                'message': f'虚拟机 {vm_name} 未在线或未建立SSH互信'
+            })
+        
+        # 执行远程脚本
+        logger.info(f"开始执行脚本 {script_name} 在成品虚拟机 {vm_name} ({vm_info['ip']})")
+        result = execute_remote_script(vm_info['ip'], 'wx', script_name)
+        
+        logger.info(f"execute_remote_script 返回结果: {result}")
+        
+        if len(result) == 3:
+            success, output, full_log = result
+            error = ""
+        elif len(result) == 4:
+            success, output, error, full_log = result
+        else:
+            success, output, error, full_log = False, "", "未知错误", ""
+        
+        logger.info(f"处理后的结果: success={success}, output_length={len(output) if output else 0}, error={error}, log_length={len(full_log) if full_log else 0}")
+        
+        response_data = {
+            'success': success,
+            'output': output,
+            'error': error,
+            'ssh_log': full_log
+        }
+        
+        logger.info(f"返回响应: {response_data}")
+        return jsonify(response_data)
+        
+    except Exception as e:
+        logger.error(f"执行脚本在成品虚拟机失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'执行脚本失败: {str(e)}'
+        })
+
+@app.route('/api/vm_chengpin_execute_scripts', methods=['POST'])
+@login_required
+def api_vm_chengpin_execute_scripts():
+    """批量执行脚本在成品虚拟机上"""
+    logger.info("收到批量执行脚本在成品虚拟机请求")
+    try:
+        data = request.get_json()
+        vm_name = data.get('vm_name')
+        script_names = data.get('script_names', [])
+        
+        if not vm_name or not script_names:
+            return jsonify({
+                'success': False,
+                'message': '缺少虚拟机名称或脚本名称列表参数'
+            })
+        
+        # 检查虚拟机状态和SSH互信
+        vm_info = get_vm_online_status(vm_name)
+        
+        if vm_info['status'] != 'online' or not vm_info.get('ssh_trust', False):
+            return jsonify({
+                'success': False,
+                'message': f'虚拟机 {vm_name} 未在线或未建立SSH互信'
+            })
+        
+        # 批量执行远程脚本
+        results = {}
+        for script_name in script_names:
+            result = execute_remote_script(vm_info['ip'], 'wx', script_name)
+            
+            if len(result) == 3:
+                success, output, full_log = result
+                error = ""
+            elif len(result) == 4:
+                success, output, error, full_log = result
+            else:
+                success, output, error, full_log = False, "", "未知错误", ""
+            
+            results[script_name] = {
+                'success': success,
+                'output': output,
+                'error': error,
+                'ssh_log': full_log
+            }
+        
+        return jsonify({
+            'success': True,
+            'results': results
+        })
+        
+    except Exception as e:
+        logger.error(f"批量执行脚本在成品虚拟机失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'批量执行脚本失败: {str(e)}'
+        })
+
+@app.route('/api/vm_10_12_list')
+@login_required
+def api_vm_10_12_list():
+    """获取10.12目录虚拟机列表"""
+    return get_vm_list_from_directory(VM_DIRS['10_12'], '10.12目录')
+
+@app.route('/api/get_10_12_wuma_info', methods=['POST'])
+@login_required
+def api_get_10_12_wuma_info():
+    """获取10.12目录虚拟机五码信息"""
+    return get_wuma_info_generic('10.12目录')
+
+@app.route('/api/get_10_12_ju_info', methods=['POST'])
+@login_required
+def api_get_10_12_ju_info():
+    """获取10.12目录虚拟机JU值信息"""
+    return get_ju_info_generic('10.12目录')
+
+@app.route('/api/vm_10_12_online_status', methods=['POST'])
+@login_required
+def api_vm_10_12_online_status():
+    """获取10.12目录虚拟机在线状态"""
+    logger.info("收到获取10.12目录虚拟机在线状态请求")
+    try:
+        data = request.get_json()
+        vm_names = data.get('vm_names', [])
+        
+        if not vm_names:
+            return jsonify({
+                'success': False,
+                'message': '缺少虚拟机名称列表'
+            })
+        
+        results = {}
+        for vm_name in vm_names:
+            try:
+                online_status = get_vm_online_status(vm_name)
+                results[vm_name] = online_status
+                print(f"[DEBUG] 10.12虚拟机 {vm_name} 在线状态结果: {online_status}")
+            except Exception as e:
+                logger.error(f"获取虚拟机 {vm_name} 在线状态失败: {str(e)}")
+                print(f"[DEBUG] 10.12虚拟机 {vm_name} 获取状态失败: {str(e)}")
+                results[vm_name] = {
+                    'status': 'error',
+                    'reason': f'获取状态失败: {str(e)}',
+                    'ip': None,
+                    'ssh_trust': False,
+                    'ssh_port_open': False,
+                    'vm_status': 'unknown'
+                }
+        
+        return jsonify({
+            'success': True,
+            'results': results
+        })
+    except Exception as e:
+        logger.error(f"获取10.12目录虚拟机在线状态失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取10.12目录虚拟机在线状态失败: {str(e)}'
+        })
+
+@app.route('/api/ssh_10_12_trust', methods=['POST'])
+@login_required
+def api_ssh_10_12_trust():
+    """设置10.12目录虚拟机SSH互信"""
+    logger.info("收到设置10.12目录虚拟机SSH互信请求")
+    try:
+        data = request.get_json()
+        vm_name = data.get('vm_name')
+        username = data.get('username', 'wx')
+        password = data.get('password', '123456')
+        
+        if not vm_name:
+            return jsonify({
+                'success': False,
+                'message': '缺少虚拟机名称参数'
+            })
+        
+        # 获取虚拟机IP
+        vm_ip = get_vm_ip(vm_name)
+        if not vm_ip:
+            return jsonify({
+                'success': False,
+                'message': f'无法获取虚拟机 {vm_name} 的IP地址'
+            })
+        
+        # 设置SSH互信
+        success, message = setup_ssh_trust(vm_ip, username, password)
+        
+        return jsonify({
+            'success': success,
+            'message': message
+        })
+    except Exception as e:
+        logger.error(f"设置10.12目录虚拟机SSH互信失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'设置10.12目录虚拟机SSH互信失败: {str(e)}'
+        })
+
+@app.route('/api/vm_10_12_delete', methods=['POST'])
+@login_required
+def api_vm_10_12_delete():
+    """删除10.12目录虚拟机"""
+    return delete_vm_generic('10.12目录', VM_DIRS['10_12'])
+
+@app.route('/api/vm_10_12_start', methods=['POST'])
+@login_required
+def api_vm_10_12_start():
+    """启动10.12目录虚拟机"""
+    return vm_operation_generic('start', '10.12目录', VM_DIRS['10_12'])
+
+@app.route('/api/vm_10_12_stop', methods=['POST'])
+@login_required
+def api_vm_10_12_stop():
+    """停止10.12目录虚拟机"""
+    return vm_operation_generic('stop', '10.12目录', VM_DIRS['10_12'])
+
+@app.route('/api/vm_10_12_restart', methods=['POST'])
+@login_required
+def api_vm_10_12_restart():
+    """重启10.12目录虚拟机"""
+    return vm_operation_generic('restart', '10.12目录', VM_DIRS['10_12'])
+
+@app.route('/api/vm_10_12_info/<vm_name>')
+@login_required
+def api_vm_10_12_info(vm_name):
+    """获取10.12目录虚拟机详细信息"""
+    return get_vm_info_generic(vm_name, '10.12目录', VM_DIRS['10_12'])
+
+@app.route('/api/vm_10_12_send_script', methods=['POST'])
+@login_required
+def api_vm_10_12_send_script():
+    """向10.12目录虚拟机发送脚本"""
+    return send_script_generic('10.12目录')
+
+@app.route('/api/vm_10_12_add_permissions', methods=['POST'])
+@login_required
+def api_vm_10_12_add_permissions():
+    """为10.12目录虚拟机添加脚本执行权限"""
+    return add_permissions_generic('10.12目录')
+
+@app.route('/api/vm_10_12_chmod_scripts', methods=['POST'])
+@login_required
+def api_vm_10_12_chmod_scripts():
+    """为10.12目录虚拟机脚本添加执行权限"""
+    logger.info("收到为10.12目录虚拟机脚本添加执行权限请求")
+    try:
+        data = request.get_json()
+        vm_name = data.get('vm_name')
+        script_names = data.get('script_names', [])
+        username = data.get('username', 'wx')
+        
+        if not vm_name or not script_names:
+            return jsonify({
+                'success': False,
+                'message': '缺少虚拟机名称或脚本名称列表参数'
+            })
+        
+        # 获取虚拟机IP
+        vm_ip = get_vm_ip(vm_name)
+        if not vm_ip:
+            return jsonify({
+                'success': False,
+                'message': f'无法获取虚拟机 {vm_name} 的IP地址'
+            })
+        
+        # 添加执行权限
+        success, message = execute_chmod_scripts(vm_ip, username, script_names)
+        
+        return jsonify({
+            'success': True,
+            'message': message
+        })
+    except Exception as e:
+        logger.error(f"为10.12目录虚拟机脚本添加执行权限失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'为10.12目录虚拟机脚本添加执行权限失败: {str(e)}'
+        })
+
+@app.route('/api/vm_10_12_ip_status/<vm_name>')
+@login_required
+def api_vm_10_12_ip_status(vm_name):
+    """获取10.12目录虚拟机IP状态"""
+    return get_ip_status_generic(vm_name, '10.12目录', VM_DIRS['10_12'])
+
+@app.route('/api/vm_10_12_execute_script', methods=['POST'])
+@login_required
+def api_vm_10_12_execute_script():
+    """执行脚本在10.12目录虚拟机上"""
+    logger.info("收到执行脚本在10.12目录虚拟机请求")
+    try:
+        data = request.get_json()
+        vm_name = data.get('vm_name')
+        script_name = data.get('script_name')
+        
+        if not vm_name or not script_name:
+            return jsonify({
+                'success': False,
+                'message': '缺少虚拟机名称或脚本名称参数'
+            })
+        
+        # 检查虚拟机状态和SSH互信
+        vm_info = get_vm_online_status(vm_name)
+        
+        if vm_info['status'] != 'online' or not vm_info.get('ssh_trust', False):
+            return jsonify({
+                'success': False,
+                'message': f'虚拟机 {vm_name} 未在线或未建立SSH互信'
+            })
+        
+        # 执行远程脚本
+        logger.info(f"开始执行脚本 {script_name} 在虚拟机 {vm_name} ({vm_info['ip']})")
+        result = execute_remote_script(vm_info['ip'], 'wx', script_name)
+        
+        logger.info(f"execute_remote_script 返回结果: {result}")
+        
+        if len(result) == 3:
+            success, output, full_log = result
+            error = ""
+        elif len(result) == 4:
+            success, output, error, full_log = result
+        else:
+            success, output, error, full_log = False, "", "未知错误", ""
+        
+        logger.info(f"处理后的结果: success={success}, output_length={len(output) if output else 0}, error={error}, log_length={len(full_log) if full_log else 0}")
+        
+        response_data = {
+            'success': success,
+            'output': output,
+            'error': error,
+            'ssh_log': full_log
+        }
+        
+        logger.info(f"返回响应: {response_data}")
+        return jsonify(response_data)
+        
+    except Exception as e:
+        logger.error(f"执行脚本在10.12目录虚拟机失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'执行脚本失败: {str(e)}'
+        })
+
+@app.route('/api/vm_10_12_execute_scripts', methods=['POST'])
+@login_required
+def api_vm_10_12_execute_scripts():
+    """批量执行脚本在10.12目录虚拟机上"""
+    logger.info("收到批量执行脚本在10.12目录虚拟机请求")
+    try:
+        data = request.get_json()
+        vm_name = data.get('vm_name')
+        script_names = data.get('script_names', [])
+        
+        if not vm_name or not script_names:
+            return jsonify({
+                'success': False,
+                'message': '缺少虚拟机名称或脚本名称列表参数'
+            })
+        
+        # 检查虚拟机状态和SSH互信
+        vm_info = get_vm_online_status(vm_name)
+        
+        if vm_info['status'] != 'online' or not vm_info.get('ssh_trust', False):
+            return jsonify({
+                'success': False,
+                'message': f'虚拟机 {vm_name} 未在线或未建立SSH互信'
+            })
+        
+        # 批量执行远程脚本
+        results = {}
+        for script_name in script_names:
+            result = execute_remote_script(vm_info['ip'], 'wx', script_name)
+            
+            if len(result) == 3:
+                success, output, full_log = result
+                error = ""
+            elif len(result) == 4:
+                success, output, error, full_log = result
+            else:
+                success, output, error, full_log = False, "", "未知错误", ""
+            
+            results[script_name] = {
+                'success': success,
+                'output': output,
+                'error': error,
+                'ssh_log': full_log
+            }
+        
+        return jsonify({
+            'success': True,
+            'results': results
+        })
+        
+    except Exception as e:
+        logger.error(f"批量执行脚本在10.12目录虚拟机失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'批量执行脚本失败: {str(e)}'
+        })
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

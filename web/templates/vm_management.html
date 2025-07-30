@@ -98,7 +98,27 @@
     
     .ju-status-icon:hover {
         transform: scale(1.2);
-        box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+    }
+    
+    /* 确保多选按钮可见和可点击 */
+    .vm-checkbox {
+        cursor: pointer;
+        opacity: 1 !important;
+        visibility: visible !important;
+        pointer-events: auto !important;
+    }
+    
+    .vm-checkbox:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    
+    /* 确保表格中的多选按钮列有足够的宽度 */
+    .vm-info-table th:first-child,
+    .vm-info-table td:first-child {
+        width: 40px;
+        min-width: 40px;
+        text-align: center;
     }
     
     .wuma-view-status-icon {
@@ -239,6 +259,63 @@
     #selectAllScriptsBtn:hover {
         transform: translateY(-1px);
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    /* 删除选中按钮样式 */
+    #deleteSelectedBtn {
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    #deleteSelectedBtn:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3);
+    }
+    
+    #deleteSelectedBtn:active:not(:disabled) {
+        transform: translateY(0);
+    }
+    
+    #deleteSelectedBtn.btn-warning {
+        background-color: #ffc107;
+        border-color: #ffc107;
+        color: #000;
+    }
+    
+    #deleteSelectedBtn.btn-warning:hover {
+        background-color: #ffca2c;
+        border-color: #ffca2c;
+        color: #000;
+    }
+    
+    #deleteSelectedBtn.btn-secondary {
+        background-color: #6c757d;
+        border-color: #6c757d;
+        color: #fff;
+    }
+    
+    #deleteSelectedBtn.btn-secondary:hover {
+        background-color: #5a6268;
+        border-color: #545b62;
+        color: #fff;
+    }
+    
+    /* 选中数量高亮效果 */
+    #selectedCount {
+        transition: all 0.3s ease;
+        display: inline-block;
+        min-width: 20px;
+        text-align: center;
+    }
+    
+    /* 删除进度模态框样式 */
+    .modal-header.bg-success {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%) !important;
+    }
+    
+    .modal-header.bg-danger {
+        background: linear-gradient(135deg, #dc3545 0%, #e74c3c 100%) !important;
     }
     html, body { width: 100vw; overflow-x: hidden !important; }
     .col-md-9.col-lg-10 { width: calc(100vw - 280px); min-width: 0; margin: 0; height: calc(100vh - 80px); overflow: auto; }
@@ -638,6 +715,25 @@
         
         // 页面加载时获取虚拟机数据
         document.addEventListener('DOMContentLoaded', function() {
+            // 测试多选按钮功能
+            console.log('页面加载完成，开始测试多选按钮功能');
+            
+            // 延迟测试多选按钮
+            setTimeout(() => {
+                const checkboxes = document.querySelectorAll('.vm-checkbox');
+                console.log('找到多选按钮数量:', checkboxes.length);
+                checkboxes.forEach((checkbox, index) => {
+                    console.log(`多选按钮 ${index}:`, checkbox.value, 'checked:', checkbox.checked);
+                });
+                
+                // 测试全选功能
+                console.log('测试全选功能...');
+                const selectAllCheckbox = document.getElementById('selectAll');
+                if (selectAllCheckbox) {
+                    console.log('全选按钮状态:', selectAllCheckbox.checked);
+                    console.log('当前选中的虚拟机数量:', selectedVMs.size);
+                }
+            }, 2000);
             // 智能计算最佳数据显示量
             const optimalDataDisplay = calculateOptimalDataDisplay();
             console.log('页面加载时计算的最佳数据显示量:', optimalDataDisplay);
@@ -990,7 +1086,7 @@
             hideError();
             currentPage = page;
             
-            fetch(`/api/vm_list?page=${page}&page_size=${pageSize}`)
+            fetch(`/api/vm_10_12_list?page=${page}&page_size=${pageSize}`)
                 .then(response => response.json())
                 .then(data => {
                     hideLoading();
@@ -1110,7 +1206,7 @@
                             <span class="badge status-badge ${getStatusClass(vm.status)} me-2">
                                 ${getStatusText(vm.status)}
                             </span>
-                            ${vm.online_status && vm.online_status !== 'unknown' ? `
+                            ${vm.online_status ? `
                                 <span class="badge status-badge ${getOnlineStatusClass(vm.online_status)}" title="${vm.online_reason || ''}">
                                     ${getOnlineStatusText(vm.online_status)}
                                 </span>
@@ -1166,6 +1262,9 @@
                             <button class="btn btn-outline-success btn-sm" onclick="sendScriptToVM('${vm.name}')" ${vm.status !== 'running' ? 'disabled' : ''} title="${vm.status !== 'running' ? '虚拟机未运行，无法发送脚本' : '发送脚本'}" style="cursor: pointer;">
                                 <i class="fas fa-paper-plane"></i>
                             </button>
+                            <button class="btn btn-outline-warning btn-sm" onclick="executeScriptOnVM('${vm.name}')" ${vm.status !== 'running' ? 'disabled' : ''} title="${vm.status !== 'running' ? '虚拟机未运行，无法执行脚本' : '执行脚本'}" style="cursor: pointer;">
+                                <i class="fas fa-terminal"></i>
+                            </button>
                         </div>
                     </td>
                 `;
@@ -1174,6 +1273,109 @@
             
             // 更新全选状态
             updateSelectAllState();
+            
+            // 调试：检查多选按钮是否正确渲染
+            console.log('虚拟机数据渲染完成，多选按钮数量:', document.querySelectorAll('.vm-checkbox').length);
+            console.log('全选按钮状态:', document.getElementById('selectAll').checked);
+            
+            // 添加直接事件监听器测试
+            const checkboxes = document.querySelectorAll('.vm-checkbox');
+            checkboxes.forEach(checkbox => {
+                checkbox.addEventListener('click', function(e) {
+                    console.log('直接点击事件:', this.value, 'checked:', this.checked);
+                });
+            });
+            
+            // 添加全选按钮的直接事件监听器
+            const selectAllCheckbox = document.getElementById('selectAll');
+            if (selectAllCheckbox) {
+                selectAllCheckbox.addEventListener('change', function(e) {
+                    console.log('全选按钮直接事件:', this.checked);
+                });
+            }
+            
+            // 添加实时更新监听器
+            const observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.type === 'childList') {
+                        // 当DOM结构变化时，重新绑定事件
+                        const newCheckboxes = document.querySelectorAll('.vm-checkbox');
+                        newCheckboxes.forEach(checkbox => {
+                            if (!checkbox.hasAttribute('data-bound')) {
+                                checkbox.setAttribute('data-bound', 'true');
+                                checkbox.addEventListener('change', function() {
+                                    console.log('实时更新: 多选按钮变化');
+                                    updateSelectedCount();
+                                });
+                            }
+                        });
+                    }
+                });
+            });
+            
+            // 监听表格内容变化
+            const vmTableBody = document.getElementById('vmTableBody');
+            if (vmTableBody) {
+                observer.observe(vmTableBody, { childList: true, subtree: true });
+            }
+            
+            // 为现有的checkbox添加直接事件监听器
+            const existingCheckboxes = document.querySelectorAll('.vm-checkbox');
+            existingCheckboxes.forEach(checkbox => {
+                checkbox.addEventListener('change', function() {
+                    console.log('checkbox直接事件: 值变化');
+                    // 延迟一点确保DOM更新完成
+                    setTimeout(() => {
+                        updateSelectedCount();
+                    }, 10);
+                });
+            });
+            
+            // 为全选按钮添加直接事件监听器
+            const selectAllCheckboxForEvents = document.getElementById('selectAll');
+            if (selectAllCheckboxForEvents) {
+                selectAllCheckboxForEvents.addEventListener('change', function() {
+                    console.log('全选按钮直接事件: 值变化');
+                    // 延迟一点确保DOM更新完成
+                    setTimeout(() => {
+                        updateSelectedCount();
+                    }, 10);
+                });
+            }
+            
+            // 手动测试删除按钮更新
+            setTimeout(() => {
+                console.log('手动测试删除按钮更新...');
+                const deleteBtn = document.getElementById('deleteSelectedBtn');
+                const selectedCountElement = document.getElementById('selectedCount');
+                console.log('删除按钮存在:', !!deleteBtn);
+                console.log('选中数量元素存在:', !!selectedCountElement);
+                if (deleteBtn) {
+                    console.log('删除按钮当前文本:', deleteBtn.innerHTML);
+                    console.log('删除按钮disabled状态:', deleteBtn.disabled);
+                }
+                if (selectedCountElement) {
+                    console.log('选中数量元素当前文本:', selectedCountElement.textContent);
+                }
+                
+                // 测试选中功能
+                console.log('测试选中功能...');
+                console.log('当前selectedVMs大小:', selectedVMs.size);
+                console.log('当前选中的虚拟机:', Array.from(selectedVMs));
+                
+                // 测试清空选中状态
+                selectedVMs.clear();
+                updateSelectedCount();
+                console.log('清空后selectedVMs大小:', selectedVMs.size);
+                console.log('清空后选中数量显示:', selectedCountElement.textContent);
+                
+                // 测试添加选中状态
+                const testVMs = ['VM_20250728_184035_7', 'VM_20250728_184037_8'];
+                testVMs.forEach(vm => selectedVMs.add(vm));
+                updateSelectedCount();
+                console.log('添加测试虚拟机后selectedVMs大小:', selectedVMs.size);
+                console.log('添加测试虚拟机后选中数量显示:', selectedCountElement.textContent);
+            }, 3000);
             
             // 异步获取运行中虚拟机的在线状态
             setTimeout(() => {
@@ -1191,6 +1393,13 @@
                     loadWumaAndJuStatus();
                 }
             }, 30000); // 30秒刷新一次
+            
+            // 设置定时器，每60秒自动刷新在线状态
+            setInterval(() => {
+                if (totalVMs.length > 0) {
+                    loadRunningVMOnlineStatus();
+                }
+            }, 60000); // 60秒刷新一次
         }
 
         // 更新分页控件
@@ -1301,19 +1510,37 @@
                 case 'partial': return 'bg-warning';
                 case 'offline': return 'bg-secondary';
                 case 'error': return 'bg-danger';
+                case 'unknown': return 'bg-info';
                 default: return 'bg-secondary';
             }
         }
         
         // 获取在线状态文本
         function getOnlineStatusText(onlineStatus) {
+            console.log(`[DEBUG] 获取在线状态文本，输入状态: ${onlineStatus}`);
+            let result;
             switch (onlineStatus) {
-                case 'online': return '完全在线';
-                case 'partial': return '部分在线';
-                case 'offline': return '未在线';
-                case 'error': return '错误';
-                default: return '未知';
+                case 'online': 
+                    result = '完全在线';
+                    break;
+                case 'partial': 
+                    result = '部分在线';
+                    break;
+                case 'offline': 
+                    result = '未在线';
+                    break;
+                case 'error': 
+                    result = '错误';
+                    break;
+                case 'unknown': 
+                    result = '运行状态未知';
+                    break;
+                default: 
+                    result = '未知';
+                    break;
             }
+            console.log(`[DEBUG] 在线状态文本结果: ${result}`);
+            return result;
         }
         
         // 获取SSH状态样式类
@@ -1401,7 +1628,7 @@
             modal.show();
             
             // 调用后端API获取五码信息
-            fetch('/api/get_wuma_info', {
+            fetch('/api/get_10_12_wuma_info', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1646,7 +1873,7 @@
             // 为每个运行中的虚拟机异步获取五码信息和JU值信息
             vmNames.forEach(vmName => {
                 // 获取五码信息
-                fetch('/api/get_wuma_info', {
+                fetch('/api/get_10_12_wuma_info', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1666,7 +1893,7 @@
                 });
                 
                 // 获取JU值信息
-                fetch('/api/get_ju_info', {
+                fetch('/api/get_10_12_ju_info', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1738,7 +1965,7 @@
             });
             
             // 异步获取在线状态
-            fetch('/api/vm_online_status', {
+            fetch('/api/vm_10_12_online_status', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1759,8 +1986,8 @@
                         
                         if (vm) {
                             // 更新虚拟机数据
-                            vm.online_status = result.online_status;
-                            vm.online_reason = result.online_reason;
+                            vm.online_status = result.status; // 修复：使用正确的字段名
+                            vm.online_reason = result.reason; // 修复：使用正确的字段名
                             vm.ip = result.ip || '-';
                             vm.ssh_trust = result.ssh_trust;
                             vm.ssh_port_open = result.ssh_port_open;
@@ -1774,13 +2001,20 @@
                             // 更新状态显示
                             const statusCell = document.querySelector(`tr[data-vm-name="${vmName}"] td:nth-child(3)`);
                             if (statusCell) {
+                                console.log(`更新在线状态 - ${vmName}: status=${result.status}, reason=${result.reason}`);
+                                console.log(`[DEBUG] 状态更新详情 - ${vmName}:`);
+                                console.log(`  - result.status: ${result.status}`);
+                                console.log(`  - result.reason: ${result.reason}`);
+                                console.log(`  - getOnlineStatusClass(result.status): ${getOnlineStatusClass(result.status)}`);
+                                console.log(`  - getOnlineStatusText(result.status): ${getOnlineStatusText(result.status)}`);
+                                
                                 statusCell.innerHTML = `
                                     <div class="d-flex align-items-center">
                                         <span class="badge status-badge ${getStatusClass(vm.status)} me-2">
                                             ${getStatusText(vm.status)}
                                         </span>
-                                        <span class="badge status-badge ${getOnlineStatusClass(result.online_status)} ${result.online_status === 'online' ? 'status-online' : ''}" title="${result.online_reason || ''}">
-                                            ${getOnlineStatusText(result.online_status)}
+                                        <span class="badge status-badge ${getOnlineStatusClass(result.status)} ${result.status === 'online' ? 'status-online' : ''}" title="${result.reason || ''}">
+                                            ${getOnlineStatusText(result.status)}
                                         </span>
                                     </div>
                                 `;
@@ -1794,11 +2028,13 @@
                                 const sshTitle = result.ssh_trust ? 'SSH互信已设置，可以无密码登录' : 
                                                result.ssh_port_open ? 'SSH端口开放但未互信，需要设置SSH互信' : 'SSH端口未开放';
                                 
+                                console.log(`更新SSH状态 - ${vmName}: ssh_trust=${result.ssh_trust}, ssh_port_open=${result.ssh_port_open}, status_class=${sshStatusClass}, status_text=${sshStatusText}`);
+                                
                                 sshCell.innerHTML = `
                                     <div class="d-flex align-items-center">
-                                                                        <span class="badge status-badge ${sshStatusClass} ${result.ssh_trust ? 'status-trusted' : ''} me-2" title="${sshTitle}">
-                                    ${sshStatusText}
-                                </span>
+                                        <span class="badge status-badge ${sshStatusClass} ${result.ssh_trust ? 'status-trusted' : ''} me-2" title="${sshTitle}">
+                                            ${sshStatusText}
+                                        </span>
                                         <button class="btn btn-outline-primary btn-sm" onclick="setupSSHTrust('${vmName}')" title="设置SSH互信" style="cursor: pointer;">
                                             <i class="fas fa-key"></i>
                                         </button>
@@ -1873,7 +2109,7 @@
             button.disabled = true;
             
             // 调用API
-            fetch('/api/ssh_trust', {
+            fetch('/api/ssh_10_12_trust', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -1906,11 +2142,29 @@
 
         // 切换单个虚拟机选择
         function toggleVMSelection(vmName) {
-            if (selectedVMs.has(vmName)) {
-                selectedVMs.delete(vmName);
-            } else {
-                selectedVMs.add(vmName);
+            console.log('切换虚拟机选择:', vmName);
+            const checkbox = document.querySelector(`input[type="checkbox"][value="${vmName}"]`);
+            
+            if (!checkbox) {
+                console.error('找不到对应的checkbox:', vmName);
+                return;
             }
+            
+            // 根据checkbox的当前状态来更新selectedVMs
+            if (checkbox.checked) {
+                // checkbox被选中，添加到selectedVMs
+                selectedVMs.add(vmName);
+                console.log('选择虚拟机:', vmName);
+            } else {
+                // checkbox被取消选中，从selectedVMs中移除
+                selectedVMs.delete(vmName);
+                console.log('取消选择虚拟机:', vmName);
+            }
+            
+            console.log('当前选中的虚拟机:', Array.from(selectedVMs));
+            console.log('当前选中数量:', selectedVMs.size);
+            
+            // 立即更新UI
             updateSelectedCount();
             updateSelectAllState();
         }
@@ -1920,21 +2174,33 @@
             const selectAllCheckbox = document.getElementById('selectAll');
             const vmCheckboxes = document.querySelectorAll('.vm-checkbox');
             
+            console.log('切换全选状态，当前全选按钮状态:', selectAllCheckbox.checked);
+            console.log('找到多选按钮数量:', vmCheckboxes.length);
+            
+            // 清空当前选中状态
+            selectedVMs.clear();
+            
             if (selectAllCheckbox.checked) {
                 // 全选
                 vmCheckboxes.forEach(checkbox => {
                     checkbox.checked = true;
                     selectedVMs.add(checkbox.value);
+                    console.log('全选虚拟机:', checkbox.value);
                 });
             } else {
                 // 取消全选
                 vmCheckboxes.forEach(checkbox => {
                     checkbox.checked = false;
-                    selectedVMs.delete(checkbox.value);
+                    console.log('取消选择虚拟机:', checkbox.value);
                 });
             }
             
+            console.log('全选操作后，选中的虚拟机:', Array.from(selectedVMs));
+            console.log('全选操作后，选中数量:', selectedVMs.size);
+            
+            // 立即更新UI
             updateSelectedCount();
+            updateSelectAllState();
         }
 
         // 更新全选状态
@@ -1964,29 +2230,90 @@
 
         // 更新选中数量
         function updateSelectedCount() {
-            const count = selectedVMs.size;
-            document.getElementById('selectedCount').textContent = count;
-            
-            // 检查选中的虚拟机状态
-            const runningVMs = [];
-            selectedVMs.forEach(vmName => {
-                const vm = totalVMs.find(v => v.name === vmName);
-                if (vm && vm.status === 'running') {
-                    runningVMs.push(vmName);
+            try {
+                const count = selectedVMs.size;
+                const selectedCountElement = document.getElementById('selectedCount');
+                const deleteBtn = document.getElementById('deleteSelectedBtn');
+                
+                console.log('=== 更新选中数量 ===');
+                console.log('当前选中数量:', count);
+                console.log('选中的虚拟机:', Array.from(selectedVMs));
+                
+                // 更新选中数量显示
+                if (selectedCountElement) {
+                    const oldValue = selectedCountElement.textContent;
+                    selectedCountElement.textContent = count;
+                    console.log('选中数量显示已更新:', oldValue, '->', count);
+                    
+                    // 添加视觉反馈
+                    if (oldValue !== count.toString()) {
+                        // 数值发生变化时，添加高亮效果
+                        selectedCountElement.style.backgroundColor = '#ffeb3b';
+                        selectedCountElement.style.color = '#000';
+                        selectedCountElement.style.padding = '2px 6px';
+                        selectedCountElement.style.borderRadius = '3px';
+                        selectedCountElement.style.fontWeight = 'bold';
+                        
+                        // 1秒后恢复原样式
+                        setTimeout(() => {
+                            selectedCountElement.style.backgroundColor = '';
+                            selectedCountElement.style.color = '';
+                            selectedCountElement.style.padding = '';
+                            selectedCountElement.style.borderRadius = '';
+                            selectedCountElement.style.fontWeight = '';
+                        }, 1000);
+                    }
+                } else {
+                    console.error('selectedCountElement不存在!');
                 }
-            });
-            
-            // 如果有运行中的虚拟机，禁用批量删除按钮
-            const hasRunningVMs = runningVMs.length > 0;
-            const deleteBtn = document.getElementById('deleteSelectedBtn');
-            
-            deleteBtn.disabled = count === 0 || hasRunningVMs;
-            
-            // 更新按钮提示
-            if (hasRunningVMs) {
-                deleteBtn.title = `选中的虚拟机中有 ${runningVMs.length} 个正在运行，无法删除`;
-            } else {
-                deleteBtn.title = '删除选中的虚拟机';
+                
+                // 检查选中的虚拟机状态
+                const runningVMs = [];
+                const stoppedVMs = [];
+                
+                selectedVMs.forEach(vmName => {
+                    const vm = totalVMs.find(v => v.name === vmName);
+                    if (vm) {
+                        if (vm.status === 'running') {
+                            runningVMs.push(vmName);
+                        } else {
+                            stoppedVMs.push(vmName);
+                        }
+                    }
+                });
+                
+                // 更新删除按钮状态
+                if (deleteBtn) {
+                    const hasRunningVMs = runningVMs.length > 0;
+                    const shouldDisable = count === 0 || hasRunningVMs;
+                    
+                    deleteBtn.disabled = shouldDisable;
+                    
+                    // 更新按钮提示和样式
+                    if (hasRunningVMs) {
+                        deleteBtn.title = `选中的虚拟机中有 ${runningVMs.length} 个正在运行，无法删除`;
+                        deleteBtn.className = 'btn btn-warning btn-sm';
+                        deleteBtn.innerHTML = `<i class="fas fa-exclamation-triangle me-1"></i>无法删除 (${runningVMs.length}个运行中)`;
+                    } else if (count === 0) {
+                        deleteBtn.title = '请先选择要删除的虚拟机';
+                        deleteBtn.className = 'btn btn-secondary btn-sm';
+                        deleteBtn.innerHTML = `<i class="fas fa-trash me-1"></i>删除选中 (<span id="selectedCount">0</span>)`;
+                    } else {
+                        deleteBtn.title = `删除选中的 ${count} 个虚拟机`;
+                        deleteBtn.className = 'btn btn-danger btn-sm';
+                        deleteBtn.innerHTML = `<i class="fas fa-trash me-1"></i>删除选中 (<span id="selectedCount">${count}</span>)`;
+                    }
+                    
+                    console.log('删除按钮状态已更新:', shouldDisable ? '禁用' : '启用', '选中数量:', count);
+                } else {
+                    console.error('deleteBtn不存在!');
+                }
+                
+                console.log('=== 更新完成 ===');
+                
+            } catch (error) {
+                console.error('updateSelectedCount函数出错:', error);
+                console.error('错误堆栈:', error.stack);
             }
         }
 
@@ -2037,14 +2364,74 @@
                 return;
             }
             
-            if (confirm(`确定要删除选中的 ${selectedArray.length} 个虚拟机吗？此操作不可恢复。`)) {
+            // 显示确认对话框
+            const confirmMessage = `确定要删除选中的 ${selectedArray.length} 个虚拟机吗？\n\n将要删除的虚拟机：\n${selectedArray.join('\n')}\n\n此操作不可恢复！`;
+            
+            if (confirm(confirmMessage)) {
+                // 显示删除进度
+                showDeleteProgress(selectedArray);
                 deleteVMs(selectedArray);
+            }
+        }
+
+        // 显示删除进度
+        function showDeleteProgress(vmNames) {
+            // 创建进度模态框
+            const modalHTML = `
+                <div class="modal fade" id="deleteProgressModal" tabindex="-1" aria-labelledby="deleteProgressModalLabel" aria-hidden="true">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="deleteProgressModalLabel">
+                                    <i class="fas fa-trash me-2"></i>正在删除虚拟机
+                                </h5>
+                            </div>
+                            <div class="modal-body">
+                                <div class="text-center">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">删除中...</span>
+                                    </div>
+                                    <p class="mt-2">正在删除选中的虚拟机，请稍候...</p>
+                                    <div class="progress mt-3">
+                                        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%" id="deleteProgressBar"></div>
+                                    </div>
+                                    <small class="text-muted" id="deleteProgressText">准备删除...</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // 移除已存在的模态框
+            const existingModal = document.getElementById('deleteProgressModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+            
+            // 添加新的模态框到页面
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+            
+            // 显示模态框
+            const modal = new bootstrap.Modal(document.getElementById('deleteProgressModal'));
+            modal.show();
+        }
+
+        // 隐藏删除进度
+        function hideDeleteProgress() {
+            const modal = document.getElementById('deleteProgressModal');
+            if (modal) {
+                const bootstrapModal = bootstrap.Modal.getInstance(modal);
+                if (bootstrapModal) {
+                    bootstrapModal.hide();
+                }
+                modal.remove();
             }
         }
 
         // 执行删除操作
         function deleteVMs(vmNames) {
-            fetch('/api/vm_delete', {
+            fetch('/api/vm_10_12_delete', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -2055,29 +2442,73 @@
             })
             .then(response => response.json())
             .then(data => {
+                hideDeleteProgress();
+                
                 if (data.success) {
                     // 从选中列表中移除已删除的虚拟机
                     data.deleted_vms.forEach(vmName => {
                         selectedVMs.delete(vmName);
                     });
                     
-                    // 显示结果
-                    let message = data.message;
+                    // 显示成功结果
+                    let message = `✅ 删除成功！\n\n成功删除 ${data.deleted_vms.length} 个虚拟机：\n${data.deleted_vms.join('\n')}`;
+                    
                     if (data.failed_vms.length > 0) {
-                        message += '\n失败的虚拟机:\n' + data.failed_vms.join('\n');
+                        message += `\n\n❌ 删除失败的虚拟机：\n${data.failed_vms.join('\n')}`;
                     }
-                    alert(message);
+                    
+                    // 使用更友好的提示框
+                    showDeleteResult(message, data.failed_vms.length === 0);
                     
                     // 刷新数据
                     loadVMData(currentPage);
                 } else {
-                    alert('删除失败: ' + data.message);
+                    showDeleteResult(`❌ 删除失败: ${data.message}`, false);
                 }
             })
             .catch(error => {
+                hideDeleteProgress();
                 console.error('删除虚拟机失败:', error);
-                alert('删除失败: ' + error.message);
+                showDeleteResult(`❌ 网络错误: ${error.message}`, false);
             });
+        }
+
+        // 显示删除结果
+        function showDeleteResult(message, isSuccess) {
+            const modalHTML = `
+                <div class="modal fade" id="deleteResultModal" tabindex="-1" aria-labelledby="deleteResultModalLabel" aria-hidden="true">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header ${isSuccess ? 'bg-success text-white' : 'bg-danger text-white'}">
+                                <h5 class="modal-title" id="deleteResultModalLabel">
+                                    <i class="fas ${isSuccess ? 'fa-check-circle' : 'fa-exclamation-triangle'} me-2"></i>
+                                    ${isSuccess ? '删除成功' : '删除失败'}
+                                </h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <pre style="white-space: pre-wrap; font-family: inherit;">${message}</pre>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // 移除已存在的模态框
+            const existingModal = document.getElementById('deleteResultModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+            
+            // 添加新的模态框到页面
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+            
+            // 显示模态框
+            const modal = new bootstrap.Modal(document.getElementById('deleteResultModal'));
+            modal.show();
         }
 
         // 显示加载状态
@@ -2106,7 +2537,7 @@
 
         // 启动虚拟机
         function startVM(vmName) {
-            fetch('/api/vm_start', {
+            fetch('/api/vm_10_12_start', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -2129,7 +2560,7 @@
 
         // 停止虚拟机
         function stopVM(vmName) {
-            fetch('/api/vm_stop', {
+            fetch('/api/vm_10_12_stop', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -2153,7 +2584,7 @@
         // 重启虚拟机
         function restartVM(vmName) {
             if (confirm(`确定要重启虚拟机 "${vmName}" 吗？`)) {
-                fetch('/api/vm_restart', {
+                fetch('/api/vm_10_12_restart', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -2181,7 +2612,7 @@
 
         // 获取虚拟机详细信息
         function getVMInfo(vmName) {
-            fetch(`/api/vm_info/${vmName}`)
+            fetch(`/api/vm_10_12_info/${vmName}`)
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
@@ -2215,6 +2646,36 @@
                 .then(data => {
                     if (data.success && data.scripts.length > 0) {
                         showScriptSelectionDialog(vmName, data.scripts);
+                    } else {
+                        alert('没有可用的脚本文件');
+                    }
+                })
+                .catch(error => {
+                    console.error('获取脚本列表失败:', error);
+                    alert('获取脚本列表失败: ' + error.message);
+                });
+        }
+
+        // 执行脚本到虚拟机
+        function executeScriptOnVM(vmName) {
+            // 检查虚拟机状态
+            const vm = getVMByName(vmName);
+            if (!vm) {
+                alert('虚拟机信息不存在');
+                return;
+            }
+            
+            if (vm.status !== 'running') {
+                alert('虚拟机未运行，无法执行脚本');
+                return;
+            }
+            
+            // 获取脚本列表并显示脚本选择页面
+            fetch('/api/scripts/all')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.scripts.length > 0) {
+                        showScriptSelectionPage(vmName, data.scripts);
                     } else {
                         alert('没有可用的脚本文件');
                     }
@@ -2345,6 +2806,117 @@
             });
         }
 
+        // 显示脚本选择页面（父页面）
+        function showScriptSelectionPage(vmName, scripts) {
+            // 创建脚本选择页面
+            const pageHTML = `
+                <div class="modal fade" id="scriptSelectionPageModal" tabindex="-1" data-bs-backdrop="static">
+                    <div class="modal-dialog modal-xl">
+                        <div class="modal-content">
+                            <div class="modal-header bg-primary text-white">
+                                <h5 class="modal-title">
+                                    <i class="fas fa-list me-2"></i>选择要执行的脚本
+                                </h5>
+                                <button type="button" class="btn-close btn-close-white" onclick="closeScriptSelectionPage()"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="alert alert-info">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    <strong>目标虚拟机：</strong>${vmName}
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-file-code me-2"></i>可用脚本列表
+                                    </h6>
+                                    <div class="d-flex align-items-center">
+                                        <span class="badge bg-primary" id="executionScriptCountBadge">${scripts.length} 个脚本</span>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <div class="input-group">
+                                        <span class="input-group-text">
+                                            <i class="fas fa-search"></i>
+                                        </span>
+                                        <input type="text" class="form-control" id="executionScriptSearchInput" placeholder="搜索脚本名称..." onkeyup="filterExecutionScripts()">
+                                        <button class="btn btn-outline-secondary" type="button" onclick="clearExecutionScriptSearch()" title="清空搜索">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="list-group" id="executionScriptListGroup" style="max-height: 400px; overflow-y: auto;">
+                                    ${scripts.map(script => `
+                                        <div class="list-group-item list-group-item-action execution-script-item" data-script-name="${script.name.toLowerCase()}" data-script-full-name="${script.name}">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <div class="d-flex align-items-center">
+                                                    <div>
+                                                        <h6 class="mb-1">
+                                                            <i class="fas fa-file-code me-2"></i>${script.name}
+                                                        </h6>
+                                                        <small class="text-muted">
+                                                            大小: ${script.size} | 修改时间: ${script.modified_time}
+                                                        </small>
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <button class="btn btn-warning btn-sm" onclick="executeScriptFromSelectionPage('${script.name}', '${vmName}')">
+                                                        <i class="fas fa-terminal me-1"></i>执行
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" onclick="closeScriptSelectionPage()">返回</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // 移除已存在的模态框
+            const existingModal = document.getElementById('scriptSelectionPageModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+            
+            // 添加模态框到页面
+            document.body.insertAdjacentHTML('beforeend', pageHTML);
+            
+            // 显示模态框
+            const modal = new bootstrap.Modal(document.getElementById('scriptSelectionPageModal'));
+            modal.show();
+            
+            // 保存当前虚拟机名称
+            currentExecutionVMName = vmName;
+            
+            // 模态框显示后初始化
+            document.getElementById('scriptSelectionPageModal').addEventListener('shown.bs.modal', function() {
+                const searchInput = document.getElementById('executionScriptSearchInput');
+                if (searchInput) {
+                    searchInput.focus();
+                }
+            });
+            
+            // 模态框关闭时清理
+            document.getElementById('scriptSelectionPageModal').addEventListener('hidden.bs.modal', function() {
+                this.remove();
+            });
+        }
+
+        // 从选择页面执行脚本（跳转到SSH终端执行窗口）
+        function executeScriptFromSelectionPage(scriptName, vmName) {
+            // 隐藏脚本选择页面
+            const selectionModal = bootstrap.Modal.getInstance(document.getElementById('scriptSelectionPageModal'));
+            if (selectionModal) {
+                selectionModal.hide();
+            }
+            
+            // 显示SSH终端执行窗口
+            showTerminalExecutionWindow(scriptName, vmName);
+        }
+
         // 选择并发送脚本
         function selectAndSendScript(scriptName, vmName) {
             // 关闭模态框
@@ -2359,7 +2931,7 @@
                 showSendProgress(scriptName, vmName);
                 
                 // 调用发送脚本API
-                fetch('/api/vm_send_script', {
+                fetch('/api/vm_10_12_send_script', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -2387,6 +2959,10 @@
         // 全局变量存储选中的脚本
         let selectedScripts = new Set();
         let currentVMName = '';
+        
+        // 全局变量存储选中的执行脚本
+        let selectedExecutionScripts = new Set();
+        let currentExecutionVMName = '';
 
         // 清空搜索框
         function clearScriptSearch() {
@@ -2686,7 +3262,7 @@
                     }
                     
                     // 调用权限添加API
-                    fetch('/api/vm_add_permissions', {
+                    fetch('/api/vm_10_12_add_permissions', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -2768,7 +3344,7 @@
                 sendStatusSpan.textContent = '发送中...';
             }
             
-            fetch('/api/vm_send_script', {
+            fetch('/api/vm_10_12_send_script', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -3183,7 +3759,7 @@
             const progressModal = showChmodProgressModal(scriptName, vmName);
             
             // 调用API添加执行权限
-            fetch('/api/vm_chmod_scripts', {
+            fetch('/api/vm_10_12_chmod_scripts', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -3290,7 +3866,7 @@
             const progressModal = showBatchChmodProgressModal(scriptNames, vmName);
             
             // 调用API添加执行权限
-            fetch('/api/vm_chmod_scripts', {
+            fetch('/api/vm_10_12_chmod_scripts', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -3379,7 +3955,7 @@
         function fetchAllRunningVMIPs(vmList) {
             vmList.forEach(vm => {
                 if (vm.status === 'running') {
-                    fetch(`/api/vm_ip_status/${encodeURIComponent(vm.name)}`)
+                    fetch(`/api/vm_10_12_ip_status/${encodeURIComponent(vm.name)}`)
                         .then(response => response.json())
                         .then(data => {
                             if (data.success && data.ip_status && data.ip_status.ip) {
@@ -3394,6 +3970,271 @@
                 }
             });
         }
+
+        // 执行脚本相关的函数
+        function selectAndExecuteScript(scriptName, vmName) {
+            // 关闭模态框（如果存在）
+            const executionModal = bootstrap.Modal.getInstance(document.getElementById('scriptExecutionModal'));
+            if (executionModal) {
+                executionModal.hide();
+            }
+            
+            // 显示终端执行窗口
+            showTerminalExecutionWindow(scriptName, vmName);
+        }
+
+        // 显示终端执行窗口
+        function showTerminalExecutionWindow(scriptName, vmName) {
+            const modalHTML = `
+                <div class="modal fade" id="terminalExecutionModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+                    <div class="modal-dialog modal-xl">
+                        <div class="modal-content">
+                            <div class="modal-header bg-dark text-white">
+                                <h5 class="modal-title">
+                                    <i class="fas fa-terminal me-2"></i>SSH终端执行窗口
+                                </h5>
+                                <button type="button" class="btn-close btn-close-white" onclick="returnToScriptSelection()"></button>
+                            </div>
+                            <div class="modal-body p-0">
+                                <div class="terminal-header bg-secondary text-white p-2">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong>脚本:</strong> ${scriptName} | 
+                                            <strong>虚拟机:</strong> ${vmName} | 
+                                            <strong>状态:</strong> <span id="execution-status">准备中...</span>
+                                        </div>
+                                        <div>
+                                            <button class="btn btn-sm btn-outline-light" onclick="startExecution()" id="start-execution-btn">
+                                                <i class="fas fa-play me-1"></i>开始执行
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-light" onclick="clearTerminal()" id="clear-terminal-btn">
+                                                <i class="fas fa-trash me-1"></i>清空
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="terminal-body" id="terminal-output" style="height: 500px; background-color: #1e1e1e; color: #00ff00; font-family: 'Courier New', monospace; padding: 15px; overflow-y: auto; white-space: pre-wrap;">
+                                    <div class="text-info">=== SSH终端执行窗口 ===</div>
+                                    <div class="text-info">脚本: ${scriptName}</div>
+                                    <div class="text-info">虚拟机: ${vmName}</div>
+                                    <div class="text-info">时间: ${new Date().toLocaleString()}</div>
+                                    <div class="text-info">状态: 等待执行...</div>
+                                    <div class="text-warning">点击"开始执行"按钮开始执行脚本</div>
+                                </div>
+                            </div>
+                            <div class="modal-footer bg-dark text-white">
+                                <button type="button" class="btn btn-outline-light" onclick="returnToScriptSelection()">
+                                    <i class="fas fa-arrow-left me-1"></i>返回选择页面
+                                </button>
+                                <button type="button" class="btn btn-secondary" onclick="returnToScriptSelection()">关闭</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // 移除已存在的模态框
+            const existingModal = document.getElementById('terminalExecutionModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+            
+            // 添加新的模态框到页面
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+            
+            // 显示模态框
+            const modal = new bootstrap.Modal(document.getElementById('terminalExecutionModal'));
+            modal.show();
+            
+            // 保存当前执行信息
+            window.currentExecution = {
+                scriptName: scriptName,
+                vmName: vmName,
+                modal: modal
+            };
+            
+            return modal;
+        }
+
+
+
+        // 关闭脚本选择页面（返回到主界面）
+        function closeScriptSelectionPage() {
+            // 关闭脚本选择页面
+            const selectionModal = bootstrap.Modal.getInstance(document.getElementById('scriptSelectionPageModal'));
+            if (selectionModal) {
+                selectionModal.hide();
+            }
+            
+            // 清理当前虚拟机名称
+            currentExecutionVMName = '';
+        }
+
+        // 返回脚本选择页面
+        function returnToScriptSelection() {
+            // 关闭当前终端执行窗口
+            const terminalModal = bootstrap.Modal.getInstance(document.getElementById('terminalExecutionModal'));
+            if (terminalModal) {
+                terminalModal.hide();
+            }
+            
+            // 重新显示脚本选择页面
+            if (currentExecutionVMName) {
+                fetch('/api/scripts/all')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success && data.scripts.length > 0) {
+                            showScriptSelectionPage(currentExecutionVMName, data.scripts);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('获取脚本列表失败:', error);
+                    });
+            }
+        }
+
+        // 执行脚本相关的辅助函数
+        function clearExecutionScriptSearch() {
+            const searchInput = document.getElementById('executionScriptSearchInput');
+            if (searchInput) {
+                searchInput.value = '';
+                filterExecutionScripts();
+                searchInput.focus();
+            }
+        }
+
+        function filterExecutionScripts() {
+            const searchTerm = document.getElementById('executionScriptSearchInput').value.toLowerCase();
+            const scriptItems = document.querySelectorAll('.execution-script-item');
+            
+            scriptItems.forEach(item => {
+                const scriptName = item.getAttribute('data-script-name');
+                if (scriptName.includes(searchTerm)) {
+                    item.style.display = 'block';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
+
+        // 开始执行脚本
+        function startExecution() {
+            if (!window.currentExecution) {
+                console.error('当前执行信息不存在');
+                return;
+            }
+            
+            const { scriptName, vmName } = window.currentExecution;
+            const terminalOutput = document.getElementById('terminal-output');
+            const statusElement = document.getElementById('execution-status');
+            const startBtn = document.getElementById('start-execution-btn');
+            
+            // 更新状态
+            statusElement.textContent = '执行中...';
+            startBtn.disabled = true;
+            startBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>执行中';
+            
+            // 添加执行开始日志
+            appendToTerminal(`\n[${new Date().toLocaleTimeString()}] 开始执行脚本: ${scriptName}`);
+            appendToTerminal(`[${new Date().toLocaleTimeString()}] 目标虚拟机: ${vmName}`);
+            appendToTerminal(`[${new Date().toLocaleTimeString()}] 正在建立SSH连接...`);
+            
+            // 调用执行脚本API
+            fetch('/api/vm_10_12_execute_script', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    vm_name: vmName,
+                    script_name: scriptName
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                appendToTerminal(`[${new Date().toLocaleTimeString()}] API调用完成`);
+                appendToTerminal(`[${new Date().toLocaleTimeString()}] API响应数据: ${JSON.stringify(data)}`);
+                
+                if (data.success) {
+                    statusElement.textContent = '执行成功';
+                    statusElement.className = 'text-success';
+                    appendToTerminal(`[${new Date().toLocaleTimeString()}] 脚本执行成功！`);
+                    
+                    // 显示SSH调用日志
+                    if (data.ssh_log) {
+                        appendToTerminal(`\n=== SSH调用日志 ===`);
+                        appendToTerminal(data.ssh_log);
+                    }
+                    
+                    if (data.output) {
+                        appendToTerminal(`\n=== 执行输出 ===`);
+                        appendToTerminal(data.output);
+                    }
+                    
+                    if (data.error) {
+                        appendToTerminal(`\n=== 错误信息 ===`);
+                        appendToTerminal(data.error);
+                    }
+                } else {
+                    statusElement.textContent = '执行失败';
+                    statusElement.className = 'text-danger';
+                    
+                    // 处理不同的错误字段
+                    let errorMessage = '未知错误';
+                    if (data.message) {
+                        errorMessage = data.message;
+                    } else if (data.error) {
+                        errorMessage = data.error;
+                    }
+                    
+                    appendToTerminal(`[${new Date().toLocaleTimeString()}] 脚本执行失败: ${errorMessage}`);
+                    
+                    // 显示SSH调用日志（即使失败）
+                    if (data.ssh_log) {
+                        appendToTerminal(`\n=== SSH调用日志 ===`);
+                        appendToTerminal(data.ssh_log);
+                    }
+                    
+                    // 显示错误输出（如果有）
+                    if (data.error) {
+                        appendToTerminal(`\n=== 错误输出 ===`);
+                        appendToTerminal(data.error);
+                    }
+                }
+                
+                appendToTerminal(`\n[${new Date().toLocaleTimeString()}] 执行完成`);
+            })
+            .catch(error => {
+                console.error('执行脚本出错:', error);
+                statusElement.textContent = '执行失败';
+                statusElement.className = 'text-danger';
+                appendToTerminal(`[${new Date().toLocaleTimeString()}] 网络错误: ${error.message}`);
+                appendToTerminal(`[${new Date().toLocaleTimeString()}] 错误详情: ${JSON.stringify(error)}`);
+            })
+            .finally(() => {
+                startBtn.disabled = false;
+                startBtn.innerHTML = '<i class="fas fa-play me-1"></i>重新执行';
+            });
+        }
+
+        // 向终端添加内容
+        function appendToTerminal(content) {
+            const terminalOutput = document.getElementById('terminal-output');
+            if (terminalOutput) {
+                terminalOutput.innerHTML += content + '\n';
+                terminalOutput.scrollTop = terminalOutput.scrollHeight;
+            }
+        }
+
+        // 清空终端
+        function clearTerminal() {
+            const terminalOutput = document.getElementById('terminal-output');
+            if (terminalOutput) {
+                terminalOutput.innerHTML = '<div class="text-info">=== SSH终端执行窗口 ===</div>\n<div class="text-warning">终端已清空</div>';
+            }
+        }
+
+
     </script>
 </body>
 </html> 
