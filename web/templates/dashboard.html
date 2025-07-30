@@ -847,21 +847,9 @@ function handleVMScriptClick() {
   showPanel('script-list');
 }
 
-// 处理虚拟机五码管理链接点击，确保菜单保持展开状态
+// 处理虚拟机五码管理链接点击
 function handleWumaClick() {
-  // 确保引导管理菜单展开
-  const bootCollapse = document.getElementById('collapseBoot');
-  const bootButton = document.getElementById('headingBoot').querySelector('.accordion-button');
-  
-  if (bootCollapse && bootButton) {
-    // 移除折叠类，添加展开类
-    bootCollapse.classList.remove('collapse');
-    bootCollapse.classList.add('show');
-    bootButton.setAttribute('aria-expanded', 'true');
-    bootButton.classList.remove('collapsed');
-  }
-  
-  // 设置当前链接为激活状态
+  // 不展开任何菜单，只设置当前链接为激活状态
   const links = document.querySelectorAll('#collapseBoot .nav-link');
   links.forEach(link => link.classList.remove('active'));
   event.target.classList.add('active');
@@ -870,21 +858,9 @@ function handleWumaClick() {
   showPanel('wuma');
 }
 
-// 处理虚拟机母盘管理链接点击，确保菜单保持展开状态
+// 处理虚拟机母盘管理链接点击
 function handleMupanClick() {
-  // 确保引导管理菜单展开
-  const bootCollapse = document.getElementById('collapseBoot');
-  const bootButton = document.getElementById('headingBoot').querySelector('.accordion-button');
-  
-  if (bootCollapse && bootButton) {
-    // 移除折叠类，添加展开类
-    bootCollapse.classList.remove('collapse');
-    bootCollapse.classList.add('show');
-    bootButton.setAttribute('aria-expanded', 'true');
-    bootButton.classList.remove('collapsed');
-  }
-  
-  // 设置当前链接为激活状态
+  // 不展开任何菜单，只设置当前链接为激活状态
   const links = document.querySelectorAll('#collapseBoot .nav-link');
   links.forEach(link => link.classList.remove('active'));
   event.target.classList.add('active');

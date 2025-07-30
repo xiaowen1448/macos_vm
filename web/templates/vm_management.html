@@ -455,11 +455,11 @@
                 <div class="accordion" id="accordionMenu">
                     <div class="accordion-item">
                         <h2 class="accordion-header" id="headingVM">
-                                                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseVM" aria-expanded="true" aria-controls="collapseVM">
+                                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseVM" aria-expanded="false" aria-controls="collapseVM">
                             虚拟机管理
                         </button>
                         </h2>
-                        <div id="collapseVM" class="accordion-collapse collapse show" aria-labelledby="headingVM" data-bs-parent="#accordionMenu">
+                        <div id="collapseVM" class="accordion-collapse collapse" aria-labelledby="headingVM" data-bs-parent="#accordionMenu">
                             <div class="accordion-body p-0">
                                 <ul class="nav flex-column">
                                     <li class="nav-item">
@@ -3297,11 +3297,17 @@
         }
 
         function handleWumaClick() {
-            ensureMenuExpanded('collapseBoot', 'collapseBoot');
+            // 不展开任何菜单，只设置当前链接为激活状态
+            const links = document.querySelectorAll('#collapseBoot .nav-link');
+            links.forEach(link => link.classList.remove('active'));
+            event.target.classList.add('active');
         }
 
         function handleMupanClick() {
-            ensureMenuExpanded('collapseBoot', 'collapseBoot');
+            // 不展开任何菜单，只设置当前链接为激活状态
+            const links = document.querySelectorAll('#collapseBoot .nav-link');
+            links.forEach(link => link.classList.remove('active'));
+            event.target.classList.add('active');
         }
 
         function handleEncryptCodeClick() {
