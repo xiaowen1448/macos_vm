@@ -293,6 +293,17 @@
             user-select: none;
         }
         
+        /* 重置自动分页按钮样式 */
+        .btn-outline-secondary:hover {
+            background-color: #6c757d;
+            border-color: #6c757d;
+            color: white;
+        }
+        
+        .btn-outline-secondary:focus {
+            box-shadow: 0 0 0 0.2rem rgba(108, 117, 125, 0.25);
+        }
+        
         .wuma-table tbody tr:hover {
             background-color: #f8f9fa;
         }
@@ -595,6 +606,9 @@
                                         <option value="50">50</option>
                                         <option value="100">100</option>
                                     </select>
+                                    <button class="btn btn-outline-secondary btn-sm ms-2" onclick="resetToAuto()" title="重置为自动分页">
+                                        <i class="fas fa-magic"></i>
+                                    </button>
                                 </div>
                             </div>
                             <nav aria-label="五码列表分页">
@@ -656,6 +670,7 @@
         let totalWuma = [];
         let totalPages = 0;
         let currentConfig = 'config';  // 当前选择的配置文件
+        let isAutoCalculated = true; // 标记是否为自动计算的分页大小
         
         // 页面加载时获取五码数据
         document.addEventListener('DOMContentLoaded', function() {
@@ -854,7 +869,22 @@
                     `);
                 }
             });
+            
+            // 检查是否之前设置了默认配置，如果是，则自动更新默认配置
+            const checkbox = document.getElementById('defaultConfigCheck');
+            if (checkbox && checkbox.checked) {
+                // 如果复选框是勾选状态，说明用户之前设置了默认配置
+                // 现在自动将新选择的配置设为默认
+                localStorage.setItem('defaultWumaConfig', configName);
+                console.log('自动更新默认配置为:', configName);
+                
+                // 显示友好的提示信息
+                const selectedConfig = configs.find(c => c.name === configName);
+                if (selectedConfig) {
+                    showToast(`默认配置已自动更新为：${selectedConfig.display_name}`, 'success');
                 }
+            }
+        }
         
         // 更新下拉框按钮文本
         function updateDropdownButtonText() {
@@ -913,9 +943,117 @@
             
             if (defaultConfig === currentConfig) {
                 checkbox.checked = true;
+                console.log('复选框状态：已勾选（当前配置为默认）');
             } else {
                 checkbox.checked = false;
+                console.log('复选框状态：未勾选（当前配置不是默认）');
             }
+        }
+        
+        // 计算最佳分页大小
+        function calculateOptimalPageSize() {
+            // 获取可用区域高度
+            const cardBody = document.querySelector('.card-body');
+            const tableHeader = document.querySelector('.wuma-stats');
+            const paginationArea = document.querySelector('.d-flex.justify-content-between');
+            
+            if (!cardBody || !tableHeader || !paginationArea) {
+                return 5; // 默认值，最小分页大小
+            }
+            
+            // 获取视口高度
+            const viewportHeight = window.innerHeight;
+            
+            // 计算可用高度（减去顶部导航栏、卡片头部、统计区域、分页区域等）
+            const topNavHeight = 80; // 顶部导航栏高度
+            const cardHeaderHeight = 80; // 卡片头部高度（包含padding）
+            const headerHeight = tableHeader.offsetHeight;
+            const paginationAreaHeight = paginationArea.offsetHeight;
+            const tableHeaderHeight = 40; // 表格头部高度
+            const paginationHeight = 60; // 分页控件高度（包括按钮和间距）
+            const padding = 120; // 预留更多空间，确保分页控件完全显示
+            
+            const availableHeight = viewportHeight - topNavHeight - cardHeaderHeight - headerHeight - tableHeaderHeight - paginationHeight - padding;
+            
+            // 估算表格行高（包括边框和内边距）
+            const estimatedRowHeight = 52; // 每行大约52px（Bootstrap表格行高）
+            
+            // 计算可以显示的行数
+            const maxRows = Math.floor(availableHeight / estimatedRowHeight);
+            
+            // 确保至少显示5行，最多显示30行（更保守）
+            const optimalPageSize = Math.max(5, Math.min(maxRows, 30));
+            
+            // 如果计算出的值不在预设选项中，选择最接近的选项
+            const options = [5, 10, 20, 50, 100];
+            let closestOption = 5; // 默认值，最小分页大小
+            
+            // 找到最接近的选项
+            for (let i = 0; i < options.length; i++) {
+                if (options[i] >= optimalPageSize) {
+                    closestOption = options[i];
+                    break;
+                }
+                if (i === options.length - 1) {
+                    closestOption = options[i]; // 如果都小于，选择最大值
+                }
+            }
+            
+            // 如果计算出的值太小，使用默认值
+            if (optimalPageSize < 5) {
+                return 5;
+            }
+            
+            // 调试信息
+            console.log('视口高度:', viewportHeight);
+            console.log('可用高度:', availableHeight);
+            console.log('计算出的行数:', maxRows);
+            console.log('最终分页大小:', closestOption);
+            
+            return closestOption;
+        }
+        
+        // 重置为自动分页
+        function resetToAuto() {
+            isAutoCalculated = true;
+            const autoPageSize = calculateOptimalPageSize();
+            document.getElementById('pageSizeSelect').value = autoPageSize.toString();
+            pageSize = autoPageSize;
+            currentPage = 1;
+            
+            console.log('重置为自动分页，分页大小:', autoPageSize);
+            
+            loadWumaData(1);
+        }
+        
+        // 显示提示信息
+        function showToast(message, type = 'info') {
+            // 创建提示元素
+            const toast = document.createElement('div');
+            toast.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+            toast.style.cssText = `
+                top: 20px;
+                right: 20px;
+                z-index: 9999;
+                min-width: 300px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            `;
+            
+            toast.innerHTML = `
+                <i class="fas fa-${type === 'success' ? 'check-circle' : 'info-circle'} me-2"></i>
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            `;
+            
+            // 添加到页面
+            document.body.appendChild(toast);
+            
+            // 3秒后自动移除
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            }, 3000);
         }
         
         // 加载五码数据
@@ -1066,9 +1204,22 @@
         // 改变每页显示数量
         function changePageSize() {
             const newPageSize = parseInt(document.getElementById('pageSizeSelect').value);
-            pageSize = newPageSize;
-            currentPage = 1; // 重置到第一页
-            loadWumaData(1);
+            
+            // 如果分页大小发生变化，重新加载数据
+            if (newPageSize !== pageSize) {
+                console.log('改变分页大小:', { oldSize: pageSize, newSize: newPageSize });
+                
+                pageSize = newPageSize;
+                currentPage = 1; // 重置到第一页
+                
+                // 标记为手动设置（非自动模式）
+                isAutoCalculated = false;
+                
+                console.log('分页大小发生变化，重新加载数据...');
+                loadWumaData(1);
+            } else {
+                console.log('分页大小未发生变化，跳过重新加载');
+            }
         }
 
         // 获取状态样式类
