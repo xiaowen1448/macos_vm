@@ -2,11 +2,21 @@
 
 虚拟机批量克隆，实时和历史日志信息
 
-<img width="1841" height="972" alt="image" src="https://github.com/user-attachments/assets/0b8743d9-a070-4bb4-a327-27942f28d95e" />
+<img width="1841" height="972" alt="image" src="https://github.com/user-attachments/assets/1c196730-be99-4f26-8d1c-d22b86619d58" />
+
 
 虚拟机管理界面，增加图标状态监控，开机关机，重启挂起，脚本发送和脚本执行按钮
 
-<img width="1841" height="972" alt="image" src="https://github.com/user-attachments/assets/b317c465-4412-4874-9412-d1b7671ceefa" />
+<img width="1841" height="972" alt="image" src="https://github.com/user-attachments/assets/efa1175c-8f4f-4b99-8b9c-75fda0580918" />
+
+虚拟机脚本管理
+
+<img width="1841" height="972" alt="image" src="https://github.com/user-attachments/assets/f3f3ab8a-2658-4fde-877f-1015fcbb6188" />
+
+虚拟机五码管理
+
+<img width="1841" height="972" alt="image" src="https://github.com/user-attachments/assets/55ba27c1-7551-48ac-9a38-08dd8fdbfa4b" />
+
 
 # macos_vm
 
