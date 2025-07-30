@@ -277,6 +277,22 @@
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
         }
         
+        /* 默认配置复选框样式 */
+        .form-check-input:checked {
+            background-color: #007bff;
+            border-color: #007bff;
+        }
+        
+        .form-check-input:focus {
+            border-color: #007bff;
+            box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+        }
+        
+        .form-check-label {
+            cursor: pointer;
+            user-select: none;
+        }
+        
         .wuma-table tbody tr:hover {
             background-color: #f8f9fa;
         }
@@ -493,6 +509,12 @@
                                         <!-- 配置文件选项将在这里动态加载 -->
                                     </ul>
                                 </div>
+                                <div class="form-check me-3" style="display: inline-flex; align-items: center;">
+                                    <input class="form-check-input" type="checkbox" id="defaultConfigCheck" onchange="toggleDefaultConfig()">
+                                    <label class="form-check-label ms-1" for="defaultConfigCheck" style="margin-bottom: 0; font-size: 14px; color: #495057;">
+                                        设为默认
+                                    </label>
+                                </div>
                                 <button class="btn btn-success me-2" onclick="uploadWumaFile()">
                                     <i class="fas fa-upload me-2"></i>上传五码文本
                                 </button>
@@ -637,8 +659,8 @@
         
         // 页面加载时获取五码数据
         document.addEventListener('DOMContentLoaded', function() {
+            loadDefaultConfig();
             loadConfigList();
-            loadWumaData(1);
             
             // 监听下拉框打开事件
             const configDropdown = document.getElementById('configDropdown');
@@ -685,6 +707,9 @@
                     `);
                 }
             });
+            
+            // 更新默认配置复选框状态
+            updateDefaultConfigCheckbox();
         }
         
         // 加载配置文件列表
@@ -755,6 +780,9 @@
             
             // 更新下拉框按钮显示
             updateDropdownButtonText();
+            
+            // 更新默认配置复选框状态
+            updateDefaultConfigCheckbox();
         }
         
         // 选择配置文件
@@ -849,6 +877,44 @@
                 // 如果没有找到当前配置，选择第一个
                 currentConfig = configs[0].name;
                 dropdownButton.innerHTML = `<i class="fas fa-cog me-2"></i>已选择：${configs[0].display_name}`;
+            }
+        }
+        
+        // 加载默认配置
+        function loadDefaultConfig() {
+            const defaultConfig = localStorage.getItem('defaultWumaConfig');
+            if (defaultConfig) {
+                currentConfig = defaultConfig;
+                console.log('加载默认配置:', defaultConfig);
+            }
+            loadWumaData(1);
+        }
+        
+        // 切换默认配置
+        function toggleDefaultConfig() {
+            const checkbox = document.getElementById('defaultConfigCheck');
+            const isChecked = checkbox.checked;
+            
+            if (isChecked) {
+                // 设置为默认配置
+                localStorage.setItem('defaultWumaConfig', currentConfig);
+                console.log('设置默认配置:', currentConfig);
+            } else {
+                // 取消默认配置
+                localStorage.removeItem('defaultWumaConfig');
+                console.log('取消默认配置');
+            }
+        }
+        
+        // 更新默认配置复选框状态
+        function updateDefaultConfigCheckbox() {
+            const checkbox = document.getElementById('defaultConfigCheck');
+            const defaultConfig = localStorage.getItem('defaultWumaConfig');
+            
+            if (defaultConfig === currentConfig) {
+                checkbox.checked = true;
+            } else {
+                checkbox.checked = false;
             }
         }
         
