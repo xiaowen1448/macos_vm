@@ -1,3 +1,8 @@
+新版控制台开发
+<img width="1841" height="972" alt="image" src="https://github.com/user-attachments/assets/0b8743d9-a070-4bb4-a327-27942f28d95e" />
+
+<img width="1841" height="972" alt="image" src="https://github.com/user-attachments/assets/b317c465-4412-4874-9412-d1b7671ceefa" />
+
 # macos_vm
 
 批量克隆增加监控虚拟机功能如下图：
