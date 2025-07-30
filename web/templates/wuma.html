@@ -293,6 +293,31 @@
             user-select: none;
         }
         
+        /* 侧边栏标题样式 */
+        .sidebar-header {
+            border-bottom: 2px solid #f8f9fa;
+            padding-bottom: 15px;
+        }
+        
+        .brand-text {
+            background: linear-gradient(135deg, #007AFF 0%, #5856D6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-weight: 700;
+            font-size: 1.2rem;
+            letter-spacing: 0.5px;
+        }
+        
+        .sidebar-header h4 {
+            margin-bottom: 5px !important;
+        }
+        
+        .sidebar-header small {
+            font-size: 0.85rem;
+            opacity: 0.8;
+        }
+        
         /* 重置自动分页按钮样式 */
         .btn-outline-secondary:hover {
             background-color: #6c757d;
@@ -397,7 +422,12 @@
         <div class="row">
             <!-- 左侧菜单 -->
             <nav class="col-md-3 col-lg-2 sidebar bg-white p-3">
-                <h5 class="mb-4"><span style="color:#000; font-style:italic; font-weight:bold;">macos_vm</span></h5>
+                <div class="sidebar-header text-center mb-4">
+                    <h4 class="mb-0">
+                        <span class="brand-text">macOS VM Manager</span>
+                    </h4>
+                    <small class="text-muted">虚拟机管理平台</small>
+                </div>
                 <div class="accordion" id="accordionMenu">
                     <div class="accordion-item">
                         <h2 class="accordion-header" id="headingVM">
@@ -647,7 +677,7 @@
                     </div>
                     <div class="alert alert-info">
                         <i class="fas fa-info-circle me-2"></i>
-                        <strong>文件格式说明：</strong>
+                        <strong>文件格式说明：</strong> 
                         <br>每行一个五码信息，必须符合以下格式：
                         <br>格式：:ROM:MLB值:SerialNumber:BoardID:产品型号:
                         <br>示例：:8468780C43FE:FV9818603EVJ2V8DC:C02TVJ3GJ1WK:Mac-4B682C642B45593E:iMac18,1:
@@ -657,6 +687,36 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
                     <button type="button" class="btn btn-primary" id="uploadBtn" onclick="submitUpload()" disabled>上传</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 删除确认模态框 -->
+    <div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-labelledby="deleteConfirmModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteConfirmModalLabel">
+                        <i class="fas fa-exclamation-triangle text-warning me-2"></i>确认删除
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>确定要删除这条五码数据吗？</p>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>注意：</strong>删除的数据将被保存到备份文件中，文件名格式为：<br>
+                        <code>原文件名_行索引_del_时间戳.bak</code><br>
+                        备份文件将保存在 <code>config_del</code> 目录中
+                    </div>
+                    <input type="hidden" id="deleteWumaId" value="">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-danger" id="confirmDeleteBtn" onclick="confirmDelete()">
+                        <i class="fas fa-trash me-2"></i>确认删除
+                    </button>
                 </div>
             </div>
         </div>
@@ -674,6 +734,7 @@
         
         // 页面加载时获取五码数据
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('页面加载完成，初始化五码管理功能');
             loadDefaultConfig();
             loadConfigList();
             
@@ -683,6 +744,32 @@
                 // 下拉时动态刷新配置文件列表
                 loadConfigList();
             });
+            
+            // 测试删除功能是否可用
+            setTimeout(() => {
+                console.log('检查删除功能...');
+                const modalElement = document.getElementById('deleteConfirmModal');
+                const hiddenInput = document.getElementById('deleteWumaId');
+                const confirmBtn = document.getElementById('confirmDeleteBtn');
+                
+                if (modalElement) {
+                    console.log('✅ 删除确认模态框存在');
+                } else {
+                    console.error('❌ 删除确认模态框不存在');
+                }
+                
+                if (hiddenInput) {
+                    console.log('✅ 删除ID隐藏字段存在');
+                } else {
+                    console.error('❌ 删除ID隐藏字段不存在');
+                }
+                
+                if (confirmBtn) {
+                    console.log('✅ 确认删除按钮存在');
+                } else {
+                    console.error('❌ 确认删除按钮不存在');
+                }
+            }, 1000);
         });
         
         // 更新下拉框样式
@@ -1056,13 +1143,158 @@
             }, 3000);
         }
         
+        // 删除五码数据
+        function deleteWuma(wumaId) {
+            console.log('🔵 deleteWuma函数被调用，行索引:', wumaId);
+            console.log('当前配置文件:', currentConfig);
+            
+            try {
+                // 检查模态框元素是否存在
+                const modalElement = document.getElementById('deleteConfirmModal');
+                if (!modalElement) {
+                    console.error('❌ 删除确认模态框不存在');
+                    alert('删除确认对话框不存在，请刷新页面重试');
+                    return;
+                }
+                
+                // 检查隐藏输入字段是否存在
+                const hiddenInput = document.getElementById('deleteWumaId');
+                if (!hiddenInput) {
+                    console.error('❌ 删除ID隐藏字段不存在');
+                    alert('删除ID字段不存在，请刷新页面重试');
+                    return;
+                }
+                
+                // 设置删除ID
+                hiddenInput.value = wumaId;
+                console.log('设置删除ID:', wumaId);
+                
+                // 显示删除确认对话框
+                const deleteModal = new bootstrap.Modal(modalElement);
+                console.log('显示删除确认对话框...');
+                deleteModal.show();
+                
+                console.log('✅ 删除确认对话框已显示');
+                
+                // 添加模态框事件监听
+                modalElement.addEventListener('shown.bs.modal', function() {
+                    console.log('✅ 模态框已完全显示');
+                });
+                
+                modalElement.addEventListener('hidden.bs.modal', function() {
+                    console.log('✅ 模态框已隐藏');
+                });
+                
+            } catch (error) {
+                console.error('删除功能出错:', error);
+                alert('删除功能出错: ' + error.message);
+            }
+        }
+        
+        // 确认删除
+        function confirmDelete() {
+            console.log('🔴 confirmDelete函数被调用');
+            
+            try {
+                const wumaId = document.getElementById('deleteWumaId').value;
+                const deleteModal = bootstrap.Modal.getInstance(document.getElementById('deleteConfirmModal'));
+                
+                console.log('确认删除，行索引:', wumaId);
+                console.log('配置文件:', currentConfig);
+                
+                // 显示加载状态
+                const confirmBtn = document.getElementById('confirmDeleteBtn');
+                const originalText = confirmBtn.innerHTML;
+                confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>删除中...';
+                confirmBtn.disabled = true;
+                
+                const requestData = {
+                    wuma_id: parseInt(wumaId),  // 确保是数字
+                    config_file: currentConfig
+                };
+                
+                console.log('发送删除请求:', requestData);
+                console.log('请求URL:', '/api/wuma_delete');
+                console.log('请求方法:', 'POST');
+                console.log('请求头:', {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                });
+                console.log('请求体:', JSON.stringify(requestData));
+                
+                // 发送删除请求
+                fetch('/api/wuma_delete', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    credentials: 'same-origin',  // 包含会话cookie
+                    body: JSON.stringify(requestData)
+                })
+                .then(response => {
+                    console.log('删除响应状态:', response.status);
+                    console.log('删除响应头:', response.headers);
+                    console.log('删除响应URL:', response.url);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('删除响应数据:', data);
+                    confirmBtn.innerHTML = originalText;
+                    confirmBtn.disabled = false;
+                    
+                    if (data.success) {
+                        console.log('✅ 删除成功！');
+                        showToast('删除成功！数据已保存到备份文件', 'success');
+                        
+                        // 确保模态框正确关闭
+                        if (deleteModal) {
+                            deleteModal.hide();
+                        }
+                        
+                        // 重新加载数据
+                        setTimeout(() => {
+                            loadWumaData(currentPage);
+                        }, 500);
+                    } else {
+                        console.log('❌ 删除失败:', data.message);
+                        showToast('删除失败：' + data.message, 'danger');
+                    }
+                })
+                .catch(error => {
+                    console.error('删除请求错误:', error);
+                    console.error('错误详情:', error.message);
+                    confirmBtn.innerHTML = originalText;
+                    confirmBtn.disabled = false;
+                    showToast('删除失败：网络错误', 'danger');
+                });
+            } catch (error) {
+                console.error('确认删除功能出错:', error);
+                console.error('错误堆栈:', error.stack);
+                showToast('删除功能出错: ' + error.message, 'danger');
+                
+                // 重置按钮状态
+                const confirmBtn = document.getElementById('confirmDeleteBtn');
+                if (confirmBtn) {
+                    confirmBtn.innerHTML = '<i class="fas fa-trash me-2"></i>确认删除';
+                    confirmBtn.disabled = false;
+                }
+            }
+        }
+        
         // 加载五码数据
         function loadWumaData(page = 1) {
             showLoading();
             hideError();
             currentPage = page;
             
-            fetch(`/api/wuma_list?page=${page}&page_size=${pageSize}&config=${currentConfig}`)
+            fetch(`/api/wuma_list?page=${page}&page_size=${pageSize}&config=${currentConfig}`, {
+                credentials: 'same-origin'
+            })
                 .then(response => response.json())
                 .then(data => {
                     hideLoading();
@@ -1136,7 +1368,7 @@
                         </span>
                     </td>
                     <td>
-                        <button class="btn btn-outline-danger btn-sm" onclick="deleteWuma('${wuma.id}')" title="删除">
+                        <button class="btn btn-outline-danger btn-sm" onclick="deleteWuma(${startIndex + index})" title="删除">
                             <i class="fas fa-trash"></i>
                         </button>
                     </td>
@@ -1399,13 +1631,7 @@
 
 
 
-        // 删除五码
-        function deleteWuma(wumaId) {
-            if (confirm('确定要删除这个五码信息吗？')) {
-                console.log('删除五码:', wumaId);
-                // 实现删除功能
-            }
-        }
+
 
         // 显示加载状态
         function showLoading() {

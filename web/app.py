@@ -24,6 +24,22 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'  # 用于会话加密
 
+# 设置Flask应用的日志级别
+app.logger.setLevel(logging.DEBUG)
+
+# 添加请求日志中间件
+@app.before_request
+def log_request_info():
+    logger.info(f"收到请求: {request.method} {request.url}")
+    logger.debug(f"请求头: {dict(request.headers)}")
+    if request.method == 'POST':
+        logger.debug(f"POST数据: {request.get_data(as_text=True)}")
+
+@app.after_request
+def log_response_info(response):
+    logger.info(f"响应状态: {response.status_code}")
+    return response
+
 # 固定账号
 USERNAME = 'admin'
 PASSWORD = '123456'
@@ -4212,13 +4228,20 @@ def api_wuma_list():
         page_size = int(request.args.get('page_size', 5))
         config_name = request.args.get('config', 'config')  # 默认使用config.txt
         
+        logger.debug(f"请求参数 - page: {page}, page_size: {page_size}, config: {config_name}")
+        
         # 根据选择的配置文件读取五码数据
         config_file_path = os.path.join(os.path.dirname(__file__), 'config', f'{config_name}.txt')
+        logger.debug(f"配置文件路径: {config_file_path}")
+        
         wuma_data = []
         
         if os.path.exists(config_file_path):
+            logger.debug(f"配置文件存在，开始读取")
             with open(config_file_path, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
+                logger.debug(f"读取到 {len(lines)} 行数据")
+                
                 for i, line in enumerate(lines, 1):
                     line = line.strip()
                     if line and line.startswith(':') and line.endswith(':'):  # 检查格式
@@ -4226,7 +4249,7 @@ def api_wuma_list():
                         content = line[1:-1]  # 去掉首尾的冒号
                         parts = content.split(':')
                         if len(parts) >= 5:
-                            wuma_data.append({
+                            wuma_item = {
                                 'id': str(i),
                                 'rom': parts[0],
                                 'mlb': parts[1],
@@ -4234,7 +4257,17 @@ def api_wuma_list():
                                 'board_id': parts[3],
                                 'model_identifier': parts[4],
                                 'status': 'valid'  # 所有数据标记为可用
-                            })
+                            }
+                            wuma_data.append(wuma_item)
+                            logger.debug(f"解析第 {i} 行数据: {wuma_item}")
+                        else:
+                            logger.warning(f"第 {i} 行数据格式不正确，跳过: {line}")
+                    else:
+                        logger.debug(f"第 {i} 行不是有效数据，跳过: {line}")
+        else:
+            logger.warning(f"配置文件不存在: {config_file_path}")
+        
+        logger.debug(f"总共解析到 {len(wuma_data)} 条有效数据")
         
         # 计算分页
         total_count = len(wuma_data)
@@ -4242,8 +4275,11 @@ def api_wuma_list():
         start_index = (page - 1) * page_size
         end_index = min(start_index + page_size, total_count)
         
+        logger.debug(f"分页信息 - 总数: {total_count}, 总页数: {total_pages}, 当前页: {page}, 起始索引: {start_index}, 结束索引: {end_index}")
+        
         # 获取当前页的数据
         current_page_data = wuma_data[start_index:end_index]
+        logger.debug(f"当前页数据条数: {len(current_page_data)}")
         
         # 计算统计信息
         stats = {
@@ -4261,6 +4297,8 @@ def api_wuma_list():
             'end_index': end_index
         }
         
+        logger.info(f"成功返回五码列表 - 总数: {total_count}, 当前页: {page}/{total_pages}")
+        
         return jsonify({
             'success': True,
             'wuma_list': current_page_data,
@@ -4269,7 +4307,7 @@ def api_wuma_list():
         })
         
     except Exception as e:
-        logger.error(f"获取五码列表失败: {str(e)}")
+        logger.error(f"获取五码列表失败: {str(e)}", exc_info=True)
         return jsonify({
             'success': False,
             'message': f'获取五码列表失败: {str(e)}'
@@ -4489,24 +4527,99 @@ def api_wuma_upload():
 @app.route('/api/wuma_delete', methods=['POST'])
 @login_required
 def api_wuma_delete():
-    """删除五码信息"""
+    """删除五码信息并保存到备份文件"""
     logger.info("收到删除五码信息请求")
     try:
         data = request.get_json()
-        wuma_id = data.get('id')
+        logger.info(f"删除请求数据: {data}")
         
-        if not wuma_id:
+        wuma_id = data.get('wuma_id')  # 行索引
+        config_file = data.get('config_file', 'config.txt')
+        
+        logger.info(f"解析参数 - wuma_id: {wuma_id}, config_file: {config_file}")
+        
+        if wuma_id is None:
             return jsonify({
                 'success': False,
-                'message': '缺少五码ID'
+                'message': '缺少五码行索引'
             })
         
-        # 这里应该从数据库中删除五码信息
-        # 目前只是返回成功信息
+        # 构建配置文件路径
+        config_dir = os.path.join(os.path.dirname(__file__), 'config')
+        
+        # 如果config_file不包含.txt扩展名，则添加
+        if not config_file.endswith('.txt'):
+            config_file_path = os.path.join(config_dir, f'{config_file}.txt')
+        else:
+            config_file_path = os.path.join(config_dir, config_file)
+        
+        if not os.path.exists(config_file_path):
+            return jsonify({
+                'success': False,
+                'message': f'配置文件 {config_file_path} 不存在'
+            })
+        
+        # 读取原文件内容
+        with open(config_file_path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        
+        # 移除空行和空白字符
+        lines = [line.strip() for line in lines if line.strip()]
+        
+        # 检查行索引是否有效
+        logger.info(f"原始wuma_id: {wuma_id}, 类型: {type(wuma_id)}")
+        try:
+            row_index = int(wuma_id)
+            logger.info(f"转换后的row_index: {row_index}, 类型: {type(row_index)}")
+            logger.info(f"文件总行数: {len(lines)}")
+            
+            if row_index < 0 or row_index >= len(lines):
+                logger.warning(f"行索引 {row_index} 超出范围 (0-{len(lines)-1})")
+                return jsonify({
+                    'success': False,
+                    'message': f'行索引 {row_index} 超出范围 (0-{len(lines)-1})'
+                })
+        except ValueError as e:
+            logger.error(f"行索引转换失败: {e}, 原始值: {wuma_id}")
+            return jsonify({
+                'success': False,
+                'message': f'无效的行索引: {wuma_id}'
+            })
+        
+        # 获取要删除的行内容
+        deleted_line = lines[row_index]
+        
+        # 删除指定行
+        lines.pop(row_index)
+        
+        # 创建备份目录
+        backup_dir = os.path.join(config_dir, 'config_del')
+        os.makedirs(backup_dir, exist_ok=True)
+        
+        # 生成备份文件名：原文件名_行索引_del_时间戳.bak
+        timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        backup_filename = f'{config_file}_{row_index}_del_{timestamp}.bak'
+        backup_file_path = os.path.join(backup_dir, backup_filename)
+        
+        # 写入备份文件
+        with open(backup_file_path, 'w', encoding='utf-8') as f:
+            f.write(deleted_line + '\n')
+        
+        # 更新原文件
+        with open(config_file_path, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(lines) + '\n')
+        
+        logger.info(f"成功删除第 {row_index} 行，内容: {deleted_line}")
+        logger.info(f"备份文件保存到: {backup_file_path}")
+        logger.info(f"原文件剩余 {len(lines)} 行")
         
         return jsonify({
             'success': True,
-            'message': '五码信息删除成功'
+            'message': f'删除成功！已删除第 {row_index + 1} 行，备份文件: {backup_filename}',
+            'deleted_line': deleted_line,
+            'backup_file': backup_filename,
+            'remaining_lines': len(lines),
+            'row_index': row_index
         })
         
     except Exception as e:
