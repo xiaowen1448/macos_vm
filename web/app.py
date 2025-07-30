@@ -363,14 +363,33 @@ def delete_vm_generic(vm_type_name, vm_dir):
             message = f'成功删除 {deleted_count} 个{vm_type_name}虚拟机'
             if errors:
                 message += f'，但有 {len(errors)} 个错误: ' + '; '.join(errors)
-            return jsonify({
+            
+            # 构建详细的返回结果
+            result = {
                 'success': True,
-                'message': message
-            })
+                'message': message,
+                'deleted_count': deleted_count,
+                'error_count': len(errors),
+                'deleted_vms': [],  # 成功删除的虚拟机列表
+                'failed_vms': []    # 删除失败的虚拟机列表
+            }
+            
+            # 分析成功和失败的虚拟机
+            for vm_name in vm_names:
+                if any(error.startswith(f'虚拟机 {vm_name}') for error in errors):
+                    result['failed_vms'].append(vm_name)
+                else:
+                    result['deleted_vms'].append(vm_name)
+            
+            return jsonify(result)
         else:
             return jsonify({
                 'success': False,
-                'message': '删除失败: ' + '; '.join(errors)
+                'message': '删除失败: ' + '; '.join(errors),
+                'deleted_count': 0,
+                'error_count': len(errors),
+                'deleted_vms': [],
+                'failed_vms': vm_names
             })
     except Exception as e:
         logger.error(f"删除{vm_type_name}虚拟机失败: {str(e)}")

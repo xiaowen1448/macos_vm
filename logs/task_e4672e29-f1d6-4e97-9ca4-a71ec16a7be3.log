@@ -1,0 +1,32 @@
+[2025-07-30 13:40:47] [INFO] 开始克隆任务: 模板=macos10.12.vmx, 数量=3
+[2025-07-30 13:40:47] [INFO] 目标目录: D:\macos_vm\NewVM\10.12
+[2025-07-30 13:40:47] [INFO] 开始创建虚拟机快照...
+[2025-07-30 13:40:47] [INFO] 执行快照命令: C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe -T ws snapshot D:\macos_vm\TemplateVM\macos10.12\macos10.12.vmx macos10.12_snapshot_20250730_134047
+[2025-07-30 13:40:48] [INFO] 快照命令执行完成，返回码: 0, 耗时: 0.66秒
+[2025-07-30 13:40:48] [SUCCESS] 虚拟机快照创建成功: macos10.12_snapshot_20250730_134047
+[2025-07-30 13:40:48] [INFO] 找到 117 个plist文件，需要克隆 3 个虚拟机
+[2025-07-30 13:40:48] [INFO] 开始克隆第 1/3 个虚拟机: VM_20250730_134048_1.vmx
+[2025-07-30 13:40:48] [INFO] 虚拟机文件夹: D:\macos_vm\NewVM\10.12\VM_20250730_134048_1
+[2025-07-30 13:40:48] [INFO] 使用配置文件: config_1.plist
+[2025-07-30 13:40:48] [INFO] 从快照克隆: macos10.12_snapshot_20250730_134047
+[2025-07-30 13:40:48] [INFO] 执行克隆命令: C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe clone D:\macos_vm\TemplateVM\macos10.12\macos10.12.vmx D:\macos_vm\NewVM\10.12\VM_20250730_134048_1\VM_20250730_134048_1.vmx linked -snapshot macos10.12_snapshot_20250730_134047
+[2025-07-30 13:40:49] [INFO] 克隆命令执行完成，返回码: 0, 耗时: 1.01秒
+[2025-07-30 13:40:49] [SUCCESS] 虚拟机 VM_20250730_134048_1.vmx 克隆成功
+[2025-07-30 13:40:49] [INFO] 虚拟机 VM_20250730_134048_1.vmx 的displayName已更新为: VM_20250730_134048_1
+[2025-07-30 13:40:50] [INFO] 开始克隆第 2/3 个虚拟机: VM_20250730_134050_2.vmx
+[2025-07-30 13:40:50] [INFO] 虚拟机文件夹: D:\macos_vm\NewVM\10.12\VM_20250730_134050_2
+[2025-07-30 13:40:50] [INFO] 使用配置文件: config_10.plist
+[2025-07-30 13:40:50] [INFO] 从快照克隆: macos10.12_snapshot_20250730_134047
+[2025-07-30 13:40:50] [INFO] 执行克隆命令: C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe clone D:\macos_vm\TemplateVM\macos10.12\macos10.12.vmx D:\macos_vm\NewVM\10.12\VM_20250730_134050_2\VM_20250730_134050_2.vmx linked -snapshot macos10.12_snapshot_20250730_134047
+[2025-07-30 13:40:51] [INFO] 克隆命令执行完成，返回码: 0, 耗时: 0.85秒
+[2025-07-30 13:40:51] [SUCCESS] 虚拟机 VM_20250730_134050_2.vmx 克隆成功
+[2025-07-30 13:40:51] [INFO] 虚拟机 VM_20250730_134050_2.vmx 的displayName已更新为: VM_20250730_134050_2
+[2025-07-30 13:40:52] [INFO] 开始克隆第 3/3 个虚拟机: VM_20250730_134052_3.vmx
+[2025-07-30 13:40:52] [INFO] 虚拟机文件夹: D:\macos_vm\NewVM\10.12\VM_20250730_134052_3
+[2025-07-30 13:40:52] [INFO] 使用配置文件: config_100.plist
+[2025-07-30 13:40:52] [INFO] 从快照克隆: macos10.12_snapshot_20250730_134047
+[2025-07-30 13:40:52] [INFO] 执行克隆命令: C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe clone D:\macos_vm\TemplateVM\macos10.12\macos10.12.vmx D:\macos_vm\NewVM\10.12\VM_20250730_134052_3\VM_20250730_134052_3.vmx linked -snapshot macos10.12_snapshot_20250730_134047
+[2025-07-30 13:40:53] [INFO] 克隆命令执行完成，返回码: 0, 耗时: 0.86秒
+[2025-07-30 13:40:53] [SUCCESS] 虚拟机 VM_20250730_134052_3.vmx 克隆成功
+[2025-07-30 13:40:53] [INFO] 虚拟机 VM_20250730_134052_3.vmx 的displayName已更新为: VM_20250730_134052_3
+[2025-07-30 13:40:54] [SUCCESS] 所有虚拟机克隆完成！成功: 3

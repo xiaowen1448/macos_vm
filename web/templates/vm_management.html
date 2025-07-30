@@ -261,62 +261,11 @@
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     
-    /* 删除选中按钮样式 */
-    #deleteSelectedBtn {
-        transition: all 0.3s ease;
-        position: relative;
-        overflow: hidden;
-    }
+
     
-    #deleteSelectedBtn:hover:not(:disabled) {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3);
-    }
+
     
-    #deleteSelectedBtn:active:not(:disabled) {
-        transform: translateY(0);
-    }
-    
-    #deleteSelectedBtn.btn-warning {
-        background-color: #ffc107;
-        border-color: #ffc107;
-        color: #000;
-    }
-    
-    #deleteSelectedBtn.btn-warning:hover {
-        background-color: #ffca2c;
-        border-color: #ffca2c;
-        color: #000;
-    }
-    
-    #deleteSelectedBtn.btn-secondary {
-        background-color: #6c757d;
-        border-color: #6c757d;
-        color: #fff;
-    }
-    
-    #deleteSelectedBtn.btn-secondary:hover {
-        background-color: #5a6268;
-        border-color: #545b62;
-        color: #fff;
-    }
-    
-    /* 选中数量高亮效果 */
-    #selectedCount {
-        transition: all 0.3s ease;
-        display: inline-block;
-        min-width: 20px;
-        text-align: center;
-    }
-    
-    /* 删除进度模态框样式 */
-    .modal-header.bg-success {
-        background: linear-gradient(135deg, #28a745 0%, #20c997 100%) !important;
-    }
-    
-    .modal-header.bg-danger {
-        background: linear-gradient(135deg, #dc3545 0%, #e74c3c 100%) !important;
-    }
+
     html, body { width: 100vw; overflow-x: hidden !important; }
     .col-md-9.col-lg-10 { width: calc(100vw - 280px); min-width: 0; margin: 0; height: calc(100vh - 80px); overflow: auto; }
     .main-wrapper { display: flex; height: 100vh; }
@@ -684,11 +633,7 @@
                                         <i class="fas fa-magic"></i>
                                     </button>
                                 </div>
-                                <div class="d-flex align-items-center ms-3">
-                                    <button class="btn btn-danger btn-sm" onclick="deleteSelectedVMs()" id="deleteSelectedBtn" disabled style="cursor: pointer;">
-                                        <i class="fas fa-trash me-1"></i>删除选中 (<span id="selectedCount">0</span>)
-                                    </button>
-                                </div>
+
                             </div>
                             <nav aria-label="虚拟机列表分页">
                                 <ul class="pagination pagination-sm mb-0" id="pagination">
@@ -731,7 +676,7 @@
                 const selectAllCheckbox = document.getElementById('selectAll');
                 if (selectAllCheckbox) {
                     console.log('全选按钮状态:', selectAllCheckbox.checked);
-                    console.log('当前选中的虚拟机数量:', selectedVMs.size);
+        
                 }
             }, 2000);
             // 智能计算最佳数据显示量
@@ -1274,108 +1219,10 @@
             // 更新全选状态
             updateSelectAllState();
             
-            // 调试：检查多选按钮是否正确渲染
+
+            
+            // 简单的调试信息
             console.log('虚拟机数据渲染完成，多选按钮数量:', document.querySelectorAll('.vm-checkbox').length);
-            console.log('全选按钮状态:', document.getElementById('selectAll').checked);
-            
-            // 添加直接事件监听器测试
-            const checkboxes = document.querySelectorAll('.vm-checkbox');
-            checkboxes.forEach(checkbox => {
-                checkbox.addEventListener('click', function(e) {
-                    console.log('直接点击事件:', this.value, 'checked:', this.checked);
-                });
-            });
-            
-            // 添加全选按钮的直接事件监听器
-            const selectAllCheckbox = document.getElementById('selectAll');
-            if (selectAllCheckbox) {
-                selectAllCheckbox.addEventListener('change', function(e) {
-                    console.log('全选按钮直接事件:', this.checked);
-                });
-            }
-            
-            // 添加实时更新监听器
-            const observer = new MutationObserver(function(mutations) {
-                mutations.forEach(function(mutation) {
-                    if (mutation.type === 'childList') {
-                        // 当DOM结构变化时，重新绑定事件
-                        const newCheckboxes = document.querySelectorAll('.vm-checkbox');
-                        newCheckboxes.forEach(checkbox => {
-                            if (!checkbox.hasAttribute('data-bound')) {
-                                checkbox.setAttribute('data-bound', 'true');
-                                checkbox.addEventListener('change', function() {
-                                    console.log('实时更新: 多选按钮变化');
-                                    updateSelectedCount();
-                                });
-                            }
-                        });
-                    }
-                });
-            });
-            
-            // 监听表格内容变化
-            const vmTableBody = document.getElementById('vmTableBody');
-            if (vmTableBody) {
-                observer.observe(vmTableBody, { childList: true, subtree: true });
-            }
-            
-            // 为现有的checkbox添加直接事件监听器
-            const existingCheckboxes = document.querySelectorAll('.vm-checkbox');
-            existingCheckboxes.forEach(checkbox => {
-                checkbox.addEventListener('change', function() {
-                    console.log('checkbox直接事件: 值变化');
-                    // 延迟一点确保DOM更新完成
-                    setTimeout(() => {
-                        updateSelectedCount();
-                    }, 10);
-                });
-            });
-            
-            // 为全选按钮添加直接事件监听器
-            const selectAllCheckboxForEvents = document.getElementById('selectAll');
-            if (selectAllCheckboxForEvents) {
-                selectAllCheckboxForEvents.addEventListener('change', function() {
-                    console.log('全选按钮直接事件: 值变化');
-                    // 延迟一点确保DOM更新完成
-                    setTimeout(() => {
-                        updateSelectedCount();
-                    }, 10);
-                });
-            }
-            
-            // 手动测试删除按钮更新
-            setTimeout(() => {
-                console.log('手动测试删除按钮更新...');
-                const deleteBtn = document.getElementById('deleteSelectedBtn');
-                const selectedCountElement = document.getElementById('selectedCount');
-                console.log('删除按钮存在:', !!deleteBtn);
-                console.log('选中数量元素存在:', !!selectedCountElement);
-                if (deleteBtn) {
-                    console.log('删除按钮当前文本:', deleteBtn.innerHTML);
-                    console.log('删除按钮disabled状态:', deleteBtn.disabled);
-                }
-                if (selectedCountElement) {
-                    console.log('选中数量元素当前文本:', selectedCountElement.textContent);
-                }
-                
-                // 测试选中功能
-                console.log('测试选中功能...');
-                console.log('当前selectedVMs大小:', selectedVMs.size);
-                console.log('当前选中的虚拟机:', Array.from(selectedVMs));
-                
-                // 测试清空选中状态
-                selectedVMs.clear();
-                updateSelectedCount();
-                console.log('清空后selectedVMs大小:', selectedVMs.size);
-                console.log('清空后选中数量显示:', selectedCountElement.textContent);
-                
-                // 测试添加选中状态
-                const testVMs = ['VM_20250728_184035_7', 'VM_20250728_184037_8'];
-                testVMs.forEach(vm => selectedVMs.add(vm));
-                updateSelectedCount();
-                console.log('添加测试虚拟机后selectedVMs大小:', selectedVMs.size);
-                console.log('添加测试虚拟机后选中数量显示:', selectedCountElement.textContent);
-            }, 3000);
             
             // 异步获取运行中虚拟机的在线状态
             setTimeout(() => {
@@ -2161,11 +2008,9 @@
                 console.log('取消选择虚拟机:', vmName);
             }
             
-            console.log('当前选中的虚拟机:', Array.from(selectedVMs));
-            console.log('当前选中数量:', selectedVMs.size);
+
             
             // 立即更新UI
-            updateSelectedCount();
             updateSelectAllState();
         }
 
@@ -2174,8 +2019,7 @@
             const selectAllCheckbox = document.getElementById('selectAll');
             const vmCheckboxes = document.querySelectorAll('.vm-checkbox');
             
-            console.log('切换全选状态，当前全选按钮状态:', selectAllCheckbox.checked);
-            console.log('找到多选按钮数量:', vmCheckboxes.length);
+
             
             // 清空当前选中状态
             selectedVMs.clear();
@@ -2185,21 +2029,19 @@
                 vmCheckboxes.forEach(checkbox => {
                     checkbox.checked = true;
                     selectedVMs.add(checkbox.value);
-                    console.log('全选虚拟机:', checkbox.value);
+    
                 });
             } else {
                 // 取消全选
                 vmCheckboxes.forEach(checkbox => {
                     checkbox.checked = false;
-                    console.log('取消选择虚拟机:', checkbox.value);
+
                 });
             }
             
-            console.log('全选操作后，选中的虚拟机:', Array.from(selectedVMs));
-            console.log('全选操作后，选中数量:', selectedVMs.size);
+
             
             // 立即更新UI
-            updateSelectedCount();
             updateSelectAllState();
         }
 
@@ -2228,94 +2070,7 @@
             }
         }
 
-        // 更新选中数量
-        function updateSelectedCount() {
-            try {
-                const count = selectedVMs.size;
-                const selectedCountElement = document.getElementById('selectedCount');
-                const deleteBtn = document.getElementById('deleteSelectedBtn');
-                
-                console.log('=== 更新选中数量 ===');
-                console.log('当前选中数量:', count);
-                console.log('选中的虚拟机:', Array.from(selectedVMs));
-                
-                // 更新选中数量显示
-                if (selectedCountElement) {
-                    const oldValue = selectedCountElement.textContent;
-                    selectedCountElement.textContent = count;
-                    console.log('选中数量显示已更新:', oldValue, '->', count);
-                    
-                    // 添加视觉反馈
-                    if (oldValue !== count.toString()) {
-                        // 数值发生变化时，添加高亮效果
-                        selectedCountElement.style.backgroundColor = '#ffeb3b';
-                        selectedCountElement.style.color = '#000';
-                        selectedCountElement.style.padding = '2px 6px';
-                        selectedCountElement.style.borderRadius = '3px';
-                        selectedCountElement.style.fontWeight = 'bold';
-                        
-                        // 1秒后恢复原样式
-                        setTimeout(() => {
-                            selectedCountElement.style.backgroundColor = '';
-                            selectedCountElement.style.color = '';
-                            selectedCountElement.style.padding = '';
-                            selectedCountElement.style.borderRadius = '';
-                            selectedCountElement.style.fontWeight = '';
-                        }, 1000);
-                    }
-                } else {
-                    console.error('selectedCountElement不存在!');
-                }
-                
-                // 检查选中的虚拟机状态
-                const runningVMs = [];
-                const stoppedVMs = [];
-                
-                selectedVMs.forEach(vmName => {
-                    const vm = totalVMs.find(v => v.name === vmName);
-                    if (vm) {
-                        if (vm.status === 'running') {
-                            runningVMs.push(vmName);
-                        } else {
-                            stoppedVMs.push(vmName);
-                        }
-                    }
-                });
-                
-                // 更新删除按钮状态
-                if (deleteBtn) {
-                    const hasRunningVMs = runningVMs.length > 0;
-                    const shouldDisable = count === 0 || hasRunningVMs;
-                    
-                    deleteBtn.disabled = shouldDisable;
-                    
-                    // 更新按钮提示和样式
-                    if (hasRunningVMs) {
-                        deleteBtn.title = `选中的虚拟机中有 ${runningVMs.length} 个正在运行，无法删除`;
-                        deleteBtn.className = 'btn btn-warning btn-sm';
-                        deleteBtn.innerHTML = `<i class="fas fa-exclamation-triangle me-1"></i>无法删除 (${runningVMs.length}个运行中)`;
-                    } else if (count === 0) {
-                        deleteBtn.title = '请先选择要删除的虚拟机';
-                        deleteBtn.className = 'btn btn-secondary btn-sm';
-                        deleteBtn.innerHTML = `<i class="fas fa-trash me-1"></i>删除选中 (<span id="selectedCount">0</span>)`;
-                    } else {
-                        deleteBtn.title = `删除选中的 ${count} 个虚拟机`;
-                        deleteBtn.className = 'btn btn-danger btn-sm';
-                        deleteBtn.innerHTML = `<i class="fas fa-trash me-1"></i>删除选中 (<span id="selectedCount">${count}</span>)`;
-                    }
-                    
-                    console.log('删除按钮状态已更新:', shouldDisable ? '禁用' : '启用', '选中数量:', count);
-                } else {
-                    console.error('deleteBtn不存在!');
-                }
-                
-                console.log('=== 更新完成 ===');
-                
-            } catch (error) {
-                console.error('updateSelectedCount函数出错:', error);
-                console.error('错误堆栈:', error.stack);
-            }
-        }
+
 
         // 删除单个虚拟机
         function deleteVM(vmName) {
@@ -2327,189 +2082,42 @@
             }
             
             if (confirm(`确定要删除虚拟机 "${vmName}" 吗？此操作不可恢复。`)) {
-                deleteVMs([vmName]);
-            }
-        }
-
-        // 批量删除选中的虚拟机
-        function deleteSelectedVMs() {
-            const selectedArray = Array.from(selectedVMs);
-            if (selectedArray.length === 0) {
-                alert('请先选择要删除的虚拟机');
-                return;
-            }
-            
-            // 检查选中的虚拟机状态
-            const runningVMs = [];
-            const stoppedVMs = [];
-            
-            selectedArray.forEach(vmName => {
-                const vm = totalVMs.find(v => v.name === vmName);
-                if (vm) {
-                    if (vm.status === 'running') {
-                        runningVMs.push(vmName);
-                    } else {
-                        stoppedVMs.push(vmName);
-                    }
-                }
-            });
-            
-            // 如果有运行中的虚拟机，提示用户
-            if (runningVMs.length > 0) {
-                let message = `以下虚拟机正在运行中，无法删除：\n${runningVMs.join('\n')}\n\n请先停止这些虚拟机，然后执行删除操作。`;
-                if (stoppedVMs.length > 0) {
-                    message += `\n\n可以删除的虚拟机：\n${stoppedVMs.join('\n')}`;
-                }
-                alert(message);
-                return;
-            }
-            
-            // 显示确认对话框
-            const confirmMessage = `确定要删除选中的 ${selectedArray.length} 个虚拟机吗？\n\n将要删除的虚拟机：\n${selectedArray.join('\n')}\n\n此操作不可恢复！`;
-            
-            if (confirm(confirmMessage)) {
-                // 显示删除进度
-                showDeleteProgress(selectedArray);
-                deleteVMs(selectedArray);
-            }
-        }
-
-        // 显示删除进度
-        function showDeleteProgress(vmNames) {
-            // 创建进度模态框
-            const modalHTML = `
-                <div class="modal fade" id="deleteProgressModal" tabindex="-1" aria-labelledby="deleteProgressModalLabel" aria-hidden="true">
-                    <div class="modal-dialog">
-                        <div class="modal-content">
-                            <div class="modal-header">
-                                <h5 class="modal-title" id="deleteProgressModalLabel">
-                                    <i class="fas fa-trash me-2"></i>正在删除虚拟机
-                                </h5>
-                            </div>
-                            <div class="modal-body">
-                                <div class="text-center">
-                                    <div class="spinner-border text-primary" role="status">
-                                        <span class="visually-hidden">删除中...</span>
-                                    </div>
-                                    <p class="mt-2">正在删除选中的虚拟机，请稍候...</p>
-                                    <div class="progress mt-3">
-                                        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%" id="deleteProgressBar"></div>
-                                    </div>
-                                    <small class="text-muted" id="deleteProgressText">准备删除...</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            // 移除已存在的模态框
-            const existingModal = document.getElementById('deleteProgressModal');
-            if (existingModal) {
-                existingModal.remove();
-            }
-            
-            // 添加新的模态框到页面
-            document.body.insertAdjacentHTML('beforeend', modalHTML);
-            
-            // 显示模态框
-            const modal = new bootstrap.Modal(document.getElementById('deleteProgressModal'));
-            modal.show();
-        }
-
-        // 隐藏删除进度
-        function hideDeleteProgress() {
-            const modal = document.getElementById('deleteProgressModal');
-            if (modal) {
-                const bootstrapModal = bootstrap.Modal.getInstance(modal);
-                if (bootstrapModal) {
-                    bootstrapModal.hide();
-                }
-                modal.remove();
-            }
-        }
-
-        // 执行删除操作
-        function deleteVMs(vmNames) {
-            fetch('/api/vm_10_12_delete', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    vm_names: vmNames
+                // 直接调用后端删除API
+                fetch('/api/vm_10_12_delete', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        vm_names: [vmName]
+                    })
                 })
-            })
-            .then(response => response.json())
-            .then(data => {
-                hideDeleteProgress();
-                
-                if (data.success) {
-                    // 从选中列表中移除已删除的虚拟机
-                    data.deleted_vms.forEach(vmName => {
-                        selectedVMs.delete(vmName);
-                    });
-                    
-                    // 显示成功结果
-                    let message = `✅ 删除成功！\n\n成功删除 ${data.deleted_vms.length} 个虚拟机：\n${data.deleted_vms.join('\n')}`;
-                    
-                    if (data.failed_vms.length > 0) {
-                        message += `\n\n❌ 删除失败的虚拟机：\n${data.failed_vms.join('\n')}`;
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('虚拟机删除成功');
+                        refreshVMData();
+                    } else {
+                        alert('删除失败: ' + data.message);
                     }
-                    
-                    // 使用更友好的提示框
-                    showDeleteResult(message, data.failed_vms.length === 0);
-                    
-                    // 刷新数据
-                    loadVMData(currentPage);
-                } else {
-                    showDeleteResult(`❌ 删除失败: ${data.message}`, false);
-                }
-            })
-            .catch(error => {
-                hideDeleteProgress();
-                console.error('删除虚拟机失败:', error);
-                showDeleteResult(`❌ 网络错误: ${error.message}`, false);
-            });
+                })
+                .catch(error => {
+                    alert('操作失败: ' + error.message);
+                });
+            }
         }
 
-        // 显示删除结果
-        function showDeleteResult(message, isSuccess) {
-            const modalHTML = `
-                <div class="modal fade" id="deleteResultModal" tabindex="-1" aria-labelledby="deleteResultModalLabel" aria-hidden="true">
-                    <div class="modal-dialog">
-                        <div class="modal-content">
-                            <div class="modal-header ${isSuccess ? 'bg-success text-white' : 'bg-danger text-white'}">
-                                <h5 class="modal-title" id="deleteResultModalLabel">
-                                    <i class="fas ${isSuccess ? 'fa-check-circle' : 'fa-exclamation-triangle'} me-2"></i>
-                                    ${isSuccess ? '删除成功' : '删除失败'}
-                                </h5>
-                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                            </div>
-                            <div class="modal-body">
-                                <pre style="white-space: pre-wrap; font-family: inherit;">${message}</pre>
-                            </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            // 移除已存在的模态框
-            const existingModal = document.getElementById('deleteResultModal');
-            if (existingModal) {
-                existingModal.remove();
-            }
-            
-            // 添加新的模态框到页面
-            document.body.insertAdjacentHTML('beforeend', modalHTML);
-            
-            // 显示模态框
-            const modal = new bootstrap.Modal(document.getElementById('deleteResultModal'));
-            modal.show();
-        }
+
+
+
+
+
+
+
+
+
+
+
 
         // 显示加载状态
         function showLoading() {
@@ -2796,7 +2404,7 @@
                 
                 // 初始化选中状态
                 selectedScripts.clear();
-                updateSelectedCount();
+
                 updateSelectAllButton();
             });
             
@@ -3000,8 +2608,6 @@
                 selectAllBtn.innerHTML = '<i class="fas fa-square me-1"></i>取消全选';
                 sendAllBtn.style.display = 'inline-block';
             }
-            
-            updateSelectedCount();
         }
 
         // 切换单个脚本选择状态
@@ -3029,28 +2635,10 @@
                 }
             });
             
-            updateSelectedCount();
             updateSelectAllButton();
         }
 
-        // 更新选中数量显示
-        function updateSelectedCount() {
-            const scriptCountBadge = document.getElementById('scriptCountBadge');
-            const sendAllBtn = document.getElementById('sendAllScriptsBtn');
-            
-            if (scriptCountBadge) {
-                const totalScripts = document.querySelectorAll('.script-item').length;
-                const selectedCount = selectedScripts.size;
-                scriptCountBadge.textContent = `${selectedCount}/${totalScripts} 个脚本`;
-                
-                // 显示或隐藏发送选中按钮
-                if (selectedCount > 0) {
-                    sendAllBtn.style.display = 'inline-block';
-                } else {
-                    sendAllBtn.style.display = 'none';
-                }
-            }
-        }
+
 
         // 更新全选按钮状态
         function updateSelectAllButton() {
