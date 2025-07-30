@@ -180,9 +180,6 @@ def create_template_content(template_info):
                                     <li class="nav-item">
                                         <a class="nav-link" href="{{{{ url_for('vm_script_page') }}}}" onclick="handleVMScriptClick()">虚拟机脚本管理</a>
                                     </li>
-                                    <li class="nav-item">
-                                        <a class="nav-link" href="{{{{ url_for('vm_trust_page') }}}}" onclick="handleVMTrustClick()">虚拟机互信管理</a>
-                                    </li>
                                 </ul>
                             </div>
                         </div>

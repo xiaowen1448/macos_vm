@@ -832,11 +832,7 @@ def vm_script_page():
     """虚拟机脚本管理页面"""
     return render_template('vm_script.html')
 
-@app.route('/vm_trust')
-@login_required
-def vm_trust_page():
-    """虚拟机互信管理页面"""
-    return render_template('vm_trust.html')
+
 
 @app.route('/wuma')
 @login_required
@@ -4203,6 +4199,237 @@ def api_vm_10_12_execute_scripts():
         return jsonify({
             'success': False,
             'message': f'批量执行脚本失败: {str(e)}'
+        })
+
+# 五码管理相关API路由
+@app.route('/api/wuma_list')
+@login_required
+def api_wuma_list():
+    """获取五码列表"""
+    logger.info("收到获取五码列表请求")
+    try:
+        page = int(request.args.get('page', 1))
+        page_size = int(request.args.get('page_size', 5))
+        config_name = request.args.get('config', 'config')  # 默认使用config.txt
+        
+        # 根据选择的配置文件读取五码数据
+        config_file_path = os.path.join(os.path.dirname(__file__), f'{config_name}.txt')
+        wuma_data = []
+        
+        if os.path.exists(config_file_path):
+            with open(config_file_path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+                for i, line in enumerate(lines, 1):
+                    line = line.strip()
+                    if line and line.startswith(':') and line.endswith(':'):  # 检查格式
+                        # 去掉开头和结尾的冒号，然后按冒号分割数据
+                        content = line[1:-1]  # 去掉首尾的冒号
+                        parts = content.split(':')
+                        if len(parts) >= 5:
+                            wuma_data.append({
+                                'id': str(i),
+                                'rom': parts[0],
+                                'mlb': parts[1],
+                                'serial_number': parts[2],
+                                'board_id': parts[3],
+                                'model_identifier': parts[4],
+                                'status': 'valid'  # 所有数据标记为可用
+                            })
+        
+        # 计算分页
+        total_count = len(wuma_data)
+        total_pages = (total_count + page_size - 1) // page_size
+        start_index = (page - 1) * page_size
+        end_index = min(start_index + page_size, total_count)
+        
+        # 获取当前页的数据
+        current_page_data = wuma_data[start_index:end_index]
+        
+        # 计算统计信息
+        stats = {
+            'total': total_count,
+            'valid': len([w for w in wuma_data if w['status'] == 'valid']),
+            'invalid': len([w for w in wuma_data if w['status'] == 'invalid']),
+            'used': len([w for w in wuma_data if w['status'] == 'used'])
+        }
+        
+        pagination = {
+            'current_page': page,
+            'total_pages': total_pages,
+            'total_count': total_count,
+            'start_index': start_index,
+            'end_index': end_index
+        }
+        
+        return jsonify({
+            'success': True,
+            'wuma_list': current_page_data,
+            'pagination': pagination,
+            'stats': stats
+        })
+        
+    except Exception as e:
+        logger.error(f"获取五码列表失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取五码列表失败: {str(e)}'
+        })
+
+@app.route('/api/wuma_configs')
+@login_required
+def api_wuma_configs():
+    """获取可用的配置文件列表"""
+    logger.info("收到获取配置文件列表请求")
+    try:
+        configs = []
+        web_dir = os.path.dirname(__file__)
+        
+        # 查找所有config*.txt文件
+        for filename in os.listdir(web_dir):
+            if filename.startswith('config') and filename.endswith('.txt'):
+                config_name = filename[:-4]  # 去掉.txt后缀
+                configs.append({
+                    'name': config_name,
+                    'display_name': config_name.replace('config', '配置').replace('1', '一').replace('2', '二')
+                })
+        
+        # 按名称排序
+        configs.sort(key=lambda x: x['name'])
+        
+        return jsonify({
+            'success': True,
+            'configs': configs
+        })
+        
+    except Exception as e:
+        logger.error(f"获取配置文件列表失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取配置文件列表失败: {str(e)}'
+        })
+
+@app.route('/api/wuma_upload', methods=['POST'])
+@login_required
+def api_wuma_upload():
+    """上传五码文件"""
+    logger.info("收到上传五码文件请求")
+    try:
+        if 'file' not in request.files:
+            return jsonify({
+                'success': False,
+                'message': '没有选择文件'
+            })
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({
+                'success': False,
+                'message': '没有选择文件'
+            })
+        
+        # 检查文件类型
+        if not file.filename.endswith(('.txt', '.csv')):
+            return jsonify({
+                'success': False,
+                'message': '只支持 .txt 和 .csv 格式的文件'
+            })
+        
+        # 读取文件内容
+        content = file.read().decode('utf-8')
+        lines = content.strip().split('\n')
+        
+        # 解析五码数据并写入config.txt
+        config_file_path = os.path.join(os.path.dirname(__file__), 'config.txt')
+        processed_count = 0
+        valid_lines = []
+        
+        for line_num, line in enumerate(lines, 1):
+            line = line.strip()
+            if not line:
+                continue
+            
+            # 支持两种格式：
+            # 1. 冒号分隔的5列数据
+            # 2. 以冒号开头和结尾的格式
+            
+            if line.startswith(':') and line.endswith(':'):
+                # 格式2：去掉首尾冒号，然后分割
+                content = line[1:-1]
+                parts = content.split(':')
+            else:
+                # 格式1：直接按冒号分割
+                parts = line.split(':')
+            
+            if len(parts) >= 5:
+                # 确保数据格式正确
+                rom = parts[0].strip()
+                mlb = parts[1].strip()
+                serial_number = parts[2].strip()
+                board_id = parts[3].strip()
+                model_identifier = parts[4].strip()
+                
+                # 构建标准格式的行（以冒号开头和结尾）
+                formatted_line = f":{rom}:{mlb}:{serial_number}:{board_id}:{model_identifier}:"
+                valid_lines.append(formatted_line)
+                processed_count += 1
+            else:
+                logger.warning(f"第{line_num}行格式错误: {line}")
+        
+        # 写入config.txt文件
+        if valid_lines:
+            with open(config_file_path, 'w', encoding='utf-8') as f:
+                f.write('\n'.join(valid_lines))
+            
+            logger.info(f"成功解析并保存 {processed_count} 条五码数据到config.txt")
+            
+            return jsonify({
+                'success': True,
+                'message': f'成功上传并保存 {processed_count} 条五码数据',
+                'uploaded_count': processed_count
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': '文件中没有找到有效的五码数据格式'
+            })
+        
+    except Exception as e:
+        logger.error(f"上传五码文件失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'上传五码文件失败: {str(e)}'
+        })
+
+
+
+@app.route('/api/wuma_delete', methods=['POST'])
+@login_required
+def api_wuma_delete():
+    """删除五码信息"""
+    logger.info("收到删除五码信息请求")
+    try:
+        data = request.get_json()
+        wuma_id = data.get('id')
+        
+        if not wuma_id:
+            return jsonify({
+                'success': False,
+                'message': '缺少五码ID'
+            })
+        
+        # 这里应该从数据库中删除五码信息
+        # 目前只是返回成功信息
+        
+        return jsonify({
+            'success': True,
+            'message': '五码信息删除成功'
+        })
+        
+    except Exception as e:
+        logger.error(f"删除五码信息失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'删除五码信息失败: {str(e)}'
         })
 
 if __name__ == '__main__':

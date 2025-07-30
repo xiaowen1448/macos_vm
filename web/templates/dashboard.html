@@ -114,9 +114,6 @@
                                 <li class="nav-item">
                                     <a class="nav-link" href="{{ url_for('vm_script_page') }}" onclick="handleVMScriptClick()">虚拟机脚本管理</a>
                                 </li>
-                                <li class="nav-item">
-                                    <a class="nav-link" href="{{ url_for('vm_trust_page') }}" onclick="handleVMTrustClick()">虚拟机互信管理</a>
-                                </li>
                             </ul>
                         </div>
                     </div>
@@ -578,10 +575,7 @@
                 <h3>虚拟机删除</h3>
                 <p>这里是虚拟机删除的内容（可后续扩展）</p>
             </div>
-            <div id="panel-trust" style="display:none;">
-                <h3>虚拟机互信管理</h3>
-                <p>这里是虚拟机互信管理的内容（可后续扩展）</p>
-            </div>
+
             <!-- 新增内容面板 -->
             <div id="panel-encrypt" style="display:none;">
                 <h3>数据加密功能</h3>
@@ -659,7 +653,6 @@ function showPanel(type) {
     document.getElementById('panel-script-list').style.display = (type === 'script-list') ? '' : 'none';
     document.getElementById('panel-clone').style.display = (type === 'clone') ? '' : 'none';
     document.getElementById('panel-delete').style.display = (type === 'delete') ? '' : 'none';
-    document.getElementById('panel-trust').style.display = (type === 'trust') ? '' : 'none';
     document.getElementById('panel-encrypt').style.display = (type === 'encrypt') ? '' : 'none';
     document.getElementById('panel-encrypt-code').style.display = (type === 'encrypt-code') ? '' : 'none';
     document.getElementById('panel-encrypt-wuma').style.display = (type === 'encrypt-wuma') ? '' : 'none';
@@ -822,29 +815,6 @@ function handleVMScriptClick() {
   
   // 显示虚拟机脚本管理面板
   showPanel('script-list');
-}
-
-// 处理虚拟机互信管理链接点击，确保菜单保持展开状态
-function handleVMTrustClick() {
-  // 确保虚拟机管理菜单展开
-  const vmCollapse = document.getElementById('collapseVM');
-  const vmButton = document.getElementById('headingVM').querySelector('.accordion-button');
-  
-  if (vmCollapse && vmButton) {
-    // 移除折叠类，添加展开类
-    vmCollapse.classList.remove('collapse');
-    vmCollapse.classList.add('show');
-    vmButton.setAttribute('aria-expanded', 'true');
-    vmButton.classList.remove('collapsed');
-  }
-  
-  // 设置当前链接为激活状态
-  const links = document.querySelectorAll('#collapseVM .nav-link');
-  links.forEach(link => link.classList.remove('active'));
-  event.target.classList.add('active');
-  
-  // 显示虚拟机互信管理面板
-  showPanel('trust');
 }
 
 // 处理虚拟机五码管理链接点击，确保菜单保持展开状态
