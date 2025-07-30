@@ -1521,10 +1521,10 @@
             let result;
             switch (onlineStatus) {
                 case 'online': 
-                    result = '完全在线';
+                    result = '在线';
                     break;
                 case 'partial': 
-                    result = '部分在线';
+                    result = '在线';
                     break;
                 case 'offline': 
                     result = '未在线';
@@ -1533,7 +1533,7 @@
                     result = '错误';
                     break;
                 case 'unknown': 
-                    result = '运行状态未知';
+                    result = '离线';
                     break;
                 default: 
                     result = '未知';

@@ -42,3 +42,61 @@
 2025-07-29 10:01:48,250 [INFO] __init__:46 - 主窗口初始化完成
 2025-07-29 10:01:48,342 [INFO] <module>:81 - 桌面窗口显示完成
 2025-07-29 10:01:48,344 [INFO] <module>:84 - 开始运行应用
+2025-07-29 12:31:07,052 [INFO] <module>:88 - 应用退出，清理资源
+2025-07-29 12:31:09,150 [INFO] <module>:64 - 启动macos_vm管理平台
+2025-07-29 12:31:09,151 [INFO] <module>:67 - 启动Flask服务
+2025-07-29 12:31:09,163 [INFO] wait_for_flask:49 - 等待Flask服务启动: http://127.0.0.1:5000/login
+2025-07-29 12:31:09,163 [DEBUG] wait_for_flask:52 - 尝试连接Flask服务 (第1次)
+2025-07-29 12:31:09,172 [DEBUG] _new_conn:241 - Starting new HTTP connection (1): 127.0.0.1:5000
+2025-07-29 12:31:09,178 [DEBUG] _make_request:544 - http://127.0.0.1:5000 "GET /login HTTP/1.1" 200 1342
+2025-07-29 12:31:09,179 [INFO] wait_for_flask:55 - Flask服务启动成功
+2025-07-29 12:31:09,179 [INFO] <module>:77 - 启动桌面窗口
+2025-07-29 12:31:09,530 [INFO] __init__:28 - 初始化主窗口
+2025-07-29 12:31:09,530 [WARNING] __init__:39 - 窗口图标文件不存在: EFI/Clover/CLOVER/themes/logo_main.png
+2025-07-29 12:31:09,531 [DEBUG] __init__:43 - 加载登录页面: http://127.0.0.1:5000/login
+2025-07-29 12:31:11,030 [INFO] __init__:46 - 主窗口初始化完成
+2025-07-29 12:31:11,134 [INFO] <module>:81 - 桌面窗口显示完成
+2025-07-29 12:31:11,143 [INFO] <module>:84 - 开始运行应用
+2025-07-29 12:31:14,343 [INFO] <module>:88 - 应用退出，清理资源
+2025-07-29 12:31:45,792 [INFO] <module>:64 - 启动macos_vm管理平台
+2025-07-29 12:31:45,793 [INFO] <module>:67 - 启动Flask服务
+2025-07-29 12:31:45,805 [INFO] wait_for_flask:49 - 等待Flask服务启动: http://127.0.0.1:5000/login
+2025-07-29 12:31:45,805 [DEBUG] wait_for_flask:52 - 尝试连接Flask服务 (第1次)
+2025-07-29 12:31:45,808 [DEBUG] _new_conn:241 - Starting new HTTP connection (1): 127.0.0.1:5000
+2025-07-29 12:31:47,180 [DEBUG] _make_request:544 - http://127.0.0.1:5000 "GET /login HTTP/1.1" 200 1342
+2025-07-29 12:31:47,182 [INFO] wait_for_flask:55 - Flask服务启动成功
+2025-07-29 12:31:47,183 [INFO] <module>:77 - 启动桌面窗口
+2025-07-29 12:31:47,337 [INFO] __init__:28 - 初始化主窗口
+2025-07-29 12:31:47,337 [WARNING] __init__:39 - 窗口图标文件不存在: EFI/Clover/CLOVER/themes/logo_main.png
+2025-07-29 12:31:47,338 [DEBUG] __init__:43 - 加载登录页面: http://127.0.0.1:5000/login
+2025-07-29 12:31:47,850 [INFO] __init__:46 - 主窗口初始化完成
+2025-07-29 12:31:47,935 [INFO] <module>:81 - 桌面窗口显示完成
+2025-07-29 12:31:47,935 [INFO] <module>:84 - 开始运行应用
+2025-07-29 13:37:15,518 [INFO] <module>:64 - 启动macos_vm管理平台
+2025-07-29 13:37:15,519 [INFO] <module>:67 - 启动Flask服务
+2025-07-29 13:37:15,527 [INFO] wait_for_flask:49 - 等待Flask服务启动: http://127.0.0.1:5000/login
+2025-07-29 13:37:15,528 [DEBUG] wait_for_flask:52 - 尝试连接Flask服务 (第1次)
+2025-07-29 13:37:15,530 [DEBUG] _new_conn:241 - Starting new HTTP connection (1): 127.0.0.1:5000
+2025-07-29 13:37:16,448 [DEBUG] _make_request:544 - http://127.0.0.1:5000 "GET /login HTTP/1.1" 200 1342
+2025-07-29 13:37:16,448 [INFO] wait_for_flask:55 - Flask服务启动成功
+2025-07-29 13:37:16,449 [INFO] <module>:77 - 启动桌面窗口
+2025-07-29 13:37:16,684 [INFO] __init__:28 - 初始化主窗口
+2025-07-29 13:37:16,684 [WARNING] __init__:39 - 窗口图标文件不存在: EFI/Clover/CLOVER/themes/logo_main.png
+2025-07-29 13:37:16,685 [DEBUG] __init__:43 - 加载登录页面: http://127.0.0.1:5000/login
+2025-07-29 13:37:17,388 [INFO] __init__:46 - 主窗口初始化完成
+2025-07-29 13:37:17,474 [INFO] <module>:81 - 桌面窗口显示完成
+2025-07-29 13:37:17,479 [INFO] <module>:84 - 开始运行应用
+2025-07-29 14:06:54,458 [INFO] <module>:64 - 启动macos_vm管理平台
+2025-07-29 14:06:54,459 [INFO] <module>:67 - 启动Flask服务
+2025-07-29 14:06:54,469 [INFO] wait_for_flask:49 - 等待Flask服务启动: http://127.0.0.1:5000/login
+2025-07-29 14:06:54,469 [DEBUG] wait_for_flask:52 - 尝试连接Flask服务 (第1次)
+2025-07-29 14:06:54,472 [DEBUG] _new_conn:241 - Starting new HTTP connection (1): 127.0.0.1:5000
+2025-07-29 14:06:55,721 [DEBUG] _make_request:544 - http://127.0.0.1:5000 "GET /login HTTP/1.1" 200 1342
+2025-07-29 14:06:55,722 [INFO] wait_for_flask:55 - Flask服务启动成功
+2025-07-29 14:06:55,722 [INFO] <module>:77 - 启动桌面窗口
+2025-07-29 14:06:55,917 [INFO] __init__:28 - 初始化主窗口
+2025-07-29 14:06:55,918 [WARNING] __init__:39 - 窗口图标文件不存在: EFI/Clover/CLOVER/themes/logo_main.png
+2025-07-29 14:06:55,918 [DEBUG] __init__:43 - 加载登录页面: http://127.0.0.1:5000/login
+2025-07-29 14:06:56,794 [INFO] __init__:46 - 主窗口初始化完成
+2025-07-29 14:06:56,887 [INFO] <module>:81 - 桌面窗口显示完成
+2025-07-29 14:06:56,888 [INFO] <module>:84 - 开始运行应用
