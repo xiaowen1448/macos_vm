@@ -4350,44 +4350,68 @@
                 });
         }
         
-        // 加载运行中的虚拟机列表
+        // 加载选中的虚拟机列表
         function loadRunningVMsList() {
             const vmListContainer = document.getElementById('runningVMsList');
             
-            // 从前端数据中筛选运行中的虚拟机
-            const runningVMs = vmDataList.filter(vm => vm.status === 'running');
-            
-            if (runningVMs.length === 0) {
+            if (selectedVMs.size === 0) {
                 vmListContainer.innerHTML = `
                     <div class="alert alert-warning">
                         <i class="fas fa-exclamation-triangle me-2"></i>
-                        没有找到运行中的虚拟机
+                        请先选择虚拟机
                     </div>
                 `;
-            } else {
-                let vmListHTML = '<div class="list-group">';
-                
-                runningVMs.forEach(vm => {
-                    vmListHTML += `
-                        <div class="list-group-item">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <h6 class="mb-1">${vm.name}</h6>
-                                    <small class="text-muted">IP: ${vm.ip || '获取中...'}</small>
-                                    <br>
-                                    <small class="text-muted">状态: ${vm.status}</small>
-                                </div>
-                                <span class="badge bg-success">运行中</span>
-                            </div>
-                        </div>
-                    `;
-                });
-                
-                vmListHTML += '</div>';
-                vmListHTML += `<div class="mt-3"><small class="text-muted">共找到 ${runningVMs.length} 个运行中的虚拟机</small></div>`;
-                
-                vmListContainer.innerHTML = vmListHTML;
+                return;
             }
+            
+            // 从前端数据中筛选选中的虚拟机
+            const selectedVMData = Array.from(selectedVMs).map(vmName => {
+                // 在当前页面的虚拟机数据中查找
+                let vmData = vmDataList.find(vm => vm.name === vmName);
+                if (!vmData) {
+                    // 如果在当前页面找不到，从totalVMs中查找
+                    vmData = totalVMs.find(vm => vm.name === vmName);
+                }
+                return vmData;
+            }).filter(vm => vm); // 过滤掉未找到的虚拟机
+            
+            if (selectedVMData.length === 0) {
+                vmListContainer.innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        未找到选中的虚拟机数据
+                    </div>
+                `;
+                return;
+            }
+            
+            let vmListHTML = '<div class="list-group">';
+            
+            selectedVMData.forEach(vm => {
+                const isRunning = vm.status === 'running';
+                const statusBadge = isRunning ? 
+                    '<span class="badge bg-success">运行中</span>' : 
+                    '<span class="badge bg-secondary">已停止</span>';
+                
+                vmListHTML += `
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-1">${vm.name}</h6>
+                                <small class="text-muted">IP: ${vm.ip || '获取中...'}</small>
+                                <br>
+                                <small class="text-muted">状态: ${vm.status}</small>
+                            </div>
+                            ${statusBadge}
+                        </div>
+                    </div>
+                `;
+            });
+            
+            vmListHTML += '</div>';
+            vmListHTML += `<div class="mt-3"><small class="text-muted">已选择 ${selectedVMData.length} 个虚拟机</small></div>`;
+            
+            vmListContainer.innerHTML = vmListHTML;
         }
         
         // 执行批量更改五码
@@ -4395,6 +4419,27 @@
             const selectedConfig = document.getElementById('batchConfigSelect').value;
             const executeBtn = document.getElementById('executeBatchChangeBtn');
             const originalText = executeBtn.innerHTML;
+            
+            // 检查是否有选中的虚拟机
+            if (selectedVMs.size === 0) {
+                alert('请先选择虚拟机');
+                return;
+            }
+            
+            // 检查选中的虚拟机中是否有运行中的
+            const selectedRunningVMs = Array.from(selectedVMs).filter(vmName => {
+                const vmData = vmDataList.find(vm => vm.name === vmName);
+                if (vmData) {
+                    return vmData.status === 'running';
+                }
+                const totalVMData = totalVMs.find(vm => vm.name === vmName);
+                return totalVMData && totalVMData.status === 'running';
+            });
+            
+            if (selectedRunningVMs.length === 0) {
+                alert('请选择运行中的虚拟机');
+                return;
+            }
             
             // 显示加载状态
             executeBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>执行中...';
@@ -4407,7 +4452,8 @@
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    default_config: selectedConfig
+                    default_config: selectedConfig,
+                    selected_vms: selectedRunningVMs
                 })
             })
             .then(response => response.json())

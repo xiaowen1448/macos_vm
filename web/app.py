@@ -4629,5 +4629,294 @@ def api_wuma_delete():
             'message': f'删除五码信息失败: {str(e)}'
         })
 
+@app.route('/api/batch_change_wuma', methods=['POST'])
+@login_required
+def api_batch_change_wuma():
+    """批量更改五码API"""
+    logger.info("收到批量更改五码API请求")
+    try:
+        data = request.get_json()
+        logger.info(f"批量更改五码请求数据: {data}")
+        
+        default_config = data.get('default_config', 'config.txt')
+        selected_vms = data.get('selected_vms', [])
+        logger.info(f"使用配置文件: {default_config}")
+        logger.info(f"选中的虚拟机: {selected_vms}")
+        
+        if not selected_vms:
+            return jsonify({
+                'success': False,
+                'message': '没有选中任何虚拟机'
+            })
+        
+        # 构建配置文件路径
+        config_dir = os.path.join(os.path.dirname(__file__), 'config')
+        if not default_config.endswith('.txt'):
+            config_file_path = os.path.join(config_dir, f'{default_config}.txt')
+        else:
+            config_file_path = os.path.join(config_dir, default_config)
+        
+        if not os.path.exists(config_file_path):
+            return jsonify({
+                'success': False,
+                'message': f'配置文件 {config_file_path} 不存在'
+            })
+        
+        # 读取五码配置文件
+        with open(config_file_path, 'r', encoding='utf-8') as f:
+            wuma_lines = f.readlines()
+        
+        # 过滤有效行
+        valid_wuma_lines = [line.strip() for line in wuma_lines if line.strip() and is_valid_wuma_file_line(line.strip())]
+        
+        if not valid_wuma_lines:
+            return jsonify({
+                'success': False,
+                'message': '配置文件中没有有效的五码数据'
+            })
+        
+        # 检查五码数据是否足够
+        if len(valid_wuma_lines) < len(selected_vms):
+            return jsonify({
+                'success': False,
+                'message': f'五码数据不足，需要 {len(selected_vms)} 个，但只有 {len(valid_wuma_lines)} 个'
+            })
+        
+        # 验证选中的虚拟机是否都在运行
+        vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
+        if not os.path.exists(vmrun_path):
+            vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
+        
+        list_cmd = [vmrun_path, 'list']
+        logger.debug(f"执行vmrun命令: {list_cmd}")
+        result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30)
+        
+        if result.returncode != 0:
+            return jsonify({
+                'success': False,
+                'message': f'获取运行中虚拟机列表失败: {result.stderr}'
+            })
+        
+        running_vms = result.stdout.strip().split('\n')[1:]  # 跳过标题行
+        logger.info(f"获取到运行中虚拟机: {running_vms}")
+        logger.info(f"选中的虚拟机: {selected_vms}")
+        
+        # 验证选中的虚拟机是否都在运行
+        for vm_name in selected_vms:
+            # 检查虚拟机名称是否在运行列表中（支持完整路径匹配）
+            vm_running = False
+            for running_vm in running_vms:
+                # 检查完整路径或文件名是否匹配
+                if vm_name in running_vm or running_vm.endswith(vm_name):
+                    vm_running = True
+                    break
+            
+            if not vm_running:
+                logger.warning(f"虚拟机 {vm_name} 不在运行状态，运行中虚拟机列表: {running_vms}")
+                return jsonify({
+                    'success': False,
+                    'message': f'虚拟机 {vm_name} 不在运行状态'
+                })
+        
+        # 读取temp.plist模板
+        plist_template_path = os.path.join(os.path.dirname(__file__), 'config', 'plist', 'temp.plist')
+        if not os.path.exists(plist_template_path):
+            return jsonify({
+                'success': False,
+                'message': f'temp.plist模板文件不存在: {plist_template_path}'
+            })
+        
+        with open(plist_template_path, 'r', encoding='utf-8') as f:
+            plist_template = f.read()
+        
+        # 创建备份目录
+        backup_dir = os.path.join(config_dir, 'config_install')
+        os.makedirs(backup_dir, exist_ok=True)
+        
+        results = []
+        used_wuma_lines = []
+        
+        # 为每个选中的虚拟机生成plist文件
+        for i, vm_name in enumerate(selected_vms):
+            if i >= len(valid_wuma_lines):
+                logger.warning(f"五码数据不足，跳过虚拟机: {vm_name}")
+                results.append({
+                    'vm_name': vm_name,
+                    'success': False,
+                    'message': '五码数据不足'
+                })
+                continue
+            
+            # 找到对应的运行中虚拟机路径
+            vm_path = None
+            for running_vm in running_vms:
+                if vm_name in running_vm or running_vm.endswith(vm_name):
+                    vm_path = running_vm
+                    logger.info(f"找到虚拟机 {vm_name} 的运行路径: {vm_path}")
+                    break
+            
+            if not vm_path:
+                logger.error(f"未找到虚拟机 {vm_name} 的运行路径，运行中虚拟机列表: {running_vms}")
+                results.append({
+                    'vm_name': vm_name,
+                    'success': False,
+                    'message': '未找到虚拟机运行路径'
+                })
+                continue
+            
+            try:
+                # 解析五码数据
+                wuma_line = valid_wuma_lines[i]
+                wuma_parts = wuma_line.split(':')
+                if len(wuma_parts) != 7:
+                    logger.error(f"五码格式错误: {wuma_line}")
+                    results.append({
+                        'vm_name': vm_name,
+                        'success': False,
+                        'message': f'五码格式错误: {wuma_line}'
+                    })
+                    continue
+                
+                # 提取五码字段
+                rom = wuma_parts[1]
+                mlb = wuma_parts[2]
+                serial_number = wuma_parts[3]
+                board_id = wuma_parts[4]
+                model = wuma_parts[5]
+                
+                # 生成UUID
+                custom_uuid = str(uuid.uuid4()).upper()
+                sm_uuid = str(uuid.uuid4()).upper()
+                
+                # 替换plist模板中的占位符
+                plist_content = plist_template
+                plist_content = plist_content.replace('$1', model)
+                plist_content = plist_content.replace('$2', board_id)
+                plist_content = plist_content.replace('$3', serial_number)
+                plist_content = plist_content.replace('$4', custom_uuid)
+                plist_content = plist_content.replace('$5', rom)
+                plist_content = plist_content.replace('$6', mlb)
+                plist_content = plist_content.replace('$7', sm_uuid)
+                
+                # 生成plist文件
+                plist_filename = f"{vm_name}.plist"
+                plist_file_path = os.path.join(os.path.dirname(__file__), 'temp', plist_filename)
+                os.makedirs(os.path.dirname(plist_file_path), exist_ok=True)
+                
+                with open(plist_file_path, 'w', encoding='utf-8') as f:
+                    f.write(plist_content)
+                
+                logger.info(f"生成plist文件: {plist_file_path}")
+                
+                # 获取虚拟机IP
+                vm_ip = get_vm_ip(vm_name)
+                if not vm_ip:
+                    results.append({
+                        'vm_name': vm_name,
+                        'success': False,
+                        'message': '无法获取虚拟机IP'
+                    })
+                    continue
+                
+                # 执行mount_efi.sh脚本
+                mount_cmd = f'ssh wx@{vm_ip} "~/mount_efi.sh"'
+                logger.info(f"执行mount命令: {mount_cmd}")
+                mount_result = subprocess.run(mount_cmd, shell=True, capture_output=True, text=True, timeout=60)
+                
+                if mount_result.returncode != 0:
+                    logger.warning(f"mount_efi.sh执行失败: {mount_result.stderr}")
+                    # 继续执行，不中断流程
+                
+                # 传输plist文件到虚拟机
+                scp_cmd = f'scp "{plist_file_path}" wx@{vm_ip}:/Volumes/EFI/CLOVER/config.plist'
+                logger.info(f"执行scp命令: {scp_cmd}")
+                scp_result = subprocess.run(scp_cmd, shell=True, capture_output=True, text=True, timeout=60)
+                
+                if scp_result.returncode != 0:
+                    results.append({
+                        'vm_name': vm_name,
+                        'success': False,
+                        'message': f'文件传输失败: {scp_result.stderr}'
+                    })
+                    continue
+                
+                # 备份已使用的五码
+                timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+                backup_filename = f"{default_config}_install_{vm_name}_{timestamp}.bak"
+                backup_file_path = os.path.join(backup_dir, backup_filename)
+                
+                with open(backup_file_path, 'w', encoding='utf-8') as f:
+                    f.write(wuma_line + '\n')
+                
+                used_wuma_lines.append(wuma_line)
+                
+                # 重启虚拟机
+                restart_cmd = [vmrun_path, 'stop', vm_path]
+                logger.info(f"停止虚拟机: {restart_cmd}")
+                subprocess.run(restart_cmd, capture_output=True, timeout=30)
+                
+                time.sleep(5)  # 等待虚拟机完全停止
+                
+                restart_cmd = [vmrun_path, 'start', vm_path]
+                logger.info(f"启动虚拟机: {restart_cmd}")
+                subprocess.run(restart_cmd, capture_output=True, timeout=30)
+                
+                results.append({
+                    'vm_name': vm_name,
+                    'success': True,
+                    'message': '批量更改五码成功',
+                    'backup_file': backup_filename
+                })
+                
+                logger.info(f"虚拟机 {vm_name} 批量更改五码完成")
+                
+            except Exception as e:
+                logger.error(f"处理虚拟机 {vm_name} 时出错: {str(e)}")
+                results.append({
+                    'vm_name': vm_name,
+                    'success': False,
+                    'message': f'处理失败: {str(e)}'
+                })
+        
+        # 从原配置文件中移除已使用的五码
+        remaining_lines = [line.strip() for line in wuma_lines if line.strip() and line.strip() not in used_wuma_lines]
+        
+        with open(config_file_path, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(remaining_lines) + '\n')
+        
+        success_count = sum(1 for r in results if r['success'])
+        total_count = len(results)
+        
+        logger.info(f"批量更改五码完成 - 成功: {success_count}/{total_count}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'批量更改五码完成！成功处理 {success_count}/{total_count} 个虚拟机',
+            'results': results
+        })
+        
+    except Exception as e:
+        logger.error(f"批量更改五码失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'批量更改五码失败: {str(e)}'
+        })
+
+def is_valid_wuma_file_line(line):
+    """验证五码文件行格式"""
+    if not line.startswith(':') or not line.endswith(':'):
+        return False
+    
+    parts = line.split(':')
+    if len(parts) != 7:
+        return False
+    
+    # 检查中间5个字段是否不为空
+    for i in range(1, 6):
+        if not parts[i].strip():
+            return False
+    
+    return True
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
