@@ -641,7 +641,19 @@
                             </div>
                         </div>
                         
-                        <!-- 批量操作和分页控件 -->
+                        <!-- 批量更改五码按钮 -->
+                        <div class="d-flex justify-content-start mt-3 mb-2">
+                            <button class="btn btn-warning btn-sm" id="batchChangeWumaBtn" onclick="batchChangeWuma()" disabled>
+                                <i class="fas fa-exchange-alt me-2"></i>批量更改五码
+                            </button>
+                            <div class="ms-3 d-flex align-items-center">
+                                <small class="text-muted">
+                                    <i class="fas fa-info-circle me-1"></i>请选择已运行的虚拟机
+                                </small>
+                            </div>
+                        </div>
+                        
+                        <!-- 分页控件 -->
                         <div class="d-flex justify-content-between align-items-center mt-3">
                             <div class="d-flex align-items-center">
                                 <div class="text-muted me-3">
@@ -660,7 +672,6 @@
                                         <i class="fas fa-magic"></i>
                                     </button>
                                 </div>
-
                             </div>
                             <nav aria-label="虚拟机列表分页">
                                 <ul class="pagination pagination-sm mb-0" id="pagination">
@@ -2035,7 +2046,8 @@
                 console.log('取消选择虚拟机:', vmName);
             }
             
-
+            // 检查选中虚拟机的运行状态并更新批量更改五码按钮
+            checkSelectedVMsRunningState();
             
             // 立即更新UI
             updateSelectAllState();
@@ -2066,7 +2078,8 @@
                 });
             }
             
-
+            // 检查选中虚拟机的运行状态并更新批量更改五码按钮
+            checkSelectedVMsRunningState();
             
             // 立即更新UI
             updateSelectAllState();
@@ -4174,6 +4187,313 @@
                 terminalOutput.innerHTML = '<div class="text-info">=== SSH终端执行窗口 ===</div>\n<div class="text-warning">终端已清空</div>';
             }
         }
+
+        // 批量更改五码功能
+        function batchChangeWuma() {
+            const batchBtn = document.getElementById('batchChangeWumaBtn');
+            
+            // 检查按钮是否被禁用
+            if (batchBtn.disabled) {
+                alert('请先启动虚拟机，然后再执行批量更改五码操作');
+                return;
+            }
+            
+            console.log('开始批量更改五码...');
+            
+            // 显示模态对话框
+            showBatchChangeModal();
+        }
+        
+        // 显示批量更改五码模态对话框
+        function showBatchChangeModal() {
+            // 创建模态对话框HTML
+            const modalHTML = `
+                <div class="modal fade" id="batchChangeModal" tabindex="-1" aria-labelledby="batchChangeModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="batchChangeModalLabel">
+                                    <i class="fas fa-exchange-alt me-2"></i>批量更改五码
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="row g-3">
+                                    <!-- 上方：五码配置选择 -->
+                                    <div class="col-12">
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <h6 class="mb-0"><i class="fas fa-cog me-2"></i>五码配置选择</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div class="row">
+                                                    <div class="col-md-8">
+                                                        <label class="form-label fw-bold">选择五码配置文件：</label>
+                                                        <select class="form-select" id="batchConfigSelect">
+                                                            <!-- 配置文件选项将动态加载 -->
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-md-4">
+                                                        <label class="form-label fw-bold">可用五码数量：</label>
+                                                        <div class="alert alert-info mb-0">
+                                                            <i class="fas fa-info-circle me-2"></i>
+                                                            <span id="availableWumaCount" class="fw-bold">-</span> 个
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- 下方：虚拟机列表 -->
+                                    <div class="col-12">
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <h6 class="mb-0"><i class="fas fa-server me-2"></i>已选择虚拟机列表</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div id="runningVMsList">
+                                                    <div class="text-center">
+                                                        <div class="spinner-border text-primary" role="status">
+                                                            <span class="visually-hidden">加载中...</span>
+                                                        </div>
+                                                        <p class="mt-2">正在获取虚拟机列表...</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                    <i class="fas fa-times me-2"></i>取消
+                                </button>
+                                <button type="button" class="btn btn-warning" id="executeBatchChangeBtn" onclick="executeBatchChange()">
+                                    <i class="fas fa-play me-2"></i>确定执行
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // 移除已存在的模态对话框
+            const existingModal = document.getElementById('batchChangeModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+            
+            // 添加模态对话框到页面
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+            
+            // 显示模态对话框
+            const modal = new bootstrap.Modal(document.getElementById('batchChangeModal'));
+            modal.show();
+            
+            // 加载配置文件列表
+            loadBatchConfigList();
+            
+            // 加载运行中的虚拟机列表
+            loadRunningVMsList();
+        }
+        
+        // 加载批量更改的配置文件列表
+        function loadBatchConfigList() {
+            fetch('/api/wuma_configs')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const select = document.getElementById('batchConfigSelect');
+                        select.innerHTML = '';
+                        
+                        data.configs.forEach(config => {
+                            const option = document.createElement('option');
+                            option.value = config.name;
+                            option.textContent = config.display_name;
+                            select.appendChild(option);
+                        });
+                        
+                        // 默认选择第一个配置文件
+                        if (data.configs.length > 0) {
+                            select.value = data.configs[0].name;
+                            loadWumaCountForConfig(data.configs[0].name);
+                        }
+                        
+                        // 监听配置文件选择变化
+                        select.addEventListener('change', function() {
+                            loadWumaCountForConfig(this.value);
+                        });
+                    } else {
+                        console.error('获取配置文件列表失败:', data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('网络错误:', error.message);
+                });
+        }
+        
+        // 加载指定配置文件的五码数量
+        function loadWumaCountForConfig(configName) {
+            fetch(`/api/wuma_list?config=${configName}&page_size=1000`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('availableWumaCount').textContent = data.stats.total;
+                    } else {
+                        document.getElementById('availableWumaCount').textContent = '0';
+                    }
+                })
+                .catch(error => {
+                    console.error('获取五码数量失败:', error.message);
+                    document.getElementById('availableWumaCount').textContent = '0';
+                });
+        }
+        
+        // 加载运行中的虚拟机列表
+        function loadRunningVMsList() {
+            const vmListContainer = document.getElementById('runningVMsList');
+            
+            // 从前端数据中筛选运行中的虚拟机
+            const runningVMs = vmDataList.filter(vm => vm.status === 'running');
+            
+            if (runningVMs.length === 0) {
+                vmListContainer.innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        没有找到运行中的虚拟机
+                    </div>
+                `;
+            } else {
+                let vmListHTML = '<div class="list-group">';
+                
+                runningVMs.forEach(vm => {
+                    vmListHTML += `
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-1">${vm.name}</h6>
+                                    <small class="text-muted">IP: ${vm.ip || '获取中...'}</small>
+                                    <br>
+                                    <small class="text-muted">状态: ${vm.status}</small>
+                                </div>
+                                <span class="badge bg-success">运行中</span>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                vmListHTML += '</div>';
+                vmListHTML += `<div class="mt-3"><small class="text-muted">共找到 ${runningVMs.length} 个运行中的虚拟机</small></div>`;
+                
+                vmListContainer.innerHTML = vmListHTML;
+            }
+        }
+        
+        // 执行批量更改五码
+        function executeBatchChange() {
+            const selectedConfig = document.getElementById('batchConfigSelect').value;
+            const executeBtn = document.getElementById('executeBatchChangeBtn');
+            const originalText = executeBtn.innerHTML;
+            
+            // 显示加载状态
+            executeBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>执行中...';
+            executeBtn.disabled = true;
+            
+            // 调用后端API
+            fetch('/api/batch_change_wuma', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    default_config: selectedConfig
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                executeBtn.innerHTML = originalText;
+                executeBtn.disabled = false;
+                
+                if (data.success) {
+                    // 关闭模态对话框
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('batchChangeModal'));
+                    modal.hide();
+                    
+                    // 显示成功消息
+                    alert('批量更改五码成功！\n\n' + data.message);
+                    console.log('批量更改结果:', data.results);
+                } else {
+                    alert('批量更改五码失败: ' + data.message);
+                }
+            })
+            .catch(error => {
+                executeBtn.innerHTML = originalText;
+                executeBtn.disabled = false;
+                alert('网络错误: ' + error.message);
+                console.error('批量更改五码错误:', error);
+            });
+        }
+        
+        // 检查选中虚拟机的运行状态并更新批量更改五码按钮
+        function checkSelectedVMsRunningState() {
+            console.log('检查选中虚拟机运行状态，当前选中的虚拟机:', Array.from(selectedVMs));
+            
+            if (selectedVMs.size === 0) {
+                // 没有选中任何虚拟机，禁用按钮
+                const batchBtn = document.getElementById('batchChangeWumaBtn');
+                batchBtn.disabled = true;
+                batchBtn.classList.remove('btn-warning');
+                batchBtn.classList.add('btn-secondary');
+                console.log('没有选中任何虚拟机，禁用按钮');
+                return;
+            }
+            
+            // 从前端数据中获取虚拟机状态
+            const selectedRunningVMs = Array.from(selectedVMs).filter(vmName => {
+                // 在当前页面的虚拟机数据中查找
+                const vmData = vmDataList.find(vm => vm.name === vmName);
+                if (vmData) {
+                    console.log(`虚拟机 ${vmName} 状态:`, vmData.status);
+                    return vmData.status === 'running';
+                }
+                
+                // 如果在当前页面找不到，从totalVMs中查找
+                const totalVMData = totalVMs.find(vm => vm.name === vmName);
+                if (totalVMData) {
+                    console.log(`虚拟机 ${vmName} 状态(从totalVMs):`, totalVMData.status);
+                    return totalVMData.status === 'running';
+                }
+                
+                console.log(`未找到虚拟机 ${vmName} 的数据`);
+                return false;
+            });
+            
+            console.log('选中的运行中虚拟机:', selectedRunningVMs);
+            
+            const batchBtn = document.getElementById('batchChangeWumaBtn');
+            if (selectedRunningVMs.length > 0) {
+                // 选中的虚拟机中有运行中的，启用按钮
+                batchBtn.disabled = false;
+                batchBtn.classList.remove('btn-secondary');
+                batchBtn.classList.add('btn-warning');
+                console.log('启用批量更改五码按钮，选中了', selectedRunningVMs.length, '个运行中的虚拟机');
+            } else {
+                // 选中的虚拟机中没有运行中的，禁用按钮
+                batchBtn.disabled = true;
+                batchBtn.classList.remove('btn-warning');
+                batchBtn.classList.add('btn-secondary');
+                console.log('禁用批量更改五码按钮，选中的虚拟机中没有运行中的');
+            }
+        }
+        
+        // 页面加载时检查虚拟机状态
+        document.addEventListener('DOMContentLoaded', function() {
+            // 延迟检查虚拟机状态，确保页面完全加载
+            setTimeout(() => {
+                checkSelectedVMsRunningState();
+            }, 1000);
+        });
 
 
     </script>
