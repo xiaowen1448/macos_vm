@@ -1292,19 +1292,64 @@
             hideError();
             currentPage = page;
             
-            fetch(`/api/wuma_list?page=${page}&page_size=${pageSize}&config=${currentConfig}`, {
+            // 获取可用五码数据
+            fetch(`/api/wuma_list?page=${page}&page_size=${pageSize}&config=${currentConfig}&type=available`, {
                 credentials: 'same-origin'
             })
                 .then(response => response.json())
                 .then(data => {
-                    hideLoading();
                     if (data.success) {
                         totalWuma = data.wuma_list || [];
                         totalPages = data.pagination.total_pages;
-                        updateWumaStats(data.stats);
-                        updateWumaTableWithPagination(page, data.pagination);
-                        updatePagination(page);
+                        
+                        // 获取已使用五码数量和已删除五码数量
+                        Promise.all([
+                            fetch(`/api/wuma_list?page=1&page_size=1000&config=${currentConfig}&type=used`, {
+                                credentials: 'same-origin'
+                            }),
+                            fetch(`/api/wuma_list?page=1&page_size=1000&config=${currentConfig}&type=deleted`, {
+                                credentials: 'same-origin'
+                            })
+                        ])
+                            .then(responses => Promise.all(responses.map(r => r.json())))
+                            .then(([usedData, deletedData]) => {
+                                hideLoading();
+                                
+                                // 计算统计信息
+                                const usedCount = usedData.success ? usedData.stats.total : 0;
+                                const deletedCount = deletedData.success ? deletedData.stats.total : 0;
+                                const validCount = data.stats.valid || 0;  // 当前配置文件中的有效五码
+                                
+                                // 合并统计信息
+                                const combinedStats = {
+                                    total: validCount + deletedCount + usedCount,  // 总五码数 = 有效五码 + 无效五码 + 已使用数量
+                                    valid: validCount,  // 有效五码 = 当前配置文件中的数量
+                                    invalid: deletedCount,  // 无效五码 = 已删除的数量
+                                    used: usedCount  // 已使用数量
+                                };
+                                
+                                updateWumaStats(combinedStats);
+                                updateWumaTableWithPagination(page, data.pagination);
+                                updatePagination(page);
+                            })
+                            .catch(error => {
+                                console.error('获取已使用或已删除五码数量失败:', error);
+                                hideLoading();
+                                
+                                // 即使获取失败，也显示可用五码数据
+                                const combinedStats = {
+                                    total: data.stats.total || 0,
+                                    valid: data.stats.valid || 0,
+                                    invalid: 0,
+                                    used: 0
+                                };
+                                
+                                updateWumaStats(combinedStats);
+                                updateWumaTableWithPagination(page, data.pagination);
+                                updatePagination(page);
+                            });
                     } else {
+                        hideLoading();
                         showError(data.message || '获取五码信息失败');
                     }
                 })

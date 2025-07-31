@@ -4335,11 +4335,24 @@
         
         // 加载指定配置文件的五码数量
         function loadWumaCountForConfig(configName) {
-            fetch(`/api/wuma_list?config=${configName}&page_size=1000`)
+            // 获取可用五码数量
+            fetch(`/api/wuma_list?config=${configName}&page_size=1000&type=available`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        document.getElementById('availableWumaCount').textContent = data.stats.total;
+                        const availableCount = data.stats.total;
+                        
+                        // 获取已使用五码数量
+                        fetch(`/api/wuma_list?config=${configName}&page_size=1000&type=used`)
+                            .then(response => response.json())
+                            .then(usedData => {
+                                const usedCount = usedData.success ? usedData.stats.total : 0;
+                                document.getElementById('availableWumaCount').textContent = `${availableCount} (已使用: ${usedCount})`;
+                            })
+                            .catch(error => {
+                                console.error('获取已使用五码数量失败:', error.message);
+                                document.getElementById('availableWumaCount').textContent = `${availableCount} (已使用: 0)`;
+                            });
                     } else {
                         document.getElementById('availableWumaCount').textContent = '0';
                     }

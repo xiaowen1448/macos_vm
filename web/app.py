@@ -9,6 +9,7 @@ import threading
 import time
 import subprocess
 import paramiko
+import base64
 
 # 配置日志
 logging.basicConfig(
@@ -2137,28 +2138,7 @@ def get_vm_ip(vm_name):
         else:
             logger.warning(f"未找到虚拟机文件: {vm_name}")
         
-        # 2. 兜底：调用现有的IP获取脚本
-        ip_script = os.path.join(os.path.dirname(__file__), '..', 'bat', 'get_vm_ip.bat')
-        if os.path.exists(ip_script):
-            logger.debug(f"尝试使用IP获取脚本: {ip_script}")
-            try:
-                result = subprocess.run([ip_script, vm_name], capture_output=True, text=True, timeout=30)
-                if result.returncode == 0 and result.stdout.strip():
-                    ip = result.stdout.strip()
-                    logger.debug(f"脚本返回IP: {ip}")
-                    if is_valid_ip(ip):
-                        logger.info(f"通过脚本成功获取IP: {ip}")
-                        return ip
-                    else:
-                        logger.warning(f"脚本返回的IP格式无效: {ip}")
-                else:
-                    logger.warning(f"IP获取脚本执行失败，返回码: {result.returncode}")
-            except Exception as e:
-                logger.error(f"IP获取脚本执行异常: {str(e)}")
-        else:
-            logger.debug(f"IP获取脚本不存在: {ip_script}")
-        
-        # 3. 兜底：从VMX文件读取
+        # 2. 兜底：从VMX文件读取
         if vm_file and os.path.exists(vm_file):
             logger.debug(f"尝试从VMX文件读取IP: {vm_file}")
             try:
@@ -4227,11 +4207,21 @@ def api_wuma_list():
         page = int(request.args.get('page', 1))
         page_size = int(request.args.get('page_size', 5))
         config_name = request.args.get('config', 'config')  # 默认使用config.txt
+        list_type = request.args.get('type', 'available')  # available 或 used
         
-        logger.debug(f"请求参数 - page: {page}, page_size: {page_size}, config: {config_name}")
+        logger.debug(f"请求参数 - page: {page}, page_size: {page_size}, config: {config_name}, type: {list_type}")
         
-        # 根据选择的配置文件读取五码数据
-        config_file_path = os.path.join(os.path.dirname(__file__), 'config', f'{config_name}.txt')
+        # 根据类型选择配置文件路径
+        if list_type == 'used':
+            # 从 config_install 目录读取已使用的五码（加_install.bak后缀）
+            config_file_path = os.path.join(os.path.dirname(__file__), 'config', 'config_install', f'{config_name}_install.bak')
+        elif list_type == 'deleted':
+            # 从 config_del 目录读取已删除的五码（加_del.bak后缀）
+            config_file_path = os.path.join(os.path.dirname(__file__), 'config', 'config_del', f'{config_name}_del.bak')
+        else:
+            # 从 config 目录读取可用的五码
+            config_file_path = os.path.join(os.path.dirname(__file__), 'config', f'{config_name}.txt')
+        
         logger.debug(f"配置文件路径: {config_file_path}")
         
         wuma_data = []
@@ -4256,7 +4246,7 @@ def api_wuma_list():
                                 'serial_number': parts[2],
                                 'board_id': parts[3],
                                 'model_identifier': parts[4],
-                                'status': 'valid'  # 所有数据标记为可用
+                                'status': 'used' if list_type == 'used' else 'valid'
                             }
                             wuma_data.append(wuma_item)
                             logger.debug(f"解析第 {i} 行数据: {wuma_item}")
@@ -4297,7 +4287,7 @@ def api_wuma_list():
             'end_index': end_index
         }
         
-        logger.info(f"成功返回五码列表 - 总数: {total_count}, 当前页: {page}/{total_pages}")
+        logger.info(f"成功返回五码列表 - 总数: {total_count}, 当前页: {page}/{total_pages}, 类型: {list_type}")
         
         return jsonify({
             'success': True,
@@ -4596,13 +4586,12 @@ def api_wuma_delete():
         backup_dir = os.path.join(config_dir, 'config_del')
         os.makedirs(backup_dir, exist_ok=True)
         
-        # 生成备份文件名：原文件名_行索引_del_时间戳.bak
-        timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-        backup_filename = f'{config_file}_{row_index}_del_{timestamp}.bak'
+        # 生成备份文件名：原文件名_del.bak
+        backup_filename = f'{config_file}_del.bak'
         backup_file_path = os.path.join(backup_dir, backup_filename)
         
-        # 写入备份文件
-        with open(backup_file_path, 'w', encoding='utf-8') as f:
+        # 追加到备份文件
+        with open(backup_file_path, 'a', encoding='utf-8') as f:
             f.write(deleted_line + '\n')
         
         # 更新原文件
@@ -4788,19 +4777,40 @@ def api_batch_change_wuma():
                 custom_uuid = str(uuid.uuid4()).upper()
                 sm_uuid = str(uuid.uuid4()).upper()
                 
+                # 对ROM进行PowerShell风格的base64加密
+                try:
+                    # 检查ROM是否为有效的十六进制字符串
+                    if not all(c in '0123456789ABCDEFabcdef' for c in rom):
+                        logger.warning(f"ROM值 {rom} 包含非十六进制字符，使用UTF-8编码")
+                        rom_bytes = rom.encode('utf-8')
+                    else:
+                        # 模拟PowerShell逻辑：按每2个字符分割，转换为字节
+                        rom_pairs = [rom[i:i+2] for i in range(0, len(rom), 2)]
+                        rom_bytes = bytes([int(pair, 16) for pair in rom_pairs])
+                    
+                    rom_base64 = base64.b64encode(rom_bytes).decode('utf-8')
+                    rom_formatted = rom_base64  # 格式化为 ROM :base64结果
+                    logger.info(f"ROM原始值: {rom}, PowerShell风格字节: {rom_bytes}, base64加密后: {rom_base64}, 格式化后: {rom_formatted}")
+                except ValueError as e:
+                    logger.error(f"ROM PowerShell风格转换失败: {e}, 使用UTF-8编码")
+                    rom_bytes = rom.encode('utf-8')
+                    rom_base64 = base64.b64encode(rom_bytes).decode('utf-8')
+                    rom_formatted = rom_base64
+                    logger.info(f"ROM原始值: {rom}, UTF-8编码后: {rom_bytes}, base64加密后: {rom_base64}, 格式化后: {rom_formatted}")
+                
                 # 替换plist模板中的占位符
                 plist_content = plist_template
                 plist_content = plist_content.replace('$1', model)
                 plist_content = plist_content.replace('$2', board_id)
                 plist_content = plist_content.replace('$3', serial_number)
                 plist_content = plist_content.replace('$4', custom_uuid)
-                plist_content = plist_content.replace('$5', rom)
+                plist_content = plist_content.replace('$5', rom_formatted)  # 使用格式化后的ROM
                 plist_content = plist_content.replace('$6', mlb)
                 plist_content = plist_content.replace('$7', sm_uuid)
                 
                 # 生成plist文件
                 plist_filename = f"{vm_name}.plist"
-                plist_file_path = os.path.join(os.path.dirname(__file__), 'temp', plist_filename)
+                plist_file_path = os.path.join(os.path.dirname(__file__), 'config', 'chengpin_plist', plist_filename)
                 os.makedirs(os.path.dirname(plist_file_path), exist_ok=True)
                 
                 with open(plist_file_path, 'w', encoding='utf-8') as f:
@@ -4840,12 +4850,13 @@ def api_batch_change_wuma():
                     })
                     continue
                 
-                # 备份已使用的五码
-                timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-                backup_filename = f"{default_config}_install_{vm_name}_{timestamp}.bak"
-                backup_file_path = os.path.join(backup_dir, backup_filename)
+                # 备份已使用的五码到同名配置文件加_install.bak后缀
+                backup_config_file = os.path.join(backup_dir, f'{default_config}_install.bak')
+                if not default_config.endswith('.txt'):
+                    backup_config_file = os.path.join(backup_dir, f'{default_config}_install.bak')
                 
-                with open(backup_file_path, 'w', encoding='utf-8') as f:
+                # 追加到备份配置文件
+                with open(backup_config_file, 'a', encoding='utf-8') as f:
                     f.write(wuma_line + '\n')
                 
                 used_wuma_lines.append(wuma_line)
@@ -4864,8 +4875,7 @@ def api_batch_change_wuma():
                 results.append({
                     'vm_name': vm_name,
                     'success': True,
-                    'message': '批量更改五码成功',
-                    'backup_file': backup_filename
+                    'message': '批量更改五码成功'
                 })
                 
                 logger.info(f"虚拟机 {vm_name} 批量更改五码完成")
@@ -4883,6 +4893,8 @@ def api_batch_change_wuma():
         
         with open(config_file_path, 'w', encoding='utf-8') as f:
             f.write('\n'.join(remaining_lines) + '\n')
+        
+        logger.info(f"已从原配置文件移除 {len(used_wuma_lines)} 个已使用的五码，剩余 {len(remaining_lines)} 个")
         
         success_count = sum(1 for r in results if r['success'])
         total_count = len(results)
