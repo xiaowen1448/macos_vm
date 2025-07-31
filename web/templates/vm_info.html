@@ -449,11 +449,11 @@
                 <div class="accordion" id="accordionMenu">
                     <div class="accordion-item">
                         <h2 class="accordion-header" id="headingVM">
-                                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseVM" aria-expanded="false" aria-controls="collapseVM">
+                                                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseVM" aria-expanded="true" aria-controls="collapseVM">
                             虚拟机管理
                         </button>
                         </h2>
-                        <div id="collapseVM" class="accordion-collapse collapse" aria-labelledby="headingVM" data-bs-parent="#accordionMenu">
+                        <div id="collapseVM" class="accordion-collapse collapse show" aria-labelledby="headingVM" data-bs-parent="#accordionMenu">
                             <div class="accordion-body p-0">
                                 <ul class="nav flex-column">
                                     <li class="nav-item">
@@ -681,6 +681,65 @@
         
         // 页面加载时获取虚拟机数据
         document.addEventListener('DOMContentLoaded', function() {
+            // 确保虚拟机管理菜单保持展开状态
+            setTimeout(() => {
+                console.log('第一次尝试展开虚拟机管理菜单...');
+                const menuCollapse = document.getElementById('collapseVM');
+                const menuButton = document.getElementById('headingVM').querySelector('.accordion-button');
+                console.log('菜单容器:', menuCollapse);
+                console.log('菜单按钮:', menuButton);
+                if (menuCollapse && menuButton) {
+                    console.log('展开前的菜单状态:', menuCollapse.className);
+                    console.log('展开前的按钮状态:', menuButton.className);
+                    menuCollapse.classList.remove('collapse');
+                    menuCollapse.classList.add('show');
+                    menuButton.setAttribute('aria-expanded', 'true');
+                    menuButton.classList.remove('collapsed');
+                    console.log('展开后的菜单状态:', menuCollapse.className);
+                    console.log('展开后的按钮状态:', menuButton.className);
+                } else {
+                    console.error('找不到菜单元素');
+                }
+            }, 100);
+            
+            // 再次确保菜单展开（双重保险）
+            setTimeout(() => {
+                console.log('第二次尝试展开虚拟机管理菜单...');
+                const menuCollapse = document.getElementById('collapseVM');
+                const menuButton = document.getElementById('headingVM').querySelector('.accordion-button');
+                if (menuCollapse && menuButton) {
+                    console.log('第二次展开前的菜单状态:', menuCollapse.className);
+                    console.log('第二次展开前的按钮状态:', menuButton.className);
+                    menuCollapse.classList.remove('collapse');
+                    menuCollapse.classList.add('show');
+                    menuButton.setAttribute('aria-expanded', 'true');
+                    menuButton.classList.remove('collapsed');
+                    console.log('第二次展开后的菜单状态:', menuCollapse.className);
+                    console.log('第二次展开后的按钮状态:', menuButton.className);
+                }
+            }, 500);
+            
+            // 允许虚拟机管理菜单正常关闭
+            const vmCollapse = document.getElementById('collapseVM');
+            if (vmCollapse) {
+                console.log('📍 允许"虚拟机管理"菜单正常关闭');
+                vmCollapse.addEventListener('hidden.bs.collapse', function() {
+                    console.log('🔄 "虚拟机管理"菜单被关闭');
+                    console.log('📍 允许菜单正常关闭，不重新展开');
+                });
+            }
+            
+            // 允许虚拟机管理菜单正常折叠/展开
+            const vmButton = document.getElementById('headingVM').querySelector('.accordion-button');
+            if (vmButton) {
+                console.log('📍 允许"虚拟机管理"菜单正常折叠/展开');
+                // 移除任何可能阻止折叠的事件监听器
+                vmButton.addEventListener('click', function(e) {
+                    console.log('🔄 "虚拟机管理"菜单按钮被点击');
+                    console.log('📍 允许Bootstrap正常处理折叠/展开');
+                });
+            }
+            
             // 测试多选按钮功能
             console.log('页面加载完成，开始测试多选按钮功能');
             
@@ -3154,19 +3213,61 @@
 
         // 菜单处理函数
         function handleCloneClick() {
-            ensureMenuExpanded('collapseVM', 'collapseVM');
+            // 只设置当前链接为激活状态，不进行任何菜单操作
+            const links = document.querySelectorAll('#collapseVM .nav-link');
+            links.forEach(link => link.classList.remove('active'));
+            event.target.classList.add('active');
         }
 
         function handleVMManagementClick() {
-            ensureMenuExpanded('collapseVM', 'collapseVM');
+            // 只设置当前链接为激活状态，不进行任何菜单操作
+            const links = document.querySelectorAll('#collapseVM .nav-link');
+            links.forEach(link => link.classList.remove('active'));
+            event.target.classList.add('active');
         }
 
         function handleVMInfoClick() {
-            ensureMenuExpanded('collapseVM', 'collapseVM');
+            console.log('🔄 handleVMInfoClick() 被调用 (vm_info.html)');
+            console.log('📍 当前事件目标:', event.target);
+            console.log('📍 当前事件目标文本:', event.target.textContent);
+            
+            // 只设置当前链接为激活状态，完全不干预Bootstrap accordion行为
+            const links = document.querySelectorAll('#collapseVM .nav-link');
+            console.log('📍 找到的链接数量:', links.length);
+            links.forEach(link => {
+                console.log('📍 移除链接激活状态:', link.textContent);
+                link.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            console.log('✅ 设置当前链接为激活状态:', event.target.textContent);
+            
+            // 完全不干预菜单状态，让Bootstrap自己处理
+            console.log('📝 不干预菜单状态，让Bootstrap自己处理展开/关闭');
+            
+            // 确保不阻止事件传播
+            console.log('📝 允许事件继续传播到Bootstrap');
         }
 
         function handleVMScriptClick() {
-            ensureMenuExpanded('collapseVM', 'collapseVM');
+            console.log('🔄 handleVMScriptClick() 被调用 (vm_info.html)');
+            console.log('📍 当前事件目标:', event.target);
+            console.log('📍 当前事件目标文本:', event.target.textContent);
+            
+            // 只设置当前链接为激活状态，完全不干预Bootstrap accordion行为
+            const links = document.querySelectorAll('#collapseVM .nav-link');
+            console.log('📍 找到的链接数量:', links.length);
+            links.forEach(link => {
+                console.log('📍 移除链接激活状态:', link.textContent);
+                link.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            console.log('✅ 设置当前链接为激活状态:', event.target.textContent);
+            
+            // 完全不干预菜单状态，让Bootstrap自己处理
+            console.log('📝 不干预菜单状态，让Bootstrap自己处理展开/关闭');
+            
+            // 确保不阻止事件传播
+            console.log('📝 允许事件继续传播到Bootstrap');
         }
 
         function handleWumaClick() {

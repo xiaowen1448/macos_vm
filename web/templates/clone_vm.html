@@ -1222,24 +1222,40 @@
             }
         }
         
-        // 处理克隆链接点击，确保菜单保持展开状态
+        // 处理克隆链接点击，只设置激活状态
         function handleCloneClick() {
-            ensureMenuExpanded('collapseVM', 'collapseVM');
+            // 只设置当前链接为激活状态，不进行任何菜单操作
+            const links = document.querySelectorAll('#collapseVM .nav-link');
+            links.forEach(link => link.classList.remove('active'));
+            event.target.classList.add('active');
         }
 
-        // 处理虚拟机管理链接点击，确保菜单保持展开状态
+        // 处理虚拟机管理链接点击，只设置激活状态
         function handleVMManagementClick() {
-            ensureMenuExpanded('collapseVM', 'collapseVM');
+            // 只设置当前链接为激活状态，不进行任何菜单操作
+            const links = document.querySelectorAll('#collapseVM .nav-link');
+            links.forEach(link => link.classList.remove('active'));
+            event.target.classList.add('active');
         }
 
-        // 处理虚拟机成品信息链接点击，确保菜单保持展开状态
+        // 处理虚拟机成品信息链接点击，只设置激活状态
         function handleVMInfoClick() {
-            ensureMenuExpanded('collapseVM', 'collapseVM');
+            // 只设置当前链接为激活状态，允许Bootstrap默认行为关闭菜单
+            const links = document.querySelectorAll('#collapseVM .nav-link');
+            links.forEach(link => link.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            // 不阻止默认行为，允许菜单正常关闭
         }
 
-        // 处理虚拟机脚本管理链接点击，确保菜单保持展开状态
+        // 处理虚拟机脚本管理链接点击，只设置激活状态
         function handleVMScriptClick() {
-            ensureMenuExpanded('collapseVM', 'collapseVM');
+            // 只设置当前链接为激活状态，允许Bootstrap默认行为关闭菜单
+            const links = document.querySelectorAll('#collapseVM .nav-link');
+            links.forEach(link => link.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            // 不阻止默认行为，允许菜单正常关闭
         }
 
         // 通用函数：确保菜单展开并设置链接激活状态

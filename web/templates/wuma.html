@@ -1659,19 +1659,45 @@
 
         // 菜单处理函数
         function handleCloneClick() {
-            ensureMenuExpanded('collapseVM', 'collapseVM');
+            // 只设置当前链接为激活状态，不进行任何菜单操作
+            const links = document.querySelectorAll('#collapseVM .nav-link');
+            links.forEach(link => link.classList.remove('active'));
+            event.target.classList.add('active');
         }
 
         function handleVMManagementClick() {
-            ensureMenuExpanded('collapseVM', 'collapseVM');
+            // 只设置当前链接为激活状态，不进行任何菜单操作
+            const links = document.querySelectorAll('#collapseVM .nav-link');
+            links.forEach(link => link.classList.remove('active'));
+            event.target.classList.add('active');
         }
 
         function handleVMInfoClick() {
-            ensureMenuExpanded('collapseVM', 'collapseVM');
+            console.log('🔄 handleVMInfoClick() 被调用 (wuma.html)');
+            console.log('📍 当前事件目标:', event.target);
+            console.log('📍 当前事件目标文本:', event.target.textContent);
+            
+            // 只设置当前链接为激活状态，完全不干预Bootstrap accordion行为
+            const links = document.querySelectorAll('#collapseVM .nav-link');
+            console.log('📍 找到的链接数量:', links.length);
+            links.forEach(link => {
+                console.log('📍 移除链接激活状态:', link.textContent);
+                link.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            console.log('✅ 设置当前链接为激活状态:', event.target.textContent);
+            
+            // 完全不干预菜单状态，让Bootstrap自己处理
+            console.log('📝 不干预菜单状态，让Bootstrap自己处理展开/关闭');
         }
 
         function handleVMScriptClick() {
-            ensureMenuExpanded('collapseVM', 'collapseVM');
+            // 只设置当前链接为激活状态，允许Bootstrap默认行为关闭菜单
+            const links = document.querySelectorAll('#collapseVM .nav-link');
+            links.forEach(link => link.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            // 不阻止默认行为，允许菜单正常关闭
         }
 
         function handleWumaClick() {

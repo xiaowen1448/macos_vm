@@ -463,16 +463,16 @@
                             <div class="accordion-body p-0">
                                 <ul class="nav flex-column">
                                     <li class="nav-item">
-                                        <a class="nav-link" href="{{ url_for('clone_vm_page') }}" onclick="handleCloneClick()">虚拟机批量克隆</a>
+                                        <a class="nav-link" href="{{ url_for('clone_vm_page') }}">虚拟机批量克隆</a>
                                     </li>
                                     <li class="nav-item">
-                                        <a class="nav-link active" href="{{ url_for('vm_management_page') }}" onclick="handleVMManagementClick()">虚拟机克隆列表</a>
+                                        <a class="nav-link" href="{{ url_for('vm_management_page') }}" onclick="handleCurrentPageClick(event)">虚拟机克隆列表</a>
                                     </li>
                                     <li class="nav-item">
-                                        <a class="nav-link" href="{{ url_for('vm_info_page') }}" onclick="handleVMInfoClick()">虚拟机成品信息</a>
+                                        <a class="nav-link" href="{{ url_for('vm_info_page') }}">虚拟机成品信息</a>
                                     </li>
                                     <li class="nav-item">
-                                        <a class="nav-link" href="{{ url_for('vm_script_page') }}" onclick="handleVMScriptClick()">虚拟机脚本管理</a>
+                                        <a class="nav-link" href="{{ url_for('vm_script_page') }}">虚拟机脚本管理</a>
                                     </li>
                                 </ul>
                             </div>
@@ -488,10 +488,10 @@
                             <div class="accordion-body p-0">
                                 <ul class="nav flex-column">
                                     <li class="nav-item">
-                                        <a class="nav-link" href="{{ url_for('wuma_page') }}" onclick="handleWumaClick()">虚拟机五码管理</a>
+                                        <a class="nav-link" href="{{ url_for('wuma_page') }}">虚拟机五码管理</a>
                                     </li>
                                     <li class="nav-item">
-                                        <a class="nav-link" href="{{ url_for('mupan_page') }}" onclick="handleMupanClick()">虚拟机母盘管理</a>
+                                        <a class="nav-link" href="{{ url_for('mupan_page') }}">虚拟机母盘管理</a>
                                     </li>
                                 </ul>
                             </div>
@@ -507,13 +507,13 @@
                             <div class="accordion-body p-0">
                                 <ul class="nav flex-column">
                                     <li class="nav-item">
-                                        <a class="nav-link" href="{{ url_for('encrypt_code_page') }}" onclick="handleEncryptCodeClick()">代码加密</a>
+                                        <a class="nav-link" href="{{ url_for('encrypt_code_page') }}">代码加密</a>
                                     </li>
                                     <li class="nav-item">
-                                        <a class="nav-link" href="{{ url_for('encrypt_wuma_page') }}" onclick="handleEncryptWumaClick()">五码加密</a>
+                                        <a class="nav-link" href="{{ url_for('encrypt_wuma_page') }}">五码加密</a>
                                     </li>
                                     <li class="nav-item">
-                                        <a class="nav-link" href="{{ url_for('encrypt_id_page') }}" onclick="handleEncryptIdClick()">id加密</a>
+                                        <a class="nav-link" href="{{ url_for('encrypt_id_page') }}">id加密</a>
                                     </li>
                                 </ul>
                             </div>
@@ -529,7 +529,7 @@
                             <div class="accordion-body p-0">
                                 <ul class="nav flex-column">
                                     <li class="nav-item">
-                                        <a class="nav-link" href="{{ url_for('proxy_assign_page') }}" onclick="handleProxyAssignClick()">代理ip分配</a>
+                                        <a class="nav-link" href="{{ url_for('proxy_assign_page') }}">代理ip分配</a>
                                     </li>
                                 </ul>
                             </div>
@@ -545,10 +545,10 @@
                             <div class="accordion-body p-0">
                                 <ul class="nav flex-column">
                                     <li class="nav-item">
-                                        <a class="nav-link" href="{{ url_for('soft_version_page') }}" onclick="handleSoftVersionClick()">版本查看</a>
+                                        <a class="nav-link" href="{{ url_for('soft_version_page') }}">版本查看</a>
                                     </li>
                                     <li class="nav-item">
-                                        <a class="nav-link" href="{{ url_for('soft_env_page') }}" onclick="handleSoftEnvClick()">环境变量</a>
+                                        <a class="nav-link" href="{{ url_for('soft_env_page') }}">环境变量</a>
                                     </li>
                                 </ul>
                             </div>
@@ -3281,19 +3281,101 @@
 
         // 菜单处理函数
         function handleCloneClick() {
-            ensureMenuExpanded('collapseVM', 'collapseVM');
+            console.log('🔄 handleCloneClick() 被调用');
+            console.log('📍 当前事件目标:', event.target);
+            console.log('📍 当前事件目标文本:', event.target.textContent);
+            
+            // 只设置当前链接为激活状态，不进行任何菜单操作
+            const links = document.querySelectorAll('#collapseVM .nav-link');
+            console.log('📍 找到的链接数量:', links.length);
+            links.forEach(link => {
+                console.log('📍 移除链接激活状态:', link.textContent);
+                link.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            console.log('✅ 设置当前链接为激活状态:', event.target.textContent);
+            
+            console.log('📊 当前菜单状态检查:');
+            const menuCollapse = document.getElementById('collapseVM');
+            const menuButton = document.getElementById('headingVM').querySelector('.accordion-button');
+            console.log('📍 菜单折叠元素:', menuCollapse);
+            console.log('📍 菜单按钮元素:', menuButton);
+            if (menuCollapse) {
+                console.log('📍 菜单折叠类名:', menuCollapse.className);
+                console.log('📍 菜单是否包含show类:', menuCollapse.classList.contains('show'));
+            }
+            if (menuButton) {
+                console.log('📍 菜单按钮aria-expanded:', menuButton.getAttribute('aria-expanded'));
+                console.log('📍 菜单按钮是否包含collapsed类:', menuButton.classList.contains('collapsed'));
+            }
         }
 
         function handleVMManagementClick() {
-            ensureMenuExpanded('collapseVM', 'collapseVM');
+            console.log('🔄 handleVMManagementClick() 被调用');
+            console.log('📍 当前事件目标:', event.target);
+            console.log('📍 当前事件目标文本:', event.target.textContent);
+            
+            // 只设置当前链接为激活状态，不进行任何菜单操作
+            const links = document.querySelectorAll('#collapseVM .nav-link');
+            console.log('📍 找到的链接数量:', links.length);
+            links.forEach(link => {
+                console.log('📍 移除链接激活状态:', link.textContent);
+                link.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            console.log('✅ 设置当前链接为激活状态:', event.target.textContent);
+            
+            console.log('📊 当前菜单状态检查:');
+            const menuCollapse = document.getElementById('collapseVM');
+            const menuButton = document.getElementById('headingVM').querySelector('.accordion-button');
+            console.log('📍 菜单折叠元素:', menuCollapse);
+            console.log('📍 菜单按钮元素:', menuButton);
+            if (menuCollapse) {
+                console.log('📍 菜单折叠类名:', menuCollapse.className);
+                console.log('📍 菜单是否包含show类:', menuCollapse.classList.contains('show'));
+            }
+            if (menuButton) {
+                console.log('📍 菜单按钮aria-expanded:', menuButton.getAttribute('aria-expanded'));
+                console.log('📍 菜单按钮是否包含collapsed类:', menuButton.classList.contains('collapsed'));
+            }
         }
 
         function handleVMInfoClick() {
-            ensureMenuExpanded('collapseVM', 'collapseVM');
+            console.log('🔄 handleVMInfoClick() 被调用');
+            console.log('📍 当前事件目标:', event.target);
+            console.log('📍 当前事件目标文本:', event.target.textContent);
+            
+            // 只设置当前链接为激活状态，完全不干预Bootstrap accordion行为
+            const links = document.querySelectorAll('#collapseVM .nav-link');
+            console.log('📍 找到的链接数量:', links.length);
+            links.forEach(link => {
+                console.log('📍 移除链接激活状态:', link.textContent);
+                link.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            console.log('✅ 设置当前链接为激活状态:', event.target.textContent);
+            
+            // 完全不干预菜单状态，让Bootstrap自己处理
+            console.log('📝 不干预菜单状态，让Bootstrap自己处理展开/关闭');
         }
 
         function handleVMScriptClick() {
-            ensureMenuExpanded('collapseVM', 'collapseVM');
+            console.log('🔄 handleVMScriptClick() 被调用');
+            console.log('📍 当前事件目标:', event.target);
+            console.log('📍 当前事件目标文本:', event.target.textContent);
+            
+            // 只设置当前链接为激活状态，完全不干预Bootstrap accordion行为
+            const links = document.querySelectorAll('#collapseVM .nav-link');
+            console.log('📍 找到的链接数量:', links.length);
+            links.forEach(link => {
+                console.log('📍 移除链接激活状态:', link.textContent);
+                link.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            console.log('✅ 设置当前链接为激活状态:', event.target.textContent);
+            
+            // 完全不干预菜单状态，让Bootstrap自己处理
+            console.log('📝 不干预菜单状态，让Bootstrap自己处理展开/关闭');
         }
 
         function handleWumaClick() {
@@ -3336,22 +3418,264 @@
 
         // 通用函数：确保菜单展开并设置链接激活状态
         function ensureMenuExpanded(menuId, linkContainerId) {
+            console.log('🔄 ensureMenuExpanded() 被调用');
+            console.log('📍 菜单ID:', menuId);
+            console.log('📍 链接容器ID:', linkContainerId);
+            
             const menuCollapse = document.getElementById(menuId);
             const menuButton = document.getElementById(menuId.replace('collapse', 'heading')).querySelector('.accordion-button');
             
+            console.log('📍 菜单折叠元素:', menuCollapse);
+            console.log('📍 菜单按钮元素:', menuButton);
+            
             if (menuCollapse && menuButton) {
                 // 移除折叠类，添加展开类
+                console.log('📍 修改前的菜单折叠类名:', menuCollapse.className);
                 menuCollapse.classList.remove('collapse');
                 menuCollapse.classList.add('show');
+                console.log('📍 修改后的菜单折叠类名:', menuCollapse.className);
+                
+                console.log('📍 修改前的菜单按钮aria-expanded:', menuButton.getAttribute('aria-expanded'));
                 menuButton.setAttribute('aria-expanded', 'true');
                 menuButton.classList.remove('collapsed');
+                console.log('📍 修改后的菜单按钮aria-expanded:', menuButton.getAttribute('aria-expanded'));
+                console.log('📍 修改后的菜单按钮是否包含collapsed类:', menuButton.classList.contains('collapsed'));
             }
             
             // 设置当前链接为激活状态
             const links = document.querySelectorAll(`#${linkContainerId} .nav-link`);
-            links.forEach(link => link.classList.remove('active'));
+            console.log('📍 找到的链接数量:', links.length);
+            links.forEach(link => {
+                console.log('📍 移除链接激活状态:', link.textContent);
+                link.classList.remove('active');
+            });
             event.target.classList.add('active');
+            console.log('✅ 设置当前链接为激活状态:', event.target.textContent);
         }
+
+        // 处理当前页面链接点击，防止页面重新加载
+        function handleCurrentPageClick(event) {
+            console.log('🔄 handleCurrentPageClick() 被调用');
+            console.log('📍 当前事件目标:', event.target);
+            console.log('📍 当前事件目标文本:', event.target.textContent);
+            
+            // 阻止默认行为（页面重新加载）
+            event.preventDefault();
+            console.log('✅ 阻止了页面重新加载');
+            
+            // 只设置当前链接为激活状态
+            const links = document.querySelectorAll('#collapseVM .nav-link');
+            console.log('📍 找到的链接数量:', links.length);
+            links.forEach(link => {
+                console.log('📍 移除链接激活状态:', link.textContent);
+                link.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            console.log('✅ 设置当前链接为激活状态:', event.target.textContent);
+            
+            // 确保"虚拟机管理"菜单保持展开状态
+            const menuCollapse = document.getElementById('collapseVM');
+            const menuButton = document.getElementById('headingVM').querySelector('.accordion-button');
+            
+            if (menuCollapse && menuButton) {
+                console.log('📍 确保菜单保持展开状态');
+                console.log('📍 修改前的菜单折叠类名:', menuCollapse.className);
+                menuCollapse.classList.remove('collapse');
+                menuCollapse.classList.add('show');
+                console.log('📍 修改后的菜单折叠类名:', menuCollapse.className);
+                
+                console.log('📍 修改前的菜单按钮aria-expanded:', menuButton.getAttribute('aria-expanded'));
+                menuButton.setAttribute('aria-expanded', 'true');
+                menuButton.classList.remove('collapsed');
+                console.log('📍 修改后的菜单按钮aria-expanded:', menuButton.getAttribute('aria-expanded'));
+                console.log('📍 修改后的菜单按钮是否包含collapsed类:', menuButton.classList.contains('collapsed'));
+            }
+            
+            console.log('📊 当前菜单状态检查:');
+            if (menuCollapse) {
+                console.log('📍 菜单折叠类名:', menuCollapse.className);
+                console.log('📍 菜单是否包含show类:', menuCollapse.classList.contains('show'));
+            }
+            if (menuButton) {
+                console.log('📍 菜单按钮aria-expanded:', menuButton.getAttribute('aria-expanded'));
+                console.log('📍 菜单按钮是否包含collapsed类:', menuButton.classList.contains('collapsed'));
+            }
+        }
+
+        // 页面加载时初始化菜单调试
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 页面加载完成，初始化菜单调试');
+            
+            // 监听所有accordion按钮的点击事件
+            const accordionButtons = document.querySelectorAll('.accordion-button');
+            console.log('📍 找到的accordion按钮数量:', accordionButtons.length);
+            
+            accordionButtons.forEach((button, index) => {
+                console.log(`📍 按钮 ${index + 1}:`, button.textContent.trim());
+                
+                // 监听按钮点击事件
+                button.addEventListener('click', function(e) {
+                    console.log('🔄 Accordion按钮被点击:', this.textContent.trim());
+                    console.log('📍 按钮元素:', this);
+                    console.log('📍 按钮aria-expanded:', this.getAttribute('aria-expanded'));
+                    console.log('📍 按钮是否包含collapsed类:', this.classList.contains('collapsed'));
+                    
+                    // 获取对应的collapse元素
+                    const targetId = this.getAttribute('data-bs-target');
+                    const collapseElement = document.getElementById(targetId.replace('#', ''));
+                    console.log('📍 目标collapse元素:', collapseElement);
+                    if (collapseElement) {
+                        console.log('📍 目标collapse类名:', collapseElement.className);
+                        console.log('📍 目标collapse是否包含show类:', collapseElement.classList.contains('show'));
+                    }
+                });
+            });
+            
+            // 监听所有菜单链接的点击事件
+            const menuLinks = document.querySelectorAll('.nav-link');
+            console.log('📍 找到的菜单链接数量:', menuLinks.length);
+            
+            menuLinks.forEach((link, index) => {
+                console.log(`📍 链接 ${index + 1}:`, link.textContent.trim());
+                
+                link.addEventListener('click', function(e) {
+                    console.log('🔄 菜单链接被点击:', this.textContent.trim());
+                    console.log('📍 链接元素:', this);
+                    console.log('📍 链接href:', this.getAttribute('href'));
+                    console.log('📍 链接是否包含active类:', this.classList.contains('active'));
+                });
+            });
+            
+            // 监听Bootstrap accordion的show.bs.collapse和hide.bs.collapse事件
+            const accordionMenu = document.getElementById('accordionMenu');
+            if (accordionMenu) {
+                accordionMenu.addEventListener('show.bs.collapse', function(e) {
+                    console.log('🔄 Bootstrap accordion show事件触发');
+                    console.log('📍 事件目标:', e.target);
+                    console.log('📍 目标ID:', e.target.id);
+                    console.log('📍 目标类名:', e.target.className);
+                });
+                
+                accordionMenu.addEventListener('hide.bs.collapse', function(e) {
+                    console.log('🔄 Bootstrap accordion hide事件触发');
+                    console.log('📍 事件目标:', e.target);
+                    console.log('📍 目标ID:', e.target.id);
+                    console.log('📍 目标类名:', e.target.className);
+                });
+            }
+            
+            console.log('✅ 菜单调试初始化完成');
+            
+            // 在vm_management页面中，设置"虚拟机克隆列表"为激活状态
+            const currentPath = window.location.pathname;
+            console.log('📍 当前页面路径:', currentPath);
+            
+            if (currentPath === '/vm_management') {
+                console.log('📍 当前在vm_management页面，设置"虚拟机克隆列表"为激活状态');
+                
+                // 确保"虚拟机管理"菜单展开
+                const menuCollapse = document.getElementById('collapseVM');
+                const menuButton = document.getElementById('headingVM').querySelector('.accordion-button');
+                
+                if (menuCollapse && menuButton) {
+                    console.log('📍 展开"虚拟机管理"菜单');
+                    menuCollapse.classList.remove('collapse');
+                    menuCollapse.classList.add('show');
+                    menuButton.setAttribute('aria-expanded', 'true');
+                    menuButton.classList.remove('collapsed');
+                }
+                
+                // 设置"虚拟机克隆列表"为激活状态
+                const vmManagementLink = document.querySelector('a[href="/vm_management"]');
+                if (vmManagementLink) {
+                    console.log('📍 找到"虚拟机克隆列表"链接，设置为激活状态');
+                    const allLinks = document.querySelectorAll('#collapseVM .nav-link');
+                    allLinks.forEach(link => link.classList.remove('active'));
+                    vmManagementLink.classList.add('active');
+                    console.log('✅ "虚拟机克隆列表"已设置为激活状态');
+                } else {
+                    console.log('❌ 未找到"虚拟机克隆列表"链接');
+                }
+            }
+            
+            // 添加全局调试函数
+            window.debugMenuState = function() {
+                console.log('🔍 === 菜单状态调试 ===');
+                
+                // 检查所有accordion按钮
+                const accordionButtons = document.querySelectorAll('.accordion-button');
+                console.log('📍 Accordion按钮数量:', accordionButtons.length);
+                
+                accordionButtons.forEach((button, index) => {
+                    const buttonText = button.textContent.trim();
+                    const ariaExpanded = button.getAttribute('aria-expanded');
+                    const isCollapsed = button.classList.contains('collapsed');
+                    const targetId = button.getAttribute('data-bs-target');
+                    
+                    console.log(`📍 按钮 ${index + 1} (${buttonText}):`);
+                    console.log(`   - aria-expanded: ${ariaExpanded}`);
+                    console.log(`   - collapsed类: ${isCollapsed}`);
+                    console.log(`   - data-bs-target: ${targetId}`);
+                    
+                    // 检查对应的collapse元素
+                    if (targetId) {
+                        const collapseId = targetId.replace('#', '');
+                        const collapseElement = document.getElementById(collapseId);
+                        if (collapseElement) {
+                            const hasShowClass = collapseElement.classList.contains('show');
+                            const hasCollapseClass = collapseElement.classList.contains('collapse');
+                            console.log(`   - 对应的collapse元素: ${collapseId}`);
+                            console.log(`   - 包含show类: ${hasShowClass}`);
+                            console.log(`   - 包含collapse类: ${hasCollapseClass}`);
+                        }
+                    }
+                });
+                
+                // 检查所有菜单链接
+                const menuLinks = document.querySelectorAll('.nav-link');
+                console.log('📍 菜单链接数量:', menuLinks.length);
+                
+                menuLinks.forEach((link, index) => {
+                    const linkText = link.textContent.trim();
+                    const isActive = link.classList.contains('active');
+                    const href = link.getAttribute('href');
+                    
+                    console.log(`📍 链接 ${index + 1} (${linkText}):`);
+                    console.log(`   - href: ${href}`);
+                    console.log(`   - active类: ${isActive}`);
+                });
+                
+                console.log('🔍 === 调试完成 ===');
+            };
+            
+            // 添加手动触发菜单展开/关闭的函数
+            window.toggleMenu = function(menuId) {
+                console.log('🔄 手动切换菜单:', menuId);
+                const collapseElement = document.getElementById(menuId);
+                const buttonElement = document.querySelector(`[data-bs-target="#${menuId}"]`);
+                
+                if (collapseElement && buttonElement) {
+                    console.log('📍 找到菜单元素，手动切换状态');
+                    const isExpanded = collapseElement.classList.contains('show');
+                    
+                    if (isExpanded) {
+                        // 关闭菜单
+                        collapseElement.classList.remove('show');
+                        buttonElement.setAttribute('aria-expanded', 'false');
+                        buttonElement.classList.add('collapsed');
+                        console.log('✅ 菜单已关闭');
+                    } else {
+                        // 展开菜单
+                        collapseElement.classList.add('show');
+                        buttonElement.setAttribute('aria-expanded', 'true');
+                        buttonElement.classList.remove('collapsed');
+                        console.log('✅ 菜单已展开');
+                    }
+                } else {
+                    console.log('❌ 未找到菜单元素');
+                }
+            };
+        });
 
         // 添加脚本执行权限
         function addScriptPermissions(scriptName, vmName) {
