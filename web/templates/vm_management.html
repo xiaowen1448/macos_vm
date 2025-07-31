@@ -641,26 +641,20 @@
                             </div>
                         </div>
                         
-                        <!-- 批量更改五码按钮 -->
+                        <!-- 批量操作按钮组 -->
                         <div class="d-flex justify-content-start mt-3 mb-2">
-                            <button class="btn btn-warning btn-sm" id="batchChangeWumaBtn" onclick="batchChangeWuma()" disabled>
+                            <button class="btn btn-warning btn-sm me-2" id="batchChangeWumaBtn" onclick="batchChangeWuma()" disabled>
                                 <i class="fas fa-exchange-alt me-2"></i>批量更改五码
                             </button>
-                            <div class="ms-3 d-flex align-items-center">
-                                <small class="text-muted">
-                                    <i class="fas fa-info-circle me-1"></i>请选择已运行的虚拟机
-                                </small>
-                            </div>
-                        </div>
-                        
-                        <!-- 批量更改JU值按钮 -->
-                        <div class="d-flex justify-content-start mt-2 mb-2">
-                            <button class="btn btn-info btn-sm" id="batchChangeJUBtn" onclick="batchChangeJU()" disabled>
+                            <button class="btn btn-info btn-sm me-2" id="batchChangeJUBtn" onclick="batchChangeJU()" disabled>
                                 <i class="fas fa-cogs me-2"></i>批量更改JU值
+                            </button>
+                            <button class="btn btn-danger btn-sm me-2" id="batchDeleteBtn" onclick="batchDelete()" disabled>
+                                <i class="fas fa-trash me-2"></i>批量删除
                             </button>
                             <div class="ms-3 d-flex align-items-center">
                                 <small class="text-muted">
-                                    <i class="fas fa-info-circle me-1"></i>请选择已运行的虚拟机
+                                    <i class="fas fa-info-circle me-1"></i>批量更改需要全部运行中的虚拟机，批量删除需要全部已关机的虚拟机
                                 </small>
                             </div>
                         </div>
@@ -4257,6 +4251,22 @@
             showBatchChangeJUModal();
         }
         
+        // 批量删除功能
+        function batchDelete() {
+            const batchBtn = document.getElementById('batchDeleteBtn');
+            
+            // 检查按钮是否被禁用
+            if (batchBtn.disabled) {
+                alert('请先选择已关机的虚拟机，然后再执行批量删除操作');
+                return;
+            }
+            
+            console.log('开始批量删除...');
+            
+            // 显示批量删除模态对话框
+            showBatchDeleteModal();
+        }
+        
         // 显示批量更改五码模态对话框
         function showBatchChangeModal() {
             // 创建模态对话框HTML
@@ -4305,7 +4315,7 @@
                                                 <h6 class="mb-0"><i class="fas fa-server me-2"></i>已选择虚拟机列表</h6>
                                             </div>
                                             <div class="card-body">
-                                                <div id="runningVMsList">
+                                                <div id="runningVMsList" style="max-height: 400px; overflow-y: auto;">
                                                     <div class="text-center">
                                                         <div class="spinner-border text-primary" role="status">
                                                             <span class="visually-hidden">加载中...</span>
@@ -4373,7 +4383,7 @@
                                                 <h6 class="mb-0"><i class="fas fa-server me-2"></i>已选择虚拟机列表</h6>
                                             </div>
                                             <div class="card-body">
-                                                <div id="runningVMsListJU">
+                                                <div id="runningVMsListJU" style="max-height: 400px; overflow-y: auto;">
                                                     <div class="text-center">
                                                         <div class="spinner-border text-primary" role="status">
                                                             <span class="visually-hidden">加载中...</span>
@@ -4414,6 +4424,71 @@
             
             // 加载选中的虚拟机列表
             loadRunningVMsListJU();
+        }
+        
+        // 显示批量删除模态对话框
+        function showBatchDeleteModal() {
+            // 创建模态对话框HTML
+            const modalHTML = `
+                <div class="modal fade" id="batchDeleteModal" tabindex="-1" aria-labelledby="batchDeleteModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="batchDeleteModalLabel">
+                                    <i class="fas fa-trash me-2"></i>批量删除虚拟机
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="row g-3">
+                                    <!-- 虚拟机列表 -->
+                                    <div class="col-12">
+                                        <div class="card">
+                                            <div class="card-header">
+                                                <h6 class="mb-0"><i class="fas fa-server me-2"></i>已选择虚拟机列表</h6>
+                                            </div>
+                                            <div class="card-body">
+                                                <div id="stoppedVMsList" style="max-height: 400px; overflow-y: auto;">
+                                                    <div class="text-center">
+                                                        <div class="spinner-border text-primary" role="status">
+                                                            <span class="visually-hidden">加载中...</span>
+                                                        </div>
+                                                        <p class="mt-2">正在获取虚拟机列表...</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                    <i class="fas fa-times me-2"></i>取消
+                                </button>
+                                <button type="button" class="btn btn-danger" id="executeBatchDeleteBtn" onclick="executeBatchDelete()">
+                                    <i class="fas fa-trash me-2"></i>确定删除
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // 移除已存在的模态对话框
+            const existingModal = document.getElementById('batchDeleteModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+            
+            // 添加模态对话框到页面
+            document.body.insertAdjacentHTML('beforeend', modalHTML);
+            
+            // 显示模态对话框
+            const modal = new bootstrap.Modal(document.getElementById('batchDeleteModal'));
+            modal.show();
+            
+            // 加载选中的虚拟机列表
+            loadStoppedVMsList();
         }
         
         // 加载批量更改的配置文件列表
@@ -4609,6 +4684,70 @@
             vmListContainer.innerHTML = vmListHTML;
         }
         
+        // 加载选中的已关机虚拟机列表
+        function loadStoppedVMsList() {
+            const vmListContainer = document.getElementById('stoppedVMsList');
+            
+            if (selectedVMs.size === 0) {
+                vmListContainer.innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        请先选择虚拟机
+                    </div>
+                `;
+                return;
+            }
+            
+            // 从前端数据中筛选选中的虚拟机
+            const selectedVMData = Array.from(selectedVMs).map(vmName => {
+                // 在当前页面的虚拟机数据中查找
+                let vmData = vmDataList.find(vm => vm.name === vmName);
+                if (!vmData) {
+                    // 如果在当前页面找不到，从totalVMs中查找
+                    vmData = totalVMs.find(vm => vm.name === vmName);
+                }
+                return vmData;
+            }).filter(vm => vm); // 过滤掉未找到的虚拟机
+            
+            if (selectedVMData.length === 0) {
+                vmListContainer.innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        未找到选中的虚拟机数据
+                    </div>
+                `;
+                return;
+            }
+            
+            let vmListHTML = '<div class="list-group">';
+            
+            selectedVMData.forEach(vm => {
+                const isStopped = vm.status === 'stopped';
+                const statusBadge = isStopped ? 
+                    '<span class="badge bg-secondary">已停止</span>' : 
+                    '<span class="badge bg-success">运行中</span>';
+                
+                vmListHTML += `
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-1">${vm.name}</h6>
+                                <small class="text-muted">IP: ${vm.ip || '获取中...'}</small>
+                                <br>
+                                <small class="text-muted">状态: ${vm.status}</small>
+                            </div>
+                            ${statusBadge}
+                        </div>
+                    </div>
+                `;
+            });
+            
+            vmListHTML += '</div>';
+            vmListHTML += `<div class="mt-3"><small class="text-muted">已选择 ${selectedVMData.length} 个虚拟机</small></div>`;
+            
+            vmListContainer.innerHTML = vmListHTML;
+        }
+        
         // 执行批量更改五码
         function executeBatchChange() {
             const selectedConfig = document.getElementById('batchConfigSelect').value;
@@ -4741,14 +4880,89 @@
             });
         }
         
-        // 检查选中虚拟机的运行状态并更新批量更改按钮
+        // 执行批量删除
+        function executeBatchDelete() {
+            const executeBtn = document.getElementById('executeBatchDeleteBtn');
+            const originalText = executeBtn.innerHTML;
+            
+            // 检查是否有选中的虚拟机
+            if (selectedVMs.size === 0) {
+                alert('请先选择虚拟机');
+                return;
+            }
+            
+            // 检查选中的虚拟机中是否有已关机的
+            const selectedStoppedVMs = Array.from(selectedVMs).filter(vmName => {
+                const vmData = vmDataList.find(vm => vm.name === vmName);
+                if (vmData) {
+                    return vmData.status === 'stopped';
+                }
+                const totalVMData = totalVMs.find(vm => vm.name === vmName);
+                return totalVMData && totalVMData.status === 'stopped';
+            });
+            
+            if (selectedStoppedVMs.length === 0) {
+                alert('请选择已关机的虚拟机');
+                return;
+            }
+            
+            // 确认删除
+            const confirmMessage = `确定要删除以下 ${selectedStoppedVMs.length} 个虚拟机吗？\n\n${selectedStoppedVMs.join('\n')}\n\n此操作不可恢复！`;
+            if (!confirm(confirmMessage)) {
+                return;
+            }
+            
+            // 显示加载状态
+            executeBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>删除中...';
+            executeBtn.disabled = true;
+            
+            // 调用后端API
+            fetch('/api/batch_delete_vm', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    selected_vms: selectedStoppedVMs
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                executeBtn.innerHTML = originalText;
+                executeBtn.disabled = false;
+                
+                if (data.success) {
+                    // 关闭模态对话框
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('batchDeleteModal'));
+                    modal.hide();
+                    
+                    // 显示成功消息
+                    alert('批量删除成功！\n\n' + data.message);
+                    console.log('批量删除结果:', data.results);
+                    
+                    // 刷新虚拟机列表
+                    loadVMData();
+                } else {
+                    alert('批量删除失败: ' + data.message);
+                }
+            })
+            .catch(error => {
+                executeBtn.innerHTML = originalText;
+                executeBtn.disabled = false;
+                alert('网络错误: ' + error.message);
+                console.error('批量删除错误:', error);
+            });
+        }
+        
+        // 检查选中虚拟机的状态并更新批量操作按钮
         function checkSelectedVMsRunningState() {
-            console.log('检查选中虚拟机运行状态，当前选中的虚拟机:', Array.from(selectedVMs));
+            console.log('检查选中虚拟机状态，当前选中的虚拟机:', Array.from(selectedVMs));
             
             if (selectedVMs.size === 0) {
-                // 没有选中任何虚拟机，禁用按钮
+                // 没有选中任何虚拟机，禁用所有按钮
                 const batchWumaBtn = document.getElementById('batchChangeWumaBtn');
                 const batchJUBtn = document.getElementById('batchChangeJUBtn');
+                const batchDeleteBtn = document.getElementById('batchDeleteBtn');
                 
                 batchWumaBtn.disabled = true;
                 batchWumaBtn.classList.remove('btn-warning');
@@ -4758,37 +4972,44 @@
                 batchJUBtn.classList.remove('btn-info');
                 batchJUBtn.classList.add('btn-secondary');
                 
-                console.log('没有选中任何虚拟机，禁用按钮');
+                batchDeleteBtn.disabled = true;
+                batchDeleteBtn.classList.remove('btn-danger');
+                batchDeleteBtn.classList.add('btn-secondary');
+                
+                console.log('没有选中任何虚拟机，禁用所有按钮');
                 return;
             }
             
             // 从前端数据中获取虚拟机状态
-            const selectedRunningVMs = Array.from(selectedVMs).filter(vmName => {
+            const selectedVMData = Array.from(selectedVMs).map(vmName => {
                 // 在当前页面的虚拟机数据中查找
-                const vmData = vmDataList.find(vm => vm.name === vmName);
-                if (vmData) {
-                    console.log(`虚拟机 ${vmName} 状态:`, vmData.status);
-                    return vmData.status === 'running';
+                let vmData = vmDataList.find(vm => vm.name === vmName);
+                if (!vmData) {
+                    // 如果在当前页面找不到，从totalVMs中查找
+                    vmData = totalVMs.find(vm => vm.name === vmName);
                 }
-                
-                // 如果在当前页面找不到，从totalVMs中查找
-                const totalVMData = totalVMs.find(vm => vm.name === vmName);
-                if (totalVMData) {
-                    console.log(`虚拟机 ${vmName} 状态(从totalVMs):`, totalVMData.status);
-                    return totalVMData.status === 'running';
-                }
-                
-                console.log(`未找到虚拟机 ${vmName} 的数据`);
-                return false;
-            });
+                return vmData;
+            }).filter(vm => vm); // 过滤掉未找到的虚拟机
             
-            console.log('选中的运行中虚拟机:', selectedRunningVMs);
+            if (selectedVMData.length === 0) {
+                console.log('未找到选中的虚拟机数据');
+                return;
+            }
+            
+            // 统计运行中和已停止的虚拟机
+            const selectedRunningVMs = selectedVMData.filter(vm => vm.status === 'running');
+            const selectedStoppedVMs = selectedVMData.filter(vm => vm.status === 'stopped');
+            
+            console.log('选中的运行中虚拟机:', selectedRunningVMs.map(vm => vm.name));
+            console.log('选中的已停止虚拟机:', selectedStoppedVMs.map(vm => vm.name));
             
             const batchWumaBtn = document.getElementById('batchChangeWumaBtn');
             const batchJUBtn = document.getElementById('batchChangeJUBtn');
+            const batchDeleteBtn = document.getElementById('batchDeleteBtn');
             
-            if (selectedRunningVMs.length > 0) {
-                // 选中的虚拟机中有运行中的，启用按钮
+            // 更新批量更改按钮状态（需要运行中的虚拟机，且不能包含已关机的虚拟机）
+            if (selectedRunningVMs.length > 0 && selectedStoppedVMs.length === 0) {
+                // 选中的虚拟机都是运行中的，启用批量更改按钮
                 batchWumaBtn.disabled = false;
                 batchWumaBtn.classList.remove('btn-secondary');
                 batchWumaBtn.classList.add('btn-warning');
@@ -4799,7 +5020,7 @@
                 
                 console.log('启用批量更改按钮，选中了', selectedRunningVMs.length, '个运行中的虚拟机');
             } else {
-                // 选中的虚拟机中没有运行中的，禁用按钮
+                // 选中的虚拟机中没有运行中的，或者包含已关机的虚拟机，禁用批量更改按钮
                 batchWumaBtn.disabled = true;
                 batchWumaBtn.classList.remove('btn-warning');
                 batchWumaBtn.classList.add('btn-secondary');
@@ -4808,7 +5029,32 @@
                 batchJUBtn.classList.remove('btn-info');
                 batchJUBtn.classList.add('btn-secondary');
                 
-                console.log('禁用批量更改按钮，选中的虚拟机中没有运行中的');
+                if (selectedRunningVMs.length === 0) {
+                    console.log('禁用批量更改按钮，选中的虚拟机中没有运行中的');
+                } else if (selectedStoppedVMs.length > 0) {
+                    console.log('禁用批量更改按钮，选中的虚拟机中包含已关机的虚拟机');
+                }
+            }
+            
+            // 更新批量删除按钮状态（需要已停止的虚拟机）
+            if (selectedStoppedVMs.length > 0 && selectedRunningVMs.length === 0) {
+                // 选中的虚拟机都是已停止的，启用批量删除按钮
+                batchDeleteBtn.disabled = false;
+                batchDeleteBtn.classList.remove('btn-secondary');
+                batchDeleteBtn.classList.add('btn-danger');
+                
+                console.log('启用批量删除按钮，选中了', selectedStoppedVMs.length, '个已停止的虚拟机');
+            } else {
+                // 选中的虚拟机中有运行中的，禁用批量删除按钮
+                batchDeleteBtn.disabled = true;
+                batchDeleteBtn.classList.remove('btn-danger');
+                batchDeleteBtn.classList.add('btn-secondary');
+                
+                if (selectedRunningVMs.length > 0) {
+                    console.log('禁用批量删除按钮，选中的虚拟机中有运行中的');
+                } else {
+                    console.log('禁用批量删除按钮，没有选中已停止的虚拟机');
+                }
             }
         }
         

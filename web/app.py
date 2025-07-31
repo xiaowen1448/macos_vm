@@ -5056,6 +5056,120 @@ def api_batch_change_ju():
             'message': f'批量更改JU值失败: {str(e)}'
         })
 
+@app.route('/api/batch_delete_vm', methods=['POST'])
+@login_required
+def api_batch_delete_vm():
+    """批量删除虚拟机"""
+    logger.info("收到批量删除虚拟机请求")
+    try:
+        data = request.get_json()
+        logger.info(f"批量删除虚拟机请求数据: {data}")
+        
+        selected_vms = data.get('selected_vms', [])
+        
+        if not selected_vms:
+            return jsonify({
+                'success': False,
+                'message': '未选择虚拟机'
+            })
+        
+        logger.info(f"选中的虚拟机: {selected_vms}")
+        
+        # 验证选中的虚拟机是否都已停止
+        vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
+        if not os.path.exists(vmrun_path):
+            vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
+        
+        list_cmd = [vmrun_path, 'list']
+        logger.debug(f"执行vmrun命令: {list_cmd}")
+        result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30)
+        
+        if result.returncode != 0:
+            return jsonify({
+                'success': False,
+                'message': f'获取运行中虚拟机列表失败: {result.stderr}'
+            })
+        
+        running_vms = result.stdout.strip().split('\n')[1:]  # 跳过标题行
+        logger.info(f"获取到运行中虚拟机: {running_vms}")
+        
+        # 验证选中的虚拟机是否都已停止
+        for vm_name in selected_vms:
+            vm_running = False
+            for running_vm in running_vms:
+                if vm_name in running_vm or running_vm.endswith(vm_name):
+                    vm_running = True
+                    break
+            
+            if vm_running:
+                logger.warning(f"虚拟机 {vm_name} 仍在运行状态，无法删除")
+                return jsonify({
+                    'success': False,
+                    'message': f'虚拟机 {vm_name} 仍在运行状态，请先停止虚拟机'
+                })
+        
+        results = []
+        
+        # 为每个选中的虚拟机执行删除操作
+        for vm_name in selected_vms:
+            try:
+                # 查找虚拟机文件
+                vm_file = find_vm_file(vm_name)
+                if not vm_file:
+                    results.append({
+                        'vm_name': vm_name,
+                        'success': False,
+                        'message': '未找到虚拟机文件'
+                    })
+                    continue
+                
+                # 删除虚拟机
+                delete_cmd = [vmrun_path, 'deleteVM', vm_file]
+                logger.info(f"删除虚拟机: {delete_cmd}")
+                delete_result = subprocess.run(delete_cmd, capture_output=True, text=True, timeout=60)
+                
+                if delete_result.returncode != 0:
+                    results.append({
+                        'vm_name': vm_name,
+                        'success': False,
+                        'message': f'删除失败: {delete_result.stderr}'
+                    })
+                    continue
+                
+                results.append({
+                    'vm_name': vm_name,
+                    'success': True,
+                    'message': '删除成功'
+                })
+                
+                logger.info(f"虚拟机 {vm_name} 删除完成")
+                
+            except Exception as e:
+                logger.error(f"处理虚拟机 {vm_name} 时出错: {str(e)}")
+                results.append({
+                    'vm_name': vm_name,
+                    'success': False,
+                    'message': f'处理失败: {str(e)}'
+                })
+        
+        success_count = sum(1 for r in results if r['success'])
+        total_count = len(results)
+        
+        logger.info(f"批量删除虚拟机完成 - 成功: {success_count}/{total_count}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'批量删除虚拟机完成，成功: {success_count}/{total_count}',
+            'results': results
+        })
+        
+    except Exception as e:
+        logger.error(f"批量删除虚拟机失败: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'message': f'批量删除虚拟机失败: {str(e)}'
+        })
+
 def is_valid_wuma_file_line(line):
     """验证五码文件行格式"""
     if not line.startswith(':') or not line.endswith(':'):
