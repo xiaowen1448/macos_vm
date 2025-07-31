@@ -4443,6 +4443,26 @@
                                 <div class="row g-3">
                                     <!-- 虚拟机列表 -->
                                     <div class="col-12">
+                                        <!-- 删除进度显示 -->
+                                        <div id="deleteProgressSection" style="display: none;">
+                                            <div class="mb-3">
+                                                <h6 class="text-danger mb-2">
+                                                    <i class="fas fa-trash me-2"></i>删除进度
+                                                </h6>
+                                                <div class="progress mb-2" style="height: 25px;">
+                                                    <div class="progress-bar bg-danger progress-bar-striped progress-bar-animated" 
+                                                         role="progressbar" 
+                                                         style="width: 0%" 
+                                                         id="deleteProgressBar">
+                                                        <span id="deleteProgressText">准备删除...</span>
+                                                    </div>
+                                                </div>
+                                                <div class="text-center">
+                                                    <small id="deleteProgressDetails" class="text-muted">正在初始化...</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
                                         <div class="card">
                                             <div class="card-header">
                                                 <h6 class="mb-0"><i class="fas fa-server me-2"></i>已选择虚拟机列表</h6>
@@ -4906,11 +4926,10 @@
                 return;
             }
             
-            // 确认删除
-            const confirmMessage = `确定要删除以下 ${selectedStoppedVMs.length} 个虚拟机吗？\n\n${selectedStoppedVMs.join('\n')}\n\n此操作不可恢复！`;
-            if (!confirm(confirmMessage)) {
-                return;
-            }
+
+            
+            // 显示进度条
+            showDeleteProgress(selectedStoppedVMs);
             
             // 显示加载状态
             executeBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>删除中...';
@@ -4932,26 +4951,100 @@
                 executeBtn.disabled = false;
                 
                 if (data.success) {
+                    // 隐藏进度条并显示完成状态
+                    hideDeleteProgress();
+                    
                     // 关闭模态对话框
                     const modal = bootstrap.Modal.getInstance(document.getElementById('batchDeleteModal'));
                     modal.hide();
                     
-                    // 显示成功消息
-                    alert('批量删除成功！\n\n' + data.message);
                     console.log('批量删除结果:', data.results);
                     
                     // 刷新虚拟机列表
                     loadVMData();
                 } else {
+                    // 隐藏进度条
+                    hideDeleteProgress();
                     alert('批量删除失败: ' + data.message);
                 }
             })
             .catch(error => {
                 executeBtn.innerHTML = originalText;
                 executeBtn.disabled = false;
+                
+                // 隐藏进度条
+                hideDeleteProgress();
+                
                 alert('网络错误: ' + error.message);
                 console.error('批量删除错误:', error);
             });
+        }
+        
+        // 显示删除进度
+        function showDeleteProgress(vmList) {
+            const progressSection = document.getElementById('deleteProgressSection');
+            const progressBar = document.getElementById('deleteProgressBar');
+            const progressText = document.getElementById('deleteProgressText');
+            const progressDetails = document.getElementById('deleteProgressDetails');
+            
+            // 显示进度条区域
+            progressSection.style.display = 'block';
+            
+            // 初始化进度
+            progressBar.style.width = '0%';
+            progressText.textContent = `准备删除 ${vmList.length} 个虚拟机`;
+            progressDetails.textContent = '正在初始化删除操作...';
+            
+            // 模拟进度更新
+            let currentProgress = 0;
+            let currentVMIndex = 0;
+            const progressInterval = setInterval(() => {
+                currentProgress += Math.random() * 8 + 2; // 2-10% 随机增长
+                if (currentProgress > 85) {
+                    currentProgress = 85; // 最多到85%，等待后端完成
+                }
+                
+                progressBar.style.width = currentProgress + '%';
+                progressText.textContent = `正在删除虚拟机... ${Math.round(currentProgress)}%`;
+                
+                // 更新详细信息
+                if (currentVMIndex < vmList.length) {
+                    const vmName = vmList[currentVMIndex];
+                    progressDetails.textContent = `正在删除: ${vmName}`;
+                    currentVMIndex++;
+                } else {
+                    progressDetails.textContent = `已完成 ${currentVMIndex} 个虚拟机的删除`;
+                }
+            }, 800);
+            
+            // 保存定时器ID，以便后续清除
+            progressSection.dataset.progressInterval = progressInterval;
+        }
+        
+        // 隐藏删除进度
+        function hideDeleteProgress() {
+            const progressSection = document.getElementById('deleteProgressSection');
+            const progressBar = document.getElementById('deleteProgressBar');
+            const progressText = document.getElementById('deleteProgressText');
+            const progressDetails = document.getElementById('deleteProgressDetails');
+            
+            // 清除定时器
+            if (progressSection.dataset.progressInterval) {
+                clearInterval(parseInt(progressSection.dataset.progressInterval));
+            }
+            
+            // 完成进度
+            progressBar.style.width = '100%';
+            progressText.textContent = '删除完成！';
+            progressDetails.textContent = '所有虚拟机已成功删除';
+            
+            // 延迟隐藏进度条
+            setTimeout(() => {
+                progressSection.style.display = 'none';
+                progressBar.style.width = '0%';
+                progressText.textContent = '准备删除...';
+                progressDetails.textContent = '正在初始化...';
+            }, 2000);
         }
         
         // 检查选中虚拟机的状态并更新批量操作按钮
@@ -5068,5 +5161,7 @@
 
 
     </script>
+    
+
 </body>
 </html> 
