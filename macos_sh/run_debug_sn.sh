@@ -1,1 +1,1 @@
-yes | ~/Desktop/iMessageDebug | grep -i -w SerialNumber | awk '{print$2}'
+yes | ~/Desktop/iMessageDebug | grep -i -w SerialNumber | awk '{print $2}'

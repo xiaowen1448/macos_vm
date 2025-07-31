@@ -4914,6 +4914,148 @@ def api_batch_change_wuma():
             'message': f'批量更改五码失败: {str(e)}'
         })
 
+@app.route('/api/batch_change_ju', methods=['POST'])
+@login_required
+def api_batch_change_ju():
+    """批量更改JU值"""
+    logger.info("收到批量更改JU值请求")
+    try:
+        data = request.get_json()
+        logger.info(f"批量更改JU值请求数据: {data}")
+        
+        selected_vms = data.get('selected_vms', [])
+        
+        if not selected_vms:
+            return jsonify({
+                'success': False,
+                'message': '未选择虚拟机'
+            })
+        
+        logger.info(f"选中的虚拟机: {selected_vms}")
+        
+        # 验证选中的虚拟机是否都在运行
+        vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
+        if not os.path.exists(vmrun_path):
+            vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
+        
+        list_cmd = [vmrun_path, 'list']
+        logger.debug(f"执行vmrun命令: {list_cmd}")
+        result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30)
+        
+        if result.returncode != 0:
+            return jsonify({
+                'success': False,
+                'message': f'获取运行中虚拟机列表失败: {result.stderr}'
+            })
+        
+        running_vms = result.stdout.strip().split('\n')[1:]  # 跳过标题行
+        logger.info(f"获取到运行中虚拟机: {running_vms}")
+        
+        # 验证选中的虚拟机是否都在运行
+        for vm_name in selected_vms:
+            vm_running = False
+            for running_vm in running_vms:
+                if vm_name in running_vm or running_vm.endswith(vm_name):
+                    vm_running = True
+                    break
+            
+            if not vm_running:
+                logger.warning(f"虚拟机 {vm_name} 不在运行状态")
+                return jsonify({
+                    'success': False,
+                    'message': f'虚拟机 {vm_name} 不在运行状态'
+                })
+        
+        results = []
+        
+        # 为每个选中的虚拟机执行JU值更改
+        for vm_name in selected_vms:
+            try:
+                # 找到对应的运行中虚拟机路径
+                vm_path = None
+                for running_vm in running_vms:
+                    if vm_name in running_vm or running_vm.endswith(vm_name):
+                        vm_path = running_vm
+                        logger.info(f"找到虚拟机 {vm_name} 的运行路径: {vm_path}")
+                        break
+                
+                if not vm_path:
+                    logger.error(f"未找到虚拟机 {vm_name} 的运行路径")
+                    results.append({
+                        'vm_name': vm_name,
+                        'success': False,
+                        'message': '未找到虚拟机运行路径'
+                    })
+                    continue
+                
+                # 获取虚拟机IP
+                vm_ip = get_vm_ip(vm_name)
+                if not vm_ip:
+                    results.append({
+                        'vm_name': vm_name,
+                        'success': False,
+                        'message': '无法获取虚拟机IP'
+                    })
+                    continue
+                
+                # 执行test.sh脚本
+                test_cmd = f'ssh wx@{vm_ip} "~/test.sh"'
+                logger.info(f"执行test.sh脚本: {test_cmd}")
+                test_result = subprocess.run(test_cmd, shell=True, capture_output=True, text=True, timeout=60)
+                
+                if test_result.returncode != 0:
+                    results.append({
+                        'vm_name': vm_name,
+                        'success': False,
+                        'message': f'test.sh脚本执行失败: {test_result.stderr}'
+                    })
+                    continue
+                
+                # 重启虚拟机
+                restart_cmd = [vmrun_path, 'stop', vm_path]
+                logger.info(f"停止虚拟机: {restart_cmd}")
+                subprocess.run(restart_cmd, capture_output=True, timeout=30)
+                
+                time.sleep(5)  # 等待虚拟机完全停止
+                
+                restart_cmd = [vmrun_path, 'start', vm_path] 
+                logger.info(f"启动虚拟机: {restart_cmd}")
+                subprocess.run(restart_cmd, capture_output=True, timeout=30)
+                
+                results.append({
+                    'vm_name': vm_name,
+                    'success': True,
+                    'message': '批量更改JU值成功'
+                })
+                
+                logger.info(f"虚拟机 {vm_name} 批量更改JU值完成")
+                
+            except Exception as e:
+                logger.error(f"处理虚拟机 {vm_name} 时出错: {str(e)}")
+                results.append({
+                    'vm_name': vm_name,
+                    'success': False,
+                    'message': f'处理失败: {str(e)}'
+                })
+        
+        success_count = sum(1 for r in results if r['success'])
+        total_count = len(results)
+        
+        logger.info(f"批量更改JU值完成 - 成功: {success_count}/{total_count}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'批量更改JU值完成，成功: {success_count}/{total_count}',
+            'results': results
+        })
+        
+    except Exception as e:
+        logger.error(f"批量更改JU值失败: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'message': f'批量更改JU值失败: {str(e)}'
+        })
+
 def is_valid_wuma_file_line(line):
     """验证五码文件行格式"""
     if not line.startswith(':') or not line.endswith(':'):
