@@ -4936,22 +4936,27 @@
             })
             .then(response => response.json())
             .then(data => {
-                executeBtn.innerHTML = originalText;
-                executeBtn.disabled = false;
-                
-                if (data.success) {
-                    // 隐藏进度条并显示完成状态
-                    hideJUProgress();
-                    
-                    // 关闭模态对话框
-                    const modal = bootstrap.Modal.getInstance(document.getElementById('batchChangeJUModal'));
-                    modal.hide();
-                    
-                    console.log('批量更改JU值结果:', data.results);
+                if (data.success && data.task_id) {
+                    // 开始监控任务进度
+                    monitorJUProgress(data.task_id, executeBtn, originalText);
                 } else {
-                    // 隐藏进度条
-                    hideJUProgress();
-                    console.error('批量更改JU值失败:', data.message);
+                    executeBtn.innerHTML = originalText;
+                    executeBtn.disabled = false;
+                    
+                    if (data.success) {
+                        // 隐藏进度条并显示完成状态
+                        hideJUProgress();
+                        
+                        // 关闭模态对话框
+                        const modal = bootstrap.Modal.getInstance(document.getElementById('batchChangeJUModal'));
+                        modal.hide();
+                        
+                        console.log('批量更改JU值结果:', data.results);
+                    } else {
+                        // 隐藏进度条
+                        hideJUProgress();
+                        console.error('批量更改JU值失败:', data.message);
+                    }
                 }
             })
             .catch(error => {
@@ -5206,35 +5211,180 @@
             // 显示进度条区域
             progressSection.style.display = 'block';
             
-            // 初始化进度
+            // 初始化进度条样式
+            progressBar.style.transition = 'width 0.5s ease-in-out';
             progressBar.style.width = '0%';
-            progressText.textContent = `准备更改 ${vmList.length} 个虚拟机的JU值`;
-            progressDetails.textContent = '正在初始化JU值更改操作...';
+            progressText.textContent = `正在执行更改JU值...`;
+            progressDetails.textContent = `准备更改 ${vmList.length} 个虚拟机的JU值`;
+        }
+        
+        // 监控JU值更改任务进度
+        function monitorJUProgress(taskId, executeBtn, originalText) {
+            const progressSection = document.getElementById('juProgressSection');
+            const progressBar = document.getElementById('juProgressBar');
+            const progressText = document.getElementById('juProgressText');
+            const progressDetails = document.getElementById('juProgressDetails');
             
-            // 模拟进度更新
-            let currentProgress = 0;
-            let currentVMIndex = 0;
-            const progressInterval = setInterval(() => {
-                currentProgress += Math.random() * 8 + 2; // 2-10% 随机增长
-                if (currentProgress > 85) {
-                    currentProgress = 85; // 最多到85%，等待后端完成
-                }
-                
-                progressBar.style.width = currentProgress + '%';
-                progressText.textContent = `正在更改虚拟机JU值... ${Math.round(currentProgress)}%`;
-                
-                // 更新详细信息
-                if (currentVMIndex < vmList.length) {
-                    const vmName = vmList[currentVMIndex];
-                    progressDetails.textContent = `正在更改: ${vmName}`;
-                    currentVMIndex++;
-                } else {
-                    progressDetails.textContent = `已完成 ${currentVMIndex} 个虚拟机的JU值更改`;
-                }
-            }, 800);
+            let checkCount = 0;
+            const maxChecks = 300; // 最多检查5分钟
+            let lastProgress = 0;
             
-            // 保存定时器ID，以便后续清除
-            progressSection.dataset.progressInterval = progressInterval;
+            function checkProgress() {
+                checkCount++;
+                
+                fetch(`/api/batch_change_ju_status/${taskId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            const task = data;
+                            
+                            // 平滑更新进度条，避免闪烁
+                            const targetProgress = task.progress;
+                            if (targetProgress > lastProgress) {
+                                // 使用CSS transition实现平滑过渡
+                                progressBar.style.transition = 'width 0.5s ease-in-out';
+                                progressBar.style.width = targetProgress + '%';
+                                lastProgress = targetProgress;
+                            }
+                            
+                            // 更新进度文字
+                            if (targetProgress > 0) {
+                                progressText.textContent = `正在更改虚拟机JU值... ${targetProgress}%`;
+                            } else {
+                                progressText.textContent = `正在执行更改JU值...`;
+                            }
+                            
+                            // 更新详细信息
+                            if (task.results && task.results.length > 0) {
+                                const currentResult = task.results[task.results.length - 1];
+                                if (currentResult.success) {
+                                    if (currentResult.message.includes('正在重启')) {
+                                        progressDetails.textContent = `${currentResult.vm_name}: 脚本执行完毕，虚拟机正在重启中`;
+                                    } else {
+                                        progressDetails.textContent = `${currentResult.vm_name}: ${currentResult.message}`;
+                                    }
+                                } else {
+                                    progressDetails.textContent = `${currentResult.vm_name}: 失败 - ${currentResult.message}`;
+                                }
+                            }
+                            
+                            // 检查任务是否完成
+                            if (task.status === 'completed') {
+                                executeBtn.innerHTML = originalText;
+                                executeBtn.disabled = false;
+                                
+                                // 显示完成状态
+                                progressBar.style.transition = 'width 0.5s ease-in-out';
+                                progressBar.style.width = '100%';
+                                progressText.textContent = 'JU值更改完成！';
+                                progressDetails.textContent = '所有虚拟机的JU值已成功更改，虚拟机正在重启中';
+                                
+                                // 延迟隐藏进度条
+                                setTimeout(() => {
+                                    progressSection.style.display = 'none';
+                                    progressBar.style.width = '0%';
+                                    progressBar.style.transition = 'none';
+                                    progressText.textContent = '准备更改...';
+                                    progressDetails.textContent = '正在初始化...';
+                                }, 3000);
+                                
+                                // 关闭模态对话框
+                                const modal = bootstrap.Modal.getInstance(document.getElementById('batchChangeJUModal'));
+                                modal.hide();
+                                
+                                console.log('批量更改JU值完成:', task.results);
+                                return;
+                            } else if (task.status === 'failed') {
+                                executeBtn.innerHTML = originalText;
+                                executeBtn.disabled = false;
+                                
+                                // 显示失败状态
+                                progressBar.style.transition = 'width 0.5s ease-in-out';
+                                progressBar.style.width = '100%';
+                                progressText.textContent = 'JU值更改失败！';
+                                progressDetails.textContent = '批量更改JU值过程中出现错误';
+                                
+                                // 延迟隐藏进度条
+                                setTimeout(() => {
+                                    progressSection.style.display = 'none';
+                                    progressBar.style.width = '0%';
+                                    progressBar.style.transition = 'none';
+                                    progressText.textContent = '准备更改...';
+                                    progressDetails.textContent = '正在初始化...';
+                                }, 3000);
+                                
+                                console.error('批量更改JU值失败:', task);
+                                return;
+                            }
+                            
+                            // 继续监控
+                            if (checkCount < maxChecks) {
+                                setTimeout(checkProgress, 1000);
+                            } else {
+                                executeBtn.innerHTML = originalText;
+                                executeBtn.disabled = false;
+                                
+                                // 超时处理
+                                progressBar.style.transition = 'width 0.5s ease-in-out';
+                                progressBar.style.width = '100%';
+                                progressText.textContent = 'JU值更改超时！';
+                                progressDetails.textContent = '任务执行时间过长，请检查系统状态';
+                                
+                                setTimeout(() => {
+                                    progressSection.style.display = 'none';
+                                    progressBar.style.width = '0%';
+                                    progressBar.style.transition = 'none';
+                                    progressText.textContent = '准备更改...';
+                                    progressDetails.textContent = '正在初始化...';
+                                }, 3000);
+                                
+                                console.error('批量更改JU值超时');
+                            }
+                        } else {
+                            executeBtn.innerHTML = originalText;
+                            executeBtn.disabled = false;
+                            
+                            // 显示错误状态
+                            progressBar.style.transition = 'width 0.5s ease-in-out';
+                            progressBar.style.width = '100%';
+                            progressText.textContent = 'JU值更改失败！';
+                            progressDetails.textContent = '无法获取任务状态';
+                            
+                            setTimeout(() => {
+                                progressSection.style.display = 'none';
+                                progressBar.style.width = '0%';
+                                progressBar.style.transition = 'none';
+                                progressText.textContent = '准备更改...';
+                                progressDetails.textContent = '正在初始化...';
+                            }, 3000);
+                            
+                            console.error('获取任务状态失败:', data.message);
+                        }
+                    })
+                    .catch(error => {
+                        executeBtn.innerHTML = originalText;
+                        executeBtn.disabled = false;
+                        
+                        // 显示错误状态
+                        progressBar.style.transition = 'width 0.5s ease-in-out';
+                        progressBar.style.width = '100%';
+                        progressText.textContent = 'JU值更改失败！';
+                        progressDetails.textContent = '网络错误，无法获取任务状态';
+                        
+                        setTimeout(() => {
+                            progressSection.style.display = 'none';
+                            progressBar.style.width = '0%';
+                            progressBar.style.transition = 'none';
+                            progressText.textContent = '准备更改...';
+                            progressDetails.textContent = '正在初始化...';
+                        }, 3000);
+                        
+                        console.error('监控任务进度失败:', error);
+                    });
+            }
+            
+            // 开始监控
+            checkProgress();
         }
         
         // 隐藏JU值更改进度
@@ -5244,12 +5394,13 @@
             const progressText = document.getElementById('juProgressText');
             const progressDetails = document.getElementById('juProgressDetails');
             
-            // 清除定时器
+            // 清除定时器（如果存在）
             if (progressSection.dataset.progressInterval) {
                 clearInterval(parseInt(progressSection.dataset.progressInterval));
             }
             
             // 完成进度
+            progressBar.style.transition = 'width 0.5s ease-in-out';
             progressBar.style.width = '100%';
             progressText.textContent = 'JU值更改完成！';
             progressDetails.textContent = '所有虚拟机的JU值已成功更改';
@@ -5258,6 +5409,7 @@
             setTimeout(() => {
                 progressSection.style.display = 'none';
                 progressBar.style.width = '0%';
+                progressBar.style.transition = 'none';
                 progressText.textContent = '准备更改...';
                 progressDetails.textContent = '正在初始化...';
             }, 2000);

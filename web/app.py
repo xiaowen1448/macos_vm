@@ -56,6 +56,7 @@ template_dir = r'D:\macos_vm\TemplateVM\macos10.12'
 
 # 全局任务存储
 clone_tasks = {}
+tasks = {}
 
 # 通用函数 - 获取虚拟机列表
 def get_vm_list_from_directory(vm_dir, vm_type_name):
@@ -298,7 +299,7 @@ def vm_operation_generic(operation, vm_type_name, vm_dir):
             vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
         
         if operation == 'start':
-            cmd = [vmrun_path, 'start', vm_file]
+                            cmd = [vmrun_path, 'start', vm_file, 'nogui']
         elif operation == 'stop':
             cmd = [vmrun_path, 'stop', vm_file, 'hard']
         elif operation == 'restart':
@@ -1264,7 +1265,7 @@ def clone_vm_worker(task_id):
                     
                     # 如果配置了自动启动
                     if params.get('autoStart') == 'true':
-                        start_cmd = [vmrun_path, 'start', vm_file_path]
+                        start_cmd = [vmrun_path, 'start', vm_file_path, 'nogui']
                         print(f"[DEBUG] 自动启动命令: {' '.join(start_cmd)}")
                         add_task_log(task_id, 'info', f'执行启动命令: {" ".join(start_cmd)}')
                         
@@ -1794,7 +1795,7 @@ def api_vm_start():
         print(f"[DEBUG] 虚拟机文件路径: {vm_file}")
         print(f"[DEBUG] vmrun路径: {vmrun_path}")
         
-        start_cmd = [vmrun_path, 'start', vm_file]
+        start_cmd = [vmrun_path, 'start', vm_file, 'nogui']
         print(f"[DEBUG] 启动命令: {' '.join(start_cmd)}")
         
         # 记录命令开始时间
@@ -1928,7 +1929,7 @@ def api_vm_restart():
         time.sleep(2)
         
         # 启动虚拟机
-        start_cmd = [vmrun_path, 'start', vm_file]
+        start_cmd = [vmrun_path, 'start', vm_file, 'nogui']
         print(f"[DEBUG] 重启-启动命令: {' '.join(start_cmd)}")
         
         # 记录启动命令开始时间
@@ -4868,7 +4869,7 @@ def api_batch_change_wuma():
                 
                 time.sleep(5)  # 等待虚拟机完全停止
                 
-                restart_cmd = [vmrun_path, 'start', vm_path]
+                restart_cmd = [vmrun_path, 'start', vm_path, 'nogui']
                 logger.info(f"启动虚拟机: {restart_cmd}")
                 subprocess.run(restart_cmd, capture_output=True, timeout=30)
                 
@@ -4933,6 +4934,42 @@ def api_batch_change_ju():
         
         logger.info(f"选中的虚拟机: {selected_vms}")
         
+        # 创建任务ID
+        task_id = f"batch_change_ju_{int(time.time())}"
+        tasks[task_id] = {
+            'status': 'running',
+            'progress': 0,
+            'total': len(selected_vms),
+            'current': 0,
+            'results': [],
+            'logs': []
+        }
+        
+        # 启动后台任务
+        import threading
+        thread = threading.Thread(target=batch_change_ju_worker, args=(task_id, selected_vms))
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({
+            'success': True,
+            'task_id': task_id,
+            'message': '批量更改JU值任务已启动'
+        })
+        
+    except Exception as e:
+        logger.error(f"批量更改JU值请求处理失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'请求处理失败: {str(e)}'
+        })
+
+
+def batch_change_ju_worker(task_id, selected_vms):
+    """批量更改JU值后台工作函数"""
+    logger.info(f"开始批量更改JU值任务: {task_id}")
+    
+    try:
         # 验证选中的虚拟机是否都在运行
         vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
         if not os.path.exists(vmrun_path):
@@ -4943,10 +4980,9 @@ def api_batch_change_ju():
         result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30)
         
         if result.returncode != 0:
-            return jsonify({
-                'success': False,
-                'message': f'获取运行中虚拟机列表失败: {result.stderr}'
-            })
+            add_task_log(task_id, 'ERROR', f'获取运行中虚拟机列表失败: {result.stderr}')
+            tasks[task_id]['status'] = 'failed'
+            return
         
         running_vms = result.stdout.strip().split('\n')[1:]  # 跳过标题行
         logger.info(f"获取到运行中虚拟机: {running_vms}")
@@ -4960,17 +4996,15 @@ def api_batch_change_ju():
                     break
             
             if not vm_running:
-                logger.warning(f"虚拟机 {vm_name} 不在运行状态")
-                return jsonify({
-                    'success': False,
-                    'message': f'虚拟机 {vm_name} 不在运行状态'
-                })
-        
-        results = []
+                add_task_log(task_id, 'ERROR', f'虚拟机 {vm_name} 不在运行状态')
+                tasks[task_id]['status'] = 'failed'
+                return
         
         # 为每个选中的虚拟机执行JU值更改
-        for vm_name in selected_vms:
+        for i, vm_name in enumerate(selected_vms):
             try:
+                add_task_log(task_id, 'INFO', f'开始处理虚拟机: {vm_name}')
+                
                 # 找到对应的运行中虚拟机路径
                 vm_path = None
                 for running_vm in running_vms:
@@ -4981,7 +5015,8 @@ def api_batch_change_ju():
                 
                 if not vm_path:
                     logger.error(f"未找到虚拟机 {vm_name} 的运行路径")
-                    results.append({
+                    add_task_log(task_id, 'ERROR', f'未找到虚拟机 {vm_name} 的运行路径')
+                    tasks[task_id]['results'].append({
                         'vm_name': vm_name,
                         'success': False,
                         'message': '未找到虚拟机运行路径'
@@ -4991,70 +5026,102 @@ def api_batch_change_ju():
                 # 获取虚拟机IP
                 vm_ip = get_vm_ip(vm_name)
                 if not vm_ip:
-                    results.append({
+                    add_task_log(task_id, 'ERROR', f'无法获取虚拟机 {vm_name} 的IP')
+                    tasks[task_id]['results'].append({
                         'vm_name': vm_name,
                         'success': False,
                         'message': '无法获取虚拟机IP'
                     })
                     continue
                 
+                add_task_log(task_id, 'INFO', f'虚拟机 {vm_name} IP: {vm_ip}')
+                
                 # 执行test.sh脚本
-                test_cmd = f'ssh wx@{vm_ip} "~/test.sh"'
+                test_cmd = f'ssh -o StrictHostKeyChecking=no wx@{vm_ip} "~/test.sh"'
                 logger.info(f"执行test.sh脚本: {test_cmd}")
+                add_task_log(task_id, 'INFO', f'执行test.sh脚本: {vm_name}')
                 test_result = subprocess.run(test_cmd, shell=True, capture_output=True, text=True, timeout=60)
                 
                 if test_result.returncode != 0:
-                    results.append({
+                    add_task_log(task_id, 'ERROR', f'test.sh脚本执行失败: {test_result.stderr}')
+                    tasks[task_id]['results'].append({
                         'vm_name': vm_name,
                         'success': False,
                         'message': f'test.sh脚本执行失败: {test_result.stderr}'
                     })
                     continue
                 
+                add_task_log(task_id, 'INFO', f'test.sh脚本执行成功: {vm_name}')
+                
                 # 重启虚拟机
+                add_task_log(task_id, 'INFO', f'开始重启虚拟机: {vm_name}')
                 restart_cmd = [vmrun_path, 'stop', vm_path]
                 logger.info(f"停止虚拟机: {restart_cmd}")
                 subprocess.run(restart_cmd, capture_output=True, timeout=30)
                 
                 time.sleep(5)  # 等待虚拟机完全停止
                 
-                restart_cmd = [vmrun_path, 'start', vm_path] 
+                restart_cmd = [vmrun_path, 'start', vm_path, 'nogui'] 
                 logger.info(f"启动虚拟机: {restart_cmd}")
                 subprocess.run(restart_cmd, capture_output=True, timeout=30)
                 
-                results.append({
+                add_task_log(task_id, 'INFO', f'虚拟机 {vm_name} 重启完成')
+                
+                tasks[task_id]['results'].append({
                     'vm_name': vm_name,
                     'success': True,
-                    'message': '批量更改JU值成功'
+                    'message': '脚本执行完毕，虚拟机正在重启中'
                 })
                 
                 logger.info(f"虚拟机 {vm_name} 批量更改JU值完成")
                 
+                # 更新进度
+                tasks[task_id]['current'] = i + 1
+                tasks[task_id]['progress'] = int((i + 1) / len(selected_vms) * 100)
+                
             except Exception as e:
                 logger.error(f"处理虚拟机 {vm_name} 时出错: {str(e)}")
-                results.append({
+                add_task_log(task_id, 'ERROR', f'处理虚拟机 {vm_name} 时出错: {str(e)}')
+                tasks[task_id]['results'].append({
                     'vm_name': vm_name,
                     'success': False,
                     'message': f'处理失败: {str(e)}'
                 })
         
-        success_count = sum(1 for r in results if r['success'])
-        total_count = len(results)
+        success_count = sum(1 for r in tasks[task_id]['results'] if r['success'])
+        total_count = len(tasks[task_id]['results'])
         
+        add_task_log(task_id, 'INFO', f'批量更改JU值完成 - 成功: {success_count}/{total_count}')
         logger.info(f"批量更改JU值完成 - 成功: {success_count}/{total_count}")
         
-        return jsonify({
-            'success': True,
-            'message': f'批量更改JU值完成，成功: {success_count}/{total_count}',
-            'results': results
-        })
+        tasks[task_id]['status'] = 'completed'
         
     except Exception as e:
-        logger.error(f"批量更改JU值失败: {str(e)}", exc_info=True)
+        logger.error(f"批量更改JU值任务失败: {str(e)}")
+        add_task_log(task_id, 'ERROR', f'批量更改JU值任务失败: {str(e)}')
+        tasks[task_id]['status'] = 'failed'
+
+
+@app.route('/api/batch_change_ju_status/<task_id>')
+@login_required
+def api_batch_change_ju_status(task_id):
+    """获取批量更改JU值任务状态"""
+    if task_id not in tasks:
         return jsonify({
             'success': False,
-            'message': f'批量更改JU值失败: {str(e)}'
+            'message': '任务不存在'
         })
+    
+    task = tasks[task_id]
+    return jsonify({
+        'success': True,
+        'status': task['status'],
+        'progress': task['progress'],
+        'current': task['current'],
+        'total': task['total'],
+        'results': task['results'],
+        'logs': task['logs']
+    })
 
 @app.route('/api/batch_delete_vm', methods=['POST'])
 @login_required
