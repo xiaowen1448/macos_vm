@@ -4909,17 +4909,22 @@ def api_batch_change_wuma():
         
         # 读取temp.plist模板
         plist_template_path = os.path.join(plist_template_dir, 'temp.plist')
+        logger.info(f"检查temp.plist模板文件: {plist_template_path}")
         if not os.path.exists(plist_template_path):
+            logger.error(f"temp.plist模板文件不存在: {plist_template_path}")
             return jsonify({
                 'success': False,
                 'message': f'temp.plist模板文件不存在: {plist_template_path}'
             })
         
+        logger.info(f"temp.plist模板文件存在，开始读取...")
         with open(plist_template_path, 'r', encoding='utf-8') as f:
             plist_template = f.read()
+        logger.info(f"temp.plist模板读取完成，长度: {len(plist_template)}")
         
         # 创建备份目录
         backup_dir = wuma_config_install_dir
+        logger.info(f"创建备份目录: {backup_dir}")
         os.makedirs(backup_dir, exist_ok=True)
         
         results = []
