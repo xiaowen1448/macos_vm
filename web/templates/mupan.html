@@ -255,29 +255,8 @@
                                                 <th>操作</th>
                                             </tr>
                                         </thead>
-                                        <tbody>
-                                            <tr>
-                                                <td>macos10.12_template</td>
-                                                <td>macOS 10.12 Sierra</td>
-                                                <td>25.6GB</td>
-                                                <td>2024-11-15 10:30:00</td>
-                                                <td><span class="badge bg-success">可用</span></td>
-                                                <td>
-                                                    <button class="btn btn-sm btn-outline-primary">查看详情</button>
-                                                    <button class="btn btn-sm btn-outline-warning">更新</button>
-                                                </td>
-                                            </tr>
-                                            <tr>
-                                                <td>macos10.15_template</td>
-                                                <td>macOS 10.15 Catalina</td>
-                                                <td>32.1GB</td>
-                                                <td>2024-11-20 14:15:00</td>
-                                                <td><span class="badge bg-success">可用</span></td>
-                                                <td>
-                                                    <button class="btn btn-sm btn-outline-primary">查看详情</button>
-                                                    <button class="btn btn-sm btn-outline-warning">更新</button>
-                                                </td>
-                                            </tr>
+                                        <tbody id="mupanTableBody">
+                                            <!-- 动态加载数据 -->
                                         </tbody>
                                     </table>
                                 </div>
@@ -291,6 +270,91 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // 页面加载时获取母盘数据
+        document.addEventListener('DOMContentLoaded', function() {
+            refreshMupanData();
+        });
+
+        // 刷新母盘数据
+        function refreshMupanData() {
+            console.log('开始获取母盘数据...');
+            fetch('/api/mupan_list')
+                .then(response => {
+                    console.log('响应状态:', response.status);
+                    console.log('响应头:', response.headers);
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('获取到的数据:', data);
+                    if (data.success) {
+                        console.log('数据获取成功，开始显示...');
+                        displayMupanData(data.data);
+                    } else {
+                        console.error('获取母盘数据失败:', data.message);
+                        alert('获取母盘数据失败: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('请求失败:', error);
+                    alert('请求失败: ' + error.message);
+                });
+        }
+
+                // 显示母盘数据
+        function displayMupanData(templateVms) {
+            console.log('开始显示母盘数据，数据长度:', templateVms.length);
+            const tbody = document.getElementById('mupanTableBody');
+            console.log('找到表格体元素:', tbody);
+            
+            tbody.innerHTML = '';
+
+            if (templateVms.length === 0) {
+                console.log('没有数据，显示空状态');
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">暂无母盘数据</td></tr>';
+                return;
+            }
+
+            console.log('开始遍历数据...');
+            templateVms.forEach((vm, index) => {
+                console.log(`处理第${index + 1}个虚拟机:`, vm);
+                const row = document.createElement('tr');
+                
+                // 状态徽章
+                let statusBadge = '';
+                if (vm.status === 'running') {
+                    statusBadge = '<span class="badge bg-success">运行中</span>';
+                } else if (vm.status === 'stopped') {
+                    statusBadge = '<span class="badge bg-secondary">已停止</span>';
+                } else {
+                    statusBadge = '<span class="badge bg-warning">未知</span>';
+                }
+
+                row.innerHTML = `
+                    <td>${vm.name}</td>
+                    <td>${vm.system_version}</td>
+                    <td>${vm.size}</td>
+                    <td>${vm.create_time}</td>
+                    <td>${statusBadge}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="editMupan('${vm.name}')" title="编辑">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                    </td>
+                `;
+                
+                tbody.appendChild(row);
+                console.log(`第${index + 1}行已添加到表格`);
+            });
+            
+            console.log('数据显示完成');
+        }
+
+        // 编辑母盘
+        function editMupan(vmName) {
+            alert('编辑母盘: ' + vmName);
+            // TODO: 实现编辑功能
+        }
+
         // 菜单处理函数
         function handleCloneClick() {
             // 只设置当前链接为激活状态，不进行任何菜单操作

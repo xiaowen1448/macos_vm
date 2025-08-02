@@ -10,6 +10,9 @@ import time
 import subprocess
 import paramiko
 import base64
+import sys
+
+from config import *
 
 # 配置日志
 logging.basicConfig(
@@ -41,22 +44,32 @@ def log_response_info(response):
     logger.info(f"响应状态: {response.status_code}")
     return response
 
-# 固定账号
-USERNAME = 'admin'
-PASSWORD = '123456'
+# 使用全局配置文件中的认证信息
+# USERNAME and PASSWORD are imported from config.py
 
-# 虚拟机目录配置
+# 虚拟机目录配置 - 使用全局配置
 VM_DIRS = {
-    '10_12': r'D:\macos_vm\NewVM\10.12',
-    'chengpin': r'D:\macos_vm\NewVM\chengpin_vm'
+    '10_12': clone_dir,
+    'chengpin': vm_chengpin_dir
 }
 
-#模板虚拟机路径
-template_dir = r'D:\macos_vm\TemplateVM\macos10.12'
+# 模板虚拟机路径 - 使用全局配置
+# template_dir is imported from config.py
 
 # 全局任务存储
 clone_tasks = {}
 tasks = {}
+
+def get_vmrun_path():
+    """获取vmrun路径，优先使用配置文件中的路径，如果不存在则使用备用路径"""
+    if os.path.exists(vmrun_path):
+        return vmrun_path
+    else:
+        backup_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
+        if os.path.exists(backup_path):
+            return backup_path
+        else:
+            raise FileNotFoundError(f"vmrun.exe not found at {vmrun_path} or {backup_path}")
 
 # 通用函数 - 获取虚拟机列表
 def get_vm_list_from_directory(vm_dir, vm_type_name):
@@ -76,9 +89,7 @@ def get_vm_list_from_directory(vm_dir, vm_type_name):
         # 批量获取运行中的虚拟机列表（只执行一次vmrun命令）
         running_vms = set()
         try:
-            vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
-            if not os.path.exists(vmrun_path):
-                vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
+            vmrun_path = get_vmrun_path()
             
             list_cmd = [vmrun_path, 'list']
             logger.debug(f"执行vmrun命令: {list_cmd}")
@@ -294,12 +305,10 @@ def vm_operation_generic(operation, vm_type_name, vm_dir):
             })
         
         # 执行虚拟机操作
-        vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
-        if not os.path.exists(vmrun_path):
-            vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
+        vmrun_path = get_vmrun_path()
         
         if operation == 'start':
-                            cmd = [vmrun_path, 'start', vm_file, 'nogui']
+            cmd = [vmrun_path, 'start', vm_file, 'nogui']
         elif operation == 'stop':
             cmd = [vmrun_path, 'stop', vm_file, 'hard']
         elif operation == 'restart':
@@ -510,7 +519,7 @@ def send_script_generic(vm_type_name):
                 '-o', 'StrictHostKeyChecking=no',
                 '-o', 'ConnectTimeout=10',
                 script_path,
-                f"wx@{vm_info['ip']}:/Users/wx/{script_name}"
+                f"{vm_username}@{vm_info['ip']}:{script_remote_path}{script_name}"
             ]
             
             logger.debug(f"执行SCP命令: {' '.join(scp_cmd)}")
@@ -521,7 +530,7 @@ def send_script_generic(vm_type_name):
                 return jsonify({
                     'success': True,
                     'message': f'脚本 {script_name} 发送成功到虚拟机 {vm_name}',
-                    'file_path': f'/Users/wx/{script_name}'
+                    'file_path': f'{script_remote_path}{script_name}'
                 })
             else:
                 error_msg = result.stderr.strip() if result.stderr else result.stdout.strip()
@@ -569,7 +578,7 @@ def add_permissions_generic(vm_type_name):
         data = request.get_json()
         vm_name = data.get('vm_name')
         script_names = data.get('script_names', [])
-        username = data.get('username', 'wx')
+        username = data.get('username', vm_username)
         
         if not vm_name or not script_names:
             return jsonify({
@@ -737,29 +746,43 @@ def clone_vm_page():
                 if fname.endswith('.vmx'):
                     template_vms.append({'name': fname})
     
-    # 获取配置文件目录列表
-    plist_dirs = []
-    base_plist_dir = r'D:\macos_vm\plist'
+    # 获取五码配置文件列表（与五码管理一致）
+    configs = []
+    config_dir = wuma_config_dir
     
-    if os.path.exists(base_plist_dir):
-        for item in os.listdir(base_plist_dir):
-            item_path = os.path.join(base_plist_dir, item)
-            if os.path.isdir(item_path):
-                # 计算目录中的plist文件数量
-                plist_count = 0
-                for fname in os.listdir(item_path):
-                    if fname.endswith('.plist') or fname.endswith('.txt'):
-                        plist_count += 1
+    # 确保config目录存在
+    if not os.path.exists(config_dir):
+        os.makedirs(config_dir, exist_ok=True)
+        logger.info("创建config目录")
+    
+    # 查找config目录下的所有.txt文件
+    if os.path.exists(config_dir):
+        for filename in os.listdir(config_dir):
+            if filename.endswith('.txt'):
+                file_path = os.path.join(config_dir, filename)
                 
-                plist_dirs.append({
-                    'name': item,
-                    'path': item_path,
-                    'count': plist_count
-                })
+                # 检查文件是否为合规的五码文本文件
+                if is_valid_wuma_file(file_path):
+                    config_name = filename[:-4]  # 去掉.txt后缀
+                    # 计算可用五码数量
+                    available_count = count_available_wuma(file_path)
+                    configs.append({
+                        'name': config_name,
+                        'display_name': filename,
+                        'path': file_path,
+                        'available_count': available_count
+                    })
+                    logger.info(f"发现合规的五码文件: {filename}, 可用五码数量: {available_count}")
+                else:
+                    logger.warning(f"跳过不合规的文件: {filename}")
+    
+    # 按名称排序
+    configs.sort(key=lambda x: x['name'])
     
     return render_template('clone_vm.html', 
                          template_vms=template_vms, 
-                         plist_dirs=plist_dirs)
+                         configs=configs,
+                         clone_dir=clone_dir)
 
 @app.route('/vm_management')
 @login_required
@@ -782,12 +805,10 @@ def api_vm_info_list():
         vm_dir = r'D:\macos_vm\NewVM'
         vms = []
         
-        # 批量获取运行中的虚拟机列表
+        # 批量获取运行中的虚拟机列表（只执行一次vmrun命令）
         running_vms = set()
         try:
-            vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
-            if not os.path.exists(vmrun_path):
-                vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
+            vmrun_path = get_vmrun_path()
             
             list_cmd = [vmrun_path, 'list']
             result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30)
@@ -864,6 +885,91 @@ def mupan_page():
     """虚拟机母盘管理页面"""
     return render_template('mupan.html')
 
+@app.route('/test_mupan')
+def test_mupan_page():
+    """母盘API测试页面"""
+    return render_template('test_mupan_direct.html')
+
+@app.route('/api/mupan_list')
+@login_required
+def api_mupan_list():
+    """获取母盘虚拟机列表"""
+    logger.info("收到母盘虚拟机列表请求")
+    try:
+        # 扫描TemplateVM目录
+        template_vms = []
+        
+        logger.info(f"扫描目录: {template_dir}")
+        if os.path.exists(template_dir):
+            logger.info("TemplateVM目录存在")
+            for root, dirs, files in os.walk(template_dir):
+                logger.info(f"扫描子目录: {root}")
+                for file in files:
+                    if file.endswith('.vmx'):
+                        vm_path = os.path.join(root, file)
+                        vm_name = os.path.splitext(file)[0]  # 去掉.vmx后缀
+                        logger.info(f"找到vmx文件: {vm_path}, 名称: {vm_name}")
+                        
+                        # 获取文件夹名称作为系统版本
+                        folder_name = os.path.basename(root)
+                        system_version = folder_name
+                        logger.info(f"系统版本: {system_version}")
+                        
+                        # 获取同vmx文件名的vmdk文件大小
+                        vmdk_path = os.path.join(root, f"{vm_name}.vmdk")
+                        size_str = "未知"
+                        if os.path.exists(vmdk_path):
+                            try:
+                                file_size = os.path.getsize(vmdk_path)
+                                size_str = f"{file_size / (1024**3):.1f}GB"
+                                logger.info(f"vmdk文件大小: {size_str}")
+                            except:
+                                size_str = "未知"
+                                logger.warning(f"无法获取vmdk文件大小: {vmdk_path}")
+                        else:
+                            logger.warning(f"vmdk文件不存在: {vmdk_path}")
+                        
+                        # 获取vmx文件创建时间
+                        try:
+                            create_time = datetime.datetime.fromtimestamp(os.path.getmtime(vm_path))
+                            create_time_str = create_time.strftime('%Y-%m-%d %H:%M:%S')
+                            logger.info(f"创建时间: {create_time_str}")
+                        except:
+                            create_time_str = "未知"
+                            logger.warning(f"无法获取创建时间: {vm_path}")
+                        
+                        # 调用vmrun获取虚拟机状态
+                        vm_status = get_vm_status(vm_path)
+                        logger.info(f"虚拟机状态: {vm_status}")
+                        
+                        vm_data = {
+                            'name': vm_name,
+                            'path': vm_path,
+                            'system_version': system_version,
+                            'size': size_str,
+                            'create_time': create_time_str,
+                            'status': vm_status
+                        }
+                        template_vms.append(vm_data)
+                        logger.info(f"添加虚拟机数据: {vm_data}")
+        
+        # 按名称排序
+        template_vms.sort(key=lambda x: x['name'])
+        logger.info(f"总共找到 {len(template_vms)} 个虚拟机")
+        
+        response_data = {
+            'success': True,
+            'data': template_vms
+        }
+        logger.info(f"返回数据: {response_data}")
+        return jsonify(response_data)
+    except Exception as e:
+        logger.error(f"获取母盘虚拟机列表失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取母盘虚拟机列表失败: {str(e)}'
+        })
+
 @app.route('/encrypt_code')
 @login_required
 def encrypt_code_page():
@@ -916,31 +1022,29 @@ def api_clone_vm():
                 logger.warning(f"缺少必要参数: {field}")
                 return jsonify({'success': False, 'message': f'缺少必要参数: {field}'})
         
-        # 验证plist文件数量
-        plist_dir = data.get('configPlist')
+        # 验证可用五码数量
+        config_file = data.get('configPlist')
         clone_count = int(data.get('cloneCount'))
         
-        logger.debug(f"plist目录: {plist_dir}")
+        logger.debug(f"配置文件: {config_file}")
         logger.debug(f"克隆数量: {clone_count}")
-        logger.debug(f"plist目录是否存在: {os.path.exists(plist_dir)}")
+        logger.debug(f"配置文件是否存在: {os.path.exists(config_file)}")
         
-        if os.path.exists(plist_dir):
-            plist_files = []
-            for fname in os.listdir(plist_dir):
-                if fname.endswith('.plist') or fname.endswith('.txt'):
-                    plist_files.append(fname)
+        if os.path.exists(config_file):
+            # 计算可用五码数量
+            available_wuma_count = count_available_wuma(config_file)
             
-            logger.debug(f"找到plist文件数量: {len(plist_files)}")
+            logger.debug(f"可用五码数量: {available_wuma_count}")
             
-            if len(plist_files) < clone_count:
-                logger.warning(f"plist文件不足: 需要{clone_count}个，只有{len(plist_files)}个")
+            if available_wuma_count < clone_count:
+                logger.warning(f"可用五码不足: 需要{clone_count}个，只有{available_wuma_count}个")
                 return jsonify({
                     'success': False, 
-                    'message': f'plist文件不足：目录中有 {len(plist_files)} 个文件，但需要克隆 {clone_count} 个虚拟机。请增加plist文件或减少克隆数量。'
+                    'message': f'可用五码不足：配置文件中有 {available_wuma_count} 个可用五码，但需要克隆 {clone_count} 个虚拟机。请增加五码配置或减少克隆数量。'
                 })
         else:
-            logger.error(f"plist目录不存在: {plist_dir}")
-            return jsonify({'success': False, 'message': f'配置文件目录不存在: {plist_dir}'})
+            logger.error(f"配置文件不存在: {config_file}")
+            return jsonify({'success': False, 'message': f'配置文件不存在: {config_file}'})
         
         # 生成任务ID
         task_id = str(uuid.uuid4())
@@ -987,18 +1091,31 @@ def clone_vm_worker(task_id):
         print(f"[DEBUG] 开始克隆任务: 模板={params['templateVM']}, 数量={params['cloneCount']}")
         
         # 验证模板虚拟机是否存在
-        template_path = os.path.join(template_dir, params['templateVM'])
-        print(f"[DEBUG] 模板路径: {template_path}")
-        print(f"[DEBUG] 模板路径是否存在: {os.path.exists(template_path)}")
+        template_vm_name = params['templateVM']
+        template_path = None
         
-        if not os.path.exists(template_path):
-            add_task_log(task_id, 'error', f'模板虚拟机不存在: {template_path}')
-            print(f"[DEBUG] 错误：模板虚拟机不存在: {template_path}")
+        # 在template_dir中查找匹配的.vmx文件
+        if os.path.exists(template_dir):
+            for root, dirs, files in os.walk(template_dir):
+                for file in files:
+                    if file == template_vm_name and file.endswith('.vmx'):
+                        template_path = os.path.join(root, file)
+                        break
+                if template_path:
+                    break
+        
+        print(f"[DEBUG] 模板虚拟机名称: {template_vm_name}")
+        print(f"[DEBUG] 找到的模板路径: {template_path}")
+        print(f"[DEBUG] 模板路径是否存在: {os.path.exists(template_path) if template_path else False}")
+        
+        if not template_path or not os.path.exists(template_path):
+            add_task_log(task_id, 'error', f'模板虚拟机不存在: {template_vm_name}')
+            print(f"[DEBUG] 错误：模板虚拟机不存在: {template_vm_name}")
             task['status'] = 'failed'
             return
         
         # 确保目标目录存在
-        target_dir = params['targetDir']
+        target_dir = clone_dir  # 使用全局配置中的克隆目录
         print(f"[DEBUG] 目标目录: {target_dir}")
         print(f"[DEBUG] 目标目录是否存在: {os.path.exists(target_dir)}")
         
@@ -1015,9 +1132,7 @@ def clone_vm_worker(task_id):
             add_task_log(task_id, 'info', '开始创建虚拟机快照...')
             print(f"[DEBUG] 开始创建虚拟机快照...")
             
-            vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
-            if not os.path.exists(vmrun_path):
-                vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
+            vmrun_path = get_vmrun_path()
             
             print(f"[DEBUG] vmrun路径: {vmrun_path}")
             print(f"[DEBUG] vmrun是否存在: {os.path.exists(vmrun_path)}")
@@ -1055,7 +1170,7 @@ def clone_vm_worker(task_id):
                 print(f"[DEBUG] 开始执行快照命令...")
                 
                 # 记录详细的快照命令执行信息
-                add_task_log(task_id, 'info', f'执行快照命令: {" ".join(snapshot_cmd)}')
+                add_task_log(task_id, 'info', f'执行快照命令: vmrun snapshot {template_path} {snapshot_name}')
                 
                 # 记录命令开始时间
                 start_time = datetime.datetime.now()
@@ -1103,25 +1218,60 @@ def clone_vm_worker(task_id):
             add_task_log(task_id, 'info', '跳过快照创建，直接开始克隆任务')
             print(f"[DEBUG] 跳过快照创建，直接开始克隆任务")
         
-        # 获取plist文件列表
-        plist_dir = params.get('configPlist')
-        plist_files = []
-        print(f"[DEBUG] plist目录: {plist_dir}")
-        print(f"[DEBUG] plist目录是否存在: {os.path.exists(plist_dir)}")
+        # 获取五码配置文件
+        config_file = params.get('configPlist')
+        wuma_codes = []
+        print(f"[DEBUG] 五码配置文件: {config_file}")
+        print(f"[DEBUG] 配置文件是否存在: {os.path.exists(config_file)}")
         
-        if os.path.exists(plist_dir):
-            for fname in os.listdir(plist_dir):
-                if fname.endswith('.plist') or fname.endswith('.txt'):
-                    plist_files.append(fname)
+        if os.path.exists(config_file):
+            # 读取五码配置文件中的有效五码
+            try:
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    content = f.read().strip()
+                
+                if content:
+                    lines = content.split('\n')
+                    for line in lines:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        
+                        # 检查格式：:ROM:MLB:SN:BoardID:Model:
+                        if not (line.startswith(':') and line.endswith(':')):
+                            continue
+                        
+                        # 分割并检查字段数量
+                        parts = line.split(':')
+                        if len(parts) != 7:  # 包括首尾的空字符串
+                            continue
+                        
+                        # 检查中间5个字段是否不为空
+                        if any(not parts[i].strip() for i in range(1, 6)):
+                            continue
+                        
+                        wuma_codes.append(line)
+                
+                print(f"[DEBUG] 读取到有效五码数量: {len(wuma_codes)}")
+            except Exception as e:
+                print(f"[DEBUG] 读取五码配置文件失败: {str(e)}")
+                add_task_log(task_id, 'error', f'读取五码配置文件失败: {str(e)}')
+                task['status'] = 'failed'
+                return
+        else:
+            print(f"[DEBUG] 五码配置文件不存在: {config_file}")
+            add_task_log(task_id, 'error', f'五码配置文件不存在: {config_file}')
+            task['status'] = 'failed'
+            return
         
-        print(f"[DEBUG] 找到plist文件数量: {len(plist_files)}")
-        print(f"[DEBUG] plist文件列表: {plist_files}")
+        print(f"[DEBUG] 找到有效五码数量: {len(wuma_codes)}")
+        print(f"[DEBUG] 五码列表: {wuma_codes[:3]}...")  # 只显示前3个
         
         # 开始克隆
         clone_count = int(params['cloneCount'])
         print(f"[DEBUG] 开始克隆，总数: {clone_count}")
         
-        add_task_log(task_id, 'info', f'找到 {len(plist_files)} 个plist文件，需要克隆 {clone_count} 个虚拟机')
+        add_task_log(task_id, 'info', f'找到 {len(wuma_codes)} 个有效五码，需要克隆 {clone_count} 个虚拟机')
         
         # 发送初始进度信息
         initial_progress = {
@@ -1164,14 +1314,14 @@ def clone_vm_worker(task_id):
                 print(f"[DEBUG] 生成的虚拟机文件夹: {vm_folder_name}")
                 print(f"[DEBUG] 生成的虚拟机文件路径: {vm_file_path}")
                 
-                # 分配plist文件
-                plist_file = plist_files[i % len(plist_files)] if plist_files else None
-                print(f"[DEBUG] 分配的plist文件: {plist_file}")
+                # 分配五码
+                wuma_code = wuma_codes[i % len(wuma_codes)] if wuma_codes else None
+                print(f"[DEBUG] 分配的五码: {wuma_code}")
                 
                 add_task_log(task_id, 'info', f'开始克隆第 {i+1}/{clone_count} 个虚拟机: {vm_name}')
                 add_task_log(task_id, 'info', f'虚拟机文件夹: {vm_folder_path}')
-                if plist_file:
-                    add_task_log(task_id, 'info', f'使用配置文件: {plist_file}')
+                if wuma_code:
+                    add_task_log(task_id, 'info', f'使用五码: {wuma_code[:50]}...')  # 只显示前50个字符
                 
                 # 发送当前虚拟机进度信息
                 current_vm_progress = {
@@ -1185,9 +1335,7 @@ def clone_vm_worker(task_id):
                 task['logs'].append(current_vm_progress)
                 
                 # 执行克隆命令
-                vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
-                if not os.path.exists(vmrun_path):
-                    vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
+                vmrun_path = get_vmrun_path()
                 
                 print(f"[DEBUG] 克隆使用的vmrun路径: {vmrun_path}")
                 
@@ -1222,7 +1370,7 @@ def clone_vm_worker(task_id):
                 print(f"[DEBUG] 执行命令: {' '.join(clone_cmd)}")
                 
                 # 记录详细的命令执行信息
-                add_task_log(task_id, 'info', f'执行克隆命令: {" ".join(clone_cmd)}')
+                add_task_log(task_id, 'info', f'执行克隆命令: vmrun clone {template_path} {vm_file_path}')
                 print(f"[DEBUG] 开始执行克隆命令...")
                 
                 # 记录命令开始时间
@@ -1267,7 +1415,7 @@ def clone_vm_worker(task_id):
                     if params.get('autoStart') == 'true':
                         start_cmd = [vmrun_path, 'start', vm_file_path, 'nogui']
                         print(f"[DEBUG] 自动启动命令: {' '.join(start_cmd)}")
-                        add_task_log(task_id, 'info', f'执行启动命令: {" ".join(start_cmd)}')
+                        add_task_log(task_id, 'info', f'执行启动命令: vmrun start {vm_file_path}')
                         
                         # 记录启动命令开始时间
                         start_time = datetime.datetime.now()
@@ -1543,9 +1691,7 @@ def api_vm_list():
         # 批量获取运行中的虚拟机列表（只执行一次vmrun命令）
         running_vms = set()
         try:
-            vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
-            if not os.path.exists(vmrun_path):
-                vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
+            vmrun_path = get_vmrun_path()
             
             list_cmd = [vmrun_path, 'list']
             logger.debug(f"执行vmrun命令: {list_cmd}")
@@ -1787,9 +1933,7 @@ def api_vm_start():
             return jsonify({'success': False, 'message': f'找不到虚拟机: {vm_name}'})
         
         # 启动虚拟机
-        vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
-        if not os.path.exists(vmrun_path):
-            vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
+        vmrun_path = get_vmrun_path()
         
         print(f"[DEBUG] 启动虚拟机 {vm_name}")
         print(f"[DEBUG] 虚拟机文件路径: {vm_file}")
@@ -1841,9 +1985,7 @@ def api_vm_stop():
             return jsonify({'success': False, 'message': f'找不到虚拟机: {vm_name}'})
         
         # 停止虚拟机
-        vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
-        if not os.path.exists(vmrun_path):
-            vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
+        vmrun_path = get_vmrun_path()
         
         print(f"[DEBUG] 停止虚拟机 {vm_name}")
         print(f"[DEBUG] 虚拟机文件路径: {vm_file}")
@@ -1895,9 +2037,7 @@ def api_vm_restart():
             return jsonify({'success': False, 'message': f'找不到虚拟机: {vm_name}'})
         
         # 重启虚拟机
-        vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
-        if not os.path.exists(vmrun_path):
-            vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
+        vmrun_path = get_vmrun_path()
         
         print(f"[DEBUG] 重启虚拟机 {vm_name}")
         print(f"[DEBUG] 虚拟机文件路径: {vm_file}")
@@ -2011,9 +2151,7 @@ def api_vm_delete():
                     continue
                 
                 # 先停止虚拟机
-                vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
-                if not os.path.exists(vmrun_path):
-                    vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
+                vmrun_path = get_vmrun_path()
                 
                 # 停止虚拟机
                 stop_cmd = [vmrun_path, 'stop', vm_file, 'hard']
@@ -2047,9 +2185,7 @@ def api_vm_delete():
 def get_vm_status(vm_path):
     """获取虚拟机状态"""
     try:
-        vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
-        if not os.path.exists(vmrun_path):
-            vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
+        vmrun_path = get_vmrun_path()
         
         print(f"[DEBUG] 使用vmrun路径: {vmrun_path}")
         list_cmd = [vmrun_path, 'list']
@@ -2090,10 +2226,8 @@ def get_vm_ip(vm_name):
         vm_file = find_vm_file(vm_name)
         if vm_file:
             logger.debug(f"找到虚拟机文件: {vm_file}")
-            vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
-            if not os.path.exists(vmrun_path):
-                vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
-                logger.debug(f"使用备用vmrun路径: {vmrun_path}")
+            vmrun_path = get_vmrun_path()
+            logger.debug(f"使用备用vmrun路径: {vmrun_path}")
             
             if os.path.exists(vmrun_path):
                 try:
@@ -2343,7 +2477,7 @@ def check_ssh_port_open(ip, port=22):
         logger.debug(f"检查SSH端口失败: {str(e)}")
         return False
 
-def check_ssh_trust_status(ip, username='wx'):
+def check_ssh_trust_status(ip, username=vm_username):
     """检查SSH互信状态"""
     if not ip:
         return False
@@ -2560,9 +2694,7 @@ def find_vm_file(vm_name):
 def get_vm_snapshots(vm_path):
     """获取虚拟机快照列表"""
     try:
-        vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
-        if not os.path.exists(vmrun_path):
-            vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
+        vmrun_path = get_vmrun_path()
         
         snapshots_cmd = [vmrun_path, 'listSnapshots', vm_path]
         result = subprocess.run(snapshots_cmd, capture_output=True, text=True, timeout=30)
@@ -2927,6 +3059,75 @@ def api_edit_script():
             'message': f'编辑脚本失败: {str(e)}'
         })
 
+@app.route('/api/script/delete', methods=['POST'])
+@login_required
+def api_delete_script():
+    """删除脚本文件"""
+    logger.info("收到删除脚本请求")
+    try:
+        data = request.get_json()
+        script_name = data.get('script_name')
+        
+        if not script_name:
+            return jsonify({
+                'success': False,
+                'message': '缺少脚本名称参数'
+            })
+        
+        # 验证脚本名称格式
+        if not script_name.endswith('.sh'):
+            return jsonify({
+                'success': False,
+                'message': '脚本文件名必须以.sh结尾'
+            })
+        
+        # 检查是否包含中文字符
+        if any('\u4e00' <= char <= '\u9fff' for char in script_name):
+            return jsonify({
+                'success': False,
+                'message': '脚本名称不能包含中文字符'
+            })
+        
+        scripts_dir = r'D:\macos_vm\macos_sh'
+        script_path = os.path.join(scripts_dir, script_name)
+        note_path = script_path.replace('.sh', '.txt')
+        
+        # 检查脚本文件是否存在
+        if not os.path.exists(script_path):
+            return jsonify({
+                'success': False,
+                'message': f'脚本文件不存在: {script_name}'
+            })
+        
+        try:
+            # 删除脚本文件
+            os.remove(script_path)
+            logger.info(f"删除脚本文件: {script_path}")
+            
+            # 如果存在对应的备注文件，也一并删除
+            if os.path.exists(note_path):
+                os.remove(note_path)
+                logger.info(f"删除备注文件: {note_path}")
+            
+            return jsonify({
+                'success': True,
+                'message': f'脚本 {script_name} 删除成功'
+            })
+            
+        except Exception as e:
+            logger.error(f"删除脚本文件失败: {str(e)}")
+            return jsonify({
+                'success': False,
+                'message': f'删除脚本文件失败: {str(e)}'
+            })
+        
+    except Exception as e:
+        logger.error(f"删除脚本失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'删除脚本失败: {str(e)}'
+        })
+
 @app.route('/api/script/content/<script_name>')
 @login_required
 def api_get_script_content(script_name):
@@ -3019,7 +3220,7 @@ def api_vm_send_script():
                 '-o', 'StrictHostKeyChecking=no',
                 '-o', 'ConnectTimeout=10',
                 script_path,
-                f"wx@{vm_info['ip']}:/Users/wx/{script_name}"
+                f"{vm_username}@{vm_info['ip']}:{script_remote_path}{script_name}"
             ]
             
             logger.debug(f"执行SCP命令: {' '.join(scp_cmd)}")
@@ -3030,7 +3231,7 @@ def api_vm_send_script():
                 return jsonify({
                     'success': True,
                     'message': f'脚本 {script_name} 发送成功到虚拟机 {vm_name}',
-                    'file_path': f'/Users/wx/{script_name}'
+                    'file_path': f'{script_remote_path}{script_name}'
                 })
             else:
                 error_msg = result.stderr.strip() if result.stderr else result.stdout.strip()
@@ -3080,7 +3281,7 @@ def api_vm_add_permissions():
         data = request.get_json()
         vm_name = data.get('vm_name')
         script_names = data.get('script_names', [])
-        username = data.get('username', 'wx')
+        username = data.get('username', vm_username)
         
         logger.debug(f"添加执行权限参数 - 虚拟机: {vm_name}, 脚本: {script_names}, 用户: {username}")
         
@@ -3140,7 +3341,7 @@ def api_ssh_trust():
     try:
         data = request.get_json()
         vm_name = data.get('vm_name')
-        username = data.get('username', 'wx')
+        username = data.get('username', vm_username)
         password = data.get('password', '123456')
         
         logger.debug(f"SSH互信参数 - 虚拟机: {vm_name}, 用户: {username}")
@@ -3278,7 +3479,7 @@ def api_vm_chmod_scripts():
         data = request.get_json()
         vm_name = data.get('vm_name')
         script_names = data.get('script_names', [])  # 可以传入单个脚本名或脚本名列表
-        username = data.get('username', 'wx')
+        username = data.get('username', vm_username)
         
         logger.debug(f"添加执行权限参数 - 虚拟机: {vm_name}, 脚本: {script_names}, 用户: {username}")
         
@@ -3662,7 +3863,7 @@ def api_ssh_chengpin_trust():
     try:
         data = request.get_json()
         vm_name = data.get('vm_name')
-        username = data.get('username', 'wx')
+        username = data.get('username', vm_username)
         password = data.get('password', '123456')
         
         if not vm_name:
@@ -3744,7 +3945,7 @@ def api_vm_chengpin_chmod_scripts():
         data = request.get_json()
         vm_name = data.get('vm_name')
         script_names = data.get('script_names', [])
-        username = data.get('username', 'wx')
+        username = data.get('username', vm_username)
         
         if not vm_name or not script_names:
             return jsonify({
@@ -3965,7 +4166,7 @@ def api_ssh_10_12_trust():
     try:
         data = request.get_json()
         vm_name = data.get('vm_name')
-        username = data.get('username', 'wx')
+        username = data.get('username', vm_username)
         password = data.get('password', '123456')
         
         if not vm_name:
@@ -4047,7 +4248,7 @@ def api_vm_10_12_chmod_scripts():
         data = request.get_json()
         vm_name = data.get('vm_name')
         script_names = data.get('script_names', [])
-        username = data.get('username', 'wx')
+        username = data.get('username', vm_username)
         
         if not vm_name or not script_names:
             return jsonify({
@@ -4215,13 +4416,13 @@ def api_wuma_list():
         # 根据类型选择配置文件路径
         if list_type == 'used':
             # 从 config_install 目录读取已使用的五码（加_install.bak后缀）
-            config_file_path = os.path.join(os.path.dirname(__file__), 'config', 'config_install', f'{config_name}_install.bak')
+            config_file_path = os.path.join(wuma_config_install_dir, f'{config_name}_install.bak')
         elif list_type == 'deleted':
             # 从 config_del 目录读取已删除的五码（加_del.bak后缀）
-            config_file_path = os.path.join(os.path.dirname(__file__), 'config', 'config_del', f'{config_name}_del.bak')
+            config_file_path = os.path.join(wuma_config_delete_dir, f'{config_name}_del.bak')
         else:
             # 从 config 目录读取可用的五码
-            config_file_path = os.path.join(os.path.dirname(__file__), 'config', f'{config_name}.txt')
+            config_file_path = os.path.join(wuma_config_dir, f'{config_name}.txt')
         
         logger.debug(f"配置文件路径: {config_file_path}")
         
@@ -4311,7 +4512,7 @@ def api_wuma_configs():
     logger.info("收到获取配置文件列表请求")
     try:
         configs = []
-        config_dir = os.path.join(os.path.dirname(__file__), 'config')
+        config_dir = wuma_config_dir
         
         # 确保config目录存在
         if not os.path.exists(config_dir):
@@ -4334,16 +4535,16 @@ def api_wuma_configs():
                         logger.info(f"发现合规的五码文件: {filename}")
                     else:
                         logger.warning(f"跳过不合规的文件: {filename}")
-        
-        # 按名称排序
-        configs.sort(key=lambda x: x['name'])
-        
-        logger.info(f"找到 {len(configs)} 个合规的五码配置文件")
-        
-        return jsonify({
-            'success': True,
-            'configs': configs
-        })
+            
+            # 按名称排序
+            configs.sort(key=lambda x: x['name'])
+            
+            logger.info(f"找到 {len(configs)} 个合规的五码配置文件")
+            
+            return jsonify({
+                'success': True,
+                'configs': configs
+            })
         
     except Exception as e:
         logger.error(f"获取配置文件列表失败: {str(e)}")
@@ -4431,7 +4632,7 @@ def api_wuma_upload():
                 filename = filename.rsplit('.', 1)[0] + '.txt'
         
         # 确保config目录存在
-        config_dir = os.path.join(os.path.dirname(__file__), 'config')
+        config_dir = wuma_config_dir
         os.makedirs(config_dir, exist_ok=True)
         
         # 构建文件路径
@@ -4536,7 +4737,7 @@ def api_wuma_delete():
             })
         
         # 构建配置文件路径
-        config_dir = os.path.join(os.path.dirname(__file__), 'config')
+        config_dir = wuma_config_dir
         
         # 如果config_file不包含.txt扩展名，则添加
         if not config_file.endswith('.txt'):
@@ -4584,7 +4785,7 @@ def api_wuma_delete():
         lines.pop(row_index)
         
         # 创建备份目录
-        backup_dir = os.path.join(config_dir, 'config_del')
+        backup_dir = wuma_config_delete_dir
         os.makedirs(backup_dir, exist_ok=True)
         
         # 生成备份文件名：原文件名_del.bak
@@ -4640,7 +4841,7 @@ def api_batch_change_wuma():
             })
         
         # 构建配置文件路径
-        config_dir = os.path.join(os.path.dirname(__file__), 'config')
+        config_dir = wuma_config_dir
         if not default_config.endswith('.txt'):
             config_file_path = os.path.join(config_dir, f'{default_config}.txt')
         else:
@@ -4673,9 +4874,7 @@ def api_batch_change_wuma():
             })
         
         # 验证选中的虚拟机是否都在运行
-        vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
-        if not os.path.exists(vmrun_path):
-            vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
+        vmrun_path = get_vmrun_path()
         
         list_cmd = [vmrun_path, 'list']
         logger.debug(f"执行vmrun命令: {list_cmd}")
@@ -4709,7 +4908,7 @@ def api_batch_change_wuma():
                 })
         
         # 读取temp.plist模板
-        plist_template_path = os.path.join(os.path.dirname(__file__), 'config', 'plist', 'temp.plist')
+        plist_template_path = os.path.join(plist_template_dir, 'temp.plist')
         if not os.path.exists(plist_template_path):
             return jsonify({
                 'success': False,
@@ -4720,7 +4919,7 @@ def api_batch_change_wuma():
             plist_template = f.read()
         
         # 创建备份目录
-        backup_dir = os.path.join(config_dir, 'config_install')
+        backup_dir = wuma_config_install_dir
         os.makedirs(backup_dir, exist_ok=True)
         
         results = []
@@ -4830,7 +5029,7 @@ def api_batch_change_wuma():
                     continue
                 
                 # 执行mount_efi.sh脚本
-                mount_cmd = f'ssh wx@{vm_ip} "~/mount_efi.sh"'
+                mount_cmd = f'ssh {vm_username}@{vm_ip} "~/mount_efi.sh"'
                 logger.info(f"执行mount命令: {mount_cmd}")
                 mount_result = subprocess.run(mount_cmd, shell=True, capture_output=True, text=True, timeout=60)
                 
@@ -4839,7 +5038,7 @@ def api_batch_change_wuma():
                     # 继续执行，不中断流程
                 
                 # 传输plist文件到虚拟机
-                scp_cmd = f'scp "{plist_file_path}" wx@{vm_ip}:/Volumes/EFI/CLOVER/config.plist'
+                scp_cmd = f'scp "{plist_file_path}" {vm_username}@{vm_ip}:{boot_config_path}'
                 logger.info(f"执行scp命令: {scp_cmd}")
                 scp_result = subprocess.run(scp_cmd, shell=True, capture_output=True, text=True, timeout=60)
                 
@@ -4971,9 +5170,7 @@ def batch_change_ju_worker(task_id, selected_vms):
     
     try:
         # 验证选中的虚拟机是否都在运行
-        vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
-        if not os.path.exists(vmrun_path):
-            vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
+        vmrun_path = get_vmrun_path()
         
         list_cmd = [vmrun_path, 'list']
         logger.debug(f"执行vmrun命令: {list_cmd}")
@@ -5143,9 +5340,7 @@ def api_batch_delete_vm():
         logger.info(f"选中的虚拟机: {selected_vms}")
         
         # 验证选中的虚拟机是否都已停止
-        vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
-        if not os.path.exists(vmrun_path):
-            vmrun_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
+        vmrun_path = get_vmrun_path()
         
         list_cmd = [vmrun_path, 'list']
         logger.debug(f"执行vmrun命令: {list_cmd}")
@@ -5252,6 +5447,44 @@ def is_valid_wuma_file_line(line):
             return False
     
     return True
+
+def count_available_wuma(file_path):
+    """计算文件中可用的五码数量"""
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read().strip()
+        
+        if not content:
+            return 0
+        
+        lines = content.split('\n')
+        valid_count = 0
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            
+            # 检查格式：:ROM:MLB:SN:BoardID:Model:
+            if not (line.startswith(':') and line.endswith(':')):
+                continue
+            
+            # 分割并检查字段数量
+            parts = line.split(':')
+            if len(parts) != 7:  # 包括首尾的空字符串
+                continue
+            
+            # 检查中间5个字段是否不为空
+            if any(not parts[i].strip() for i in range(1, 6)):
+                continue
+            
+            valid_count += 1
+        
+        return valid_count
+        
+    except Exception as e:
+        logger.error(f"计算可用五码数量失败 {file_path}: {str(e)}")
+        return 0
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

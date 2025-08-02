@@ -433,16 +433,17 @@
                                             <input type="number" class="form-control form-control-sm" id="cloneCount" name="cloneCount" min="1" max="100" value="3" style="width: 50%;" required>
                                         </div>
                                         <div class="col-md-4">
-                                            <label for="targetDir" class="form-label">目标目录</label>
-                                            <input type="text" class="form-control" style="width: 60%;"   id="targetDir" name="targetDir" 
-                                           value="D:\macos_vm\NewVM\10.12" required>
+                                            <label for="targetDir" class="form-label">虚拟克隆目录</label>
+                                            <input type="text" class="form-control" style="width: 60%;" id="targetDir" name="targetDir" 
+                                           value="{{ clone_dir }}" readonly>
+                                            <small class="text-muted">从配置文件获取 ({{ clone_dir.split('\\')[-1] }})</small>
                                         </div>
                                         <div class="col-md-4">
-                                            <label for="configPlist" class="form-label">配置文件目录</label>
-                                            <select class="form-select" id="configPlist" name="configPlist" style="width: 60%;"   required>
-                                                <option value="">选择配置文件目录</option>
-                                                {% for plist_dir in plist_dirs %}
-                                                <option value="{{ plist_dir.path }}">{{ plist_dir.name }} ({{ plist_dir.count }}个文件)</option>
+                                            <label for="configPlist" class="form-label">五码配置文件</label>
+                                            <select class="form-select" id="configPlist" name="configPlist" style="width: 60%;" required>
+                                                <option value="">选择五码配置文件</option>
+                                                {% for config in configs %}
+                                                <option value="{{ config.path }}">{{ config.display_name }} ({{ config.available_count }}个可用五码)</option>
                                                 {% endfor %}
                                             </select>
                                         </div>
@@ -1127,12 +1128,12 @@
         document.getElementById('configPlist').addEventListener('change', function() {
             const cloneCount = parseInt(document.getElementById('cloneCount').value) || 0;
             const selectedOption = this.options[this.selectedIndex];
-            const countText = selectedOption.text.match(/\((\d+)个文件\)/);
+            const countText = selectedOption.text.match(/\((\d+)个可用五码\)/);
             
             if (countText) {
                 const plistCount = parseInt(countText[1]);
                 if (plistCount < cloneCount) {
-                    alert(`警告：选择的配置文件目录只有 ${plistCount} 个文件，但需要克隆 ${cloneCount} 个虚拟机。请增加plist文件或减少克隆数量。`);
+                    alert(`警告：选择的五码配置文件只有 ${plistCount} 个可用五码，但需要克隆 ${cloneCount} 个虚拟机。请增加五码或减少克隆数量。`);
                 }
             }
         });
@@ -1205,7 +1206,7 @@
                 }
                 
                 // 禁用克隆按钮
-                const cloneButton = document.getElementById('cloneButton');
+                const cloneButton = document.getElementById('cloneBtn');
                 if (cloneButton) {
                     cloneButton.disabled = true;
                     cloneButton.textContent = '克隆进行中...';

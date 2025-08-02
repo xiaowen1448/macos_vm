@@ -4,6 +4,10 @@ import subprocess
 from glob import glob
 from flask import request, jsonify
 
+# 添加项目根目录到Python路径
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config import *
+
 def log(msg):
     print(f"[INFO] {msg}")
 
@@ -36,7 +40,7 @@ def api_clone_vm():
     # 获取参数并做健壮处理
     clone_count = int(data.get('clone_count', 3))
     base_name = data.get('base_name', 'vm_clone_')
-    target_dir = data.get('target_dir', r'D:\macos_vm\NewVM\10.12')
+    target_dir = data.get('target_dir', clone_dir)  # 使用全局配置
     template_vmx = data.get('template_vmx')
     clone_type = data.get('clone_type', 'full')
     inc_type = data.get('inc_type', 'num')  # 'num' or 'alpha'

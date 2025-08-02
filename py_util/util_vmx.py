@@ -1,6 +1,11 @@
 import os
+import sys
 
-def find_vmx_files(directory,str_file):
+# 添加项目根目录到Python路径
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config import *
+
+def find_vmx_files(directory, str_file):
     """遍历目录及其子目录，查找所有 .vmx 文件"""
     vmx_files = []
     for root, _, files in os.walk(directory):
@@ -21,3 +26,11 @@ def read_vmx_files(directory):
             absolute_path = os.path.abspath(clean_path)
             vmx_files.append(absolute_path)
     return vmx_files
+
+def get_default_vm_directories():
+    """获取默认的虚拟机目录列表"""
+    return {
+        'template': template_dir,
+        'clone': clone_dir,
+        'chengpin': vm_chengpin_dir
+    }

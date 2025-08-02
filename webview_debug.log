@@ -33,3 +33,69 @@
 2025-07-29 13:36:13,512 [DEBUG] wait_for_flask:52 - 尝试连接Flask服务 (第4次)
 2025-07-29 13:36:13,513 [DEBUG] _new_conn:241 - Starting new HTTP connection (1): 127.0.0.1:5000
 2025-07-29 13:36:15,551 [DEBUG] wait_for_flask:58 - 连接失败: HTTPConnectionPool(host='127.0.0.1', port=5000): Max retries exceeded with url: /login (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000000003BA4E90>: Failed to establish a new connection: [WinError 10061] 由于目标计算机积极拒绝，无法连接。'))
+2025-07-31 20:41:51,242 [INFO] <module>:64 - 启动macos_vm管理平台
+2025-07-31 20:41:51,243 [INFO] <module>:67 - 启动Flask服务
+2025-07-31 20:41:51,250 [INFO] wait_for_flask:49 - 等待Flask服务启动: http://127.0.0.1:5000/login
+2025-07-31 20:41:51,251 [DEBUG] wait_for_flask:52 - 尝试连接Flask服务 (第1次)
+2025-07-31 20:41:51,254 [DEBUG] _new_conn:241 - Starting new HTTP connection (1): 127.0.0.1:5000
+2025-07-31 20:41:53,294 [DEBUG] wait_for_flask:58 - 连接失败: HTTPConnectionPool(host='127.0.0.1', port=5000): Max retries exceeded with url: /login (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000000003937E00>: Failed to establish a new connection: [WinError 10061] 由于目标计算机积极拒绝，无法连接。'))
+2025-07-31 20:41:53,795 [DEBUG] wait_for_flask:52 - 尝试连接Flask服务 (第2次)
+2025-07-31 20:41:53,796 [DEBUG] _new_conn:241 - Starting new HTTP connection (1): 127.0.0.1:5000
+2025-07-31 20:41:55,827 [DEBUG] wait_for_flask:58 - 连接失败: HTTPConnectionPool(host='127.0.0.1', port=5000): Max retries exceeded with url: /login (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000000004490690>: Failed to establish a new connection: [WinError 10061] 由于目标计算机积极拒绝，无法连接。'))
+2025-07-31 20:41:56,328 [DEBUG] wait_for_flask:52 - 尝试连接Flask服务 (第3次)
+2025-07-31 20:41:56,330 [DEBUG] _new_conn:241 - Starting new HTTP connection (1): 127.0.0.1:5000
+2025-07-31 20:41:58,375 [DEBUG] wait_for_flask:58 - 连接失败: HTTPConnectionPool(host='127.0.0.1', port=5000): Max retries exceeded with url: /login (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000000004490F50>: Failed to establish a new connection: [WinError 10061] 由于目标计算机积极拒绝，无法连接。'))
+2025-07-31 20:42:57,557 [INFO] <module>:64 - 启动macos_vm管理平台
+2025-07-31 20:42:57,558 [INFO] <module>:67 - 启动Flask服务
+2025-07-31 20:42:57,564 [INFO] wait_for_flask:49 - 等待Flask服务启动: http://127.0.0.1:5000/login
+2025-07-31 20:42:57,564 [DEBUG] wait_for_flask:52 - 尝试连接Flask服务 (第1次)
+2025-07-31 20:42:57,567 [DEBUG] _new_conn:241 - Starting new HTTP connection (1): 127.0.0.1:5000
+2025-07-31 20:42:59,607 [DEBUG] wait_for_flask:58 - 连接失败: HTTPConnectionPool(host='127.0.0.1', port=5000): Max retries exceeded with url: /login (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000000003977E00>: Failed to establish a new connection: [WinError 10061] 由于目标计算机积极拒绝，无法连接。'))
+2025-07-31 20:43:00,108 [DEBUG] wait_for_flask:52 - 尝试连接Flask服务 (第2次)
+2025-07-31 20:43:00,109 [DEBUG] _new_conn:241 - Starting new HTTP connection (1): 127.0.0.1:5000
+2025-07-31 20:43:02,153 [DEBUG] wait_for_flask:58 - 连接失败: HTTPConnectionPool(host='127.0.0.1', port=5000): Max retries exceeded with url: /login (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000000003BA0690>: Failed to establish a new connection: [WinError 10061] 由于目标计算机积极拒绝，无法连接。'))
+2025-07-31 20:43:02,653 [DEBUG] wait_for_flask:52 - 尝试连接Flask服务 (第3次)
+2025-07-31 20:43:02,655 [DEBUG] _new_conn:241 - Starting new HTTP connection (1): 127.0.0.1:5000
+2025-07-31 20:43:55,428 [INFO] <module>:64 - 启动macos_vm管理平台
+2025-07-31 20:43:55,429 [INFO] <module>:67 - 启动Flask服务
+2025-07-31 20:43:55,435 [INFO] wait_for_flask:49 - 等待Flask服务启动: http://127.0.0.1:5000/login
+2025-07-31 20:43:55,435 [DEBUG] wait_for_flask:52 - 尝试连接Flask服务 (第1次)
+2025-07-31 20:43:55,438 [DEBUG] _new_conn:241 - Starting new HTTP connection (1): 127.0.0.1:5000
+2025-07-31 20:43:55,950 [DEBUG] _make_request:544 - http://127.0.0.1:5000 "GET /login HTTP/1.1" 200 1342
+2025-07-31 20:43:55,951 [INFO] wait_for_flask:55 - Flask服务启动成功
+2025-07-31 20:43:55,951 [INFO] <module>:77 - 启动桌面窗口
+2025-07-31 20:43:56,411 [INFO] __init__:28 - 初始化主窗口
+2025-07-31 20:43:56,463 [DEBUG] __init__:37 - 设置窗口图标: EFI/Clover/CLOVER/themes/logo_main.png
+2025-07-31 20:43:56,466 [DEBUG] __init__:43 - 加载登录页面: http://127.0.0.1:5000/login
+2025-07-31 20:43:57,413 [INFO] __init__:46 - 主窗口初始化完成
+2025-07-31 20:43:57,514 [INFO] <module>:81 - 桌面窗口显示完成
+2025-07-31 20:43:57,514 [INFO] <module>:84 - 开始运行应用
+2025-07-31 20:44:14,556 [INFO] <module>:64 - 启动macos_vm管理平台
+2025-07-31 20:44:14,556 [INFO] <module>:67 - 启动Flask服务
+2025-07-31 20:44:14,562 [INFO] wait_for_flask:49 - 等待Flask服务启动: http://127.0.0.1:5000/login
+2025-07-31 20:44:14,562 [DEBUG] wait_for_flask:52 - 尝试连接Flask服务 (第1次)
+2025-07-31 20:44:14,565 [DEBUG] _new_conn:241 - Starting new HTTP connection (1): 127.0.0.1:5000
+2025-07-31 20:44:15,090 [DEBUG] _make_request:544 - http://127.0.0.1:5000 "GET /login HTTP/1.1" 200 1342
+2025-07-31 20:44:15,091 [INFO] wait_for_flask:55 - Flask服务启动成功
+2025-07-31 20:44:15,091 [INFO] <module>:77 - 启动桌面窗口
+2025-07-31 20:44:15,228 [INFO] __init__:28 - 初始化主窗口
+2025-07-31 20:44:15,236 [DEBUG] __init__:37 - 设置窗口图标: EFI/Clover/CLOVER/themes/logo_main.png
+2025-07-31 20:44:15,237 [DEBUG] __init__:43 - 加载登录页面: http://127.0.0.1:5000/login
+2025-07-31 20:44:15,546 [INFO] __init__:46 - 主窗口初始化完成
+2025-07-31 20:44:15,620 [INFO] <module>:81 - 桌面窗口显示完成
+2025-07-31 20:44:15,629 [INFO] <module>:84 - 开始运行应用
+2025-07-31 20:44:17,096 [INFO] <module>:88 - 应用退出，清理资源
+2025-07-31 20:47:49,018 [INFO] <module>:64 - 启动macos_vm管理平台
+2025-07-31 20:47:49,019 [INFO] <module>:67 - 启动Flask服务
+2025-07-31 20:47:49,027 [INFO] wait_for_flask:49 - 等待Flask服务启动: http://127.0.0.1:5000/login
+2025-07-31 20:47:49,027 [DEBUG] wait_for_flask:52 - 尝试连接Flask服务 (第1次)
+2025-07-31 20:47:49,033 [DEBUG] _new_conn:241 - Starting new HTTP connection (1): 127.0.0.1:5000
+2025-07-31 20:47:50,064 [DEBUG] _make_request:544 - http://127.0.0.1:5000 "GET /login HTTP/1.1" 200 1342
+2025-07-31 20:47:50,065 [INFO] wait_for_flask:55 - Flask服务启动成功
+2025-07-31 20:47:50,065 [INFO] <module>:77 - 启动桌面窗口
+2025-07-31 20:47:50,320 [INFO] __init__:28 - 初始化主窗口
+2025-07-31 20:47:50,358 [DEBUG] __init__:37 - 设置窗口图标: EFI/Clover/CLOVER/themes/logo_main.png
+2025-07-31 20:47:50,361 [DEBUG] __init__:43 - 加载登录页面: http://127.0.0.1:5000/login
+2025-07-31 20:47:51,293 [INFO] __init__:46 - 主窗口初始化完成
+2025-07-31 20:47:51,413 [INFO] <module>:81 - 桌面窗口显示完成
+2025-07-31 20:47:51,414 [INFO] <module>:84 - 开始运行应用
