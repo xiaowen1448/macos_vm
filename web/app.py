@@ -5025,7 +5025,9 @@ def api_batch_change_wuma():
                 
                 # 获取虚拟机IP
                 vm_ip = get_vm_ip(vm_name)
+                logger.info(f"获取虚拟机 {vm_name} 的IP: {vm_ip}")
                 if not vm_ip:
+                    logger.error(f"无法获取虚拟机 {vm_name} 的IP")
                     results.append({
                         'vm_name': vm_name,
                         'success': False,
@@ -5041,6 +5043,8 @@ def api_batch_change_wuma():
                 if mount_result.returncode != 0:
                     logger.warning(f"mount_efi.sh执行失败: {mount_result.stderr}")
                     # 继续执行，不中断流程
+                else:
+                    logger.info(f"mount_efi.sh执行成功")
                 
                 # 传输plist文件到虚拟机
                 scp_cmd = f'scp "{plist_file_path}" {vm_username}@{vm_ip}:{boot_config_path}'
@@ -5048,12 +5052,15 @@ def api_batch_change_wuma():
                 scp_result = subprocess.run(scp_cmd, shell=True, capture_output=True, text=True, timeout=60)
                 
                 if scp_result.returncode != 0:
+                    logger.error(f"文件传输失败: {scp_result.stderr}")
                     results.append({
                         'vm_name': vm_name,
                         'success': False,
                         'message': f'文件传输失败: {scp_result.stderr}'
                     })
                     continue
+                else:
+                    logger.info(f"文件传输成功")
                 
                 # 备份已使用的五码到同名配置文件加_install.bak后缀
                 backup_config_file = os.path.join(backup_dir, f'{default_config}_install.bak')
@@ -5067,15 +5074,26 @@ def api_batch_change_wuma():
                 used_wuma_lines.append(wuma_line)
                 
                 # 重启虚拟机
+                logger.info(f"开始重启虚拟机 {vm_name}")
                 restart_cmd = [vmrun_path, 'stop', vm_path]
                 logger.info(f"停止虚拟机: {restart_cmd}")
-                subprocess.run(restart_cmd, capture_output=True, timeout=30)
+                stop_result = subprocess.run(restart_cmd, capture_output=True, timeout=30)
+                
+                if stop_result.returncode != 0:
+                    logger.warning(f"停止虚拟机失败: {stop_result.stderr}")
+                else:
+                    logger.info(f"虚拟机停止成功")
                 
                 time.sleep(5)  # 等待虚拟机完全停止
                 
                 restart_cmd = [vmrun_path, 'start', vm_path, 'nogui']
                 logger.info(f"启动虚拟机: {restart_cmd}")
-                subprocess.run(restart_cmd, capture_output=True, timeout=30)
+                start_result = subprocess.run(restart_cmd, capture_output=True, timeout=30)
+                
+                if start_result.returncode != 0:
+                    logger.warning(f"启动虚拟机失败: {start_result.stderr}")
+                else:
+                    logger.info(f"虚拟机启动成功")
                 
                 results.append({
                     'vm_name': vm_name,
