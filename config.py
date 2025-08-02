@@ -23,6 +23,11 @@ plist_template_dir = r'config\plist'
 # 五码配置文件目录
 wuma_config_dir = r'config\config_unused'
 
+# 配置已删除五码目录
+wuma_config_delete_dir = r'config\config_delete'
+
+# 配置已使用五码目录
+wuma_config_install_dir = r'config\config_install'
 
 # 脚本本地上传路径
 script_upload_dir = r'D:\macos_vm\macos_sh'
