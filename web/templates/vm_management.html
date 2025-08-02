@@ -1203,7 +1203,7 @@
                         </div>
                     </td>
                     <td id="ip-${vm.name}">
-                        ${vm.ip && vm.ip !== '获取中...' ? vm.ip : (vm.status === 'running' ? '<span id="ip-status-${vm.name}">获取中...</span>' : '<span class="text-muted">-</span>')}
+                        ${vm.ip && vm.ip !== '获取中...' ? vm.ip : (vm.status === 'running' || vm.status === 'starting' ? '<span id="ip-status-${vm.name}">获取中...</span>' : '<span class="text-muted">-</span>')}
                     </td>
                     <td id="wuma-view-${vm.name}">
                         <div class="d-flex align-items-center">
@@ -1223,8 +1223,8 @@
                     </td>
                     <td id="ssh-${vm.name}">
                         <div class="d-flex align-items-center">
-                            <span class="badge status-badge ${vm.status === 'running' ? 'bg-secondary' : 'bg-danger'} me-2" title="${vm.status === 'running' ? '检测中...' : '虚拟机未运行，无法检测SSH状态'}">
-                                ${vm.status === 'running' ? '检测中...' : '未互信'}
+                            <span class="badge status-badge ${vm.status === 'running' || vm.status === 'starting' ? 'bg-secondary' : 'bg-danger'} me-2" title="${vm.status === 'running' || vm.status === 'starting' ? '检测中...' : '虚拟机未运行，无法检测SSH状态'}">
+                                ${vm.status === 'running' || vm.status === 'starting' ? '检测中...' : '未互信'}
                             </span>
                             <button class="btn btn-outline-primary btn-sm" onclick="setupSSHTrust('${vm.name}')" title="设置SSH互信" style="cursor: pointer;">
                                 <i class="fas fa-key"></i>
@@ -1233,7 +1233,7 @@
                     </td>
                     <td>
                         <div class="btn-group btn-group-sm">
-                            <button class="btn btn-outline-primary btn-sm" onclick="startVM('${vm.name}')" ${vm.status === 'running' ? 'disabled' : ''} title="启动虚拟机" style="cursor: pointer;">
+                            <button class="btn btn-outline-primary btn-sm" onclick="startVM('${vm.name}')" ${vm.status === 'running' || vm.status === 'starting' ? 'disabled' : ''} title="启动虚拟机" style="cursor: pointer;">
                                 <i class="fas fa-play"></i>
                             </button>
                             <button class="btn btn-outline-warning btn-sm" onclick="stopVM('${vm.name}')" ${vm.status === 'stopped' ? 'disabled' : ''} title="停止虚拟机" style="cursor: pointer;">
@@ -1245,7 +1245,7 @@
                             <button class="btn btn-outline-info btn-sm" onclick="getVMInfo('${vm.name}')" title="详细信息" style="cursor: pointer;">
                                 <i class="fas fa-info-circle"></i>
                             </button>
-                            <button class="btn btn-outline-danger btn-sm" onclick="deleteVM('${vm.name}')" ${vm.status === 'running' ? 'disabled' : ''} title="${vm.status === 'running' ? '无法删除运行中的虚拟机' : '删除虚拟机'}" style="cursor: pointer;">
+                            <button class="btn btn-outline-danger btn-sm" onclick="deleteVM('${vm.name}')" ${vm.status === 'running' || vm.status === 'starting' ? 'disabled' : ''} title="${vm.status === 'running' || vm.status === 'starting' ? '无法删除运行中或重启中的虚拟机' : '删除虚拟机'}" style="cursor: pointer;">
                                 <i class="fas fa-trash"></i>
                             </button>
                             <button class="btn btn-outline-success btn-sm" onclick="sendScriptToVM('${vm.name}')" ${vm.status !== 'running' ? 'disabled' : ''} title="${vm.status !== 'running' ? '虚拟机未运行，无法发送脚本' : '发送脚本'}" style="cursor: pointer;">
@@ -1378,6 +1378,7 @@
         function getStatusClass(status) {
             switch (status) {
                 case 'running': return 'bg-success';
+                case 'starting': return 'bg-warning';
                 case 'stopped': return 'bg-secondary';
                 case 'suspended': return 'bg-warning';
                 default: return 'bg-secondary';
@@ -1388,6 +1389,7 @@
         function getStatusText(status) {
             switch (status) {
                 case 'running': return '运行中';
+                case 'starting': return '<i class="fas fa-spinner fa-spin"></i> 重启中';
                 case 'stopped': return '已停止';
                 case 'suspended': return '已暂停';
                 default: return '未知';
@@ -4658,10 +4660,16 @@
             let vmListHTML = '<div class="list-group">';
             
             selectedVMData.forEach(vm => {
-                const isRunning = vm.status === 'running';
-                const statusBadge = isRunning ? 
-                    '<span class="badge bg-success">运行中</span>' : 
-                    '<span class="badge bg-secondary">已停止</span>';
+                let statusBadge;
+                if (vm.status === 'running') {
+                    statusBadge = '<span class="badge bg-success">运行中</span>';
+                } else if (vm.status === 'starting') {
+                    statusBadge = '<span class="badge bg-warning"><i class="fas fa-spinner fa-spin"></i> 重启中</span>';
+                } else if (vm.status === 'stopped') {
+                    statusBadge = '<span class="badge bg-secondary">已停止</span>';
+                } else {
+                    statusBadge = '<span class="badge bg-info">未知</span>';
+                }
                 
                 vmListHTML += `
                     <div class="list-group-item">
@@ -4722,10 +4730,16 @@
             let vmListHTML = '<div class="list-group">';
             
             selectedVMData.forEach(vm => {
-                const isRunning = vm.status === 'running';
-                const statusBadge = isRunning ? 
-                    '<span class="badge bg-success">运行中</span>' : 
-                    '<span class="badge bg-secondary">已停止</span>';
+                let statusBadge;
+                if (vm.status === 'running') {
+                    statusBadge = '<span class="badge bg-success">运行中</span>';
+                } else if (vm.status === 'starting') {
+                    statusBadge = '<span class="badge bg-warning"><i class="fas fa-spinner fa-spin"></i> 重启中</span>';
+                } else if (vm.status === 'stopped') {
+                    statusBadge = '<span class="badge bg-secondary">已停止</span>';
+                } else {
+                    statusBadge = '<span class="badge bg-info">未知</span>';
+                }
                 
                 vmListHTML += `
                     <div class="list-group-item">
@@ -4870,10 +4884,7 @@
                     executeBtn.classList.remove('btn-warning');
                     executeBtn.classList.add('btn-success');
                     
-                    // 关闭模态对话框
-                    const modal = bootstrap.Modal.getInstance(document.getElementById('batchChangeModal'));
-                    modal.hide();
-                    
+                    // 不关闭模态对话框，保持页面展示
                     console.log('批量更改结果:', data.results);
                 } else {
                     // 隐藏进度条
@@ -4947,10 +4958,13 @@
                         // 隐藏进度条并显示完成状态
                         hideJUProgress();
                         
-                        // 关闭模态对话框
-                        const modal = bootstrap.Modal.getInstance(document.getElementById('batchChangeJUModal'));
-                        modal.hide();
+                        // 更新按钮状态为执行完毕
+                        executeBtn.innerHTML = '<i class="fas fa-check me-2"></i>执行完毕';
+                        executeBtn.disabled = true;
+                        executeBtn.classList.remove('btn-info');
+                        executeBtn.classList.add('btn-success');
                         
+                        // 不关闭模态对话框，保持页面展示
                         console.log('批量更改JU值结果:', data.results);
                     } else {
                         // 隐藏进度条
@@ -5270,8 +5284,11 @@
                             
                             // 检查任务是否完成
                             if (task.status === 'completed') {
-                                executeBtn.innerHTML = originalText;
-                                executeBtn.disabled = false;
+                                // 更新按钮状态为执行完毕
+                                executeBtn.innerHTML = '<i class="fas fa-check me-2"></i>执行完毕';
+                                executeBtn.disabled = true;
+                                executeBtn.classList.remove('btn-info');
+                                executeBtn.classList.add('btn-success');
                                 
                                 // 显示完成状态
                                 progressBar.style.transition = 'width 0.5s ease-in-out';
@@ -5288,10 +5305,7 @@
                                     progressDetails.textContent = '正在初始化...';
                                 }, 3000);
                                 
-                                // 关闭模态对话框
-                                const modal = bootstrap.Modal.getInstance(document.getElementById('batchChangeJUModal'));
-                                modal.hide();
-                                
+                                // 不关闭模态对话框，保持页面展示
                                 console.log('批量更改JU值完成:', task.results);
                                 return;
                             } else if (task.status === 'failed') {
@@ -5457,11 +5471,11 @@
                 return;
             }
             
-            // 统计运行中和已停止的虚拟机
-            const selectedRunningVMs = selectedVMData.filter(vm => vm.status === 'running');
+            // 统计运行中、重启中和已停止的虚拟机
+            const selectedRunningVMs = selectedVMData.filter(vm => vm.status === 'running' || vm.status === 'starting');
             const selectedStoppedVMs = selectedVMData.filter(vm => vm.status === 'stopped');
             
-            console.log('选中的运行中虚拟机:', selectedRunningVMs.map(vm => vm.name));
+            console.log('选中的运行中/重启中虚拟机:', selectedRunningVMs.map(vm => vm.name));
             console.log('选中的已停止虚拟机:', selectedStoppedVMs.map(vm => vm.name));
             
             const batchWumaBtn = document.getElementById('batchChangeWumaBtn');
@@ -5479,7 +5493,7 @@
                 batchJUBtn.classList.remove('btn-secondary');
                 batchJUBtn.classList.add('btn-info');
                 
-                console.log('启用批量更改按钮，选中了', selectedRunningVMs.length, '个运行中的虚拟机');
+                console.log('启用批量更改按钮，选中了', selectedRunningVMs.length, '个运行中/重启中的虚拟机');
             } else {
                 // 选中的虚拟机中没有运行中的，或者包含已关机的虚拟机，禁用批量更改按钮
                 batchWumaBtn.disabled = true;
@@ -5491,7 +5505,7 @@
                 batchJUBtn.classList.add('btn-secondary');
                 
                 if (selectedRunningVMs.length === 0) {
-                    console.log('禁用批量更改按钮，选中的虚拟机中没有运行中的');
+                    console.log('禁用批量更改按钮，选中的虚拟机中没有运行中/重启中的');
                 } else if (selectedStoppedVMs.length > 0) {
                     console.log('禁用批量更改按钮，选中的虚拟机中包含已关机的虚拟机');
                 }

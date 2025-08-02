@@ -2204,13 +2204,31 @@ def get_vm_status(vm_path):
             print(f"[DEBUG] 查找虚拟机名称: {vm_name}")
             print(f"[DEBUG] 运行中的虚拟机列表: {running_vms}")
             
+            # 检查虚拟机是否在运行列表中
+            vm_found = False
             for vm in running_vms:
                 if vm.strip() and vm_name in vm:
                     print(f"[DEBUG] 找到运行中的虚拟机: {vm}")
-                    return 'running'
+                    vm_found = True
+                    break
             
-            print(f"[DEBUG] 未找到运行中的虚拟机: {vm_name}")
-            return 'stopped'
+            if vm_found:
+                # 检查虚拟机是否正在启动过程中
+                try:
+                    # 尝试获取虚拟机IP，如果获取失败可能正在启动
+                    vm_ip = get_vm_ip(vm_name)
+                    if vm_ip and is_valid_ip(vm_ip):
+                        print(f"[DEBUG] 虚拟机IP正常: {vm_ip}")
+                        return 'running'
+                    else:
+                        print(f"[DEBUG] 虚拟机IP获取失败，可能正在启动")
+                        return 'starting'
+                except Exception as e:
+                    print(f"[DEBUG] 获取虚拟机IP异常，可能正在启动: {str(e)}")
+                    return 'starting'
+            else:
+                print(f"[DEBUG] 未找到运行中的虚拟机: {vm_name}")
+                return 'stopped'
         
         return 'stopped'
         
