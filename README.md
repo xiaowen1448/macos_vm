@@ -1,6 +1,7 @@
 新版控制台开发登录窗口
 <img width="1841" height="972" alt="image" src="https://github.com/user-attachments/assets/4b99351c-f044-488d-91cb-23ab8eee3e67" />
 
+<img width="1841" height="972" alt="image" src="https://github.com/user-attachments/assets/71ff203e-d53c-421c-a6c6-80e2908558fc" />
 
 
 虚拟机批量克隆，实时和历史日志信息
@@ -135,6 +136,7 @@ python test_webview.py
 
 技术支持咨询： Telegram：@xiaowen1448
 wechat：w8686512
+
 
 
 
