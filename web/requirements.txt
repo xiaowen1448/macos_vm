@@ -1,4 +1,0 @@
-flask 
-PyQt5
-requests
-paramiko

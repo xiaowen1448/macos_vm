@@ -90,6 +90,37 @@ vm02
 
 初成模型，底层后续实现，客户端和web客户端均可
 
+## 启动方式
+
+### 1. Web浏览器版本
+```bash
+# 启动Web应用
+python app.py
+
+# 或者使用批处理脚本
+start.bat
+```
+
+### 2. 桌面应用版本 (WebView)
+```bash
+# 启动桌面WebView应用
+python webview_app.py
+
+# 或者使用批处理脚本
+start_webview.bat
+```
+
+### 3. 依赖测试
+```bash
+# 测试PyQt5依赖是否正确安装
+python test_webview.py
+```
+
+## 访问地址
+- Web版本: http://127.0.0.1:5000
+- 默认用户名: admin
+- 默认密码: 123456
+
 
 <img width="1334" height="846" alt="image" src="https://github.com/user-attachments/assets/7abfcd62-8c8a-40ad-848e-c6d30dd3302e" />
 

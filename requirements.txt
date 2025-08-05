@@ -1,2 +1,5 @@
+flask 
+PyQt5
+PyQtWebEngine
+requests
 paramiko
-Flask>=2.0 
