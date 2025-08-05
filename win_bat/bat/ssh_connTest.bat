@@ -7,7 +7,7 @@ REM Set the storage path of the target VM
 set VM_BASE_PATH=%BASE_DIR%\..\NewVM
 set ISO_BASE_HOME=%BASE_DIR%\..\iso
 set IP_PATH=%BASE_DIR%\var_files
-set LOG_PATH=%BASE_DIR%\log
+set LOG_PATH=%BASE_DIR%\logs
 REM Set the number of virtual machines that need to be created
 set VM_COUNT=2
 set VMRUN_PATH="C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe"

@@ -51,7 +51,7 @@ boot_config_path = '/Volumes/EFI/CLOVER/config.plist'
 project_root = r'D:\macos_vm'
 
 # 日志目录
-logs_dir = r'log'
+logs_dir = r'logs'
 
 # 工具目录
 tools_dir = r'tools'

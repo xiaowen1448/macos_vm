@@ -6,7 +6,7 @@ REM Set the storage path of the target VM
 set VM_BASE_PATH=%BASE_DIR%\..\..\NewVM
 set IP_PATH=%BASE_DIR%\..\var_files
 set ISO_BASE_HOME=%BASE_DIR%\..\..\iso
-set LOG_PATH=%BASE_DIR%\..\log
+set LOG_PATH=%BASE_DIR%\..\logs
 set plist_num=0
 copy /y nul %IP_PATH%\ip_list.txt  >> %LOG_PATH%\run.log   2>&1
 copy /y nul %IP_PATH%\vmx_list.txt  >> %LOG_PATH%\run.log   2>&1
