@@ -12,38 +12,78 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
         
-        .sidebar {
-            background: white;
-            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
-            min-height: 100vh;
-            position: fixed;
-            top: 0;
-            left: 0;
-            z-index: 1000;
-            width: 280px;
-        }
+            .sidebar {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        box-shadow: 2px 0 15px rgba(102, 126, 234, 0.3);
+        min-height: 100vh;
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 1000;
+        width: 280px;
+        color: white;
+    }
         
         .accordion-button:not(.collapsed) {
-            background-color: #e7f3ff;
-            color: #0d6efd;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: none;
+            box-shadow: none;
+        }
+        
+        .accordion-button {
+            background: transparent;
+            color: white;
+            border: none;
+            box-shadow: none;
+            font-weight: 600;
+        }
+        
+        .accordion-button:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+        
+        .accordion-button:focus {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            box-shadow: none;
+        }
+        
+        .accordion-button::after {
+            filter: invert(1);
         }
         
         .nav-link {
-            color: #495057;
-            padding: 8px 16px;
-            border-radius: 4px;
-            margin: 2px 0;
-            transition: all 0.2s;
+            color: rgba(255, 255, 255, 0.8);
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin: 4px 8px;
+            transition: all 0.3s ease;
+            font-weight: 500;
         }
         
         .nav-link:hover {
-            background-color: #f8f9fa;
-            color: #0d6efd;
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+            transform: translateX(5px);
         }
         
         .nav-link.active {
-            background-color: #0d6efd;
+            background: rgba(255, 255, 255, 0.2);
             color: white;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        .accordion-item {
+            background: transparent;
+            border: none;
+        }
+        
+        .accordion-body {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            margin: 0 8px;
         }
         
         .card {
@@ -295,7 +335,7 @@
         
         /* 侧边栏标题样式 */
         .sidebar-header {
-            border-bottom: 2px solid #f8f9fa;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.2);
             padding-bottom: 15px;
             display: flex;
             align-items: center;
@@ -304,13 +344,11 @@
         }
         
         .brand-text {
-            background: linear-gradient(135deg, #007AFF 0%, #5856D6 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            color: white;
             font-weight: 700;
             font-size: 1.2rem;
             letter-spacing: 0.5px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         }
         
         .sidebar-header h4 {
@@ -425,7 +463,7 @@
     <div class="container-fluid" style="margin-left: 280px; margin-top: 80px;">
         <div class="row">
             <!-- 左侧菜单 -->
-            <nav class="col-md-3 col-lg-2 sidebar bg-white p-3">
+            <nav class="col-md-3 col-lg-2 sidebar p-3">
                 <div class="sidebar-header text-center mb-4">
                     <h4 class="mb-0">
                                                     <span class="brand-text">MacOS VM 虚拟机管理平台</span>
