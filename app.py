@@ -6283,6 +6283,43 @@ def api_batch_im_login():
         # 计算分配的Apple ID总数
         total_allocated = sum(r.get('apple_id_count', 0) for r in results if r['success'])
         
+        # 如果有成功的分发，则标记Apple ID为已使用
+        used_apple_ids = []
+        if success_count > 0:
+            try:
+                from config import appleid_install_dir
+                
+                # 获取已使用的Apple ID
+                for i, result in enumerate(results):
+                    if result['success']:
+                        used_apple_ids.append(apple_ids_to_distribute[i])
+                
+                if used_apple_ids:
+                    # 创建备份文件到ID_install目录
+                    backup_file_name = f"{apple_id_file.replace('.txt', '')}_bak.txt"
+                    backup_file_path = os.path.join(project_root, appleid_install_dir, backup_file_name)
+                    
+                    # 确保目录存在
+                    os.makedirs(os.path.dirname(backup_file_path), exist_ok=True)
+                    
+                    # 写入已使用的Apple ID到备份文件
+                    with open(backup_file_path, 'w', encoding='utf-8') as f:
+                        f.write('\n'.join(used_apple_ids))
+                    
+                    logger.info(f"已使用的Apple ID已备份到: {backup_file_path}")
+                    
+                    # 从原文件中移除已使用的Apple ID
+                    remaining_apple_ids = [aid for aid in apple_ids if aid not in used_apple_ids]
+                    
+                    # 更新原文件
+                    with open(apple_id_file_path, 'w', encoding='utf-8') as f:
+                        f.write('\n'.join(remaining_apple_ids))
+                    
+                    logger.info(f"已从原文件中移除 {len(used_apple_ids)} 个已使用的Apple ID")
+                    
+            except Exception as e:
+                logger.error(f"标记Apple ID为已使用时发生错误: {str(e)}")
+        
         return jsonify({
             'success': True,
             'message': f'批量IM登录任务完成，成功传输到 {success_count}/{total_count} 个虚拟机，共分配 {total_allocated} 个Apple ID',
@@ -6293,7 +6330,9 @@ def api_batch_im_login():
                 'failed_count': total_count - success_count,
                 'total_apple_ids': len(apple_ids),
                 'allocated_apple_ids': total_allocated,
+                'used_apple_ids': len(used_apple_ids),
                 'source_file': apple_id_file,
+                'backup_file': backup_file_name if used_apple_ids else None,
                 'distribution_info': {
                     'apple_ids_per_vm': apple_ids_per_vm,
                     'total_apple_ids_used': len(apple_ids_to_distribute),
