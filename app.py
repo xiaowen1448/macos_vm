@@ -6132,11 +6132,13 @@ def api_batch_im_login():
         # 读取文件内容，尝试多种编码
         content = ""
         encodings = ['utf-8', 'utf-8-sig', 'gbk', 'gb2312', 'latin-1']
+        used_encoding = None
         
         for encoding in encodings:
             try:
                 with open(apple_id_file_path, 'r', encoding=encoding) as f:
                     content = f.read().strip()
+                used_encoding = encoding
                 logger.info(f"成功使用 {encoding} 编码读取文件 {apple_id_file}")
                 break
             except UnicodeDecodeError:
@@ -6302,20 +6304,59 @@ def api_batch_im_login():
                     # 确保目录存在
                     os.makedirs(os.path.dirname(backup_file_path), exist_ok=True)
                     
-                    # 写入已使用的Apple ID到备份文件
-                    with open(backup_file_path, 'w', encoding='utf-8') as f:
-                        f.write('\n'.join(used_apple_ids))
-                    
-                    logger.info(f"已使用的Apple ID已备份到: {backup_file_path}")
+                    # 增量写入已使用的Apple ID到备份文件
+                    try:
+                        # 读取现有备份文件内容（如果存在）
+                        existing_backup_ids = []
+                        if os.path.exists(backup_file_path):
+                            try:
+                                with open(backup_file_path, 'r', encoding='utf-8') as f:
+                                    existing_content = f.read().strip()
+                                    if existing_content:
+                                        existing_backup_ids = existing_content.split('\n')
+                                logger.info(f"读取现有备份文件，包含 {len(existing_backup_ids)} 个Apple ID")
+                            except UnicodeDecodeError:
+                                # 如果UTF-8解码失败，尝试其他编码
+                                for encoding in ['gbk', 'gb2312', 'latin-1']:
+                                    try:
+                                        with open(backup_file_path, 'r', encoding=encoding) as f:
+                                            existing_content = f.read().strip()
+                                            if existing_content:
+                                                existing_backup_ids = existing_content.split('\n')
+                                        logger.info(f"使用 {encoding} 编码读取现有备份文件，包含 {len(existing_backup_ids)} 个Apple ID")
+                                        break
+                                    except UnicodeDecodeError:
+                                        continue
+                        
+                        # 合并现有和新使用的Apple ID，去重
+                        all_backup_ids = existing_backup_ids + used_apple_ids
+                        unique_backup_ids = list(dict.fromkeys(all_backup_ids))  # 保持顺序的去重
+                        
+                        # 增量写入备份文件（使用UTF-8编码）
+                        with open(backup_file_path, 'w', encoding='utf-8') as f:
+                            f.write('\n'.join(unique_backup_ids))
+                        
+                        logger.info(f"已使用的Apple ID已增量备份到: {backup_file_path}")
+                        logger.info(f"备份文件总计包含 {len(unique_backup_ids)} 个Apple ID（新增 {len(used_apple_ids)} 个）")
+                        
+                    except Exception as e:
+                        logger.error(f"备份文件操作失败: {str(e)}")
+                        # 如果备份失败，仍然继续处理原文件
                     
                     # 从原文件中移除已使用的Apple ID
                     remaining_apple_ids = [aid for aid in apple_ids if aid not in used_apple_ids]
                     
-                    # 更新原文件
-                    with open(apple_id_file_path, 'w', encoding='utf-8') as f:
-                        f.write('\n'.join(remaining_apple_ids))
-                    
-                    logger.info(f"已从原文件中移除 {len(used_apple_ids)} 个已使用的Apple ID")
+                    # 更新原文件（使用检测到的编码，如果没有检测到则使用UTF-8）
+                    try:
+                        write_encoding = used_encoding if used_encoding else 'utf-8'
+                        with open(apple_id_file_path, 'w', encoding=write_encoding) as f:
+                            f.write('\n'.join(remaining_apple_ids))
+                        
+                        logger.info(f"已从原文件中移除 {len(used_apple_ids)} 个已使用的Apple ID（使用 {write_encoding} 编码）")
+                        
+                    except Exception as e:
+                        logger.error(f"更新原文件失败: {str(e)}")
+                        # 如果更新原文件失败，记录错误但不影响整体流程
                     
             except Exception as e:
                 logger.error(f"标记Apple ID为已使用时发生错误: {str(e)}")
