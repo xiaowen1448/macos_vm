@@ -1395,6 +1395,15 @@
             const endIndex = Math.min(startIndex + pageSize, allAppleIdData.length);
             const currentPageData = allAppleIdData.slice(startIndex, endIndex);
             
+            console.log('显示当前页数据:', {
+                currentPage: currentPage,
+                pageSize: pageSize,
+                startIndex: startIndex,
+                endIndex: endIndex,
+                totalData: allAppleIdData.length,
+                currentPageDataLength: currentPageData.length
+            });
+            
             if (currentPageData.length > 0) {
                 currentPageData.forEach((item, index) => {
                     const row = document.createElement('tr');
