@@ -988,6 +988,11 @@
         document.addEventListener('DOMContentLoaded', function() {
             console.log('页面加载完成，初始化Apple ID管理功能');
             
+            // 初始化分页设置
+            pageSize = 5;
+            currentPage = 1;
+            document.getElementById('pageSizeSelect').value = pageSize;
+            
             // 先加载默认文件设置
             const defaultFile = localStorage.getItem('defaultAppleIdFile');
             if (defaultFile) {
@@ -1324,6 +1329,8 @@
             
             // 重置分页
             currentPage = 1;
+            // 确保分页选择器值与当前设置一致
+            document.getElementById('pageSizeSelect').value = pageSize;
             displayCurrentPage();
             updateAppleIdStats(); // 更新统计信息
         }
@@ -1546,6 +1553,7 @@
         function changePageSize() {
             pageSize = parseInt(document.getElementById('pageSizeSelect').value);
             currentPage = 1;
+            console.log('分页大小已更改为:', pageSize);
             displayCurrentPage();
         }
 
