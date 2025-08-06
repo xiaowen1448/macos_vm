@@ -512,7 +512,7 @@
                                         <a class="nav-link" href="{{ url_for('mupan_page') }}" onclick="handleMupanClick()">虚拟机母盘管理</a>
                                     </li>
                                     <li class="nav-item">
-                                        <a class="nav-link" href="{{ url_for('id_management_page') }}" onclick="handleIdManagementClick()">ID管理</a>
+                                        <a class="nav-link" href="{{ url_for('id_management_page') }}" onclick="handleIdManagementClick()">Apple ID管理</a>
                                     </li>
                                 </ul>
                             </div>
@@ -1006,13 +1006,12 @@
                 }
             });
             
-            // 检查是否之前设置了默认配置，如果是，则自动更新默认配置
+            // 检查"设为默认"复选框是否勾选，如果是，则自动将新选择的配置设为默认
             const checkbox = document.getElementById('defaultConfigCheck');
             if (checkbox && checkbox.checked) {
-                // 如果复选框是勾选状态，说明用户之前设置了默认配置
-                // 现在自动将新选择的配置设为默认
+                // 如果复选框是勾选状态，无论当前配置是否为默认，都将新选择的配置设为默认
                 localStorage.setItem('defaultWumaConfig', configName);
-                console.log('自动更新默认配置为:', configName);
+                console.log('设为默认已勾选，自动将新选择的配置设为默认:', configName);
                 
                 // 显示友好的提示信息
                 const selectedConfig = configs.find(c => c.name === configName);
@@ -1034,7 +1033,7 @@
                 
                 return {
                     name: match[1],
-                    display_name: item.textContent
+                display_name: item.textContent
                 };
             }).filter(config => config !== null);
             

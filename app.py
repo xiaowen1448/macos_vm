@@ -3,7 +3,7 @@ import logging
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, Response
 from functools import wraps
 import os
-import datetime
+from datetime import datetime, timedelta
 import uuid
 import threading
 import time
@@ -15,8 +15,6 @@ import sys
 from config import *
 
 # 配置日志
-import os
-import datetime
 from config import logs_dir
 
 # 使用配置文件中的日志目录
@@ -24,7 +22,7 @@ log_dir = os.path.join(os.path.dirname(__file__), logs_dir)
 os.makedirs(log_dir, exist_ok=True)
 
 # 生成带日期的日志文件名
-current_date = datetime.datetime.now().strftime('%Y-%m-%d')
+current_date = datetime.now().strftime('%Y-%m-%d')
 app_log_file = os.path.join(log_dir, f'app_debug_{current_date}.log')
 
 logging.basicConfig(
@@ -40,7 +38,7 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__, template_folder='web/templates')
 import secrets
 app.secret_key = secrets.token_hex(32)  # 生成随机session密钥
-app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(hours=8)  # 设置session过期时间
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)  # 设置session过期时间
 
 # 设置Flask应用的日志级别
 app.logger.setLevel(logging.DEBUG)
@@ -714,7 +712,7 @@ def login():
                 session.permanent = True  # 设置session为永久性
                 session['logged_in'] = True
                 session['username'] = username
-                session['login_time'] = datetime.datetime.now().isoformat()
+                session['login_time'] = datetime.now().isoformat()
                 session['session_id'] = secrets.token_hex(16)  # 生成唯一session ID
                 logger.info(f"用户 {username} 登录成功")
                 
@@ -807,7 +805,7 @@ def dashboard():
             fpath = os.path.join(script_dir, fname)
             if os.path.isfile(fpath):
                 stat = os.stat(fpath)
-                mtime = datetime.datetime.fromtimestamp(stat.st_mtime).strftime('%Y/%m/%d %H:%M')
+                mtime = datetime.fromtimestamp(stat.st_mtime).strftime('%Y/%m/%d %H:%M')
                 size = stat.st_size
                 script_list.append({'name': fname, 'mtime': mtime, 'size': size})
                 logger.debug(f"找到脚本文件: {fname}, 大小: {size} bytes")
@@ -915,7 +913,7 @@ def api_vm_info_list():
                         
                         # 获取创建时间（使用文件修改时间）
                         try:
-                            create_time = datetime.datetime.fromtimestamp(os.path.getmtime(vm_path))
+                            create_time = datetime.fromtimestamp(os.path.getmtime(vm_path))
                             create_time_str = create_time.strftime('%Y-%m-%d %H:%M:%S')
                         except:
                             create_time_str = '未知'
@@ -1021,7 +1019,7 @@ def api_mupan_list():
                         
                         # 获取vmx文件创建时间
                         try:
-                            create_time = datetime.datetime.fromtimestamp(os.path.getmtime(vm_path))
+                            create_time = datetime.fromtimestamp(os.path.getmtime(vm_path))
                             create_time_str = create_time.strftime('%Y-%m-%d %H:%M:%S')
                             logger.info(f"创建时间: {create_time_str}")
                         except:
@@ -1147,7 +1145,7 @@ def api_clone_vm():
             'params': data,
             'logs': [],
             'stats': {'success': 0, 'running': 0, 'error': 0, 'total': int(data['cloneCount'])},
-            'start_time': datetime.datetime.now(),
+            'start_time': datetime.now(),
             'progress': {'current': 0, 'total': int(data['cloneCount'])}
         }
         
@@ -1228,7 +1226,7 @@ def clone_vm_worker(task_id):
             print(f"[DEBUG] vmrun是否存在: {os.path.exists(vmrun_path)}")
             
             # 生成快照名称
-            timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             vm_name_without_ext = params['templateVM'].replace('.vmx', '')
             
             print(f"[DEBUG] 时间戳: {timestamp}")
@@ -1263,13 +1261,13 @@ def clone_vm_worker(task_id):
                 add_task_log(task_id, 'info', f'执行快照命令: vmrun snapshot {template_path} {snapshot_name}')
                 
                 # 记录命令开始时间
-                start_time = datetime.datetime.now()
+                start_time = datetime.now()
                 print(f"[DEBUG] 快照命令开始时间: {start_time}")
                 
                 result = subprocess.run(snapshot_cmd, capture_output=True, text=True, timeout=120)
                 
                 # 记录命令结束时间
-                end_time = datetime.datetime.now()
+                end_time = datetime.now()
                 duration = (end_time - start_time).total_seconds()
                 print(f"[DEBUG] 快照命令结束时间: {end_time}")
                 print(f"[DEBUG] 快照命令执行时长: {duration} 秒")
@@ -1379,7 +1377,7 @@ def clone_vm_worker(task_id):
                 print(f"[DEBUG] 开始克隆第 {i+1}/{clone_count} 个虚拟机")
                 
                 # 生成虚拟机名称和文件夹名称
-                timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
                 vm_name_pattern = params['namingPattern']
                 if vm_name_pattern == 'custom':
                     vm_name_pattern = params.get('customNamingPattern', 'VM_{timestamp}_{index}')
@@ -1464,13 +1462,13 @@ def clone_vm_worker(task_id):
                 print(f"[DEBUG] 开始执行克隆命令...")
                 
                 # 记录命令开始时间
-                start_time = datetime.datetime.now()
+                start_time = datetime.now()
                 print(f"[DEBUG] 命令开始时间: {start_time}")
                 
                 result = subprocess.run(clone_cmd, capture_output=True, text=True, timeout=300)
                 
                 # 记录命令结束时间
-                end_time = datetime.datetime.now()
+                end_time = datetime.now()
                 duration = (end_time - start_time).total_seconds()
                 print(f"[DEBUG] 命令结束时间: {end_time}")
                 print(f"[DEBUG] 命令执行时长: {duration} 秒")
@@ -1508,13 +1506,13 @@ def clone_vm_worker(task_id):
                         add_task_log(task_id, 'info', f'执行启动命令: vmrun start {vm_file_path}')
                         
                         # 记录启动命令开始时间
-                        start_time = datetime.datetime.now()
+                        start_time = datetime.now()
                         print(f"[DEBUG] 启动命令开始时间: {start_time}")
                         
                         result = subprocess.run(start_cmd, capture_output=True, text=True, timeout=60)
                         
                         # 记录启动命令结束时间
-                        end_time = datetime.datetime.now()
+                        end_time = datetime.now()
                         duration = (end_time - start_time).total_seconds()
                         print(f"[DEBUG] 启动命令结束时间: {end_time}")
                         print(f"[DEBUG] 启动命令执行时长: {duration} 秒")
@@ -1643,18 +1641,18 @@ def add_task_log(task_id, level, message):
     if task_id in clone_tasks:
         task = clone_tasks[task_id]
         log_entry = {
-            'timestamp': datetime.datetime.now().isoformat(),
+            'timestamp': datetime.now().isoformat(),
             'level': level,
             'message': message
         }
         task['logs'].append(log_entry)
         
         # 同时写入日志文件
-        current_date = datetime.datetime.now().strftime('%Y-%m-%d')
+        current_date = datetime.now().strftime('%Y-%m-%d')
         log_file_path = os.path.join(log_dir, f'task_{task_id}_{current_date}.log')
         try:
             with open(log_file_path, 'a', encoding='utf-8') as f:
-                timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 f.write(f'[{timestamp}] [{level.upper()}] {message}\n')
         except Exception as e:
             print(f"[DEBUG] 写入日志文件失败: {str(e)}")
@@ -2033,13 +2031,13 @@ def api_vm_start():
         print(f"[DEBUG] 启动命令: {' '.join(start_cmd)}")
         
         # 记录命令开始时间
-        start_time = datetime.datetime.now()
+        start_time = datetime.now()
         print(f"[DEBUG] 启动命令开始时间: {start_time}")
         
         result = subprocess.run(start_cmd, capture_output=True, text=True, timeout=60)
         
         # 记录命令结束时间
-        end_time = datetime.datetime.now()
+        end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
         print(f"[DEBUG] 启动命令结束时间: {end_time}")
         print(f"[DEBUG] 启动命令执行时长: {duration} 秒")
@@ -2085,13 +2083,13 @@ def api_vm_stop():
         print(f"[DEBUG] 停止命令: {' '.join(stop_cmd)}")
         
         # 记录命令开始时间
-        start_time = datetime.datetime.now()
+        start_time = datetime.now()
         print(f"[DEBUG] 停止命令开始时间: {start_time}")
         
         result = subprocess.run(stop_cmd, capture_output=True, text=True, timeout=60)
         
         # 记录命令结束时间
-        end_time = datetime.datetime.now()
+        end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
         print(f"[DEBUG] 停止命令结束时间: {end_time}")
         print(f"[DEBUG] 停止命令执行时长: {duration} 秒")
@@ -2138,13 +2136,13 @@ def api_vm_restart():
         print(f"[DEBUG] 重启-停止命令: {' '.join(stop_cmd)}")
         
         # 记录停止命令开始时间
-        stop_start_time = datetime.datetime.now()
+        stop_start_time = datetime.now()
         print(f"[DEBUG] 重启-停止命令开始时间: {stop_start_time}")
         
         stop_result = subprocess.run(stop_cmd, capture_output=True, text=True, timeout=60)
         
         # 记录停止命令结束时间
-        stop_end_time = datetime.datetime.now()
+        stop_end_time = datetime.now()
         stop_duration = (stop_end_time - stop_start_time).total_seconds()
         print(f"[DEBUG] 重启-停止命令结束时间: {stop_end_time}")
         print(f"[DEBUG] 重启-停止命令执行时长: {stop_duration} 秒")
@@ -2163,13 +2161,13 @@ def api_vm_restart():
         print(f"[DEBUG] 重启-启动命令: {' '.join(start_cmd)}")
         
         # 记录启动命令开始时间
-        start_start_time = datetime.datetime.now()
+        start_start_time = datetime.now()
         print(f"[DEBUG] 重启-启动命令开始时间: {start_start_time}")
         
         start_result = subprocess.run(start_cmd, capture_output=True, text=True, timeout=60)
         
         # 记录启动命令结束时间
-        start_end_time = datetime.datetime.now()
+        start_end_time = datetime.now()
         start_duration = (start_end_time - start_start_time).total_seconds()
         print(f"[DEBUG] 重启-启动命令结束时间: {start_end_time}")
         print(f"[DEBUG] 重启-启动命令执行时长: {start_duration} 秒")
@@ -2344,13 +2342,13 @@ def get_vm_ip(vm_name):
                     print(f"[DEBUG] 执行vmrun getGuestIPAddress命令: {' '.join(cmd)}")
                     
                     # 记录命令开始时间
-                    start_time = datetime.datetime.now()
+                    start_time = datetime.now()
                     print(f"[DEBUG] getGuestIPAddress命令开始时间: {start_time}")
                     
                     result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
                     
                     # 记录命令结束时间
-                    end_time = datetime.datetime.now()
+                    end_time = datetime.now()
                     duration = (end_time - start_time).total_seconds()
                     print(f"[DEBUG] getGuestIPAddress命令结束时间: {end_time}")
                     print(f"[DEBUG] getGuestIPAddress命令执行时长: {duration} 秒")
@@ -2867,7 +2865,7 @@ def api_scripts():
                         # 获取文件信息
                         stat = os.stat(file_path)
                         size = stat.st_size
-                        modified_time = datetime.datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+                        modified_time = datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
                         
                         # 格式化文件大小
                         if size < 1024:
@@ -2965,7 +2963,7 @@ def api_all_scripts():
                         # 获取文件信息
                         stat = os.stat(file_path)
                         size = stat.st_size
-                        modified_time = datetime.datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+                        modified_time = datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
                         
                         # 格式化文件大小
                         if size < 1024:
@@ -5620,6 +5618,303 @@ def count_available_wuma(file_path):
     except Exception as e:
         logger.error(f"计算可用五码数量失败 {file_path}: {str(e)}")
         return 0
+
+# Apple ID管理相关API
+@app.route('/api/appleid_files')
+@login_required
+def api_appleid_files():
+    """获取Apple ID文件列表"""
+    logger.info("收到获取Apple ID文件列表请求")
+    try:
+        files = []
+        id_dir = os.path.join(project_root, 'web', 'config', 'ID')
+        
+        # 确保ID目录存在
+        if not os.path.exists(id_dir):
+            os.makedirs(id_dir, exist_ok=True)
+            logger.info("创建ID目录")
+        
+        # 查找ID目录下的所有.txt文件
+        if os.path.exists(id_dir):
+            for filename in os.listdir(id_dir):
+                if filename.endswith('.txt'):
+                    file_path = os.path.join(id_dir, filename)
+                    
+                    # 获取文件信息
+                    try:
+                        stat = os.stat(file_path)
+                        files.append({
+                            'name': filename,
+                            'display_name': filename,
+                            'size': stat.st_size,
+                            'modified': datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+                        })
+                        logger.info(f"发现Apple ID文件: {filename}")
+                    except Exception as e:
+                        logger.warning(f"获取文件信息失败 {filename}: {str(e)}")
+            
+            # 按名称排序
+            files.sort(key=lambda x: x['name'])
+            
+            logger.info(f"找到 {len(files)} 个Apple ID文件")
+            
+            return jsonify({
+                'success': True,
+                'files': files
+            })
+        
+    except Exception as e:
+        logger.error(f"获取Apple ID文件列表失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取Apple ID文件列表失败: {str(e)}'
+        })
+
+@app.route('/api/appleid_file_content')
+@login_required
+def api_appleid_file_content():
+    """获取Apple ID文件内容"""
+    logger.info("收到获取Apple ID文件内容请求")
+    try:
+        filename = request.args.get('file')
+        if not filename:
+            return jsonify({
+                'success': False,
+                'message': '未指定文件名'
+            })
+        
+        file_path = os.path.join(project_root, 'web', 'config', 'ID', filename)
+        
+        if not os.path.exists(file_path):
+            return jsonify({
+                'success': False,
+                'message': f'文件不存在: {filename}'
+            })
+        
+        # 读取文件内容
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read().strip()
+        
+        lines = content.split('\n') if content else []
+        valid_lines = []
+        
+        for line in lines:
+            line = line.strip()
+            if line and '----' in line:
+                parts = line.split('----')
+                if len(parts) >= 4:
+                    valid_lines.append(line)
+        
+        # 获取文件信息
+        stat = os.stat(file_path)
+        file_info = {
+            'name': filename,
+            'size': stat.st_size,
+            'lines': len(valid_lines),
+            'modified': datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+        }
+        
+        logger.info(f"成功读取Apple ID文件 {filename}, 有效行数: {len(valid_lines)}")
+        
+        return jsonify({
+            'success': True,
+            'file_info': file_info,
+            'content': valid_lines
+        })
+        
+    except Exception as e:
+        logger.error(f"获取Apple ID文件内容失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取Apple ID文件内容失败: {str(e)}'
+        })
+
+@app.route('/api/appleid_upload', methods=['POST'])
+@login_required
+def api_appleid_upload():
+    """上传Apple ID文件"""
+    logger.info("收到Apple ID文件上传请求")
+    try:
+        if 'file' not in request.files:
+            return jsonify({
+                'success': False,
+                'message': '未找到上传的文件'
+            })
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({
+                'success': False,
+                'message': '未选择文件'
+            })
+        
+        # 检查文件扩展名
+        if not file.filename.lower().endswith(('.txt', '.csv')):
+            return jsonify({
+                'success': False,
+                'message': '只支持 .txt 和 .csv 格式的文件'
+            })
+        
+        # 获取自定义文件名
+        custom_filename = request.form.get('custom_filename', '').strip()
+        if custom_filename:
+            # 确保文件名安全
+            import re
+            custom_filename = re.sub(r'[^\w\-_.]', '_', custom_filename)
+            filename = f"{custom_filename}.txt"
+        else:
+            # 使用原文件名，但确保是.txt格式
+            base_name = os.path.splitext(file.filename)[0]
+            filename = f"{base_name}.txt"
+        
+        # 确保ID目录存在
+        id_dir = os.path.join(project_root, 'web', 'config', 'ID')
+        os.makedirs(id_dir, exist_ok=True)
+        
+        # 检查文件是否已存在
+        file_path = os.path.join(id_dir, filename)
+        if os.path.exists(file_path):
+            return jsonify({
+                'success': False,
+                'message': f'文件 {filename} 已存在，请使用不同的文件名'
+            })
+        
+        # 读取并验证文件内容
+        content = file.read().decode('utf-8')
+        lines = content.split('\n')
+        valid_lines = []
+        invalid_count = 0
+        
+        for i, line in enumerate(lines, 1):
+            line = line.strip()
+            if not line:
+                continue
+            
+            # 验证格式：邮箱----密码----电话----接码地址
+            parts = line.split('----')
+            if len(parts) == 4:
+                # 检查每个字段是否不为空
+                if all(part.strip() for part in parts):
+                    valid_lines.append(line)
+                else:
+                    invalid_count += 1
+                    logger.warning(f"第{i}行：字段为空")
+            else:
+                invalid_count += 1
+                logger.warning(f"第{i}行：格式错误，期望4个字段，实际{len(parts)}个")
+        
+        if not valid_lines:
+            return jsonify({
+                'success': False,
+                'message': '文件中没有有效的Apple ID数据，请检查格式'
+            })
+        
+        # 保存文件
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(valid_lines))
+        
+        logger.info(f"Apple ID文件上传成功: {filename}, 有效行数: {len(valid_lines)}, 无效行数: {invalid_count}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'文件上传成功！有效行数: {len(valid_lines)}',
+            'filename': filename,
+            'valid_lines': len(valid_lines),
+            'invalid_lines': invalid_count
+        })
+        
+    except Exception as e:
+        logger.error(f"Apple ID文件上传失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'文件上传失败: {str(e)}'
+        })
+
+@app.route('/api/appleid_delete', methods=['POST'])
+@login_required
+def api_appleid_delete():
+    """删除Apple ID数据"""
+    logger.info("收到Apple ID删除请求")
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'message': '未提供删除数据'
+            })
+        
+        filename = data.get('file_name')
+        line_index = data.get('line_index')
+        original_line = data.get('original_line')
+        
+        if not filename or line_index is None or not original_line:
+            return jsonify({
+                'success': False,
+                'message': '缺少必要的删除参数'
+            })
+        
+        file_path = os.path.join(project_root, 'web', 'config', 'ID', filename)
+        
+        if not os.path.exists(file_path):
+            return jsonify({
+                'success': False,
+                'message': f'文件不存在: {filename}'
+            })
+        
+        # 读取文件内容
+        with open(file_path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        
+        # 确保行索引有效
+        if line_index >= len(lines):
+            return jsonify({
+                'success': False,
+                'message': f'行索引超出范围: {line_index}'
+            })
+        
+        # 验证要删除的行
+        target_line = lines[line_index].strip()
+        if target_line != original_line:
+            return jsonify({
+                'success': False,
+                'message': '要删除的行与原始行不匹配'
+            })
+        
+        # 创建备份目录
+        backup_dir = os.path.join(project_root, 'web', 'config', 'ID', 'backup')
+        os.makedirs(backup_dir, exist_ok=True)
+        
+        # 创建备份文件
+        backup_filename = f"{os.path.splitext(filename)[0]}_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+        backup_path = os.path.join(backup_dir, backup_filename)
+        
+        # 将删除的行写入备份文件
+        with open(backup_path, 'w', encoding='utf-8') as f:
+            f.write(f"# 删除时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"# 原文件: {filename}\n")
+            f.write(f"# 行索引: {line_index}\n")
+            f.write(f"{original_line}\n")
+        
+        # 从原文件中删除该行
+        lines.pop(line_index)
+        
+        # 写回原文件
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.writelines(lines)
+        
+        logger.info(f"成功删除Apple ID数据，文件: {filename}, 行索引: {line_index}")
+        
+        return jsonify({
+            'success': True,
+            'message': '删除成功，数据已移动到备份文件'
+        })
+        
+    except Exception as e:
+        logger.error(f"删除Apple ID数据失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'删除失败: {str(e)}'
+        })
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
