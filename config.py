@@ -29,8 +29,14 @@ wuma_config_delete_dir = r'web\config\config_delete'
 # 配置已使用五码目录
 wuma_config_install_dir = r'web\config\config_install'
 
-# Apple ID配置文件目录
-appleid_config_dir = r'web\config\appleid'
+# Apple ID未使用目录
+appleid_unused_dir = r'web\config\ID_unused'
+
+# Apple ID已删除目录
+appleid_delete_dir = r'web\config\ID_delete'
+
+# Apple ID已使用目录
+appleid_install_dir = r'web\config\ID_install'
 
 # 脚本本地上传路径
 script_upload_dir = r'D:\macos_vm\macos_sh'

@@ -961,7 +961,7 @@
                     <p>确定要删除这条Apple ID数据吗？</p>
                     <div class="alert alert-info">
                         <i class="fas fa-info-circle me-2"></i>
-                        <strong>注意：</strong>删除的Apple ID数据将会移动到备份文件<br>
+                        <strong>注意：</strong>删除的Apple ID数据将会移动到ID_delete目录下的备份文件中<br>
                     </div>
                     <input type="hidden" id="deleteAppleIdIndex" value="">
                 </div>
@@ -1025,7 +1025,7 @@
             document.getElementById('invalidAppleIds').textContent = '-';
             document.getElementById('usedAppleIds').textContent = '-';
             
-            fetch('/api/appleid_files?directory=ID')
+            fetch('/api/appleid_files')
                 .then(response => response.json())
                 .then(data => {
                     console.log('Apple ID文件列表响应:', data);
@@ -1347,15 +1347,42 @@
 
         // 更新Apple ID统计信息
         function updateAppleIdStats() {
-            const totalCount = allAppleIdData.length;
-            const validCount = allAppleIdData.filter(item => item.status === 'valid').length;
-            const invalidCount = allAppleIdData.filter(item => item.status === 'invalid').length;
-            const usedCount = 0; // 暂时设为0，后续可以扩展使用状态
-            
-            document.getElementById('totalAppleIds').textContent = totalCount;
-            document.getElementById('validAppleIds').textContent = validCount;
-            document.getElementById('invalidAppleIds').textContent = invalidCount;
-            document.getElementById('usedAppleIds').textContent = usedCount;
+            // 从服务器获取统计信息
+            fetch('/api/appleid_stats')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('totalAppleIds').textContent = data.stats.total;
+                        document.getElementById('validAppleIds').textContent = data.stats.valid;
+                        document.getElementById('invalidAppleIds').textContent = data.stats.invalid;
+                        document.getElementById('usedAppleIds').textContent = data.stats.used;
+                    } else {
+                        console.error('获取统计信息失败:', data.message);
+                        // 如果获取失败，使用本地数据
+                        const totalCount = allAppleIdData.length;
+                        const validCount = allAppleIdData.filter(item => item.status === 'valid').length;
+                        const invalidCount = allAppleIdData.filter(item => item.status === 'invalid').length;
+                        const usedCount = 0;
+                        
+                        document.getElementById('totalAppleIds').textContent = totalCount;
+                        document.getElementById('validAppleIds').textContent = validCount;
+                        document.getElementById('invalidAppleIds').textContent = invalidCount;
+                        document.getElementById('usedAppleIds').textContent = usedCount;
+                    }
+                })
+                .catch(error => {
+                    console.error('获取统计信息网络错误:', error);
+                    // 如果网络错误，使用本地数据
+                    const totalCount = allAppleIdData.length;
+                    const validCount = allAppleIdData.filter(item => item.status === 'valid').length;
+                    const invalidCount = allAppleIdData.filter(item => item.status === 'invalid').length;
+                    const usedCount = 0;
+                    
+                    document.getElementById('totalAppleIds').textContent = totalCount;
+                    document.getElementById('validAppleIds').textContent = validCount;
+                    document.getElementById('invalidAppleIds').textContent = invalidCount;
+                    document.getElementById('usedAppleIds').textContent = usedCount;
+                });
         }
 
         // 加载Apple ID文件内容
@@ -1427,7 +1454,7 @@
                                 <i class="fas fa-check"></i>
                             </button>
                             <button class="btn btn-danger btn-sm" onclick="deleteAppleId(${startIndex + index})" title="删除">
-                                <i class="fas fa-trash"></i>
+                                <i class="fas fa-times"></i>
                             </button>
                         </td>
                     `;
@@ -1680,7 +1707,7 @@
                     
                     if (data.success) {
                         console.log('✅ 删除成功！');
-                        showToast('删除成功！数据已移动到备份文件', 'success');
+                        showToast('删除成功！数据已移动到ID_delete目录', 'success');
                         
                         // 确保模态框正确关闭
                         if (deleteModal) {

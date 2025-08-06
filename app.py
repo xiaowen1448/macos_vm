@@ -5627,12 +5627,14 @@ def api_appleid_files():
     logger.info("收到获取Apple ID文件列表请求")
     try:
         files = []
-        id_dir = os.path.join(project_root, 'web', 'config', 'ID')
+        # 从配置文件读取目录路径
+        from config import appleid_unused_dir
+        id_dir = os.path.join(project_root, appleid_unused_dir)
         
         # 确保ID目录存在
         if not os.path.exists(id_dir):
             os.makedirs(id_dir, exist_ok=True)
-            logger.info("创建ID目录")
+            logger.info("创建ID_unused目录")
         
         # 查找ID目录下的所有.txt文件
         if os.path.exists(id_dir):
@@ -5683,7 +5685,9 @@ def api_appleid_file_content():
                 'message': '未指定文件名'
             })
         
-        file_path = os.path.join(project_root, 'web', 'config', 'ID', filename)
+        # 从配置文件读取目录路径
+        from config import appleid_unused_dir
+        file_path = os.path.join(project_root, appleid_unused_dir, filename)
         
         if not os.path.exists(file_path):
             return jsonify({
@@ -5767,8 +5771,9 @@ def api_appleid_upload():
             base_name = os.path.splitext(file.filename)[0]
             filename = f"{base_name}.txt"
         
-        # 确保ID目录存在
-        id_dir = os.path.join(project_root, 'web', 'config', 'ID')
+        # 确保ID_unused目录存在
+        from config import appleid_unused_dir
+        id_dir = os.path.join(project_root, appleid_unused_dir)
         os.makedirs(id_dir, exist_ok=True)
         
         # 检查文件是否已存在
@@ -5853,7 +5858,9 @@ def api_appleid_delete():
                 'message': '缺少必要的删除参数'
             })
         
-        file_path = os.path.join(project_root, 'web', 'config', 'ID', filename)
+        # 从配置文件读取目录路径
+        from config import appleid_unused_dir, appleid_delete_dir
+        file_path = os.path.join(project_root, appleid_unused_dir, filename)
         
         if not os.path.exists(file_path):
             return jsonify({
@@ -5880,19 +5887,16 @@ def api_appleid_delete():
                 'message': '要删除的行与原始行不匹配'
             })
         
-        # 创建备份目录
-        backup_dir = os.path.join(project_root, 'web', 'config', 'ID', 'backup')
-        os.makedirs(backup_dir, exist_ok=True)
+        # 创建删除目录
+        delete_dir = os.path.join(project_root, appleid_delete_dir)
+        os.makedirs(delete_dir, exist_ok=True)
         
-        # 创建备份文件
-        backup_filename = f"{os.path.splitext(filename)[0]}_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-        backup_path = os.path.join(backup_dir, backup_filename)
+        # 创建删除备份文件
+        backup_filename = f"{os.path.splitext(filename)[0]}_bak.txt"
+        backup_path = os.path.join(delete_dir, backup_filename)
         
-        # 将删除的行写入备份文件
-        with open(backup_path, 'w', encoding='utf-8') as f:
-            f.write(f"# 删除时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-            f.write(f"# 原文件: {filename}\n")
-            f.write(f"# 行索引: {line_index}\n")
+        # 将删除的行写入删除备份文件
+        with open(backup_path, 'a', encoding='utf-8') as f:
             f.write(f"{original_line}\n")
         
         # 从原文件中删除该行
@@ -5906,7 +5910,7 @@ def api_appleid_delete():
         
         return jsonify({
             'success': True,
-            'message': '删除成功，数据已移动到备份文件'
+            'message': '删除成功，数据已移动到删除备份文件'
         })
         
     except Exception as e:
@@ -5914,6 +5918,93 @@ def api_appleid_delete():
         return jsonify({
             'success': False,
             'message': f'删除失败: {str(e)}'
+        })
+
+@app.route('/api/appleid_stats')
+@login_required
+def api_appleid_stats():
+    """获取Apple ID统计信息"""
+    logger.info("收到Apple ID统计信息请求")
+    try:
+        from config import appleid_unused_dir, appleid_install_dir, appleid_delete_dir
+        
+        # 计算有效ID数量（未使用目录中的ID）
+        valid_count = 0
+        unused_dir = os.path.join(project_root, appleid_unused_dir)
+        if os.path.exists(unused_dir):
+            for filename in os.listdir(unused_dir):
+                if filename.endswith('.txt'):
+                    file_path = os.path.join(unused_dir, filename)
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            content = f.read().strip()
+                            lines = content.split('\n') if content else []
+                            for line in lines:
+                                if line.strip() and '----' in line:
+                                    parts = line.split('----')
+                                    if len(parts) >= 4:
+                                        valid_count += 1
+                    except Exception as e:
+                        logger.warning(f"读取文件失败 {filename}: {str(e)}")
+        
+        # 计算已使用ID数量（已安装目录中的bak文件）
+        used_count = 0
+        install_dir = os.path.join(project_root, appleid_install_dir)
+        if os.path.exists(install_dir):
+            for filename in os.listdir(install_dir):
+                if filename.endswith('_bak.txt'):
+                    file_path = os.path.join(install_dir, filename)
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            content = f.read().strip()
+                            lines = content.split('\n') if content else []
+                            for line in lines:
+                                if line.strip() and '----' in line:
+                                    parts = line.split('----')
+                                    if len(parts) >= 4:
+                                        used_count += 1
+                    except Exception as e:
+                        logger.warning(f"读取已使用文件失败 {filename}: {str(e)}")
+        
+        # 计算无效ID数量（删除目录中的bak文件）
+        invalid_count = 0
+        delete_dir = os.path.join(project_root, appleid_delete_dir)
+        if os.path.exists(delete_dir):
+            for filename in os.listdir(delete_dir):
+                if filename.endswith('_bak.txt'):
+                    file_path = os.path.join(delete_dir, filename)
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            content = f.read().strip()
+                            lines = content.split('\n') if content else []
+                            for line in lines:
+                                if line.strip() and '----' in line:
+                                    parts = line.split('----')
+                                    if len(parts) >= 4:
+                                        invalid_count += 1
+                    except Exception as e:
+                        logger.warning(f"读取删除文件失败 {filename}: {str(e)}")
+        
+        # 计算总数量
+        total_count = valid_count + used_count + invalid_count
+        
+        logger.info(f"Apple ID统计信息 - 有效: {valid_count}, 已使用: {used_count}, 无效: {invalid_count}, 总计: {total_count}")
+        
+        return jsonify({
+            'success': True,
+            'stats': {
+                'total': total_count,
+                'valid': valid_count,
+                'used': used_count,
+                'invalid': invalid_count
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"获取Apple ID统计信息失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取统计信息失败: {str(e)}'
         })
 
 if __name__ == '__main__':
