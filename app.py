@@ -721,10 +721,10 @@ def login():
                     return jsonify({
                         'success': True,
                         'message': '登录成功',
-                        'redirect': url_for('clone_vm_page')
+                        'redirect': url_for('dashboard')
                     })
                 else:
-                    return redirect(url_for('clone_vm_page'))
+                    return redirect(url_for('dashboard'))
             else:
                 logger.warning(f"用户 {username} 登录失败")
                 error_msg = '用户名或密码错误'
@@ -754,6 +754,8 @@ def login():
 @login_required
 def dashboard():
     logger.debug("访问dashboard页面")
+    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
     #获取虚拟机名称
     vm_temp_dir = r'D:\macos_vm\NewVM\10.12'
     vm_chengpin_dir = r'D:\macos_vm\NewVM\chengpin_vm'
@@ -812,7 +814,7 @@ def dashboard():
     script_list.sort(key=lambda x: x['name'])
     
     logger.info(f"Dashboard数据准备完成 - 成品VM: {len(vm_list)}, 临时VM: {len(vm_data)}, 脚本: {len(script_list)}")
-    return render_template('dashboard.html', username=session.get('username'), vm_list=vm_list,vm_data=vm_data, script_list=script_list, wuma_list=wuma_list)
+    return render_template('dashboard.html', username=session.get('username'), vm_list=vm_list,vm_data=vm_data, script_list=script_list, wuma_list=wuma_list, current_time=current_time)
 
 @app.route('/clone_vm')
 @login_required
