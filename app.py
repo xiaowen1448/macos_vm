@@ -6046,9 +6046,22 @@ def api_apple_ids():
             
             logger.info(f"总共找到 {len(apple_id_list)} 个唯一的Apple ID")
             
-                    return jsonify({
-            'success': True,
-            'apple_ids': apple_id_list
+            return jsonify({
+                'success': True,
+                'apple_ids': apple_id_list
+            })
+        else:
+            logger.warning("ID目录不存在")
+            return jsonify({
+                'success': True,
+                'apple_ids': []
+            })
+        
+    except Exception as e:
+        logger.error(f"获取Apple ID列表失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取Apple ID列表失败: {str(e)}'
         })
 
 @app.route('/api/batch_im_login', methods=['POST'])
@@ -6106,10 +6119,187 @@ def api_batch_im_login():
         
         logger.info(f"批量IM登录验证通过 - 运行中虚拟机: {running_vms}, Apple ID文件: {apple_id_file}")
         
-        # TODO: 实现批量IM登录逻辑
+        # 读取Apple ID文件内容
+        from config import appleid_unused_dir
+        apple_id_file_path = os.path.join(project_root, appleid_unused_dir, apple_id_file)
+        
+        if not os.path.exists(apple_id_file_path):
+            return jsonify({
+                'success': False,
+                'message': f'Apple ID文件不存在: {apple_id_file}'
+            })
+        
+        # 读取文件内容，尝试多种编码
+        content = ""
+        encodings = ['utf-8', 'utf-8-sig', 'gbk', 'gb2312', 'latin-1']
+        
+        for encoding in encodings:
+            try:
+                with open(apple_id_file_path, 'r', encoding=encoding) as f:
+                    content = f.read().strip()
+                logger.info(f"成功使用 {encoding} 编码读取文件 {apple_id_file}")
+                break
+            except UnicodeDecodeError:
+                logger.warning(f"使用 {encoding} 编码读取文件 {apple_id_file} 失败，尝试下一种编码")
+                continue
+            except Exception as e:
+                logger.error(f"读取文件 {apple_id_file} 时发生错误: {str(e)}")
+                continue
+        
+        if not content:
+            return jsonify({
+                'success': False,
+                'message': f'无法读取Apple ID文件 {apple_id_file}，请检查文件编码'
+            })
+        
+        # 解析Apple ID内容
+        lines = [line.strip() for line in content.split('\n') if line.strip()]
+        apple_ids = []
+        for line in lines:
+            if '----' in line:
+                apple_id = line.split('----')[0].strip()
+                if apple_id and '@' in apple_id:
+                    apple_ids.append(line)  # 保留完整行
+            else:
+                if '@' in line:
+                    apple_ids.append(line)
+        
+        if not apple_ids:
+            return jsonify({
+                'success': False,
+                'message': f'Apple ID文件 {apple_id_file} 中没有找到有效的Apple ID'
+            })
+        
+        logger.info(f"从文件 {apple_id_file} 中提取到 {len(apple_ids)} 个Apple ID")
+        
+        # 检查Apple ID数量是否足够分配给所有虚拟机
+        if len(apple_ids) < len(running_vms):
+            return jsonify({
+                'success': False,
+                'message': f'Apple ID数量不足，需要 {len(running_vms)} 个，但只有 {len(apple_ids)} 个可用'
+            })
+        
+        # 每个虚拟机分配一个Apple ID
+        apple_ids_per_vm = 1
+        # 只使用前running_vms数量的Apple ID
+        apple_ids_to_distribute = apple_ids[:len(running_vms)]
+        
+        logger.info(f"每个虚拟机分配 {apple_ids_per_vm} 个Apple ID，共使用 {len(apple_ids_to_distribute)} 个")
+        
+        # 为每个虚拟机创建临时文件并传输
+        results = []
+        start_index = 0
+        
+        for i, vm_name in enumerate(running_vms):
+            try:
+                # 获取虚拟机IP
+                vm_ip = get_vm_ip(vm_name)
+                if not vm_ip:
+                    results.append({
+                        'vm_name': vm_name,
+                        'success': False,
+                        'message': '无法获取虚拟机IP地址'
+                    })
+                    continue
+                
+                # 获取分配给当前虚拟机的Apple ID（每个虚拟机一个）
+                vm_apple_ids = [apple_ids_to_distribute[i]]
+                
+                logger.info(f"虚拟机 {vm_name} 分配第 {i+1} 个Apple ID: {vm_apple_ids[0]}")
+                
+                # 创建临时文件
+                temp_file_name = f"{vm_name}_appleid.txt"
+                temp_file_path = os.path.join(project_root, 'temp', temp_file_name)
+                
+                # 确保临时目录存在
+                os.makedirs(os.path.dirname(temp_file_path), exist_ok=True)
+                
+                # 写入分配给当前虚拟机的Apple ID到临时文件
+                with open(temp_file_path, 'w', encoding='utf-8') as f:
+                    f.write(vm_apple_ids[0])
+                
+                logger.info(f"创建临时文件: {temp_file_path}，包含 1 个Apple ID")
+                
+                # 使用SCP传输文件到虚拟机
+                remote_file_path = f"/Users/{vm_username}/{temp_file_name}"
+                
+                scp_cmd = [
+                    'scp',
+                    '-o', 'StrictHostKeyChecking=no',
+                    temp_file_path,
+                    f"{vm_username}@{vm_ip}:{remote_file_path}"
+                ]
+                
+                logger.info(f"执行SCP命令: {' '.join(scp_cmd)}")
+                result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=60)
+                
+                if result.returncode == 0:
+                    logger.info(f"成功传输Apple ID文件到虚拟机 {vm_name}")
+                    results.append({
+                        'vm_name': vm_name,
+                        'success': True,
+                        'message': f'Apple ID文件已成功传输到虚拟机 {vm_name}',
+                        'remote_path': remote_file_path,
+                        'apple_id_count': len(vm_apple_ids),
+                        'apple_id_range': f"{i+1}"
+                    })
+                else:
+                    error_msg = result.stderr.strip() if result.stderr else '未知错误'
+                    logger.error(f"传输Apple ID文件到虚拟机 {vm_name} 失败: {error_msg}")
+                    results.append({
+                        'vm_name': vm_name,
+                        'success': False,
+                        'message': f'传输失败: {error_msg}',
+                        'apple_id_count': len(vm_apple_ids),
+                        'apple_id_range': f"{i+1}"
+                    })
+                
+                # 清理临时文件
+                try:
+                    os.remove(temp_file_path)
+                    logger.info(f"清理临时文件: {temp_file_path}")
+                except Exception as e:
+                    logger.warning(f"清理临时文件失败: {str(e)}")
+                
+            except subprocess.TimeoutExpired:
+                logger.error(f"传输Apple ID文件到虚拟机 {vm_name} 超时")
+                results.append({
+                    'vm_name': vm_name,
+                    'success': False,
+                    'message': '传输超时（60秒）'
+                })
+            except Exception as e:
+                logger.error(f"处理虚拟机 {vm_name} 时发生错误: {str(e)}")
+                results.append({
+                    'vm_name': vm_name,
+                    'success': False,
+                    'message': f'处理失败: {str(e)}'
+                })
+        
+        # 统计结果
+        success_count = sum(1 for r in results if r['success'])
+        total_count = len(results)
+        
+        # 计算分配的Apple ID总数
+        total_allocated = sum(r.get('apple_id_count', 0) for r in results if r['success'])
+        
         return jsonify({
             'success': True,
-            'message': f'批量IM登录任务已提交，将为 {len(running_vms)} 个虚拟机使用Apple ID文件: {apple_id_file}'
+            'message': f'批量IM登录任务完成，成功传输到 {success_count}/{total_count} 个虚拟机，共分配 {total_allocated} 个Apple ID',
+            'results': results,
+            'summary': {
+                'total_vms': total_count,
+                'success_count': success_count,
+                'failed_count': total_count - success_count,
+                'total_apple_ids': len(apple_ids),
+                'allocated_apple_ids': total_allocated,
+                'source_file': apple_id_file,
+                'distribution_info': {
+                    'apple_ids_per_vm': apple_ids_per_vm,
+                    'total_apple_ids_used': len(apple_ids_to_distribute),
+                    'distribution_method': 'one_apple_id_per_vm'
+                }
+            }
         })
         
     except Exception as e:
@@ -6117,19 +6307,6 @@ def api_batch_im_login():
         return jsonify({
             'success': False,
             'message': f'批量IM登录失败: {str(e)}'
-        })
-        else:
-            logger.warning("ID目录不存在")
-            return jsonify({
-                'success': True,
-                'apple_ids': []
-            })
-        
-    except Exception as e:
-        logger.error(f"获取Apple ID列表失败: {str(e)}")
-        return jsonify({
-            'success': False,
-            'message': f'获取Apple ID列表失败: {str(e)}'
         })
 
 @app.route('/api/appleid_stats')
@@ -6260,6 +6437,205 @@ def api_appleid_stats():
         return jsonify({
             'success': False,
             'message': f'获取统计信息失败: {str(e)}'
+        })
+
+@app.route('/api/distribute_text_lines', methods=['POST'])
+@login_required
+def api_distribute_text_lines():
+    """将多行文本分别分发到多个虚拟机"""
+    logger.info("收到多行文本分发请求")
+    try:
+        data = request.get_json()
+        vm_names = data.get('vm_names', [])
+        text_lines = data.get('text_lines', [])  # 多行文本内容
+        file_name = data.get('file_name', 'distributed_text.txt')  # 远程文件名
+        remote_path = data.get('remote_path', None)  # 远程路径，如果为None则使用默认路径
+        
+        if not vm_names:
+            return jsonify({
+                'success': False,
+                'message': '请选择虚拟机'
+            })
+        
+        if not text_lines:
+            return jsonify({
+                'success': False,
+                'message': '请提供要分发的文本内容'
+            })
+        
+        # 验证虚拟机状态
+        running_vms = []
+        stopped_vms = []
+        unknown_vms = []
+        
+        for vm_name in vm_names:
+            try:
+                vm_status = get_vm_online_status(vm_name)
+                if vm_status['status'] == 'online' or vm_status['vm_status'] == 'running':
+                    running_vms.append(vm_name)
+                elif vm_status['status'] == 'offline' or vm_status['vm_status'] == 'stopped':
+                    stopped_vms.append(vm_name)
+                else:
+                    unknown_vms.append(vm_name)
+            except Exception as e:
+                logger.error(f"检查虚拟机 {vm_name} 状态失败: {str(e)}")
+                unknown_vms.append(vm_name)
+        
+        # 检查是否有非运行中的虚拟机
+        if stopped_vms or unknown_vms:
+            error_msg = "只能对运行中的虚拟机执行文本分发操作。"
+            if stopped_vms:
+                error_msg += f"\n已停止的虚拟机: {', '.join(stopped_vms)}"
+            if unknown_vms:
+                error_msg += f"\n状态未知的虚拟机: {', '.join(unknown_vms)}"
+            
+            return jsonify({
+                'success': False,
+                'message': error_msg
+            })
+        
+        logger.info(f"文本分发验证通过 - 运行中虚拟机: {running_vms}, 文本行数: {len(text_lines)}")
+        
+        # 检查文本行数是否足够分配给所有虚拟机
+        if len(text_lines) < len(running_vms):
+            return jsonify({
+                'success': False,
+                'message': f'文本行数不足，需要 {len(running_vms)} 行，但只有 {len(text_lines)} 行可用'
+            })
+        
+        # 每个虚拟机分配一行文本
+        lines_per_vm = 1
+        # 只使用前running_vms数量的行
+        text_lines_to_distribute = text_lines[:len(running_vms)]
+        
+        logger.info(f"每个虚拟机分配 {lines_per_vm} 行文本，共使用 {len(text_lines_to_distribute)} 行")
+        
+        # 为每个虚拟机创建临时文件并传输
+        results = []
+        start_index = 0
+        
+        for i, vm_name in enumerate(running_vms):
+            try:
+                # 获取虚拟机IP
+                vm_ip = get_vm_ip(vm_name)
+                if not vm_ip:
+                    results.append({
+                        'vm_name': vm_name,
+                        'success': False,
+                        'message': '无法获取虚拟机IP地址'
+                    })
+                    continue
+                
+                # 获取分配给当前虚拟机的文本行（每个虚拟机一行）
+                vm_text_lines = [text_lines_to_distribute[i]]
+                
+                logger.info(f"虚拟机 {vm_name} 分配第 {i+1} 行文本: {vm_text_lines[0]}")
+                
+                # 创建临时文件
+                temp_file_name = f"{vm_name}_{file_name}"
+                temp_file_path = os.path.join(project_root, 'temp', temp_file_name)
+                
+                # 确保临时目录存在
+                os.makedirs(os.path.dirname(temp_file_path), exist_ok=True)
+                
+                # 写入分配给当前虚拟机的文本行到临时文件
+                with open(temp_file_path, 'w', encoding='utf-8') as f:
+                    f.write(vm_text_lines[0])
+                
+                logger.info(f"创建临时文件: {temp_file_path}，包含 1 行文本")
+                
+                # 确定远程文件路径
+                if remote_path:
+                    remote_file_path = f"{remote_path}/{file_name}"
+                else:
+                    remote_file_path = f"/Users/{vm_username}/{file_name}"
+                
+                # 使用SCP传输文件到虚拟机
+                scp_cmd = [
+                    'scp',
+                    '-o', 'StrictHostKeyChecking=no',
+                    temp_file_path,
+                    f"{vm_username}@{vm_ip}:{remote_file_path}"
+                ]
+                
+                logger.info(f"执行SCP命令: {' '.join(scp_cmd)}")
+                result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=60)
+                
+                if result.returncode == 0:
+                    logger.info(f"成功传输文本文件到虚拟机 {vm_name}")
+                    results.append({
+                        'vm_name': vm_name,
+                        'success': True,
+                        'message': f'文本文件已成功传输到虚拟机 {vm_name}',
+                        'remote_path': remote_file_path,
+                        'line_count': len(vm_text_lines),
+                        'line_range': f"{i+1}",
+                        'text_lines': vm_text_lines  # 返回分配给该虚拟机的具体文本行
+                    })
+                else:
+                    error_msg = result.stderr.strip() if result.stderr else '未知错误'
+                    logger.error(f"传输文本文件到虚拟机 {vm_name} 失败: {error_msg}")
+                    results.append({
+                        'vm_name': vm_name,
+                        'success': False,
+                        'message': f'传输失败: {error_msg}',
+                        'line_count': len(vm_text_lines),
+                        'line_range': f"{i+1}"
+                    })
+                
+                # 清理临时文件
+                try:
+                    os.remove(temp_file_path)
+                    logger.info(f"清理临时文件: {temp_file_path}")
+                except Exception as e:
+                    logger.warning(f"清理临时文件失败: {str(e)}")
+                
+            except subprocess.TimeoutExpired:
+                logger.error(f"传输文本文件到虚拟机 {vm_name} 超时")
+                results.append({
+                    'vm_name': vm_name,
+                    'success': False,
+                    'message': '传输超时（60秒）'
+                })
+            except Exception as e:
+                logger.error(f"处理虚拟机 {vm_name} 时发生错误: {str(e)}")
+                results.append({
+                    'vm_name': vm_name,
+                    'success': False,
+                    'message': f'处理失败: {str(e)}'
+                })
+        
+        # 统计结果
+        success_count = sum(1 for r in results if r['success'])
+        total_count = len(results)
+        
+        # 计算分配的文本行总数
+        total_allocated = sum(r.get('line_count', 0) for r in results if r['success'])
+        
+        return jsonify({
+            'success': True,
+            'message': f'文本分发任务完成，成功传输到 {success_count}/{total_count} 个虚拟机，共分配 {total_allocated} 行文本',
+            'results': results,
+            'summary': {
+                'total_vms': total_count,
+                'success_count': success_count,
+                'failed_count': total_count - success_count,
+                'total_text_lines': len(text_lines),
+                'allocated_lines': total_allocated,
+                'file_name': file_name,
+                'distribution_info': {
+                    'lines_per_vm': lines_per_vm,
+                    'total_lines_used': len(text_lines_to_distribute),
+                    'distribution_method': 'one_line_per_vm'
+                }
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"文本分发失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'文本分发失败: {str(e)}'
         })
 
 if __name__ == '__main__':
