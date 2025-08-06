@@ -5760,7 +5760,38 @@
             if (!submitBtn) return;
             
             const hasSelection = selectedIMVMs.size > 0 && selectedIMId;
-            submitBtn.disabled = !hasSelection;
+            
+            // 检查Apple ID数量是否足够
+            let hasEnoughAppleIds = true;
+            if (hasSelection && selectedIMId) {
+                const appleIdSelect = document.getElementById('appleIdSelect');
+                if (appleIdSelect) {
+                    const selectedOption = appleIdSelect.options[appleIdSelect.selectedIndex];
+                    if (selectedOption) {
+                        const availableCount = parseInt(selectedOption.getAttribute('data-count') || '0');
+                        const requiredCount = selectedIMVMs.size;
+                        
+                        if (availableCount < requiredCount) {
+                            hasEnoughAppleIds = false;
+                            // 更新按钮提示信息
+                            submitBtn.title = `Apple ID数量不足：需要 ${requiredCount} 个，但只有 ${availableCount} 个可用`;
+                        } else {
+                            submitBtn.title = '';
+                        }
+                    }
+                }
+            }
+            
+            submitBtn.disabled = !hasSelection || !hasEnoughAppleIds;
+            
+            // 更新按钮样式
+            if (submitBtn.disabled) {
+                submitBtn.classList.remove('btn-primary');
+                submitBtn.classList.add('btn-secondary');
+            } else {
+                submitBtn.classList.remove('btn-secondary');
+                submitBtn.classList.add('btn-primary');
+            }
         }
 
         // 提交批量IM登录
