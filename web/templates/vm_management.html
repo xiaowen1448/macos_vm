@@ -700,6 +700,9 @@
                             <button class="btn btn-danger btn-sm me-2" id="batchDeleteBtn" onclick="batchDelete()" disabled>
                                 <i class="fas fa-trash me-2"></i>批量删除
                             </button>
+                            <button class="btn btn-primary btn-sm me-2" id="batchIMLoginBtn" onclick="openBatchIMLoginModal()" disabled>
+                                <i class="fas fa-comments me-2"></i>批量IM登录
+                            </button>
                             <div class="ms-3 d-flex align-items-center">
                                 <small class="text-muted">
                                     <i class="fas fa-info-circle me-1"></i>批量更改需要全部运行中的虚拟机，批量删除需要全部已关机的虚拟机
@@ -5499,6 +5502,10 @@
                 batchDeleteBtn.classList.remove('btn-danger');
                 batchDeleteBtn.classList.add('btn-secondary');
                 
+                batchIMLoginBtn.disabled = true;
+                batchIMLoginBtn.classList.remove('btn-primary');
+                batchIMLoginBtn.classList.add('btn-secondary');
+                
                 console.log('没有选中任何虚拟机，禁用所有按钮');
                 return;
             }
@@ -5529,6 +5536,7 @@
             const batchWumaBtn = document.getElementById('batchChangeWumaBtn');
             const batchJUBtn = document.getElementById('batchChangeJUBtn');
             const batchDeleteBtn = document.getElementById('batchDeleteBtn');
+            const batchIMLoginBtn = document.getElementById('batchIMLoginBtn');
             
             // 更新批量更改按钮状态（需要运行中的虚拟机，且不能包含已关机的虚拟机）
             if (selectedRunningVMs.length > 0 && selectedStoppedVMs.length === 0) {
@@ -5541,6 +5549,11 @@
                 batchJUBtn.classList.remove('btn-secondary');
                 batchJUBtn.classList.add('btn-info');
                 
+                // 启用批量IM登录按钮（需要运行中的虚拟机，且不能包含已关机的虚拟机）
+                batchIMLoginBtn.disabled = false;
+                batchIMLoginBtn.classList.remove('btn-secondary');
+                batchIMLoginBtn.classList.add('btn-primary');
+                
                 console.log('启用批量更改按钮，选中了', selectedRunningVMs.length, '个运行中/重启中的虚拟机');
             } else {
                 // 选中的虚拟机中没有运行中的，或者包含已关机的虚拟机，禁用批量更改按钮
@@ -5551,6 +5564,11 @@
                 batchJUBtn.disabled = true;
                 batchJUBtn.classList.remove('btn-info');
                 batchJUBtn.classList.add('btn-secondary');
+                
+                // 禁用批量IM登录按钮
+                batchIMLoginBtn.disabled = true;
+                batchIMLoginBtn.classList.remove('btn-primary');
+                batchIMLoginBtn.classList.add('btn-secondary');
                 
                 if (selectedRunningVMs.length === 0) {
                     console.log('禁用批量更改按钮，选中的虚拟机中没有运行中/重启中的');
@@ -5589,9 +5607,340 @@
             }, 1000);
         });
 
+        // 批量IM登录相关变量
+        let selectedIMVMs = new Set();
+        let selectedIMId = '';
+
+        // 打开批量IM登录模态框
+        function openBatchIMLoginModal() {
+            const modalElement = document.getElementById('batchIMLoginModal');
+            if (!modalElement) {
+                console.error('找不到批量IM登录模态框');
+                return;
+            }
+            
+            // 使用选中的运行中虚拟机
+            const selectedRunningVMs = Array.from(selectedVMs).filter(vmName => {
+                const vm = totalVMs.find(v => v.name === vmName);
+                return vm && (vm.status === 'running' || vm.status === 'starting');
+            });
+            
+            // 将选中的运行中虚拟机设置为runningVMs
+            const runningVMs = selectedRunningVMs.map(vmName => {
+                const vm = totalVMs.find(v => v.name === vmName);
+                return {
+                    name: vmName,
+                    path: vm.path,
+                    status: vm.status
+                };
+            });
+            
+            console.log('使用选中的运行中虚拟机:', runningVMs);
+            
+            // 更新模态框中的虚拟机列表
+            updateVMListInModal(runningVMs);
+            
+            // 获取Apple ID列表
+            fetchAppleIds();
+            
+            // 显示模态框
+            const modal = new bootstrap.Modal(modalElement);
+            modal.show();
+        }
+
+        // 获取Apple ID列表
+        function fetchAppleIds() {
+            fetch('/api/apple_ids')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    const select = document.getElementById('appleIdSelect');
+                    if (!select) return;
+                    
+                    select.innerHTML = '<option value="">请选择Apple ID</option>';
+                    
+                    if (data.apple_ids && data.apple_ids.length > 0) {
+                        data.apple_ids.forEach(item => {
+                            const option = document.createElement('option');
+                            option.value = item.id;
+                            option.textContent = item.text;  // 只显示Apple ID文本
+                            option.setAttribute('data-count', item.count);
+                            option.setAttribute('data-display-text', item.display_text);  // 保存带数量信息的文本
+                            select.appendChild(option);
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('获取Apple ID列表失败:', error);
+                });
+        }
+
+        // 处理Apple ID文件选择变化
+        function handleAppleIdChange() {
+            const select = document.getElementById('appleIdSelect');
+            const quantitySpan = document.getElementById('appleIdQuantity');
+            
+            if (!select || !quantitySpan) return;
+            
+            const selectedOption = select.options[select.selectedIndex];
+            if (selectedOption && selectedOption.value) {
+                const filename = selectedOption.value;
+                const count = selectedOption.getAttribute('data-count') || '0';
+                const displayText = selectedOption.getAttribute('data-display-text') || '';
+                const usedCount = 0; // 这里可以根据需要从后端获取已使用数量
+                
+                // 在数量显示区域显示带数量信息的文本
+                if (displayText) {
+                    quantitySpan.textContent = displayText;
+                } else {
+                    quantitySpan.textContent = `${count} (已使用: ${usedCount}) 个`;
+                }
+                
+                // 保存选择的文件名，用于后续的批量IM登录操作
+                selectedIMId = filename;
+                
+                console.log('选择的Apple ID文件:', filename);
+            } else {
+                quantitySpan.textContent = '0 (已使用: 0) 个';
+                selectedIMId = '';
+            }
+            
+            updateSubmitButton();
+        }
+
+        // 更新模态框中的虚拟机列表
+        function updateVMListInModal(runningVMs) {
+            const vmListContainer = document.getElementById('vmListContainer');
+            if (!vmListContainer) return;
+            
+            vmListContainer.innerHTML = '';
+            
+            if (runningVMs.length === 0) {
+                vmListContainer.innerHTML = '<div class="text-muted">暂无选中的运行中虚拟机</div>';
+                return;
+            }
+            
+            runningVMs.forEach(vm => {
+                const vmItem = document.createElement('div');
+                vmItem.className = 'form-check';
+                vmItem.innerHTML = `
+                    <input class="form-check-input" type="checkbox" value="${vm.name}" id="vm_${vm.name}" onchange="toggleIMVMSelection('${vm.name}')" checked>
+                    <label class="form-check-label" for="vm_${vm.name}">
+                        ${vm.name} (${vm.status})
+                    </label>
+                `;
+                vmListContainer.appendChild(vmItem);
+            });
+            
+            // 初始化模态框中的选择状态
+            selectedIMVMs.clear();
+            runningVMs.forEach(vm => {
+                selectedIMVMs.add(vm.name);
+            });
+            updateSubmitButton();
+        }
+
+        // 切换虚拟机选择状态
+        function toggleIMVMSelection(vmName) {
+            if (selectedIMVMs.has(vmName)) {
+                selectedIMVMs.delete(vmName);
+            } else {
+                selectedIMVMs.add(vmName);
+            }
+            updateSubmitButton();
+        }
+
+        // 更新提交按钮状态
+        function updateSubmitButton() {
+            const submitBtn = document.getElementById('submitIMLoginBtn');
+            if (!submitBtn) return;
+            
+            const hasSelection = selectedIMVMs.size > 0 && selectedIMId;
+            submitBtn.disabled = !hasSelection;
+        }
+
+        // 提交批量IM登录
+        function submitBatchIMLogin() {
+            if (selectedIMVMs.size === 0 || !selectedIMId) {
+                alert('请选择虚拟机和Apple ID文件');
+                return;
+            }
+            
+            const data = {
+                vm_names: Array.from(selectedIMVMs),
+                apple_id_file: selectedIMId  // 传递文件名而不是具体的Apple ID
+            };
+            
+            // 显示加载状态
+            const submitBtn = document.getElementById('submitIMLoginBtn');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>提交中...';
+            submitBtn.disabled = true;
+            
+            fetch('/api/batch_im_login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('批量IM登录任务已提交');
+                    // 关闭模态框
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('batchIMLoginModal'));
+                    modal.hide();
+                    // 清空选择
+                    selectedIMVMs.clear();
+                    selectedIMId = '';
+                    updateSubmitButton();
+                } else {
+                    alert('提交失败: ' + (data.message || '未知错误'));
+                }
+            })
+            .catch(error => {
+                console.error('提交批量IM登录失败:', error);
+                alert('提交失败: ' + error.message);
+            })
+            .finally(() => {
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            });
+        }
+
+        // 关闭模态框时清空选择
+        function onModalHidden() {
+            selectedIMVMs.clear();
+            selectedIMId = '';
+            
+            const appleIdSelect = document.getElementById('appleIdSelect');
+            const quantitySpan = document.getElementById('appleIdQuantity');
+            
+            if (appleIdSelect) {
+                appleIdSelect.value = '';
+            }
+            
+            if (quantitySpan) {
+                quantitySpan.textContent = '0 (已使用: 0) 个';
+            }
+            
+            updateSubmitButton();
+        }
+
+        // 更新批量IM登录按钮状态
+        function updateBatchIMLoginButton() {
+            const btn = document.getElementById('batchIMLoginBtn');
+            if (!btn) return;
+            
+            if (selectedVMs.size === 0) {
+                btn.disabled = true;
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-secondary');
+                return;
+            }
+            
+            // 检查选中的虚拟机状态
+            const selectedVMData = Array.from(selectedVMs).map(vmName => {
+                let vmData = vmDataList.find(vm => vm.name === vmName);
+                if (!vmData) {
+                    vmData = totalVMs.find(vm => vm.name === vmName);
+                }
+                return vmData;
+            }).filter(vm => vm);
+            
+            if (selectedVMData.length === 0) {
+                btn.disabled = true;
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-secondary');
+                return;
+            }
+            
+            // 检查是否有运行中的虚拟机，且没有已关闭的虚拟机
+            const hasRunningVM = selectedVMData.some(vm => vm.status === 'running' || vm.status === 'starting');
+            const hasStoppedVM = selectedVMData.some(vm => vm.status === 'stopped');
+            
+            if (hasRunningVM && !hasStoppedVM) {
+                // 有运行中的虚拟机且没有已关闭的虚拟机，启用按钮
+                btn.disabled = false;
+                btn.classList.remove('btn-secondary');
+                btn.classList.add('btn-primary');
+            } else {
+                // 没有运行中的虚拟机或包含已关闭的虚拟机，禁用按钮
+                btn.disabled = true;
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-secondary');
+            }
+        }
+
+
 
     </script>
-    
+
+    <!-- 批量IM登录模态框 -->
+    <div class="modal fade" id="batchIMLoginModal" tabindex="-1" aria-labelledby="batchIMLoginModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="batchIMLoginModalLabel">
+                        <i class="fas fa-comments me-2"></i>批量IM登录
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close">
+                        <i class="fas fa-power-off me-1"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-list me-2"></i>虚拟机列表</h6>
+                            <div id="vmListContainer" class="border rounded p-3" style="max-height: 300px; overflow-y: auto;">
+                                <!-- 虚拟机列表将在这里动态加载 -->
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-user me-2"></i>Apple ID配置选择</h6>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">选择Apple ID配置文件:</label>
+                                <select class="form-select" id="appleIdSelect" onchange="handleAppleIdChange()">
+                                    <option value="">请选择Apple ID</option>
+                                    <!-- Apple ID选项将在这里动态加载 -->
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">可用Apple ID数量:</label>
+                                <div class="bg-info bg-opacity-25 border rounded p-2">
+                                    <i class="fas fa-info-circle text-info me-2"></i>
+                                    <span id="appleIdQuantity">0 (已使用: 0) 个</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i>取消
+                    </button>
+                    <button type="button" class="btn btn-primary" id="submitIMLoginBtn" onclick="submitBatchIMLogin()" disabled>
+                        <i class="fas fa-paper-plane me-1"></i>提交
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 添加模态框关闭事件监听器 -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const modal = document.getElementById('batchIMLoginModal');
+            if (modal) {
+                modal.addEventListener('hidden.bs.modal', onModalHidden);
+            }
+        });
+    </script>
 
 </body>
 </html> 

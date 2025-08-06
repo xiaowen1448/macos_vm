@@ -5941,6 +5941,197 @@ def api_appleid_delete():
             'message': f'删除失败: {str(e)}'
         })
 
+@app.route('/api/apple_ids')
+@login_required
+def api_apple_ids():
+    """获取Apple ID列表"""
+    logger.info("收到获取Apple ID列表请求")
+    try:
+        apple_ids = []
+        # 从配置文件读取目录路径
+        from config import appleid_unused_dir
+        id_dir = os.path.join(project_root, appleid_unused_dir)
+        
+        # 确保ID目录存在
+        if not os.path.exists(id_dir):
+            os.makedirs(id_dir, exist_ok=True)
+            logger.info("创建ID_unused目录")
+        
+        # 查找ID目录下的所有.txt文件
+        if os.path.exists(id_dir):
+            for filename in os.listdir(id_dir):
+                if filename.endswith('.txt'):
+                    file_path = os.path.join(id_dir, filename)
+                    
+                    # 读取文件内容，尝试多种编码
+                    content = ""
+                    encodings = ['utf-8', 'utf-8-sig', 'gbk', 'gb2312', 'latin-1']
+                    
+                    for encoding in encodings:
+                        try:
+                            with open(file_path, 'r', encoding=encoding) as f:
+                                content = f.read().strip()
+                            logger.info(f"成功使用 {encoding} 编码读取文件 {filename}")
+                            break
+                        except UnicodeDecodeError:
+                            logger.warning(f"使用 {encoding} 编码读取文件 {filename} 失败，尝试下一种编码")
+                            continue
+                        except Exception as e:
+                            logger.error(f"读取文件 {filename} 时发生错误: {str(e)}")
+                            continue
+                    
+                    if content:
+                        # 按行分割，过滤空行和无效行
+                        lines = [line.strip() for line in content.split('\n') if line.strip()]
+                        for line in lines:
+                            # 提取Apple ID（邮箱部分，第一个----之前的内容）
+                            if '----' in line:
+                                apple_id = line.split('----')[0].strip()
+                                if apple_id and '@' in apple_id:  # 确保是有效的邮箱格式
+                                    apple_ids.append(apple_id)
+                            else:
+                                # 如果没有分隔符，直接使用整行作为Apple ID
+                                if '@' in line:
+                                    apple_ids.append(line)
+                        logger.info(f"从文件 {filename} 中读取到 {len(lines)} 行，提取到 {len([l for l in lines if '----' in l])} 个Apple ID")
+            
+            # 按文件分组统计Apple ID
+            file_apple_ids = {}
+            for filename in os.listdir(id_dir):
+                if filename.endswith('.txt'):
+                    file_path = os.path.join(id_dir, filename)
+                    
+                    # 读取文件内容
+                    content = ""
+                    encodings = ['utf-8', 'utf-8-sig', 'gbk', 'gb2312', 'latin-1']
+                    
+                    for encoding in encodings:
+                        try:
+                            with open(file_path, 'r', encoding=encoding) as f:
+                                content = f.read().strip()
+                            break
+                        except UnicodeDecodeError:
+                            continue
+                        except Exception as e:
+                            logger.error(f"读取文件 {filename} 时发生错误: {str(e)}")
+                            continue
+                    
+                    if content:
+                        # 统计该文件中的Apple ID数量
+                        lines = [line.strip() for line in content.split('\n') if line.strip()]
+                        apple_count = 0
+                        for line in lines:
+                            if '----' in line:
+                                apple_id = line.split('----')[0].strip()
+                                if apple_id and '@' in apple_id:
+                                    apple_count += 1
+                            elif '@' in line:
+                                apple_count += 1
+                        
+                        if apple_count > 0:
+                            file_apple_ids[filename] = apple_count
+            
+            # 转换为列表格式，显示文件名
+            apple_id_list = []
+            for filename, count in file_apple_ids.items():
+                apple_id_list.append({
+                    'id': filename,
+                    'text': filename,  # 显示文件名
+                    'display_text': f"{filename} (可用: {count})",  # 带数量信息的显示文本
+                    'count': count
+                })
+            
+            # 按文件名排序
+            apple_id_list.sort(key=lambda x: x['id'])
+            
+            logger.info(f"总共找到 {len(apple_id_list)} 个唯一的Apple ID")
+            
+                    return jsonify({
+            'success': True,
+            'apple_ids': apple_id_list
+        })
+
+@app.route('/api/batch_im_login', methods=['POST'])
+@login_required
+def api_batch_im_login():
+    """批量IM登录"""
+    logger.info("收到批量IM登录请求")
+    try:
+        data = request.get_json()
+        vm_names = data.get('vm_names', [])
+        apple_id_file = data.get('apple_id_file')
+        
+        if not vm_names:
+            return jsonify({
+                'success': False,
+                'message': '请选择虚拟机'
+            })
+        
+        if not apple_id_file:
+            return jsonify({
+                'success': False,
+                'message': '请选择Apple ID文件'
+            })
+        
+        # 验证虚拟机状态
+        running_vms = []
+        stopped_vms = []
+        unknown_vms = []
+        
+        for vm_name in vm_names:
+            try:
+                vm_status = get_vm_online_status(vm_name)
+                if vm_status['status'] == 'online' or vm_status['vm_status'] == 'running':
+                    running_vms.append(vm_name)
+                elif vm_status['status'] == 'offline' or vm_status['vm_status'] == 'stopped':
+                    stopped_vms.append(vm_name)
+                else:
+                    unknown_vms.append(vm_name)
+            except Exception as e:
+                logger.error(f"检查虚拟机 {vm_name} 状态失败: {str(e)}")
+                unknown_vms.append(vm_name)
+        
+        # 检查是否有非运行中的虚拟机
+        if stopped_vms or unknown_vms:
+            error_msg = "只能对运行中的虚拟机执行批量IM登录操作。"
+            if stopped_vms:
+                error_msg += f"\n已停止的虚拟机: {', '.join(stopped_vms)}"
+            if unknown_vms:
+                error_msg += f"\n状态未知的虚拟机: {', '.join(unknown_vms)}"
+            
+            return jsonify({
+                'success': False,
+                'message': error_msg
+            })
+        
+        logger.info(f"批量IM登录验证通过 - 运行中虚拟机: {running_vms}, Apple ID文件: {apple_id_file}")
+        
+        # TODO: 实现批量IM登录逻辑
+        return jsonify({
+            'success': True,
+            'message': f'批量IM登录任务已提交，将为 {len(running_vms)} 个虚拟机使用Apple ID文件: {apple_id_file}'
+        })
+        
+    except Exception as e:
+        logger.error(f"批量IM登录失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'批量IM登录失败: {str(e)}'
+        })
+        else:
+            logger.warning("ID目录不存在")
+            return jsonify({
+                'success': True,
+                'apple_ids': []
+            })
+        
+    except Exception as e:
+        logger.error(f"获取Apple ID列表失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取Apple ID列表失败: {str(e)}'
+        })
+
 @app.route('/api/appleid_stats')
 @login_required
 def api_appleid_stats():
