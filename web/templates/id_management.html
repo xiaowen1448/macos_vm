@@ -1016,8 +1016,13 @@
                 console.log('初始化时设置当前文件为默认文件:', currentAppleIdFile);
             }
             
-            loadDefaultAppleIdFile(); // 加载默认Apple ID文件
+            // 先加载文件列表，然后加载默认文件
             loadAppleIdFiles();
+            
+            // 延迟加载默认文件，确保文件列表已加载完成
+            setTimeout(() => {
+                loadDefaultAppleIdFile();
+            }, 1000);
             
             // 监听下拉框打开事件
             const appleIdFileDropdown = document.getElementById('appleIdFileDropdown');
@@ -1074,6 +1079,16 @@
                             document.getElementById('validAppleIds').textContent = '0';
                             document.getElementById('invalidAppleIds').textContent = '0';
                             document.getElementById('usedAppleIds').textContent = '0';
+                        }
+                        
+                        // 如果有文件，自动选择第一个文件并更新统计
+                        if (data.files && data.files.length > 0 && !currentAppleIdFile) {
+                            console.log('自动选择第一个文件:', data.files[0].name);
+                            selectAppleIdFile(data.files[0].name);
+                        } else if (data.files && data.files.length > 0 && currentAppleIdFile) {
+                            // 如果已经有选中的文件，确保统计信息是最新的
+                            console.log('刷新文件列表后更新统计信息');
+                            updateAppleIdStats();
                         }
                     } else {
                         console.error('获取Apple ID文件列表失败:', data.message);
@@ -1362,9 +1377,14 @@
             
             // 从服务器获取统计信息，传递文件名参数
             fetch(`/api/appleid_stats?filename=${encodeURIComponent(selectedFilename)}`)
-                .then(response => response.json())
+                .then(response => {
+                    console.log('统计API响应状态:', response.status);
+                    return response.json();
+                })
                 .then(data => {
+                    console.log('统计API响应数据:', data);
                     if (data.success) {
+                        console.log('统计信息更新成功:', data.stats);
                         document.getElementById('totalAppleIds').textContent = data.stats.total;
                         document.getElementById('validAppleIds').textContent = data.stats.valid;
                         document.getElementById('invalidAppleIds').textContent = data.stats.invalid;
@@ -1377,6 +1397,7 @@
                         const invalidCount = allAppleIdData.filter(item => item.status === 'invalid').length;
                         const usedCount = 0;
                         
+                        console.log('使用本地数据作为统计信息:', {totalCount, validCount, invalidCount, usedCount});
                         document.getElementById('totalAppleIds').textContent = totalCount;
                         document.getElementById('validAppleIds').textContent = validCount;
                         document.getElementById('invalidAppleIds').textContent = invalidCount;
@@ -1391,6 +1412,7 @@
                     const invalidCount = allAppleIdData.filter(item => item.status === 'invalid').length;
                     const usedCount = 0;
                     
+                    console.log('网络错误，使用本地数据作为统计信息:', {totalCount, validCount, invalidCount, usedCount});
                     document.getElementById('totalAppleIds').textContent = totalCount;
                     document.getElementById('validAppleIds').textContent = validCount;
                     document.getElementById('invalidAppleIds').textContent = invalidCount;
@@ -1949,15 +1971,9 @@
         function loadDefaultAppleIdFile() {
             const defaultFile = localStorage.getItem('defaultAppleIdFile');
             if (defaultFile) {
-                // 只有在currentAppleIdFile为空时才设置
-                if (!currentAppleIdFile) {
-                    currentAppleIdFile = defaultFile;
-                    console.log('加载默认Apple ID文件:', defaultFile);
-                }
-                // 等待文件列表加载完成后再选择默认文件
-                setTimeout(() => {
-                    selectAppleIdFile(defaultFile);
-                }, 500);
+                console.log('加载默认Apple ID文件:', defaultFile);
+                // 直接选择默认文件，因为文件列表应该已经加载完成
+                selectAppleIdFile(defaultFile);
             } else {
                 // 如果没有默认文件，更新按钮文本为初始状态
                 updateDropdownButtonText();
