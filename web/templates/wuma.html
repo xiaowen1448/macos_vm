@@ -499,7 +499,7 @@
                     <div class="accordion-item">
                         <h2 class="accordion-header" id="headingBoot">
                             <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseBoot" aria-expanded="true" aria-controls="collapseBoot">
-                                母盘及五码管理
+                                登录引导管理
                             </button>
                         </h2>
                         <div id="collapseBoot" class="accordion-collapse collapse show" aria-labelledby="headingBoot" data-bs-parent="#accordionMenu">
@@ -510,6 +510,9 @@
                                     </li>
                                     <li class="nav-item">
                                         <a class="nav-link" href="{{ url_for('mupan_page') }}" onclick="handleMupanClick()">虚拟机母盘管理</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="{{ url_for('id_management_page') }}" onclick="handleIdManagementClick()">ID管理</a>
                                     </li>
                                 </ul>
                             </div>
@@ -815,7 +818,13 @@
         // 更新下拉框样式
         function updateDropdownStyles() {
             document.querySelectorAll('#configDropdownMenu .dropdown-item').forEach(item => {
-                const itemConfigName = item.getAttribute('onclick').match(/'([^']+)'/)[1];
+                const onclick = item.getAttribute('onclick');
+                if (!onclick) return; // 跳过没有onclick的元素（如提示信息）
+                
+                const match = onclick.match(/'([^']+)'/);
+                if (!match) return; // 跳过无法匹配的元素
+                
+                const itemConfigName = match[1];
                 const isActive = itemConfigName === currentConfig;
                 
                 // 更新class
@@ -1016,10 +1025,18 @@
         // 更新下拉框按钮文本
         function updateDropdownButtonText() {
             const dropdownButton = document.getElementById('configDropdown');
-            const configs = Array.from(document.querySelectorAll('#configDropdownMenu .dropdown-item')).map(item => ({
-                name: item.getAttribute('onclick') ? item.getAttribute('onclick').match(/'([^']+)'/)[1] : null,
-                display_name: item.textContent
-            })).filter(config => config.name !== null);
+            const configs = Array.from(document.querySelectorAll('#configDropdownMenu .dropdown-item')).map(item => {
+                const onclick = item.getAttribute('onclick');
+                if (!onclick) return null;
+                
+                const match = onclick.match(/'([^']+)'/);
+                if (!match) return null;
+                
+                return {
+                    name: match[1],
+                    display_name: item.textContent
+                };
+            }).filter(config => config !== null);
             
             if (configs.length === 0) {
                 dropdownButton.innerHTML = `<i class="fas fa-cog me-2"></i>暂无配置文件`;

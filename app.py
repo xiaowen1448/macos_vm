@@ -968,6 +968,12 @@ def mupan_page():
     """虚拟机母盘管理页面"""
     return render_template('mupan.html')
 
+@app.route('/id_management')
+@login_required
+def id_management_page():
+    """ID管理页面"""
+    return render_template('id_management.html')
+
 @app.route('/test_mupan')
 @login_required
 def test_mupan_page():

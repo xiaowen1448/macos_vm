@@ -517,7 +517,7 @@
                     <div class="accordion-item">
                         <h2 class="accordion-header" id="headingBoot">
                             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseBoot" aria-expanded="false" aria-controls="collapseBoot">
-                                母盘及五码管理
+                                登录引导管理
                             </button>
                         </h2>
                         <div id="collapseBoot" class="accordion-collapse collapse" aria-labelledby="headingBoot" data-bs-parent="#accordionMenu">
@@ -528,6 +528,9 @@
                                     </li>
                                     <li class="nav-item">
                                         <a class="nav-link" href="{{ url_for('mupan_page') }}" onclick="handleMupanClick()">虚拟机母盘管理</a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" href="{{ url_for('id_management_page') }}" onclick="handleIdManagementClick()">ID管理</a>
                                     </li>
                                 </ul>
                             </div>

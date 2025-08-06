@@ -18,16 +18,16 @@ vm_chengpin_dir = r'D:\macos_vm\NewVM\chengpin_vm'
 vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
 
 # plist模板配置文件目录
-plist_template_dir = r'config\plist'
+plist_template_dir = r'web\config\plist'
 
 # 五码配置文件目录
-wuma_config_dir = r'config\config_unused'
+wuma_config_dir = r'web\config\config_unused'
 
 # 配置已删除五码目录
-wuma_config_delete_dir = r'config\config_delete'
+wuma_config_delete_dir = r'web\config\config_delete'
 
 # 配置已使用五码目录
-wuma_config_install_dir = r'config\config_install'
+wuma_config_install_dir = r'web\config\config_install'
 
 # 脚本本地上传路径
 script_upload_dir = r'D:\macos_vm\macos_sh'
@@ -50,24 +50,3 @@ project_root = r'D:\macos_vm'
 
 # 日志目录
 logs_dir = r'logs'
-
-# 工具目录
-tools_dir = r'tools'
-
-# EFI目录
-efi_dir = r'EFI'
-
-# ISO目录
-iso_dir = r'iso'
-
-# 批处理脚本目录
-bat_dir = r'bat'
-
-# Python工具目录
-py_util_dir = r'py_util'
-
-# Web应用目录
-web_dir = r'web'
-
-# NVRAM目录
-nvram_dir = r'nvrm' 
