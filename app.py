@@ -5695,9 +5695,28 @@ def api_appleid_file_content():
                 'message': f'文件不存在: {filename}'
             })
         
-        # 读取文件内容
-        with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read().strip()
+        # 读取文件内容，尝试多种编码
+        content = ""
+        encodings = ['utf-8', 'utf-8-sig', 'gbk', 'gb2312', 'latin-1']
+        
+        for encoding in encodings:
+            try:
+                with open(file_path, 'r', encoding=encoding) as f:
+                    content = f.read().strip()
+                logger.info(f"成功使用 {encoding} 编码读取文件 {filename}")
+                break
+            except UnicodeDecodeError:
+                logger.warning(f"使用 {encoding} 编码读取文件 {filename} 失败，尝试下一种编码")
+                continue
+            except Exception as e:
+                logger.error(f"读取文件 {filename} 时发生错误: {str(e)}")
+                continue
+        
+        if not content:
+            return jsonify({
+                'success': False,
+                'message': f'无法读取文件 {filename}，请检查文件编码'
+            })
         
         lines = content.split('\n') if content else []
         valid_lines = []
@@ -5928,73 +5947,116 @@ def api_appleid_stats():
     try:
         from config import appleid_unused_dir, appleid_install_dir, appleid_delete_dir
         
-        # 计算有效ID数量（未使用目录中的ID）
-        valid_count = 0
-        unused_dir = os.path.join(project_root, appleid_unused_dir)
-        if os.path.exists(unused_dir):
-            for filename in os.listdir(unused_dir):
-                if filename.endswith('.txt'):
-                    file_path = os.path.join(unused_dir, filename)
-                    try:
-                        with open(file_path, 'r', encoding='utf-8') as f:
-                            content = f.read().strip()
-                            lines = content.split('\n') if content else []
-                            for line in lines:
-                                if line.strip() and '----' in line:
-                                    parts = line.split('----')
-                                    if len(parts) >= 4:
-                                        valid_count += 1
-                    except Exception as e:
-                        logger.warning(f"读取文件失败 {filename}: {str(e)}")
+        # 获取请求参数中的文件名
+        filename = request.args.get('filename', 'test.txt')
+        logger.info(f"统计文件名: {filename}")
         
-        # 计算已使用ID数量（已安装目录中的bak文件）
+        # 计算可用ID数量（有效Apple ID = 可用ID，从未使用目录中的下拉文件名读取）
+        available_count = 0
+        unused_dir = os.path.join(project_root, appleid_unused_dir)
+        file_path = os.path.join(unused_dir, filename)
+        if os.path.exists(file_path):
+            content = ""
+            encodings = ['utf-8', 'utf-8-sig', 'gbk', 'gb2312', 'latin-1']
+            
+            for encoding in encodings:
+                try:
+                    with open(file_path, 'r', encoding=encoding) as f:
+                        content = f.read().strip()
+                    logger.info(f"成功使用 {encoding} 编码读取文件 {filename}")
+                    break
+                except UnicodeDecodeError:
+                    logger.warning(f"使用 {encoding} 编码读取文件 {filename} 失败，尝试下一种编码")
+                    continue
+                except Exception as e:
+                    logger.error(f"读取文件 {filename} 时发生错误: {str(e)}")
+                    continue
+            
+            if content:
+                lines = content.split('\n') if content else []
+                for line in lines:
+                    if line.strip() and '----' in line:
+                        parts = line.split('----')
+                        if len(parts) >= 4:
+                            available_count += 1
+            else:
+                logger.warning(f"无法读取{filename}文件，编码问题")
+        
+        # 计算已使用ID数量（已安装目录中的下拉文件名加_bak文件）
         used_count = 0
         install_dir = os.path.join(project_root, appleid_install_dir)
-        if os.path.exists(install_dir):
-            for filename in os.listdir(install_dir):
-                if filename.endswith('_bak.txt'):
-                    file_path = os.path.join(install_dir, filename)
-                    try:
-                        with open(file_path, 'r', encoding='utf-8') as f:
-                            content = f.read().strip()
-                            lines = content.split('\n') if content else []
-                            for line in lines:
-                                if line.strip() and '----' in line:
-                                    parts = line.split('----')
-                                    if len(parts) >= 4:
-                                        used_count += 1
-                    except Exception as e:
-                        logger.warning(f"读取已使用文件失败 {filename}: {str(e)}")
+        # 从文件名中提取基础名称（去掉.txt后缀）
+        base_filename = filename.replace('.txt', '')
+        bak_filename = f"{base_filename}_bak.txt"
+        bak_file_path = os.path.join(install_dir, bak_filename)
+        if os.path.exists(bak_file_path):
+            content = ""
+            encodings = ['utf-8', 'utf-8-sig', 'gbk', 'gb2312', 'latin-1']
+            
+            for encoding in encodings:
+                try:
+                    with open(bak_file_path, 'r', encoding=encoding) as f:
+                        content = f.read().strip()
+                    logger.info(f"成功使用 {encoding} 编码读取文件 {bak_filename}")
+                    break
+                except UnicodeDecodeError:
+                    logger.warning(f"使用 {encoding} 编码读取文件 {bak_filename} 失败，尝试下一种编码")
+                    continue
+                except Exception as e:
+                    logger.error(f"读取文件 {bak_filename} 时发生错误: {str(e)}")
+                    continue
+            
+            if content:
+                lines = content.split('\n') if content else []
+                for line in lines:
+                    if line.strip() and '----' in line:
+                        parts = line.split('----')
+                        if len(parts) >= 4:
+                            used_count += 1
+            else:
+                logger.warning(f"无法读取{bak_filename}文件，编码问题")
         
-        # 计算无效ID数量（删除目录中的bak文件）
+        # 计算无效ID数量（删除目录中的下拉文件名加_bak文件）
         invalid_count = 0
         delete_dir = os.path.join(project_root, appleid_delete_dir)
-        if os.path.exists(delete_dir):
-            for filename in os.listdir(delete_dir):
-                if filename.endswith('_bak.txt'):
-                    file_path = os.path.join(delete_dir, filename)
-                    try:
-                        with open(file_path, 'r', encoding='utf-8') as f:
-                            content = f.read().strip()
-                            lines = content.split('\n') if content else []
-                            for line in lines:
-                                if line.strip() and '----' in line:
-                                    parts = line.split('----')
-                                    if len(parts) >= 4:
-                                        invalid_count += 1
-                    except Exception as e:
-                        logger.warning(f"读取删除文件失败 {filename}: {str(e)}")
+        bak_file_path = os.path.join(delete_dir, bak_filename)
+        if os.path.exists(bak_file_path):
+            content = ""
+            encodings = ['utf-8', 'utf-8-sig', 'gbk', 'gb2312', 'latin-1']
+            
+            for encoding in encodings:
+                try:
+                    with open(bak_file_path, 'r', encoding=encoding) as f:
+                        content = f.read().strip()
+                    logger.info(f"成功使用 {encoding} 编码读取文件 {bak_filename}")
+                    break
+                except UnicodeDecodeError:
+                    logger.warning(f"使用 {encoding} 编码读取文件 {bak_filename} 失败，尝试下一种编码")
+                    continue
+                except Exception as e:
+                    logger.error(f"读取文件 {bak_filename} 时发生错误: {str(e)}")
+                    continue
+            
+            if content:
+                lines = content.split('\n') if content else []
+                for line in lines:
+                    if line.strip() and '----' in line:
+                        parts = line.split('----')
+                        if len(parts) >= 4:
+                            invalid_count += 1
+            else:
+                logger.warning(f"无法读取{bak_filename}文件，编码问题")
         
-        # 计算总数量
-        total_count = valid_count + used_count + invalid_count
+        # 计算总数量：总ID数量 = 无效ID + 可用ID + 已使用ID
+        total_count = invalid_count + available_count + used_count
         
-        logger.info(f"Apple ID统计信息 - 有效: {valid_count}, 已使用: {used_count}, 无效: {invalid_count}, 总计: {total_count}")
+        logger.info(f"Apple ID统计信息 - 文件: {filename}, 可用ID(有效): {available_count}, 已使用: {used_count}, 无效: {invalid_count}, 总计: {total_count}")
         
         return jsonify({
             'success': True,
             'stats': {
                 'total': total_count,
-                'valid': valid_count,
+                'valid': available_count,  # 有效Apple ID = 可用ID
                 'used': used_count,
                 'invalid': invalid_count
             }

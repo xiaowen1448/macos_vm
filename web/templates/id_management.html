@@ -277,7 +277,7 @@
         }
         
         .appleid-table th:nth-child(4), .appleid-table td:nth-child(4) {
-            width: 35%; /* 接码地址 */
+            width: 37%; /* 接码地址 */
             min-width: 200px;
         }
         
@@ -291,19 +291,18 @@
         }
         
         .appleid-table th:nth-child(6), .appleid-table td:nth-child(6) {
-            width: 12%; /* 操作 */
+            width: 8%; /* 删除 */
             text-align: center;
-            min-width: 100px;
-            max-width: 120px;
+            min-width: 80px;
+            max-width: 80px;
             white-space: nowrap;
             overflow: hidden;
         }
         
-        /* 操作列按钮样式优化 */
+        /* 删除列按钮样式优化 */
         .appleid-table td:nth-child(6) .btn {
             padding: 0.2rem 0.4rem;
             font-size: 0.7rem;
-            margin: 0 1px;
             white-space: nowrap;
             min-width: 32px;
             height: 28px;
@@ -871,7 +870,7 @@
                                     <th><i class="fas fa-key me-1"></i>密码</th>
                                     <th><i class="fas fa-link me-1"></i>接码地址</th>
                                     <th><i class="fas fa-info-circle me-1"></i>状态</th>
-                                    <th><i class="fas fa-cogs me-1"></i>操作</th>
+                                    <th><i class="fas fa-trash me-1"></i>删除</th>
                                 </tr>
                             </thead>
                             <tbody id="previewTableBody">
@@ -1335,20 +1334,17 @@
             updateAppleIdStats(); // 更新统计信息
         }
 
-        // 标记为有效
-        function markAsValid(index) {
-            if (index >= 0 && index < allAppleIdData.length) {
-                allAppleIdData[index].status = 'valid';
-                displayCurrentPage(); // 重新显示当前页
-                updateAppleIdStats(); // 更新统计信息
-                showToast('已标记为有效', 'success');
-            }
-        }
+
 
         // 更新Apple ID统计信息
         function updateAppleIdStats() {
-            // 从服务器获取统计信息
-            fetch('/api/appleid_stats')
+            // 获取当前选择的文件名
+            const selectedFilename = currentAppleIdFile || 'test.txt';
+            
+            console.log('更新统计信息，当前选择的文件:', selectedFilename);
+            
+            // 从服务器获取统计信息，传递文件名参数
+            fetch(`/api/appleid_stats?filename=${encodeURIComponent(selectedFilename)}`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
@@ -1450,11 +1446,8 @@
                             <span class="badge bg-${getStatusBadgeClass(item.status)}">${getStatusDisplayName(item.status)}</span>
                         </td>
                         <td style="text-align: center;">
-                            <button class="btn btn-success btn-sm me-1" onclick="markAsValid(${startIndex + index})" title="标记为有效" ${item.status === 'valid' ? 'disabled' : ''}>
-                                <i class="fas fa-check"></i>
-                            </button>
-                            <button class="btn btn-danger btn-sm" onclick="deleteAppleId(${startIndex + index})" title="删除">
-                                <i class="fas fa-times"></i>
+                            <button class="btn btn-outline-danger btn-sm" onclick="deleteAppleId(${startIndex + index})" title="删除">
+                                <i class="fas fa-trash"></i>
                             </button>
                         </td>
                     `;
