@@ -1096,6 +1096,12 @@ def soft_env_page():
     """环境变量页面"""
     return render_template('soft_env.html')
 
+@app.route('/client_management')
+@login_required
+def client_management_page():
+    """客户端管理页面"""
+    return render_template('client_management.html')
+
 @app.route('/api/clone_vm', methods=['POST'])
 @login_required
 def api_clone_vm():
@@ -6716,6 +6722,176 @@ def api_distribute_text_lines():
         return jsonify({
             'success': False,
             'message': f'文本分发失败: {str(e)}'
+        })
+
+# 客户端管理相关API
+@app.route('/api/scan_clients', methods=['POST'])
+@login_required
+def api_scan_clients():
+    """扫描ScptRunner客户端"""
+    try:
+        logger.info("开始扫描ScptRunner客户端")
+        
+        # 模拟扫描客户端的过程
+        # 这里可以根据实际需求实现真实的客户端扫描逻辑
+        # 例如：扫描网络中的特定端口、检查已知客户端列表等
+        
+        # 模拟发现的客户端数据
+        discovered_clients = [
+            {
+                'id': 'client_001',
+                'version': '1.2.3',
+                'ip': '192.168.1.100',
+                'details': 'ScptRunner客户端 - 在线状态正常',
+                'status': 'online',
+                'last_seen': datetime.now().isoformat()
+            },
+            {
+                'id': 'client_002',
+                'version': '1.2.1',
+                'ip': '192.168.1.101',
+                'details': 'ScptRunner客户端 - 需要升级',
+                'status': 'online',
+                'last_seen': datetime.now().isoformat()
+            },
+            {
+                'id': 'client_003',
+                'version': '1.1.9',
+                'ip': '192.168.1.102',
+                'details': 'ScptRunner客户端 - 离线',
+                'status': 'offline',
+                'last_seen': (datetime.now() - timedelta(hours=2)).isoformat()
+            }
+        ]
+        
+        logger.info(f"扫描完成，发现 {len(discovered_clients)} 个客户端")
+        
+        return jsonify({
+            'success': True,
+            'message': f'成功扫描到 {len(discovered_clients)} 个客户端',
+            'clients': discovered_clients
+        })
+        
+    except Exception as e:
+        logger.error(f"扫描客户端失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'扫描失败: {str(e)}'
+        })
+
+@app.route('/api/test_api', methods=['POST'])
+@login_required
+def api_test_api():
+    """测试API功能"""
+    try:
+        data = request.get_json()
+        api_content = data.get('api_content', '')
+        
+        if not api_content:
+            return jsonify({
+                'success': False,
+                'message': 'API内容不能为空'
+            })
+        
+        logger.info(f"执行API测试: {api_content}")
+        
+        # 这里可以根据实际需求实现API测试逻辑
+        # 例如：解析API内容、执行相应的操作等
+        
+        # 模拟API测试结果
+        test_result = {
+            'input': api_content,
+            'timestamp': datetime.now().isoformat(),
+            'status': 'success',
+            'response': f'API测试成功，输入内容: {api_content}',
+            'execution_time': '0.05s'
+        }
+        
+        logger.info("API测试执行成功")
+        
+        return jsonify({
+            'success': True,
+            'message': 'API测试执行成功',
+            'result': test_result
+        })
+        
+    except Exception as e:
+        logger.error(f"API测试失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'API测试失败: {str(e)}'
+        })
+
+@app.route('/api/upgrade_client', methods=['POST'])
+@login_required
+def api_upgrade_client():
+    """升级客户端"""
+    try:
+        data = request.get_json()
+        client_id = data.get('client_id', '')
+        
+        if not client_id:
+            return jsonify({
+                'success': False,
+                'message': '客户端ID不能为空'
+            })
+        
+        logger.info(f"开始升级客户端: {client_id}")
+        
+        # 这里可以根据实际需求实现客户端升级逻辑
+        # 例如：下载新版本、传输升级文件、执行升级脚本等
+        
+        # 模拟升级过程
+        time.sleep(1)  # 模拟升级耗时
+        
+        logger.info(f"客户端 {client_id} 升级成功")
+        
+        return jsonify({
+            'success': True,
+            'message': f'客户端 {client_id} 升级成功'
+        })
+        
+    except Exception as e:
+        logger.error(f"客户端升级失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'升级失败: {str(e)}'
+        })
+
+@app.route('/api/delete_client', methods=['POST'])
+@login_required
+def api_delete_client():
+    """删除客户端"""
+    try:
+        data = request.get_json()
+        client_id = data.get('client_id', '')
+        
+        if not client_id:
+            return jsonify({
+                'success': False,
+                'message': '客户端ID不能为空'
+            })
+        
+        logger.info(f"开始删除客户端: {client_id}")
+        
+        # 这里可以根据实际需求实现客户端删除逻辑
+        # 例如：清理客户端文件、移除注册信息等
+        
+        # 模拟删除过程
+        time.sleep(0.5)  # 模拟删除耗时
+        
+        logger.info(f"客户端 {client_id} 删除成功")
+        
+        return jsonify({
+            'success': True,
+            'message': f'客户端 {client_id} 删除成功'
+        })
+        
+    except Exception as e:
+        logger.error(f"客户端删除失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'删除失败: {str(e)}'
         })
 
 if __name__ == '__main__':

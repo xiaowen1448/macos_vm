@@ -545,6 +545,22 @@
                 </div>
             </div>
             <div class="accordion-item">
+                <h2 class="accordion-header" id="headingClient">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseClient" aria-expanded="false" aria-controls="collapseClient">
+                        客户端管理
+                    </button>
+                </h2>
+                <div id="collapseClient" class="accordion-collapse collapse" aria-labelledby="headingClient" data-bs-parent="#accordionMenu">
+                    <div class="accordion-body p-0">
+                        <ul class="nav flex-column">
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('client_management_page') }}">ScptRunner客户端管理</a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
                 <h2 class="accordion-header" id="headingBoot">
                     <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseBoot" aria-expanded="false" aria-controls="collapseBoot">
                         登录引导管理
