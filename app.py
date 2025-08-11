@@ -6974,8 +6974,8 @@ def api_test_url():
         start_time = time.time()
         
         try:
-            # 设置请求超时时间为10秒
-            response = requests.get(url, timeout=10)
+            # 设置请求超时时间为60秒，等待ScptRunner脚本执行完成
+            response = requests.get(url, timeout=60)
             end_time = time.time()
             response_time = int((end_time - start_time) * 1000)  # 转换为毫秒
             
@@ -7008,7 +7008,7 @@ def api_test_url():
             logger.warning(f"URL请求超时: {url}")
             return jsonify({
                 'success': False,
-                'message': '请求超时（10秒），请检查URL地址是否可访问'
+                'message': '请求超时（60秒），请检查URL地址是否可访问或脚本执行时间过长'
             })
             
         except requests.exceptions.ConnectionError:
