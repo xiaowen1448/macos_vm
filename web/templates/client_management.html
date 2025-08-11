@@ -170,6 +170,7 @@
             color: #2c3e50;
             font-weight: 700;
             margin-bottom: 10px;
+            font-size: 1.5rem; /* 缩小标题字体 */
         }
         
         .page-subtitle {
@@ -191,6 +192,7 @@
             margin-bottom: 20px;
             border-bottom: 2px solid #e9ecef;
             padding-bottom: 10px;
+            font-size: 1.5rem; /* 统一字体大小 */
         }
         
         .btn-scan {
@@ -257,6 +259,7 @@
             margin-bottom: 20px;
             border-bottom: 2px solid #e9ecef;
             padding-bottom: 10px;
+            font-size: 1.5rem; /* 统一字体大小 */
         }
         
         .table {
@@ -340,6 +343,55 @@
             height: 100%;
             display: flex;
             align-items: center;
+        }
+        
+        /* API测试模态框样式 */
+        .modal-header {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+        }
+        
+        .modal-header .btn-close {
+            filter: invert(1);
+        }
+        
+        .test-result-modal {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+            min-height: 150px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            border: 1px solid #dee2e6;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .url-input-group {
+            position: relative;
+        }
+        
+        .url-input-group .form-control {
+            padding-right: 45px;
+        }
+        
+        .url-validate-icon {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #6c757d;
+        }
+        
+        .url-validate-icon.valid {
+            color: #28a745;
+        }
+        
+        .url-validate-icon.invalid {
+            color: #dc3545;
         }
     </style>
 </head>
@@ -528,14 +580,43 @@
                             <div class="spinner-border spinner-border-sm text-primary me-2" role="status">
                                 <span class="visually-hidden">扫描中...</span>
                             </div>
-                            <span>扫描中...</span>
+                            <span>正在扫描虚拟机网络...</span>
                         </div>
+                    </div>
+                    <div class="mt-2">
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle me-1"></i>
+                            扫描策略：自动检测虚拟机网卡IP地址，扫描8787端口查找ScptRunner客户端
+                        </small>
                     </div>
                 </div>
                 <div class="col-md-6">
-                    <button id="testApiBtn" class="btn btn-test">
+                    <button id="testApiBtn" class="btn btn-test" data-bs-toggle="modal" data-bs-target="#apiTestModal">
                         <i class="fas fa-code me-2"></i>API测试
                     </button>
+                </div>
+            </div>
+            
+            <!-- 扫描进度显示 -->
+            <div class="scan-progress mt-3" id="scanProgress" style="display: none;">
+                <div class="progress mb-2">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                         role="progressbar" style="width: 0%" id="progressBar">
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-3">
+                        <small class="text-muted">虚拟机扫描: <span id="vmCount">0</span></small>
+                    </div>
+                    <div class="col-md-3">
+                        <small class="text-muted">客户端发现: <span id="clientCount">0</span></small>
+                    </div>
+                    <div class="col-md-3">
+                        <small class="text-muted">扫描状态: <span id="scanStatus">准备中</span></small>
+                    </div>
+                    <div class="col-md-3">
+                        <small class="text-muted">耗时: <span id="scanTime">0s</span></small>
+                    </div>
                 </div>
             </div>
             
@@ -563,17 +644,17 @@
                 <table class="table table-hover">
                     <thead>
                         <tr>
-                            <th>客户端版本</th>
-                            <th>客户端IP地址</th>
-                            <th>客户端详细信息</th>
-                            <th>状态</th>
-                            <th>操作</th>
+                            <th><i class="fas fa-tag me-1"></i>客户端版本</th>
+                            <th><i class="fas fa-network-wired me-1"></i>客户端IP地址</th>
+                            <th><i class="fas fa-info-circle me-1"></i>客户端详细信息</th>
+                            <th><i class="fas fa-signal me-1"></i>状态</th>
+                            <th><i class="fas fa-cogs me-1"></i>操作</th>
                         </tr>
                     </thead>
                     <tbody id="clientTableBody">
                         <tr>
-                            <td colspan="5" class="text-center text-muted">
-                                <i class="fas fa-info-circle me-2"></i>暂无客户端数据，请点击"手动扫描客户端"按钮开始扫描
+                            <td colspan="5" class="text-center text-muted py-4">
+                                <i class="fas fa-search me-2"></i>点击"手动扫描客户端"开始扫描网络中的ScptRunner客户端
                             </td>
                         </tr>
                     </tbody>
@@ -582,7 +663,60 @@
         </div>
     </div>
 
-    <!-- Bootstrap JS -->
+    <!-- API测试模态框 -->
+    <div class="modal fade" id="apiTestModal" tabindex="-1" aria-labelledby="apiTestModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="apiTestModalLabel">
+                        <i class="fas fa-code me-2"></i>ScptRunner API测试
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="clientSelect" class="form-label">选择客户端</label>
+                            <select id="clientSelect" class="form-select">
+                                <option value="">请选择客户端...</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="scriptName" class="form-label">脚本名称</label>
+                            <input type="text" id="scriptName" class="form-control" placeholder="请输入脚本名称">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="apiFormat" class="form-label">API格式预览</label>
+                        <div class="form-control bg-light" id="apiFormat" style="font-family: monospace; color: #666;">
+                            http://IP地址:8787/script?name=脚本名称
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="testText" class="form-label">测试文本（可选）</label>
+                        <textarea id="testText" class="form-control" rows="3" placeholder="输入要发送给脚本的测试文本..."></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <button id="executeApiTestBtn" class="btn btn-primary">
+                            <i class="fas fa-play me-2"></i>执行测试
+                        </button>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="testResultModal" class="form-label">测试结果</label>
+                        <div class="test-result" id="testResultModal">点击"执行测试"开始测试...</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     
     <script>
@@ -595,23 +729,26 @@
 
         function initializeEventListeners() {
             // 扫描按钮事件
-            document.getElementById('scanBtn').addEventListener('click', function() {
-                scanClients();
-            });
-
-            // API测试按钮事件
-            document.getElementById('testApiBtn').addEventListener('click', function() {
-                toggleApiTestArea();
-            });
-
-            // 执行API测试按钮事件
-            document.getElementById('executeApiBtn').addEventListener('click', function() {
-                executeApiTest();
-            });
+            document.getElementById('scanBtn').addEventListener('click', scanClients);
+            
+            // API测试模态框事件
+            document.getElementById('executeApiTestBtn').addEventListener('click', executeApiTestModal);
+            
+            // 客户端选择变化事件
+            document.getElementById('clientSelect').addEventListener('change', updateApiFormat);
+            document.getElementById('scriptName').addEventListener('input', updateApiFormat);
+            
+            // 执行API测试按钮事件（原有的）
+            document.getElementById('executeApiBtn').addEventListener('click', executeApiTest);
             
             // 移动端菜单切换按钮事件
             document.getElementById('menuToggle').addEventListener('click', function() {
                 document.getElementById('sidebar').classList.toggle('show');
+            });
+            
+            // 模态框显示时更新客户端列表
+            document.getElementById('apiTestModal').addEventListener('show.bs.modal', function() {
+                updateClientSelectOptions();
             });
             
             // 点击外部关闭移动端菜单
@@ -619,102 +756,237 @@
                 const sidebar = document.getElementById('sidebar');
                 const menuToggle = document.getElementById('menuToggle');
                 
-                // 只在移动设备上关闭侧边栏
-                if (window.innerWidth <= 768 && !sidebar.contains(event.target) && !menuToggle.contains(event.target)) {
+                if (!sidebar.contains(event.target) && !menuToggle.contains(event.target)) {
                     sidebar.classList.remove('show');
                 }
+            });
+            
+            // 为所有菜单项和折叠按钮添加点击事件，防止事件冒泡
+            document.querySelectorAll('.nav-link, .accordion-button').forEach(item => {
+                item.addEventListener('click', function(event) {
+                    // 阻止事件冒泡，确保不会触发外部点击事件
+                    event.stopPropagation();
+                    
+                    // 确保在桌面模式下侧边栏始终显示
+                    if (window.innerWidth > 768) {
+                        document.getElementById('sidebar').style.transform = 'translateX(0)';
+                    }
+                });
+            });
+        }
+        
+        // 更新客户端选择下拉框
+        function updateClientSelectOptions() {
+            const clientSelect = document.getElementById('clientSelect');
+            const currentClients = window.currentClients || [];
+            
+            // 清空现有选项
+            clientSelect.innerHTML = '<option value="">请选择客户端...</option>';
+            
+            // 添加在线客户端选项
+            currentClients.forEach(client => {
+                if (client.status === 'online') {
+                    const option = document.createElement('option');
+                    option.value = client.ip;
+                    option.textContent = `${client.ip} (${client.version || '未知版本'})`;
+                    clientSelect.appendChild(option);
+                }
+            });
+            
+            if (currentClients.filter(c => c.status === 'online').length === 0) {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = '暂无在线客户端';
+                option.disabled = true;
+                clientSelect.appendChild(option);
+            }
+        }
+
+        // 更新API格式显示
+        function updateApiFormat() {
+            const clientIP = document.getElementById('clientSelect').value;
+            const scriptName = document.getElementById('scriptName').value;
+            const apiFormat = document.getElementById('apiFormat');
+            
+            if (clientIP && scriptName) {
+                apiFormat.textContent = `http://${clientIP}:8787/script?name=${scriptName}`;
+            } else if (clientIP) {
+                apiFormat.textContent = `http://${clientIP}:8787/script?name=脚本名称`;
+            } else {
+                apiFormat.textContent = 'http://IP地址:8787/script?name=脚本名称';
+            }
+        }
+
+        // 执行API测试（模态框版本）
+        function executeApiTestModal() {
+            const clientIP = document.getElementById('clientSelect').value;
+            const scriptName = document.getElementById('scriptName').value;
+            const testText = document.getElementById('testText').value;
+            const testResult = document.getElementById('testResultModal');
+            
+            if (!clientIP) {
+                testResult.textContent = '请选择一个客户端';
+                return;
+            }
+            
+            if (!scriptName) {
+                testResult.textContent = '请输入脚本名称';
+                return;
+            }
+            
+            testResult.textContent = '正在执行API测试...';
+            
+            // 构建API URL
+            const apiUrl = `http://${clientIP}:8787/script?name=${scriptName}`;
+            
+            // 调用API测试接口
+            fetch('/api/test_client_api', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    client_ip: clientIP,
+                    script_name: scriptName,
+                    test_text: testText,
+                    api_url: apiUrl
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    testResult.textContent = `测试成功！\n\nAPI URL: ${apiUrl}\n\n响应结果：\n${JSON.stringify(data.result, null, 2)}`;
+                } else {
+                    testResult.textContent = `测试失败：\n${data.message}\n\nAPI URL: ${apiUrl}`;
+                }
+            })
+            .catch(error => {
+                console.error('API测试错误:', error);
+                testResult.textContent = `测试过程中发生错误：\n${error.message}\n\nAPI URL: ${apiUrl}`;
             });
         }
         
         // 高亮当前页面的菜单项
-function highlightCurrentPage() {
-    // 获取当前页面的URL路径
-    const currentPath = window.location.pathname;
-    
-    // 找到所有导航链接
-    const navLinks = document.querySelectorAll('.nav-link');
-    
-    // 客户端管理页面的路径
-    if (currentPath.includes('/client_management')) {
-        // 找到ScptRunner客户端管理链接并高亮
-        navLinks.forEach(link => {
-            const linkText = link.textContent.trim();
-            if (linkText === 'ScptRunner客户端管理') {
-                // 添加active类
-                link.classList.add('active');
-                
-                // 展开包含当前链接的折叠面板
-                const accordionItem = link.closest('.accordion-item');
-                if (accordionItem) {
-                    const accordionButton = accordionItem.querySelector('.accordion-button');
-                    const accordionCollapse = accordionItem.querySelector('.accordion-collapse');
-                    
-                    if (accordionButton && accordionCollapse) {
-                        accordionButton.classList.remove('collapsed');
-                        accordionCollapse.classList.add('show');
+        function highlightCurrentPage() {
+            // 获取当前页面的URL路径
+            const currentPath = window.location.pathname;
+            
+            // 找到所有导航链接
+            const navLinks = document.querySelectorAll('.nav-link');
+            
+            // 客户端管理页面的路径
+            if (currentPath.includes('/client_management')) {
+                // 找到ScptRunner客户端管理链接并高亮
+                navLinks.forEach(link => {
+                    const linkText = link.textContent.trim();
+                    if (linkText === 'ScptRunner客户端管理') {
+                        // 添加active类
+                        link.classList.add('active');
+                        
+                        // 展开包含当前链接的折叠面板
+                        const accordionItem = link.closest('.accordion-item');
+                        if (accordionItem) {
+                            const accordionButton = accordionItem.querySelector('.accordion-button');
+                            const accordionCollapse = accordionItem.querySelector('.accordion-collapse');
+                            
+                            if (accordionButton && accordionCollapse) {
+                                accordionButton.classList.remove('collapsed');
+                                accordionCollapse.classList.add('show');
+                            }
+                        }
                     }
+                });
+            } else {
+                // 对于其他页面，根据路径匹配
+                navLinks.forEach(link => {
+                    const linkHref = link.getAttribute('href');
+                    if (linkHref && currentPath.includes(linkHref.split('?')[0])) {
+                        // 添加active类
+                        link.classList.add('active');
+                        
+                        // 展开包含当前链接的折叠面板
+                        const accordionItem = link.closest('.accordion-item');
+                        if (accordionItem) {
+                            const accordionButton = accordionItem.querySelector('.accordion-button');
+                            const accordionCollapse = accordionItem.querySelector('.accordion-collapse');
+                            
+                            if (accordionButton && accordionCollapse) {
+                                accordionButton.classList.remove('collapsed');
+                                accordionCollapse.classList.add('show');
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // 确保侧边栏在桌面设备上始终显示
+            if (window.innerWidth > 768) {
+                document.getElementById('sidebar').style.transform = 'translateX(0)';
+            }
+        }
+
+        // 添加窗口大小变化监听器，确保在桌面模式下侧边栏始终显示
+        window.addEventListener('resize', function() {
+            if (window.innerWidth > 768) {
+                document.getElementById('sidebar').style.transform = 'translateX(0)';
+            } else {
+                if (!document.getElementById('sidebar').classList.contains('show')) {
+                    document.getElementById('sidebar').style.transform = 'translateX(-100%)';
                 }
             }
         });
-    } else {
-        // 对于其他页面，根据路径匹配
-        navLinks.forEach(link => {
-            const linkHref = link.getAttribute('href');
-            if (linkHref && currentPath.includes(linkHref.split('?')[0])) {
-                // 添加active类
-                link.classList.add('active');
+
+        // 修改菜单点击事件，确保在点击菜单项时不会关闭侧边栏
+        document.querySelectorAll('.nav-link, .accordion-button').forEach(link => {
+            link.addEventListener('click', function(event) {
+                // 阻止事件冒泡
+                event.stopPropagation();
                 
-                // 展开包含当前链接的折叠面板
-                const accordionItem = link.closest('.accordion-item');
-                if (accordionItem) {
-                    const accordionButton = accordionItem.querySelector('.accordion-button');
-                    const accordionCollapse = accordionItem.querySelector('.accordion-collapse');
-                    
-                    if (accordionButton && accordionCollapse) {
-                        accordionButton.classList.remove('collapsed');
-                        accordionCollapse.classList.add('show');
-                    }
+                // 确保在桌面设备上侧边栏始终显示
+                if (window.innerWidth > 768) {
+                    document.getElementById('sidebar').style.transform = 'translateX(0)';
                 }
-            }
+            });
         });
-    }
-    
-    // 确保侧边栏在桌面设备上始终显示
-    if (window.innerWidth > 768) {
-        document.getElementById('sidebar').style.transform = 'translateX(0)';
-    }
-}
 
-// 添加窗口大小变化监听器，确保在桌面模式下侧边栏始终显示
-window.addEventListener('resize', function() {
-    if (window.innerWidth > 768) {
-        document.getElementById('sidebar').style.transform = 'translateX(0)';
-    } else {
-        if (!document.getElementById('sidebar').classList.contains('show')) {
-            document.getElementById('sidebar').style.transform = 'translateX(-100%)';
-        }
-    }
-});
-
-// 修改菜单点击事件，确保在点击菜单项时不会关闭侧边栏
-document.querySelectorAll('.nav-link, .accordion-button').forEach(link => {
-    link.addEventListener('click', function(event) {
-        // 阻止事件冒泡
-        event.stopPropagation();
-        
-        // 确保在桌面设备上侧边栏始终显示
-        if (window.innerWidth > 768) {
-            document.getElementById('sidebar').style.transform = 'translateX(0)';
-        }
-    });
-});
         function scanClients() {
             const scanBtn = document.getElementById('scanBtn');
             const scanLoading = document.getElementById('scanLoading');
+            const scanProgress = document.getElementById('scanProgress');
+            const progressBar = document.getElementById('progressBar');
+            const vmCount = document.getElementById('vmCount');
+            const clientCount = document.getElementById('clientCount');
+            const scanStatus = document.getElementById('scanStatus');
+            const scanTime = document.getElementById('scanTime');
             
-            // 显示加载状态
+            // 显示加载状态和进度条
             scanBtn.style.display = 'none';
             scanLoading.style.display = 'block';
+            scanProgress.style.display = 'block';
+            
+            // 重置进度显示
+            progressBar.style.width = '0%';
+            vmCount.textContent = '0';
+            clientCount.textContent = '0';
+            scanStatus.textContent = '正在获取虚拟机列表...';
+            
+            // 开始计时
+            const startTime = Date.now();
+            const timer = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                scanTime.textContent = elapsed + 's';
+            }, 1000);
+            
+            // 模拟进度更新
+            let progress = 0;
+            const progressTimer = setInterval(() => {
+                progress += Math.random() * 15;
+                if (progress > 90) progress = 90;
+                progressBar.style.width = progress + '%';
+                
+                if (progress > 30) scanStatus.textContent = '正在扫描8787端口...';
+                if (progress > 60) scanStatus.textContent = '正在获取客户端信息...';
+            }, 500);
             
             // 调用扫描API
             fetch('/api/scan_clients', {
@@ -725,21 +997,44 @@ document.querySelectorAll('.nav-link, .accordion-button').forEach(link => {
             })
             .then(response => response.json())
             .then(data => {
+                clearInterval(progressTimer);
+                progressBar.style.width = '100%';
+                scanStatus.textContent = '扫描完成';
+                
                 if (data.success) {
                     updateClientTable(data.clients);
-                    showAlert('success', '客户端扫描完成！');
+                    
+                    // 更新统计信息
+                    if (data.scan_info) {
+                        vmCount.textContent = data.scan_info.total_vms_scanned || 0;
+                        clientCount.textContent = data.scan_info.clients_found || 0;
+                    }
+                    
+                    showAlert('success', data.message || '客户端扫描完成！');
                 } else {
+                    scanStatus.textContent = '扫描失败';
                     showAlert('danger', '扫描失败：' + data.message);
                 }
             })
             .catch(error => {
+                clearInterval(progressTimer);
+                progressBar.style.width = '100%';
+                progressBar.classList.add('bg-danger');
+                scanStatus.textContent = '扫描出错';
+                
                 console.error('扫描错误:', error);
                 showAlert('danger', '扫描过程中发生错误');
             })
             .finally(() => {
-                // 恢复按钮状态
-                scanBtn.style.display = 'block';
-                scanLoading.style.display = 'none';
+                clearInterval(timer);
+                
+                // 延迟恢复按钮状态，让用户看到完成状态
+                setTimeout(() => {
+                    scanBtn.style.display = 'block';
+                    scanLoading.style.display = 'none';
+                    scanProgress.style.display = 'none';
+                    progressBar.classList.remove('bg-danger');
+                }, 2000);
             });
         }
 
@@ -788,13 +1083,17 @@ document.querySelectorAll('.nav-link, .accordion-button').forEach(link => {
         }
 
         function updateClientTable(clients) {
+            // 保存客户端数据供模态框使用
+            window.currentClients = clients;
+            
             const tableBody = document.getElementById('clientTableBody');
             
             if (!clients || clients.length === 0) {
                 tableBody.innerHTML = `
                     <tr>
-                        <td colspan="5" class="text-center text-muted">
-                            <i class="fas fa-info-circle me-2"></i>未发现任何客户端
+                        <td colspan="5" class="text-center text-muted py-4">
+                            <i class="fas fa-info-circle me-2"></i>未发现任何ScptRunner客户端
+                            <br><small class="text-muted mt-2">请确保虚拟机正在运行且ScptRunner服务已启动</small>
                         </td>
                     </tr>
                 `;
@@ -803,21 +1102,45 @@ document.querySelectorAll('.nav-link, .accordion-button').forEach(link => {
             
             let tableHTML = '';
             clients.forEach(client => {
-                const statusClass = client.status === 'online' ? 'status-online' : 'status-offline';
-                const statusIcon = client.status === 'online' ? 'fa-circle' : 'fa-circle';
+                const statusClass = client.status === 'online' ? 'status-online' : 
+                                   client.status === 'offline' ? 'status-offline' : 'text-warning';
+                const statusIcon = client.status === 'online' ? 'fa-circle' : 
+                                  client.status === 'offline' ? 'fa-circle' : 'fa-question-circle';
+                const statusText = client.status === 'online' ? '在线' : 
+                                  client.status === 'offline' ? '离线' : '未知';
+                
+                // 格式化最后见到时间
+                let lastSeenText = '未知';
+                if (client.last_seen) {
+                    try {
+                        const lastSeen = new Date(client.last_seen);
+                        lastSeenText = lastSeen.toLocaleString('zh-CN');
+                    } catch (e) {
+                        lastSeenText = client.last_seen;
+                    }
+                }
                 
                 tableHTML += `
                     <tr>
-                        <td>${client.version || '未知'}</td>
-                        <td>${client.ip || '未知'}</td>
-                        <td>${client.details || '无详细信息'}</td>
+                        <td>
+                            <span class="badge bg-primary">${client.version || '未知'}</span>
+                        </td>
+                        <td>
+                            <strong>${client.ip || '未知'}</strong>
+                            <br><small class="text-muted">最后见到: ${lastSeenText}</small>
+                        </td>
+                        <td>
+                            ${client.details || '无详细信息'}
+                            ${client.vm_name ? `<br><small class="text-muted">虚拟机: ${client.vm_name}</small>` : ''}
+                        </td>
                         <td>
                             <span class="${statusClass}">
-                                <i class="fas ${statusIcon} me-1"></i>${client.status === 'online' ? '在线' : '离线'}
+                                <i class="fas ${statusIcon} me-1"></i>${statusText}
                             </span>
                         </td>
                         <td>
-                            <button class="btn btn-upgrade" onclick="upgradeClient('${client.id}')">
+                            <button class="btn btn-upgrade" onclick="upgradeClient('${client.id}')" 
+                                    ${client.status !== 'online' ? 'disabled' : ''}>
                                 <i class="fas fa-arrow-up me-1"></i>升级
                             </button>
                             <button class="btn btn-delete" onclick="deleteClient('${client.id}')">
@@ -906,7 +1229,7 @@ document.querySelectorAll('.nav-link, .accordion-button').forEach(link => {
                 }
             }, 3000);
         }
-        
+
         // 添加页面加载动画
         window.addEventListener('load', function() {
             document.body.style.opacity = '0';
@@ -916,258 +1239,5 @@ document.querySelectorAll('.nav-link, .accordion-button').forEach(link => {
             }, 100);
         });
     </script>
-</body>
-</html>
-function initializeEventListeners() {
-    // 扫描按钮事件
-    document.getElementById('scanBtn').addEventListener('click', function() {
-        scanClients();
-    });
-
-    // API测试按钮事件
-    document.getElementById('testApiBtn').addEventListener('click', function() {
-        toggleApiTestArea();
-    });
-
-    // 执行API测试按钮事件
-    document.getElementById('executeApiBtn').addEventListener('click', function() {
-        executeApiTest();
-    });
-    
-    // 移动端菜单切换按钮事件
-    document.getElementById('menuToggle').addEventListener('click', function() {
-        document.getElementById('sidebar').classList.toggle('show');
-    });
-    
-    // 点击外部关闭移动端菜单
-    document.addEventListener('click', function(event) {
-        const sidebar = document.getElementById('sidebar');
-        const menuToggle = document.getElementById('menuToggle');
-        
-        if (!sidebar.contains(event.target) && !menuToggle.contains(event.target)) {
-            sidebar.classList.remove('show');
-        }
-    });
-    
-    // 为所有菜单项和折叠按钮添加点击事件，防止事件冒泡
-    document.querySelectorAll('.nav-link, .accordion-button').forEach(item => {
-        item.addEventListener('click', function(event) {
-            // 阻止事件冒泡，确保不会触发外部点击事件
-            event.stopPropagation();
-            
-            // 确保在桌面模式下侧边栏始终显示
-            if (window.innerWidth > 768) {
-                document.getElementById('sidebar').style.transform = 'translateX(0)';
-            }
-        });
-    });
-}
-function scanClients() {
-    const scanBtn = document.getElementById('scanBtn');
-    const scanLoading = document.getElementById('scanLoading');
-    
-    // 显示加载状态
-    scanBtn.style.display = 'none';
-    scanLoading.style.display = 'block';
-    
-    // 调用扫描API
-    fetch('/api/scan_clients', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            updateClientTable(data.clients);
-            showAlert('success', '客户端扫描完成！');
-        } else {
-            showAlert('danger', '扫描失败：' + data.message);
-        }
-    })
-    .catch(error => {
-        console.error('扫描错误:', error);
-        showAlert('danger', '扫描过程中发生错误');
-    })
-    .finally(() => {
-        // 恢复按钮状态
-        scanBtn.style.display = 'block';
-        scanLoading.style.display = 'none';
-    });
-}
-
-function toggleApiTestArea() {
-    const apiTestArea = document.getElementById('apiTestArea');
-    if (apiTestArea.style.display === 'none') {
-        apiTestArea.style.display = 'block';
-    } else {
-        apiTestArea.style.display = 'none';
-    }
-}
-
-function executeApiTest() {
-    const apiInput = document.getElementById('apiInput').value.trim();
-    const testResult = document.getElementById('testResult');
-    
-    if (!apiInput) {
-        testResult.textContent = '请输入要测试的API内容';
-        return;
-    }
-    
-    testResult.textContent = '正在执行测试...';
-    
-    // 调用API测试接口
-    fetch('/api/test_api', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            api_content: apiInput
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            testResult.textContent = '测试成功！\n\n响应结果：\n' + JSON.stringify(data.result, null, 2);
-        } else {
-            testResult.textContent = '测试失败：\n' + data.message;
-        }
-    })
-    .catch(error => {
-        console.error('API测试错误:', error);
-        testResult.textContent = '测试过程中发生错误：\n' + error.message;
-    });
-}
-
-function updateClientTable(clients) {
-    const tableBody = document.getElementById('clientTableBody');
-    
-    if (!clients || clients.length === 0) {
-        tableBody.innerHTML = `
-            <tr>
-                <td colspan="5" class="text-center text-muted">
-                    <i class="fas fa-info-circle me-2"></i>未发现任何客户端
-                </td>
-            </tr>
-        `;
-        return;
-    }
-    
-    let tableHTML = '';
-    clients.forEach(client => {
-        const statusClass = client.status === 'online' ? 'status-online' : 'status-offline';
-        const statusIcon = client.status === 'online' ? 'fa-circle' : 'fa-circle';
-        
-        tableHTML += `
-            <tr>
-                <td>${client.version || '未知'}</td>
-                <td>${client.ip || '未知'}</td>
-                <td>${client.details || '无详细信息'}</td>
-                <td>
-                    <span class="${statusClass}">
-                        <i class="fas ${statusIcon} me-1"></i>${client.status === 'online' ? '在线' : '离线'}
-                    </span>
-                </td>
-                <td>
-                    <button class="btn btn-upgrade" onclick="upgradeClient('${client.id}')">
-                        <i class="fas fa-arrow-up me-1"></i>升级
-                    </button>
-                    <button class="btn btn-delete" onclick="deleteClient('${client.id}')">
-                        <i class="fas fa-trash me-1"></i>删除
-                    </button>
-                </td>
-            </tr>
-        `;
-    });
-    
-    tableBody.innerHTML = tableHTML;
-}
-
-function upgradeClient(clientId) {
-    if (confirm('确定要升级此客户端吗？')) {
-        fetch('/api/upgrade_client', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                client_id: clientId
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                showAlert('success', '客户端升级成功！');
-                // 刷新客户端列表
-                scanClients();
-            } else {
-                showAlert('danger', '升级失败：' + data.message);
-            }
-        })
-        .catch(error => {
-            console.error('升级错误:', error);
-            showAlert('danger', '升级过程中发生错误');
-        });
-    }
-}
-
-function deleteClient(clientId) {
-    if (confirm('确定要删除此客户端吗？此操作不可恢复！')) {
-        fetch('/api/delete_client', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                client_id: clientId
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                showAlert('success', '客户端删除成功！');
-                // 刷新客户端列表
-                scanClients();
-            } else {
-                showAlert('danger', '删除失败：' + data.message);
-            }
-        })
-        .catch(error => {
-            console.error('删除错误:', error);
-            showAlert('danger', '删除过程中发生错误');
-        });
-    }
-}
-
-function showAlert(type, message) {
-    // 创建提示框
-    const alertDiv = document.createElement('div');
-    alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
-    alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
-    alertDiv.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-    
-    document.body.appendChild(alertDiv);
-    
-    // 3秒后自动消失
-    setTimeout(() => {
-        if (alertDiv.parentNode) {
-            alertDiv.parentNode.removeChild(alertDiv);
-        }
-    }, 3000);
-}
-
-// 添加页面加载动画
-window.addEventListener('load', function() {
-    document.body.style.opacity = '0';
-    document.body.style.transition = 'opacity 0.5s ease';
-    setTimeout(() => {
-        document.body.style.opacity = '1';
-    }, 100);
-});
 </body>
 </html>

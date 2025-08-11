@@ -6729,47 +6729,163 @@ def api_distribute_text_lines():
 @login_required
 def api_scan_clients():
     """扫描ScptRunner客户端"""
+    import socket
+    import requests
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import ipaddress
+    import re
+    
     try:
         logger.info("开始扫描ScptRunner客户端")
         
-        # 模拟扫描客户端的过程
-        # 这里可以根据实际需求实现真实的客户端扫描逻辑
-        # 例如：扫描网络中的特定端口、检查已知客户端列表等
+        # 获取所有虚拟机IP地址
+        def get_all_vm_ips():
+            """获取所有虚拟机的IP地址"""
+            vm_ips = []
+            vmrun_path = get_vmrun_path()
+            
+            # 扫描所有虚拟机目录
+            all_vm_dirs = [clone_dir, vm_chengpin_dir]
+            
+            for vm_dir in all_vm_dirs:
+                if os.path.exists(vm_dir):
+                    for root, dirs, files in os.walk(vm_dir):
+                        for file in files:
+                            if file.endswith('.vmx'):
+                                vm_path = os.path.join(root, file)
+                                try:
+                                    # 使用vmrun获取虚拟机IP
+                                    command = f'"{vmrun_path}" getGuestIPAddress "{vm_path}"'
+                                    result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=10)
+                                    if result.returncode == 0:
+                                        ip = result.stdout.strip()
+                                        # 验证IP地址格式
+                                        ipaddress.ip_address(ip)
+                                        vm_ips.append({
+                                            'ip': ip,
+                                            'vm_name': os.path.splitext(file)[0],
+                                            'vm_path': vm_path
+                                        })
+                                        logger.debug(f"获取到虚拟机IP: {ip} ({file})")
+                                except Exception as e:
+                                    logger.debug(f"获取虚拟机IP失败 {file}: {str(e)}")
+                                    continue
+            
+            return vm_ips
         
-        # 模拟发现的客户端数据
-        discovered_clients = [
-            {
-                'id': 'client_001',
-                'version': '1.2.3',
-                'ip': '192.168.1.100',
-                'details': 'ScptRunner客户端 - 在线状态正常',
-                'status': 'online',
-                'last_seen': datetime.now().isoformat()
-            },
-            {
-                'id': 'client_002',
-                'version': '1.2.1',
-                'ip': '192.168.1.101',
-                'details': 'ScptRunner客户端 - 需要升级',
-                'status': 'online',
-                'last_seen': datetime.now().isoformat()
-            },
-            {
-                'id': 'client_003',
-                'version': '1.1.9',
-                'ip': '192.168.1.102',
-                'details': 'ScptRunner客户端 - 离线',
-                'status': 'offline',
-                'last_seen': (datetime.now() - timedelta(hours=2)).isoformat()
-            }
-        ]
+        # 检查端口是否开放
+        def check_port_open(ip, port, timeout=3):
+            """检查指定IP的端口是否开放"""
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(timeout)
+                result = sock.connect_ex((ip, port))
+                sock.close()
+                return result == 0
+            except Exception:
+                return False
         
-        logger.info(f"扫描完成，发现 {len(discovered_clients)} 个客户端")
+        # 获取ScptRunner客户端信息
+        def get_scptrunner_info(ip, port=8787):
+            """获取ScptRunner客户端信息"""
+            try:
+                # 尝试连接ScptRunner API获取版本信息
+                url = f"http://{ip}:{port}/api/version"
+                response = requests.get(url, timeout=5)
+                if response.status_code == 200:
+                    data = response.json()
+                    return {
+                        'version': data.get('version', '未知版本'),
+                        'details': data.get('details', 'ScptRunner客户端'),
+                        'status': 'online'
+                    }
+                else:
+                    # 如果API不可用，但端口开放，说明是ScptRunner但版本较老
+                    return {
+                        'version': '1.0.x',
+                        'details': 'ScptRunner客户端 (旧版本)',
+                        'status': 'online'
+                    }
+            except Exception:
+                # 端口开放但无法获取版本信息
+                return {
+                    'version': '未知',
+                    'details': 'ScptRunner客户端 (无法获取详细信息)',
+                    'status': 'unknown'
+                }
+        
+        # 扫描单个IP
+        def scan_ip(vm_info):
+            """扫描单个虚拟机IP的8787端口"""
+            ip = vm_info['ip']
+            vm_name = vm_info['vm_name']
+            
+            try:
+                # 检查8787端口是否开放
+                if check_port_open(ip, 8787):
+                    # 获取ScptRunner信息
+                    client_info = get_scptrunner_info(ip)
+                    
+                    return {
+                        'id': f"client_{ip.replace('.', '_')}",
+                        'version': client_info['version'],
+                        'ip': ip,
+                        'details': f"{client_info['details']} (虚拟机: {vm_name})",
+                        'status': client_info['status'],
+                        'last_seen': datetime.now().isoformat(),
+                        'vm_name': vm_name
+                    }
+                else:
+                    return None
+            except Exception as e:
+                logger.debug(f"扫描IP {ip} 失败: {str(e)}")
+                return None
+        
+        # 获取所有虚拟机IP
+        logger.info("正在获取虚拟机IP地址...")
+        vm_ips = get_all_vm_ips()
+        logger.info(f"找到 {len(vm_ips)} 个虚拟机IP地址")
+        
+        if not vm_ips:
+            return jsonify({
+                'success': True,
+                'message': '未找到运行中的虚拟机',
+                'clients': []
+            })
+        
+        # 并发扫描所有IP的8787端口
+        logger.info("正在扫描8787端口...")
+        discovered_clients = []
+        
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            # 提交所有扫描任务
+            future_to_ip = {executor.submit(scan_ip, vm_info): vm_info for vm_info in vm_ips}
+            
+            # 收集结果
+            for future in as_completed(future_to_ip):
+                vm_info = future_to_ip[future]
+                try:
+                    result = future.result()
+                    if result:
+                        discovered_clients.append(result)
+                        logger.info(f"发现ScptRunner客户端: {result['ip']} (版本: {result['version']})")
+                except Exception as e:
+                    logger.error(f"扫描虚拟机 {vm_info['vm_name']} 失败: {str(e)}")
+        
+        # 按IP地址排序
+        discovered_clients.sort(key=lambda x: ipaddress.ip_address(x['ip']))
+        
+        logger.info(f"扫描完成，发现 {len(discovered_clients)} 个ScptRunner客户端")
         
         return jsonify({
             'success': True,
-            'message': f'成功扫描到 {len(discovered_clients)} 个客户端',
-            'clients': discovered_clients
+            'message': f'成功扫描到 {len(discovered_clients)} 个ScptRunner客户端',
+            'clients': discovered_clients,
+            'scan_info': {
+                'total_vms_scanned': len(vm_ips),
+                'clients_found': len(discovered_clients),
+                'scan_time': datetime.now().isoformat()
+            }
         })
         
     except Exception as e:
@@ -6820,6 +6936,100 @@ def api_test_api():
         return jsonify({
             'success': False,
             'message': f'API测试失败: {str(e)}'
+        })
+
+@app.route('/api/test_url', methods=['POST'])
+@login_required
+def api_test_url():
+    """测试URL GET请求功能"""
+    try:
+        data = request.get_json()
+        url = data.get('url', '').strip()
+        
+        if not url:
+            return jsonify({
+                'success': False,
+                'message': 'URL地址不能为空'
+            })
+        
+        logger.info(f"执行URL GET请求测试: {url}")
+        
+        # 验证URL格式
+        try:
+            from urllib.parse import urlparse
+            parsed_url = urlparse(url)
+            if not parsed_url.scheme or not parsed_url.netloc:
+                return jsonify({
+                    'success': False,
+                    'message': 'URL格式无效，请输入完整的URL地址'
+                })
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'message': f'URL格式验证失败: {str(e)}'
+            })
+        
+        # 发送GET请求
+        import requests
+        start_time = time.time()
+        
+        try:
+            # 设置请求超时时间为10秒
+            response = requests.get(url, timeout=10)
+            end_time = time.time()
+            response_time = int((end_time - start_time) * 1000)  # 转换为毫秒
+            
+            # 获取响应内容
+            try:
+                # 尝试解析JSON响应
+                response_json = response.json()
+                response_text = json.dumps(response_json, indent=2, ensure_ascii=False)
+            except:
+                # 如果不是JSON，直接获取文本内容
+                response_text = response.text
+            
+            # 限制响应内容长度，避免过长的响应
+            if len(response_text) > 2000:
+                response_text = response_text[:2000] + "\n\n... (响应内容过长，已截断)"
+            
+            logger.info(f"URL请求成功: {url}, 状态码: {response.status_code}, 响应时间: {response_time}ms")
+            
+            return jsonify({
+                'success': True,
+                'message': 'GET请求执行成功',
+                'status_code': response.status_code,
+                'response_time': response_time,
+                'response_text': response_text,
+                'headers': dict(response.headers),
+                'url': url
+            })
+            
+        except requests.exceptions.Timeout:
+            logger.warning(f"URL请求超时: {url}")
+            return jsonify({
+                'success': False,
+                'message': '请求超时（10秒），请检查URL地址是否可访问'
+            })
+            
+        except requests.exceptions.ConnectionError:
+            logger.warning(f"URL连接失败: {url}")
+            return jsonify({
+                'success': False,
+                'message': '连接失败，请检查URL地址和网络连接'
+            })
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"URL请求异常: {url}, 错误: {str(e)}")
+            return jsonify({
+                'success': False,
+                'message': f'请求失败: {str(e)}'
+            })
+        
+    except Exception as e:
+        logger.error(f"URL测试失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'测试过程中发生错误: {str(e)}'
         })
 
 @app.route('/api/upgrade_client', methods=['POST'])
