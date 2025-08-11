@@ -674,29 +674,19 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="row mb-3">
-                        <div class="col-md-6">
-                            <label for="clientSelect" class="form-label">选择客户端</label>
-                            <select id="clientSelect" class="form-select">
-                                <option value="">请选择客户端...</option>
-                            </select>
-                        </div>
-                        <div class="col-md-6">
-                            <label for="scriptName" class="form-label">脚本名称</label>
-                            <input type="text" id="scriptName" class="form-control" placeholder="请输入脚本名称">
-                        </div>
+                    <div class="mb-3">
+                        <label for="clientSelect" class="form-label">选择客户端</label>
+                        <select id="clientSelect" class="form-select">
+                            <option value="">请选择客户端...</option>
+                        </select>
                     </div>
                     
                     <div class="mb-3">
-                        <label for="apiFormat" class="form-label">API格式预览</label>
-                        <div class="form-control bg-light" id="apiFormat" style="font-family: monospace; color: #666;">
-                            http://IP地址:8787/script?name=脚本名称
+                        <label for="apiUrlInput" class="form-label">API测试URL</label>
+                        <div class="url-input-group">
+                            <input type="text" id="apiUrlInput" class="form-control" placeholder="http://虚拟机IP地址:8787/script?name=scriptname">
+                            <i class="fas fa-link url-validate-icon" id="urlValidateIcon"></i>
                         </div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="testText" class="form-label">测试文本（可选）</label>
-                        <textarea id="testText" class="form-control" rows="3" placeholder="输入要发送给脚本的测试文本..."></textarea>
                     </div>
                     
                     <div class="mb-3">
@@ -735,8 +725,10 @@
             document.getElementById('executeApiTestBtn').addEventListener('click', executeApiTestModal);
             
             // 客户端选择变化事件
-            document.getElementById('clientSelect').addEventListener('change', updateApiFormat);
-            document.getElementById('scriptName').addEventListener('input', updateApiFormat);
+            document.getElementById('clientSelect').addEventListener('change', updateApiUrl);
+            document.getElementById('apiUrlInput').addEventListener('input', function() {
+                // URL输入框变化时的处理逻辑可以在这里添加
+            });
             
             // 执行API测试按钮事件（原有的）
             document.getElementById('executeApiBtn').addEventListener('click', executeApiTest);
@@ -802,67 +794,97 @@
             }
         }
 
-        // 更新API格式显示
-        function updateApiFormat() {
-            const clientIP = document.getElementById('clientSelect').value;
-            const scriptName = document.getElementById('scriptName').value;
-            const apiFormat = document.getElementById('apiFormat');
+        // 加载客户端选择选项（主动获取）
+        function loadClientSelectOptions() {
+            const clientSelect = document.getElementById('clientSelect');
             
-            if (clientIP && scriptName) {
-                apiFormat.textContent = `http://${clientIP}:8787/script?name=${scriptName}`;
-            } else if (clientIP) {
-                apiFormat.textContent = `http://${clientIP}:8787/script?name=脚本名称`;
+            // 显示加载状态
+            clientSelect.innerHTML = '<option value="">正在加载客户端...</option>';
+            
+            // 调用扫描API获取最新的客户端列表
+            fetch('/api/scan_clients', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.clients) {
+                    // 更新全局客户端数据
+                    window.currentClients = data.clients;
+                    // 更新下拉框选项
+                    updateClientSelectOptions();
+                } else {
+                    clientSelect.innerHTML = '<option value="">获取客户端列表失败</option>';
+                }
+            })
+            .catch(error => {
+                console.error('获取客户端列表错误:', error);
+                clientSelect.innerHTML = '<option value="">获取客户端列表出错</option>';
+            });
+        }
+
+        // 更新API URL显示
+        function updateApiUrl() {
+            const clientIP = document.getElementById('clientSelect').value;
+            const apiUrlInput = document.getElementById('apiUrlInput');
+            
+            if (clientIP) {
+                apiUrlInput.value = `http://${clientIP}:8787/script?name=scriptname`;
             } else {
-                apiFormat.textContent = 'http://IP地址:8787/script?name=脚本名称';
+                apiUrlInput.value = '';
+                apiUrlInput.placeholder = 'http://虚拟机IP地址:8787/script?name=scriptname';
             }
         }
 
         // 执行API测试（模态框版本）
         function executeApiTestModal() {
-            const clientIP = document.getElementById('clientSelect').value;
-            const scriptName = document.getElementById('scriptName').value;
-            const testText = document.getElementById('testText').value;
+            const apiUrl = document.getElementById('apiUrlInput').value.trim();
             const testResult = document.getElementById('testResultModal');
             
-            if (!clientIP) {
-                testResult.textContent = '请选择一个客户端';
+            if (!apiUrl) {
+                testResult.textContent = '请输入API测试URL';
                 return;
             }
             
-            if (!scriptName) {
-                testResult.textContent = '请输入脚本名称';
+            // URL格式验证
+            try {
+                new URL(apiUrl);
+            } catch (error) {
+                testResult.textContent = '请输入有效的URL格式';
                 return;
             }
             
             testResult.textContent = '正在执行API测试...';
             
-            // 构建API URL
-            const apiUrl = `http://${clientIP}:8787/script?name=${scriptName}`;
-            
-            // 调用API测试接口
-            fetch('/api/test_client_api', {
+            // 调用URL测试接口
+            fetch('/api/test_url', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    client_ip: clientIP,
-                    script_name: scriptName,
-                    test_text: testText,
-                    api_url: apiUrl
+                    url: apiUrl
                 })
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    testResult.textContent = `测试成功！\n\nAPI URL: ${apiUrl}\n\n响应结果：\n${JSON.stringify(data.result, null, 2)}`;
+                    testResult.textContent = `测试成功！
+
+URL: ${apiUrl}
+状态码: ${data.status_code}
+响应时间: ${data.response_time}ms
+
+响应内容:
+${data.response_text || '无响应内容'}`;
                 } else {
-                    testResult.textContent = `测试失败：\n${data.message}\n\nAPI URL: ${apiUrl}`;
+                    testResult.textContent = `测试失败: ${data.error}`;
                 }
             })
             .catch(error => {
-                console.error('API测试错误:', error);
-                testResult.textContent = `测试过程中发生错误：\n${error.message}\n\nAPI URL: ${apiUrl}`;
+                testResult.textContent = `测试出错: ${error.message}`;
             });
         }
         
