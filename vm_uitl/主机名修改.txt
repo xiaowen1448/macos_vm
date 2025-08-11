@@ -1,0 +1,46 @@
+ 脚本配置例子：
+ #!/bin/bash
+# 这里修改主机名
+NEW_HOSTNAME="MyMac"
+scutil --set HostName "$NEW_HOSTNAME"
+scutil --set LocalHostName "$NEW_HOSTNAME"
+scutil --set ComputerName "$NEW_HOSTNAME"
+dscacheutil -flushcache
+
+exit 0
+
+ 用户目录:
+ ~/Library/LaunchAgents/com.example.startup.plist
+
+系统目录:/Library/LaunchDaemons/
+
+184CBC84-EF44-4C47-9E2F-09D903CED01C:~wx$ sudo mv  ~/Library/LaunchAgents/com.example.startup.plist  /Library/LaunchDaemons/
+Password:
+184CBC84-EF44-4C47-9E2F-09D903CED01C:~ wx$ sudo chown root:wheel /Library/LaunchDaemons/com.example.startup.plist
+184CBC84-EF44-4C47-9E2F-09D903CED01C:~ wx$ sudo chmod 644 /Library/LaunchDaemons/com.example.startup.plist 
+184CBC84-EF44-4C47-9E2F-09D903CED01C:~ wx$ sudo launchctl load -w /Library/LaunchDaemons/com.example.startup.plist 
+184CBC84-EF44-4C47-9E2F-09D903CED01C:~ wx$ 
+
+
+ <?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.example.startup</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/wx/random_hostname.sh</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <false/>
+    <key>StandardOutPath</key>
+    <string>/tmp/startup.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/startup.err</string>
+</dict>
+</plist>

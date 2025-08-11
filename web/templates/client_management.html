@@ -393,6 +393,252 @@
         .url-validate-icon.invalid {
             color: #dc3545;
         }
+        
+        /* 批量API测试样式 */
+        .api-test-item {
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            background: #f8f9fa;
+            position: relative;
+        }
+        
+        .api-test-item:hover {
+            background: #e9ecef;
+            border-color: #adb5bd;
+        }
+        
+        .api-test-item.selected {
+            border-color: #007bff;
+            background: #e7f3ff;
+        }
+        
+        .api-test-item .badge {
+            font-size: 0.75rem;
+        }
+        
+        .test-result-item {
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            background: #ffffff;
+        }
+        
+        .test-result-item.success {
+            border-left: 4px solid #28a745;
+            background: #f8fff9;
+        }
+        
+        .test-result-item.error {
+            border-left: 4px solid #dc3545;
+            background: #fff8f8;
+        }
+        
+        .test-result-item.warning {
+            border-left: 4px solid #ffc107;
+            background: #fffdf5;
+        }
+        
+        .test-result-content {
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            background: #f8f9fa;
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        
+        .test-progress-container {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        
+        .template-btn {
+            margin-bottom: 5px;
+        }
+        
+        .template-btn:hover {
+            background: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+        
+        .remove-test-btn {
+            opacity: 0.7;
+        }
+        
+        .remove-test-btn:hover {
+            opacity: 1;
+        }
+        
+        .card-header h6 {
+            color: #495057;
+            font-weight: 600;
+        }
+        
+        .progress-bar {
+            transition: width 0.3s ease;
+        }
+        
+        .test-status-badge {
+            font-size: 0.7rem;
+            padding: 0.25rem 0.5rem;
+        }
+
+        /* 新的API测试界面样式 */
+        .api-test-section {
+            background: #f8f9fa;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            border: 1px solid #dee2e6;
+        }
+
+        .api-test-section h5 {
+            color: #495057;
+            margin-bottom: 1rem;
+            font-weight: 600;
+        }
+
+        .vm-list-section {
+            background: white;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            border: 1px solid #dee2e6;
+        }
+
+        .vm-list-section h5 {
+            color: #495057;
+            margin-bottom: 1rem;
+            font-weight: 600;
+        }
+
+        .vm-table {
+            margin-bottom: 0;
+        }
+
+        .vm-table th {
+            background-color: #f8f9fa;
+            border-top: none;
+            font-weight: 600;
+            color: #495057;
+            font-size: 0.875rem;
+        }
+
+        .vm-table td {
+            vertical-align: middle;
+            font-size: 0.875rem;
+        }
+
+        .vm-selection-controls {
+            margin-bottom: 1rem;
+            padding: 0.75rem;
+            background-color: #f8f9fa;
+            border-radius: 0.375rem;
+            border: 1px solid #dee2e6;
+        }
+
+        .test-progress-container {
+            background: #e3f2fd;
+            border: 1px solid #bbdefb;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .test-results-section {
+            background: white;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            border: 1px solid #dee2e6;
+            margin-top: 1.5rem;
+        }
+
+        .test-results-section h5 {
+            color: #495057;
+            margin-bottom: 1rem;
+            font-weight: 600;
+        }
+
+        .batch-urls-textarea {
+            min-height: 120px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.875rem;
+        }
+
+        .single-test-section, .batch-test-section {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+            padding: 1.25rem;
+        }
+
+        .single-test-section h6, .batch-test-section h6 {
+            color: #495057;
+            margin-bottom: 1rem;
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        .test-controls {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .results-controls {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            margin-bottom: 1rem;
+        }
+
+        /* 测试结果滚动条样式 */
+        .test-result-content::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        .test-result-content::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+
+        .test-result-content::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+
+        .test-result-content::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+
+        /* 测试结果容器滚动条样式 */
+        .card-body::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .card-body::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+
+        .card-body::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+
+        .card-body::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
     </style>
 </head>
 <body>
@@ -665,39 +911,78 @@
 
     <!-- API测试模态框 -->
     <div class="modal fade" id="apiTestModal" tabindex="-1" aria-labelledby="apiTestModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
+        <div class="modal-dialog modal-lg" style="max-width: 50%; width: 50%;">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="apiTestModalLabel">
-                        <i class="fas fa-code me-2"></i>ScptRunner API测试
+                        <i class="fas fa-code me-2"></i>ScptRunner API 测试
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="mb-3">
-                        <label for="clientSelect" class="form-label">选择客户端</label>
-                        <select id="clientSelect" class="form-select">
-                            <option value="">请选择客户端...</option>
-                        </select>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="apiUrlInput" class="form-label">API测试URL</label>
-                        <div class="url-input-group">
-                            <input type="text" id="apiUrlInput" class="form-control" placeholder="http://虚拟机IP地址:8787/script?name=scriptname">
-                            <i class="fas fa-link url-validate-icon" id="urlValidateIcon"></i>
+                    <!-- 上部：API测试区域 -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="mb-0"><i class="fas fa-list me-2"></i>批量API测试</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <label for="batchApiUrls" class="form-label">批量API URLs (每行一个)</label>
+                                        <textarea id="batchApiUrls" class="form-control mb-2" rows="4" cols="40" style="width: 100%;"
+                                                  placeholder="http://192.168.1.100:8787/script?name=script1&#10;http://192.168.1.101:8787/script?name=script2&#10;http://192.168.1.102:8787/script?name=script3&#10;&#10;注意：请输入完整的URL，包含具体的IP地址"></textarea>
+                                        <div class="d-flex justify-content-start gap-2 mb-2">
+                                            <button id="executeBatchTestBtn" class="btn btn-success">
+                                                <i class="fas fa-play me-2"></i>批量执行
+                                            </button>
+                                            <button id="stopBatchTestBtn" class="btn btn-warning" style="display: none;">
+                                                <i class="fas fa-stop me-2"></i>停止测试
+                                            </button>
+                                        </div> 
+                                    </div>
+                                    
+                                    <!-- 测试进度 -->
+                                    <div class="mt-3" id="testProgressContainer" style="display: none;">
+                                        <label class="form-label">测试进度</label>
+                                        <div class="progress mb-2">
+                                            <div class="progress-bar" id="testProgressBar" role="progressbar" style="width: 0%"></div>
+                                        </div>
+                                        <div class="d-flex justify-content-between">
+                                            <small class="text-muted" id="testProgressText">准备开始...</small>
+                                            <small class="text-muted" id="testProgressCount">0/0</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     
-                    <div class="mb-3">
-                        <button id="executeApiTestBtn" class="btn btn-primary">
-                            <i class="fas fa-play me-2"></i>执行测试
-                        </button>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="testResultModal" class="form-label">测试结果</label>
-                        <div class="test-result" id="testResultModal">点击"执行测试"开始测试...</div>
+                    <!-- 下部：测试结果 -->
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <h6 class="mb-0"><i class="fas fa-terminal me-2"></i>测试结果</h6>
+                                    <div>
+                                        <button id="clearResultsBtn" class="btn btn-sm btn-outline-secondary me-2">
+                                            <i class="fas fa-eraser me-1"></i>清空
+                                        </button>
+                                        <button id="copyResultsBtn" class="btn btn-sm btn-outline-info">
+                                            <i class="fas fa-copy me-1"></i>复制
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="card-body" style="max-height: 250px; overflow-y: auto;">
+                                    <div id="testResultsContainer">
+                                        <div class="text-muted text-center py-4">
+                                            <i class="fas fa-info-circle me-2"></i>
+                                            执行测试后结果将显示在这里
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -710,6 +995,13 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     
     <script>
+        // 全局变量
+        let testCounter = 0;
+        let isTestRunning = false;
+        let currentTestResults = [];
+        let orderedResults = {}; // 存储按顺序的结果
+        let nextDisplayOrder = 1; // 下一个要显示的顺序号
+
         // 页面加载完成后初始化
         document.addEventListener('DOMContentLoaded', function() {
             initializeEventListeners();
@@ -721,14 +1013,11 @@
             // 扫描按钮事件
             document.getElementById('scanBtn').addEventListener('click', scanClients);
             
-            // API测试模态框事件
-            document.getElementById('executeApiTestBtn').addEventListener('click', executeApiTestModal);
-            
-            // 客户端选择变化事件
-            document.getElementById('clientSelect').addEventListener('change', updateApiUrl);
-            document.getElementById('apiUrlInput').addEventListener('input', function() {
-                // URL输入框变化时的处理逻辑可以在这里添加
-            });
+            // API测试相关事件
+            document.getElementById('executeBatchTestBtn').addEventListener('click', executeBatchTest);
+            document.getElementById('stopBatchTestBtn').addEventListener('click', stopBatchTest);
+            document.getElementById('clearResultsBtn').addEventListener('click', clearResults);
+            document.getElementById('copyResultsBtn').addEventListener('click', copyResults);
             
             // 执行API测试按钮事件（原有的）
             document.getElementById('executeApiBtn').addEventListener('click', executeApiTest);
@@ -738,10 +1027,7 @@
                 document.getElementById('sidebar').classList.toggle('show');
             });
             
-            // 模态框显示时更新客户端列表
-            document.getElementById('apiTestModal').addEventListener('show.bs.modal', function() {
-                updateClientSelectOptions();
-            });
+
             
             // 点击外部关闭移动端菜单
             document.addEventListener('click', function(event) {
@@ -767,141 +1053,419 @@
             });
         }
         
-        // 更新客户端选择下拉框
-        function updateClientSelectOptions() {
-            const clientSelect = document.getElementById('clientSelect');
-            const currentClients = window.currentClients || [];
-            
-            // 清空现有选项
-            clientSelect.innerHTML = '<option value="">请选择客户端...</option>';
-            
-            // 添加在线客户端选项
-            currentClients.forEach(client => {
-                if (client.status === 'online') {
-                    const option = document.createElement('option');
-                    option.value = client.ip;
-                    option.textContent = `${client.ip} (${client.version || '未知版本'})`;
-                    clientSelect.appendChild(option);
-                }
-            });
-            
-            if (currentClients.filter(c => c.status === 'online').length === 0) {
-                const option = document.createElement('option');
-                option.value = '';
-                option.textContent = '暂无在线客户端';
-                option.disabled = true;
-                clientSelect.appendChild(option);
-            }
-        }
 
-        // 加载客户端选择选项（主动获取）
-        function loadClientSelectOptions() {
-            const clientSelect = document.getElementById('clientSelect');
+        
+        // 执行批量测试
+        async function executeBatchTest() {
+            const batchUrls = document.getElementById('batchApiUrls').value.trim();
             
-            // 显示加载状态
-            clientSelect.innerHTML = '<option value="">正在加载客户端...</option>';
-            
-            // 调用扫描API获取最新的客户端列表
-            fetch('/api/scan_clients', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success && data.clients) {
-                    // 更新全局客户端数据
-                    window.currentClients = data.clients;
-                    // 更新下拉框选项
-                    updateClientSelectOptions();
-                } else {
-                    clientSelect.innerHTML = '<option value="">获取客户端列表失败</option>';
-                }
-            })
-            .catch(error => {
-                console.error('获取客户端列表错误:', error);
-                clientSelect.innerHTML = '<option value="">获取客户端列表出错</option>';
-            });
-        }
-
-        // 更新API URL显示
-        function updateApiUrl() {
-            const clientIP = document.getElementById('clientSelect').value;
-            const apiUrlInput = document.getElementById('apiUrlInput');
-            
-            if (clientIP) {
-                apiUrlInput.value = `http://${clientIP}:8787/script?name=on run argv.applescript`;
-            } else {
-                apiUrlInput.value = '';
-                apiUrlInput.placeholder = 'http://虚拟机IP地址:8787/script?name=on run argv.applescript';
-            }
-        }
-
-        // 执行API测试（模态框版本）
-        function executeApiTestModal() {
-            const apiUrl = document.getElementById('apiUrlInput').value.trim();
-            const testResult = document.getElementById('testResultModal');
-            
-            if (!apiUrl) {
-                testResult.textContent = '请输入API测试URL';
+            if (!batchUrls) {
                 return;
             }
             
-            // URL格式验证
+            if (isTestRunning) {
+                alert('测试正在进行中，请等待完成');
+                return;
+            }
+            
+            const urls = batchUrls.split('\n').filter(url => url.trim());
+            if (urls.length === 0) {
+                alert('请输入有效的API URLs');
+                return;
+            }
+            
+            // 验证URL格式
+            const invalidUrls = urls.filter(url => {
+                const trimmedUrl = url.trim();
+                return !trimmedUrl.startsWith('http://') && !trimmedUrl.startsWith('https://');
+            });
+            
+            if (invalidUrls.length > 0) {
+                alert(`发现无效的URL格式：\n${invalidUrls.join('\n')}\n\n请确保每个URL都以http://或https://开头`);
+                return;
+            }
+            
+            isTestRunning = true;
+            updateTestButtons(true);
+            
+            // 清空结果区域
+            document.getElementById('testResultsContainer').innerHTML = '';
+            currentTestResults = [];
+            orderedResults = {};
+            nextDisplayOrder = 1;
+            
+            // 显示进度
+            showTestProgress(true);
+            updateProgress(0, urls.length);
+            
+            let completedTests = 0;
+            const totalTests = urls.length;
+            
+            // 创建所有API调用的Promise数组，实现并发执行
+            const apiPromises = urls.map((url, index) => {
+                const testUrl = url.trim();
+                const testName = `批量测试 ${index + 1} - ${testUrl.split('?')[0].split('/').pop() || testUrl}`;
+                
+                return executeApiCallConcurrent(testName, testUrl, '', index + 1)
+                    .then(() => {
+                        completedTests++;
+                        updateProgress(completedTests, totalTests);
+                    })
+                    .catch(error => {
+                        console.error(`API调用失败 (${testName}):`, error);
+                        completedTests++;
+                        updateProgress(completedTests, totalTests);
+                    });
+            });
+            
             try {
-                new URL(apiUrl);
+                // 并发执行所有API调用
+                await Promise.all(apiPromises);
+                
+                if (isTestRunning) {
+                    showAlert('success', `批量测试完成！共执行 ${totalTests} 个测试`);
+                }
             } catch (error) {
-                testResult.textContent = '请输入有效的URL格式';
+                console.error('批量测试过程中发生错误:', error);
+                showAlert('danger', '批量测试过程中发生错误');
+            } finally {
+                isTestRunning = false;
+                updateTestButtons(false);
+                showTestProgress(false);
+            }
+        }
+        
+
+        
+        // 停止批量测试
+        function stopBatchTest() {
+            if (isTestRunning) {
+                isTestRunning = false;
+                updateTestButtons(false);
+                showTestProgress(false);
+                showAlert('warning', '测试已停止');
+            }
+        }
+        
+        // 执行API调用（原有的串行版本）
+        async function executeApiCall(testName, apiUrl, expectedResult) {
+            try {
+                const startTime = Date.now();
+                
+                const response = await fetch('/api/test_url', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ url: apiUrl })
+                });
+                
+                const data = await response.json();
+                const endTime = Date.now();
+                const duration = endTime - startTime;
+                
+                if (data.success) {
+                    let resultType = 'success';
+                    let resultMessage = '测试成功';
+                    
+                    // 如果有预期结果，进行对比
+                    if (expectedResult) {
+                        try {
+                            const actualResult = JSON.parse(data.response_text || '{}');
+                            const expected = JSON.parse(expectedResult);
+                            
+                            if (JSON.stringify(actualResult) === JSON.stringify(expected)) {
+                                resultMessage = '测试成功 - 结果匹配';
+                            } else {
+                                resultType = 'warning';
+                                resultMessage = '测试成功 - 结果不匹配';
+                            }
+                        } catch (e) {
+                            if (data.response_text === expectedResult) {
+                                resultMessage = '测试成功 - 结果匹配';
+                            } else {
+                                resultType = 'warning';
+                                resultMessage = '测试成功 - 结果不匹配';
+                            }
+                        }
+                    }
+                    
+                    addTestResult(testName, resultType, resultMessage, data.response_text || '', duration);
+                } else {
+                    addTestResult(testName, 'error', `测试失败: ${data.message}`, '', duration);
+                }
+            } catch (error) {
+                addTestResult(testName, 'error', `测试错误: ${error.message}`, '', 0);
+            }
+        }
+
+        // 并发执行API调用（新增的并发版本）
+        async function executeApiCallConcurrent(testName, apiUrl, expectedResult, order) {
+            try {
+                const startTime = Date.now();
+                
+                const response = await fetch('/api/test_url', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ url: apiUrl })
+                });
+                
+                const data = await response.json();
+                const endTime = Date.now();
+                const duration = endTime - startTime;
+                
+                let resultType, resultMessage;
+                
+                if (data.success) {
+                    resultType = 'success';
+                    resultMessage = '测试成功';
+                    
+                    // 如果有预期结果，进行对比
+                    if (expectedResult) {
+                        try {
+                            const actualResult = JSON.parse(data.response_text || '{}');
+                            const expected = JSON.parse(expectedResult);
+                            
+                            if (JSON.stringify(actualResult) === JSON.stringify(expected)) {
+                                resultMessage = '测试成功 - 结果匹配';
+                            } else {
+                                resultType = 'warning';
+                                resultMessage = '测试成功 - 结果不匹配';
+                            }
+                        } catch (e) {
+                            if (data.response_text === expectedResult) {
+                                resultMessage = '测试成功 - 结果匹配';
+                            } else {
+                                resultType = 'warning';
+                                resultMessage = '测试成功 - 结果不匹配';
+                            }
+                        }
+                    }
+                } else {
+                    resultType = 'error';
+                    resultMessage = `测试失败: ${data.message}`;
+                }
+                
+                // 按顺序添加测试结果
+                addTestResultOrdered(testName, resultType, resultMessage, data.response_text || '', duration, order);
+                
+            } catch (error) {
+                addTestResultOrdered(testName, 'error', `测试错误: ${error.message}`, '', 0, order);
+            }
+        }
+        
+        // 显示/隐藏测试进度
+        function showTestProgress(show) {
+            const progressContainer = document.getElementById('testProgressContainer');
+            progressContainer.style.display = show ? 'block' : 'none';
+        }
+        
+        // 更新进度
+        function updateProgress(completed, total) {
+            const progressBar = document.getElementById('testProgressBar');
+            const progressText = document.getElementById('testProgressText');
+            const progressCount = document.getElementById('testProgressCount');
+            
+            const percentage = total > 0 ? (completed / total) * 100 : 0;
+            progressBar.style.width = `${percentage}%`;
+            progressText.textContent = completed === total ? '测试完成' : '正在执行测试...';
+            progressCount.textContent = `${completed}/${total}`;
+        }
+        
+        // 添加测试结果
+        function addTestResult(testName, type, message, responseContent, duration) {
+            const resultsContainer = document.getElementById('testResultsContainer');
+            const resultItem = document.createElement('div');
+            resultItem.className = `test-result-item ${type} mb-3`;
+            
+            const timestamp = new Date().toLocaleString('zh-CN');
+            const durationText = duration > 0 ? `${duration}ms` : '未知';
+            
+            resultItem.innerHTML = `
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h6 class="mb-0" style="font-size: 0.9rem;">${testName}</h6>
+                    <div>
+                        <span class="badge ${
+                            type === 'success' ? 'bg-success' :
+                            type === 'warning' ? 'bg-warning text-dark' :
+                            'bg-danger'
+                        }">${
+                            type === 'success' ? '成功' :
+                            type === 'warning' ? '警告' : '失败'
+                        }</span>
+                    </div>
+                </div>
+                <p class="mb-2" style="font-size: 0.85rem;">${message}</p>
+                <div class="mb-2">
+                    <small class="text-muted">响应时间: ${durationText} | ${timestamp}</small>
+                </div>
+                ${responseContent ? `
+                    <div class="test-result-content" style="font-size: 0.8rem; max-height: 150px; overflow-y: auto; overflow-x: auto; white-space: pre-wrap; word-break: break-all; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 0.375rem; padding: 0.5rem;">
+                        ${responseContent}
+                    </div>
+                ` : ''}
+            `;
+            
+            resultsContainer.appendChild(resultItem);
+            currentTestResults.push({
+                testName,
+                type,
+                message,
+                responseContent,
+                duration,
+                timestamp
+            });
+            
+            // 滚动到最新结果
+            resultItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        // 按顺序添加测试结果（用于并发执行）
+        function addTestResultOrdered(testName, type, message, responseContent, duration, order) {
+            const timestamp = new Date().toLocaleString('zh-CN');
+            
+            // 将结果存储到有序结果对象中
+            orderedResults[order] = {
+                testName,
+                type,
+                message,
+                responseContent,
+                duration,
+                timestamp
+            };
+            
+            // 按顺序显示所有可以显示的结果
+            displayOrderedResults();
+        }
+
+        // 显示有序结果
+        function displayOrderedResults() {
+            const resultsContainer = document.getElementById('testResultsContainer');
+            
+            // 按顺序显示结果
+            while (orderedResults[nextDisplayOrder]) {
+                const result = orderedResults[nextDisplayOrder];
+                const resultItem = document.createElement('div');
+                resultItem.className = `test-result-item ${result.type} mb-3`;
+                
+                const durationText = result.duration > 0 ? `${result.duration}ms` : '未知';
+                
+                resultItem.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <h6 class="mb-0" style="font-size: 0.9rem;">${result.testName}</h6>
+                        <div>
+                            <span class="badge ${
+                                result.type === 'success' ? 'bg-success' :
+                                result.type === 'warning' ? 'bg-warning text-dark' :
+                                'bg-danger'
+                            }">${
+                                result.type === 'success' ? '成功' :
+                                result.type === 'warning' ? '警告' : '失败'
+                            }</span>
+                        </div>
+                    </div>
+                    <p class="mb-2" style="font-size: 0.85rem;">${result.message}</p>
+                    <div class="mb-2">
+                        <small class="text-muted">响应时间: ${durationText} | ${result.timestamp}</small>
+                    </div>
+                    ${result.responseContent ? `
+                        <div class="test-result-content" style="font-size: 0.8rem; max-height: 150px; overflow-y: auto; overflow-x: auto; white-space: pre-wrap; word-break: break-all; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 0.375rem; padding: 0.5rem;">
+                            ${result.responseContent}
+                        </div>
+                    ` : ''}
+                `;
+                
+                resultsContainer.appendChild(resultItem);
+                currentTestResults.push(result);
+                
+                // 滚动到最新结果
+                resultItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                
+                // 删除已显示的结果并移动到下一个
+                delete orderedResults[nextDisplayOrder];
+                nextDisplayOrder++;
+            }
+        }
+        
+        // 更新按钮状态
+        function updateTestButtons(running) {
+            document.getElementById('executeBatchTestBtn').disabled = running;
+            document.getElementById('stopBatchTestBtn').style.display = running ? 'block' : 'none';
+        }
+        
+        // 清空结果
+        function clearResults() {
+            document.getElementById('testResultsContainer').innerHTML = `
+                <div class="text-muted text-center py-4">
+                    <i class="fas fa-info-circle me-2"></i>
+                    执行测试后结果将显示在这里
+                </div>
+            `;
+            currentTestResults = [];
+            orderedResults = {};
+            nextDisplayOrder = 1;
+        }
+        
+        // 复制结果
+        function copyResults() {
+            if (currentTestResults.length === 0) {
                 return;
             }
             
-            testResult.textContent = '正在执行API测试...';
+            // 创建格式化的文本内容
+            const textContent = currentTestResults.map(result => {
+                return `测试名称: ${result.testName}
+状态: ${result.type}
+消息: ${result.message}
+响应时间: ${result.duration}ms
+时间戳: ${result.timestamp}
+响应内容: ${result.responseContent || '无'}
+${'='.repeat(50)}`;
+            }).join('\n\n');
             
-            // 调用URL测试接口
-            fetch('/api/test_url', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    url: apiUrl
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    let responseContent = data.response_text || '无响应内容';
-                    
-                    // 尝试格式化JSON响应
-                    try {
-                        const jsonData = JSON.parse(responseContent);
-                        responseContent = JSON.stringify(jsonData, null, 2);
-                    } catch (e) {
-                        // 如果不是JSON，保持原样
-                    }
-                    
-                    // 限制显示长度，避免界面过长
-                    if (responseContent.length > 1500) {
-                        responseContent = responseContent.substring(0, 1500) + '\n\n... (内容过长，已截断)';
-                    }
-                    
-                    testResult.textContent = `测试成功！
-
-URL: ${apiUrl}
-状态码: ${data.status_code}
-响应时间: ${data.response_time}ms
-
-响应内容:
-${responseContent}`;
-                } else {
-                    testResult.textContent = `测试失败: ${data.message}`;
-                }
-            })
-            .catch(error => {
-                testResult.textContent = `测试出错: ${error.message}`;
-            });
+            // 使用现代剪贴板API
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(textContent).then(() => {
+                    showAlert('success', '测试结果已复制到剪贴板');
+                }).catch(err => {
+                    console.error('复制失败:', err);
+                    fallbackCopyTextToClipboard(textContent);
+                });
+            } else {
+                // 降级方案
+                fallbackCopyTextToClipboard(textContent);
+            }
         }
+        
+        // 降级复制方案
+        function fallbackCopyTextToClipboard(text) {
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-999999px';
+            textArea.style.top = '-999999px';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    showAlert('success', '测试结果已复制到剪贴板');
+                } else {
+                    showAlert('danger', '复制失败，请手动选择并复制');
+                }
+            } catch (err) {
+                console.error('复制失败:', err);
+                showAlert('danger', '复制失败，请手动选择并复制');
+            } finally {
+                document.body.removeChild(textArea);
+            }
+        }
+
+
         
         // 高亮当前页面的菜单项
         function highlightCurrentPage() {
