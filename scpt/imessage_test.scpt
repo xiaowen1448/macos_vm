@@ -36,17 +36,14 @@ end run
 -- 读取Apple ID信息
 on readAppleIDInfo()
 	try
-		-- 获取脚本所在目录的/Users/wx/Documents/appleid.txt文件
-		set scriptPath to path to me
-		tell application "Finder"
-			set scriptFolder to container of scriptPath
-		end tell
-		set appleIDFile to (scriptFolder as string) & "/Users/wx/Documents/appleid.txt"
+		-- 获取用户Documents目录下的appleid.txt文件
+		set documentsPath to (path to documents folder) as string
+		set appleIDFile to documentsPath & "appleid.txt"
 		
 		-- 检查文件是否存在
 		tell application "System Events"
 			if not (exists file appleIDFile) then
-				error "/Users/wx/Documents/appleid.txt 文件不存在，请在脚本同目录下创建该文件"
+				error "~/Documents/appleid.txt 文件不存在，请在Documents目录下创建该文件"
 			end if
 		end tell
 		
