@@ -18,9 +18,9 @@ on run
 		-- 步骤3：打开账户标签页
 		openAccountsTab()
 		
-		-- 步骤4：登录Apple ID
+		-- 步骤4：登录Apple ID（修改后的逻辑）
 		if accountsTabOpened then
-			loginAppleID(appleID, userPassword)
+			loginAppleIDNewLogic(appleID, userPassword)
 		end if
 		
 		-- 返回JSON结果
@@ -345,45 +345,264 @@ on openAccountsTab()
 	end try
 end openAccountsTab
 
--- 登录Apple ID
-on loginAppleID(appleID, userPassword)
+-- 新的登录逻辑：先输入信息，再寻找登录按钮
+on loginAppleIDNewLogic(appleID, userPassword)
 	try
 		tell application "System Events"
 			tell process "Messages"
 				-- 等待账户页面加载
 				delay 2
+			end tell
+		end tell
+		
+		-- 第一步：先尝试填写Apple ID和密码
+		set inputCompleted to my fillLoginCredentials(appleID, userPassword)
+		
+		-- 第二步：如果成功填写信息，再寻找并点击登录按钮
+		if inputCompleted then
+			my findAndClickLoginButton()
+			set end of executionResults to {stepName:"step8_login", success:true, message:"Apple ID登录流程完成", timestamp:(current date) as string}
+		else
+			-- 如果没有找到输入框，可能需要先点击登录按钮打开登录界面
+			set loginDialogOpened to my findAndClickLoginButton()
+			if loginDialogOpened then
+				delay 3 -- 等待登录对话框出现
+				my fillLoginCredentials(appleID, userPassword)
+				-- 再次尝试确认登录
+				my confirmLoginAfterInput()
+			end if
+			set end of executionResults to {stepName:"step8_login", success:true, message:"通过先点击登录按钮再输入信息的方式完成登录", timestamp:(current date) as string}
+		end if
+		
+	on error errMsg
+		set end of executionResults to {stepName:"step8_login", success:false, message:"登录过程失败: " & errMsg, timestamp:(current date) as string}
+		set end of errorMessages to "登录失败: " & errMsg
+		set overallSuccess to false
+	end try
+end loginAppleIDNewLogic
+
+-- 填写登录凭据（Apple ID和密码）
+on fillLoginCredentials(appleID, userPassword)
+	try
+		tell application "System Events"
+			tell process "Messages"
+				set credentialsFilled to false
 				
-				-- 查找登录相关的按钮或链接
-				set loginStarted to false
+				-- 等待登录界面加载
+				delay 2
 				
-				-- 方法1：查找"登录"按钮
-				try
-					if exists (button "登录" of window 1) then
-						click button "登录" of window 1
-						set loginStarted to true
-						delay 2
-					end if
-				end try
+				-- 方法1：在主窗口中查找文本输入框
+				set textFields to every text field of window 1
 				
-				-- 方法2：查找"Sign In"按钮
-				if not loginStarted then
+				if length of textFields >= 2 then
 					try
-						if exists (button "Sign In" of window 1) then
-							click button "Sign In" of window 1
-							set loginStarted to true
-							delay 2
+						-- 填写Apple ID
+						set value of (item 1 of textFields) to ""
+						set value of (item 1 of textFields) to appleID
+						delay 0.5
+						
+						-- 填写密码
+						set value of (item 2 of textFields) to ""
+						set value of (item 2 of textFields) to userPassword
+						delay 0.5
+						
+						set credentialsFilled to true
+						set end of executionResults to {stepName:"step8a_fill_credentials", success:true, message:"在主窗口成功填写Apple ID和密码", timestamp:(current date) as string}
+					on error
+						-- 如果直接设置值失败，尝试点击和键入的方式
+						click (item 1 of textFields)
+						delay 0.5
+						keystroke "a" using {command down} -- 全选
+						keystroke appleID
+						
+						delay 0.5
+						key code 48 -- Tab键切换到密码框
+						delay 0.5
+						keystroke "a" using {command down} -- 全选
+						keystroke userPassword
+						
+						set credentialsFilled to true
+						set end of executionResults to {stepName:"step8a_fill_credentials", success:true, message:"在主窗口通过键盘输入方式成功填写凭据", timestamp:(current date) as string}
+					end try
+				end if
+				
+				-- 方法2：在sheet对话框中查找输入框
+				if not credentialsFilled then
+					try
+						set allSheets to every sheet of window 1
+						repeat with currentSheet in allSheets
+							set sheetTextFields to every text field of currentSheet
+							if length of sheetTextFields >= 2 then
+								-- 填写Apple ID
+								set value of (item 1 of sheetTextFields) to ""
+								set value of (item 1 of sheetTextFields) to appleID
+								delay 0.5
+								
+								-- 填写密码
+								set value of (item 2 of sheetTextFields) to ""
+								set value of (item 2 of sheetTextFields) to userPassword
+								delay 0.5
+								
+								set credentialsFilled to true
+								set end of executionResults to {stepName:"step8a_fill_credentials", success:true, message:"在对话框中成功填写凭据", timestamp:(current date) as string}
+								exit repeat
+							else if length of sheetTextFields = 1 then
+								-- 只有一个输入框的情况
+								set value of (item 1 of sheetTextFields) to appleID
+								delay 0.5
+								key code 48 -- Tab键
+								delay 0.5
+								keystroke userPassword
+								set credentialsFilled to true
+								set end of executionResults to {stepName:"step8a_fill_credentials", success:true, message:"在对话框中通过单个输入框填写凭据", timestamp:(current date) as string}
+								exit repeat
+							end if
+						end repeat
+					end try
+				end if
+				
+				-- 方法3：尝试通用的键盘输入方法
+				if not credentialsFilled then
+					try
+						-- 尝试直接输入（假设焦点在第一个输入框）
+						keystroke "a" using {command down} -- 全选
+						keystroke appleID
+						delay 0.5
+						key code 48 -- Tab键
+						delay 0.5
+						keystroke "a" using {command down} -- 全选
+						keystroke userPassword
+						delay 0.5
+						
+						set credentialsFilled to true
+						set end of executionResults to {stepName:"step8a_fill_credentials", success:true, message:"通过通用键盘输入方式填写凭据", timestamp:(current date) as string}
+					end try
+				end if
+				
+				-- 方法4：查找所有可能的输入元素
+				if not credentialsFilled then
+					try
+						-- 查找所有UI元素，包括可能的输入框
+						set allElements to entire contents of window 1
+						set foundTextFields to {}
+						
+						repeat with element in allElements
+							try
+								if (class of element is text field) or (class of element is combo box) then
+									set end of foundTextFields to element
+								end if
+							end try
+						end repeat
+						
+						if length of foundTextFields >= 1 then
+							click (item 1 of foundTextFields)
+							delay 0.5
+							keystroke "a" using {command down}
+							keystroke appleID
+							
+							if length of foundTextFields >= 2 then
+								click (item 2 of foundTextFields)
+								delay 0.5
+								keystroke "a" using {command down}
+								keystroke userPassword
+							else
+								key code 48 -- Tab键
+								delay 0.5
+								keystroke userPassword
+							end if
+							
+							set credentialsFilled to true
+							set end of executionResults to {stepName:"step8a_fill_credentials", success:true, message:"通过搜索所有元素找到输入框并填写", timestamp:(current date) as string}
 						end if
 					end try
 				end if
 				
-				-- 方法3：查找包含"登录"的任何按钮
-				if not loginStarted then
+				if not credentialsFilled then
+					set end of executionResults to {stepName:"step8a_fill_credentials", success:false, message:"未找到合适的输入框", timestamp:(current date) as string}
+				end if
+				
+				return credentialsFilled
+			end tell
+		end tell
+	on error errMsg
+		set end of executionResults to {stepName:"step8a_fill_credentials", success:false, message:"填写凭据失败: " & errMsg, timestamp:(current date) as string}
+		return false
+	end try
+end fillLoginCredentials
+
+-- 寻找并点击登录按钮
+on findAndClickLoginButton()
+	try
+		tell application "System Events"
+			tell process "Messages"
+				set loginButtonClicked to false
+				
+				-- 先等待界面稳定
+				delay 1
+				
+				-- 方法1：在主窗口查找"登录"按钮
+				try
+					set allButtons to every button of window 1
+					repeat with btn in allButtons
+						set buttonName to name of btn as string
+						if buttonName contains "登录" or buttonName contains "Sign In" or buttonName contains "登入" or buttonName contains "iMessage" then
+							click btn
+							set loginButtonClicked to true
+							set end of executionResults to {stepName:"step8b_click_login", success:true, message:"在主窗口成功点击登录按钮: " & buttonName, timestamp:(current date) as string}
+							delay 2 -- 等待登录界面出现
+							exit repeat
+						end if
+					end repeat
+				end try
+				
+				-- 方法2：在sheet对话框中查找登录按钮
+				if not loginButtonClicked then
 					try
-						set allButtons to every button of window 1
-						repeat with btn in allButtons
-							if (name of btn as string) contains "登录" or (name of btn as string) contains "Sign" then
+						set allSheets to every sheet of window 1
+						repeat with currentSheet in allSheets
+							set sheetButtons to every button of currentSheet
+							repeat with sheetButton in sheetButtons
+								try
+									set buttonName to name of sheetButton
+									if buttonName contains "登录" or buttonName contains "Sign In" or buttonName contains "登入" then
+										click sheetButton
+										set loginButtonClicked to true
+										set end of executionResults to {stepName:"step8b_click_login", success:true, message:"在对话框中成功点击登录按钮: " & buttonName, timestamp:(current date) as string}
+										delay 2
+										exit repeat
+									end if
+								end try
+							end repeat
+							if loginButtonClicked then exit repeat
+						end repeat
+					end try
+				end if
+				
+				-- 方法3：查找"添加账户"、"Add Account"等按钮
+				if not loginButtonClicked then
+					try
+						repeat with btn in (every button of window 1)
+							set buttonName to name of btn as string
+							if buttonName contains "添加" or buttonName contains "Add" or buttonName contains "新增" or buttonName contains "+" then
 								click btn
-								set loginStarted to true
+								set loginButtonClicked to true
+								set end of executionResults to {stepName:"step8b_click_login", success:true, message:"点击添加账户按钮: " & buttonName, timestamp:(current date) as string}
+								delay 3 -- 等待添加账户界面出现
+								exit repeat
+							end if
+						end repeat
+					end try
+				end if
+				
+				-- 方法4：如果没找到明确的登录按钮，查找"确定"、"OK"等按钮
+				if not loginButtonClicked then
+					try
+						repeat with btn in (every button of window 1)
+							set buttonName to name of btn as string
+							if buttonName contains "确定" or buttonName contains "OK" or buttonName contains "好" or buttonName contains "Continue" then
+								click btn
+								set loginButtonClicked to true
+								set end of executionResults to {stepName:"step8b_click_login", success:true, message:"通过确定按钮操作: " & buttonName, timestamp:(current date) as string}
 								delay 2
 								exit repeat
 							end if
@@ -391,127 +610,60 @@ on loginAppleID(appleID, userPassword)
 					end try
 				end if
 				
-				-- 如果找到登录按钮，尝试填写信息
-				if loginStarted then
-					delay 3 -- 等待登录窗口出现
-					
-					-- 填写Apple ID
-					fillAppleIDField(appleID)
-					
-					-- 填写密码
-					fillPasswordField(userPassword)
-					
-					-- 点击确认登录
-					confirmLogin()
-					
-					set end of executionResults to {stepName:"step8_login", success:true, message:"Apple ID登录流程完成", timestamp:(current date) as string}
-				else
-					-- 如果没有找到登录按钮，可能已经登录或需要其他操作
-					set end of executionResults to {stepName:"step8_login", success:false, message:"未找到登录按钮，可能已经登录", timestamp:(current date) as string}
-				end if
-			end tell
-		end tell
-		
-	on error errMsg
-		set end of executionResults to {stepName:"step8_login", success:false, message:"登录过程失败: " & errMsg, timestamp:(current date) as string}
-		set end of errorMessages to "登录失败: " & errMsg
-		set overallSuccess to false
-	end try
-end loginAppleID
-
--- 填写Apple ID字段
-on fillAppleIDField(appleID)
-	try
-		tell application "System Events"
-			tell process "Messages"
-				-- 查找用户名/邮箱输入框
-				set fieldFilled to false
-				
-				-- 方法1：查找text field
-				try
-					set textFields to every text field of window 1
-					if length of textFields > 0 then
-						set value of (item 1 of textFields) to appleID
-						set fieldFilled to true
-					end if
-				end try
-				
-				-- 方法2：查找包含placeholder的输入框
-				if not fieldFilled then
+				-- 方法5：使用回车键（作为最后的尝试）
+				if not loginButtonClicked then
 					try
-						repeat with tf in (every text field of window 1)
-							-- 点击输入框并输入
-							click tf
-							delay 0.5
-							keystroke appleID
-							set fieldFilled to true
-							exit repeat
-						end repeat
+						key code 36 -- Return key
+						set loginButtonClicked to true
+						set end of executionResults to {stepName:"step8b_click_login", success:true, message:"通过回车键确认登录", timestamp:(current date) as string}
+						delay 2
 					end try
 				end if
 				
-				-- 方法3：通过tab键导航
-				if not fieldFilled then
-					key code 48 -- Tab键
-					delay 0.5
-					keystroke appleID
-					set fieldFilled to true
+				if not loginButtonClicked then
+					set end of executionResults to {stepName:"step8b_click_login", success:false, message:"未找到登录确认按钮", timestamp:(current date) as string}
 				end if
 				
+				return loginButtonClicked
 			end tell
 		end tell
 	on error errMsg
-		error "填写Apple ID失败: " & errMsg
+		set end of executionResults to {stepName:"step8b_click_login", success:false, message:"点击登录按钮失败: " & errMsg, timestamp:(current date) as string}
+		return false
 	end try
-end fillAppleIDField
+end findAndClickLoginButton
 
--- 填写密码字段
-on fillPasswordField(userPassword)
+-- 输入信息后确认登录
+on confirmLoginAfterInput()
 	try
 		tell application "System Events"
 			tell process "Messages"
-				-- 切换到密码字段（通常是下一个字段）
-				key code 48 -- Tab键
-				delay 0.5
+				delay 1
 				
-				-- 输入密码
-				keystroke userPassword
-				delay 0.5
-				
-			end tell
-		end tell
-	on error errMsg
-		error "填写密码失败: " & errMsg
-	end try
-end fillPasswordField
-
--- 确认登录
-on confirmLogin()
-	try
-		tell application "System Events"
-			tell process "Messages"
-				-- 方法1：按回车键
+				-- 尝试多种确认方式
+				-- 方法1：回车键
 				key code 36 -- Return key
 				delay 1
 				
 				-- 方法2：查找确认按钮
 				try
-					if exists (button "确定" of window 1) then
-						click button "确定" of window 1
-					else if exists (button "OK" of window 1) then
-						click button "OK" of window 1
-					else if exists (button "登录" of window 1) then
-						click button "登录" of window 1
-					else if exists (button "Sign In" of window 1) then
-						click button "Sign In" of window 1
-					end if
+					set allButtons to every button of window 1
+					repeat with btn in allButtons
+						set buttonName to name of btn as string
+						if buttonName contains "登录" or buttonName contains "Sign In" or buttonName contains "确定" or buttonName contains "OK" or buttonName contains "Continue" then
+							click btn
+							exit repeat
+						end if
+					end repeat
 				end try
+				
+				set end of executionResults to {stepName:"step8c_confirm_login", success:true, message:"执行登录确认操作", timestamp:(current date) as string}
 			end tell
 		end tell
 	on error errMsg
-		error "确认登录失败: " & errMsg
+		set end of executionResults to {stepName:"step8c_confirm_login", success:false, message:"确认登录失败: " & errMsg, timestamp:(current date) as string}
 	end try
-end confirmLogin
+end confirmLoginAfterInput
 
 -- 生成JSON结果
 on generateJSONResult()
