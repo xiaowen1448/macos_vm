@@ -6228,8 +6228,22 @@ def api_batch_im_login():
                 
                 logger.info(f"创建临时文件: {temp_file_path}，包含 1 个Apple ID")
                 
-                # 使用SCP传输文件到虚拟机
-                remote_file_path = f"/Users/{vm_username}/{temp_file_name}"
+                # 确保Documents目录存在
+                mkdir_cmd = [
+                    'ssh',
+                    '-o', 'StrictHostKeyChecking=no',
+                    f"{vm_username}@{vm_ip}",
+                    'mkdir -p ~/Documents'
+                ]
+                
+                logger.info(f"确保Documents目录存在: {' '.join(mkdir_cmd)}")
+                mkdir_result = subprocess.run(mkdir_cmd, capture_output=True, text=True, timeout=30)
+                
+                if mkdir_result.returncode != 0:
+                    logger.warning(f"创建Documents目录失败，但继续尝试传输文件: {mkdir_result.stderr}")
+                
+                # 使用SCP传输文件到虚拟机的Documents目录，文件名固定为appleid.txt
+                remote_file_path = f"/Users/{vm_username}/Documents/appleid.txt"
                 
                 scp_cmd = [
                     'scp',
@@ -6242,11 +6256,11 @@ def api_batch_im_login():
                 result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=60)
                 
                 if result.returncode == 0:
-                    logger.info(f"成功传输Apple ID文件到虚拟机 {vm_name}")
+                    logger.info(f"成功传输Apple ID文件到虚拟机 {vm_name} 的Documents目录")
                     results.append({
                         'vm_name': vm_name,
                         'success': True,
-                        'message': f'Apple ID文件已成功传输到虚拟机 {vm_name}',
+                        'message': f'appleid.txt文件已成功传输到虚拟机 {vm_name} 的Documents目录',
                         'remote_path': remote_file_path,
                         'apple_id_count': len(vm_apple_ids),
                         'apple_id_range': f"{i+1}"
@@ -6369,7 +6383,7 @@ def api_batch_im_login():
         
         return jsonify({
             'success': True,
-            'message': f'批量IM登录任务完成，成功传输到 {success_count}/{total_count} 个虚拟机，共分配 {total_allocated} 个Apple ID',
+            'message': f'批量IM登录任务完成，appleid.txt文件已成功传输到 {success_count}/{total_count} 个虚拟机的Documents目录，共分配 {total_allocated} 个Apple ID',
             'results': results,
             'summary': {
                 'total_vms': total_count,
