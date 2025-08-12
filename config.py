@@ -59,3 +59,14 @@ project_root = r'D:\macos_vm'
 
 # 日志目录
 logs_dir = r'logs'
+
+#ScptRunner客户端安装路径
+ScptRunner_path=f'/Users/wx/Documents/ScptRunner/'
+
+#ScptRunner客户日志路径
+
+ScptRunner_path=f'/Users/wx/Documents/ScptRunner/logs/'
+
+
+#appleid临时文本路径
+appleidtxt_path=f'/Users/wx/Documents/'
