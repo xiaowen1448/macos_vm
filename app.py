@@ -7104,5 +7104,128 @@ def api_delete_client():
             'message': f'删除失败: {str(e)}'
         })
 
+@app.route('/api/execute_im_test', methods=['POST'])
+@login_required
+def api_execute_im_test():
+    """执行IM测试脚本"""
+    try:
+        data = request.get_json()
+        client_id = data.get('client_id', '')
+        script_name = data.get('script_name', 'imessage_test.scpt')
+        
+        if not client_id:
+            return jsonify({
+                'success': False,
+                'message': '客户端ID不能为空'
+            })
+        
+        logger.info(f"开始执行IM测试: 客户端ID={client_id}, 脚本={script_name}")
+        
+        # 从客户端ID中提取IP地址
+        # 客户端ID格式通常为 "client_192_168_119_156"
+        try:
+            ip_parts = client_id.replace('client_', '').split('_')
+            if len(ip_parts) == 4:
+                client_ip = '.'.join(ip_parts)
+            else:
+                return jsonify({
+                    'success': False,
+                    'message': f'无效的客户端ID格式: {client_id}'
+                })
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'message': f'解析客户端IP失败: {str(e)}'
+            })
+        
+        logger.info(f"解析得到客户端IP: {client_ip}")
+        
+        # 检查客户端是否在线（检查8787端口）
+        import socket
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(5)
+            result = sock.connect_ex((client_ip, 8787))
+            sock.close()
+            
+            if result != 0:
+                return jsonify({
+                    'success': False,
+                    'message': f'客户端 {client_ip} 不在线或8787端口未开放'
+                })
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'message': f'检查客户端连接失败: {str(e)}'
+            })
+        
+        # 通过ScptRunner API执行脚本
+        import requests
+        try:
+            # 构建ScptRunner API URL - 使用GET请求和查询参数格式
+            scptrunner_url = f"http://{client_ip}:8787/script?name={script_name}"
+            
+            logger.info(f"调用ScptRunner API: {scptrunner_url}")
+            logger.debug(f"脚本名称: {script_name}")
+            
+            # 发送GET请求到ScptRunner
+            response = requests.get(
+                scptrunner_url, 
+                timeout=120  # 120秒超时，IM测试需要更多时间进行UI交互
+            )
+            
+            if response.status_code == 200:
+                # ScptRunner的GET请求通常直接返回脚本执行结果
+                output = response.text
+                logger.info(f"IM测试脚本执行成功，输出长度: {len(output)}")
+                
+                return jsonify({
+                    'success': True,
+                    'message': 'IM测试脚本执行成功',
+                    'output': output,
+                    'client_ip': client_ip,
+                    'script_name': script_name
+                })
+            else:
+                logger.error(f"ScptRunner API调用失败，状态码: {response.status_code}")
+                error_text = response.text if response.text else '无响应内容'
+                return jsonify({
+                    'success': False,
+                    'message': f'ScptRunner API调用失败，状态码: {response.status_code}',
+                    'output': error_text,
+                    'client_ip': client_ip
+                })
+                
+        except requests.exceptions.Timeout:
+            logger.warning(f"ScptRunner API调用超时: {client_ip}")
+            return jsonify({
+                'success': False,
+                'message': 'IM测试脚本执行超时（120秒），请检查脚本是否正常运行或UI元素查找是否失败',
+                'client_ip': client_ip
+            })
+            
+        except requests.exceptions.ConnectionError:
+            logger.error(f"无法连接到ScptRunner: {client_ip}")
+            return jsonify({
+                'success': False,
+                'message': f'无法连接到ScptRunner客户端 {client_ip}:8787',
+                'client_ip': client_ip
+            })
+            
+        except Exception as e:
+            logger.error(f"调用ScptRunner API异常: {str(e)}")
+            return jsonify({
+                'success': False,
+                'message': f'调用ScptRunner API失败: {str(e)}',
+                'client_ip': client_ip
+            })
+        
+    except Exception as e:
+        logger.error(f"执行IM测试失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'执行IM测试失败: {str(e)}'
+        })
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

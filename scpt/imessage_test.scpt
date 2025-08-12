@@ -1,341 +1,559 @@
--- 系统对话框处理脚本
--- 处理Apple ID登录弹窗
-tell application "Messages" to activate
-delay 3
+-- Apple ID 自动登录完整脚本
+-- 格式要求：belle10665@gmail.com----GcxCmGhJY7h3----573018243428----http://appleid-phone-api.vip/api/get_sms.php?id=3837058330
 
--- 初始化结果变量
-set executionResults to {}
-set overallSuccess to true
-set errorMessages to {}
+property executionResults : {}
+property errorMessages : {}
+property overallSuccess : true
+property accountsTabOpened : false
 
-tell application "System Events"
-	tell process "Messages"
-		set firstButtonClicked to false
+-- 主函数
+on run
+	try
+		-- 步骤1：读取Apple ID信息
+		set {appleID, userPassword} to readAppleIDInfo()
 		
-		-- 第一步: 在Messages进程中深度查找"以后"按钮
-		try
-			-- 获取所有UI元素
-			set allElements to entire contents
-			repeat with element in allElements
-				try
-					if class of element is button then
-						try
-							set elementName to name of element
-							if elementName contains "以后" or elementName contains "Later" or elementName contains "稍后" then
-								click element
-								--log "第一步成功: 在UI树中找到并点击: " & elementName
-								set firstButtonClicked to true
-								set end of executionResults to {stepName:"step1_later_button", success:true, message:"成功点击'以后'按钮: " & elementName, timestamp:(current date) as string}
-								exit repeat
-							end if
-						end try
-					end if
-				end try
-			end repeat
-			
-			if not firstButtonClicked then
-				set end of executionResults to {stepName:"step1_later_button", success:false, message:"未找到'以后'按钮", timestamp:(current date) as string}
-				set end of errorMessages to "第一步失败：未找到'以后'按钮"
-				set overallSuccess to false
+		-- 步骤2：切换到Messages应用并处理弹窗
+		switchToMessagesAndHandleDialogs()
+		
+		-- 步骤3：打开账户标签页
+		openAccountsTab()
+		
+		-- 步骤4：登录Apple ID
+		if accountsTabOpened then
+			loginAppleID(appleID, userPassword)
+		end if
+		
+		-- 返回JSON结果
+		return generateJSONResult()
+		
+	on error errMsg
+		set end of errorMessages to "脚本执行失败: " & errMsg
+		set overallSuccess to false
+		return generateJSONResult()
+	end try
+end run
+
+-- 读取Apple ID信息
+on readAppleIDInfo()
+	try
+		-- 获取脚本所在目录的appleid.txt文件
+		set scriptPath to path to me
+		tell application "Finder"
+			set scriptFolder to container of scriptPath
+		end tell
+		set appleIDFile to (scriptFolder as string) & "appleid.txt"
+		
+		-- 检查文件是否存在
+		tell application "System Events"
+			if not (exists file appleIDFile) then
+				error "appleid.txt 文件不存在，请在脚本同目录下创建该文件"
 			end if
-		on error errMsg
-			set end of executionResults to {stepName:"step1_later_button", success:false, message:"第一步执行错误: " & errMsg, timestamp:(current date) as string}
-			set end of errorMessages to "第一步执行错误: " & errMsg
-			set overallSuccess to false
-		end try
+		end tell
 		
-		-- 如果第一个按钮成功点击，等待3秒后处理对话框
-		if firstButtonClicked then
-			--log "等待3秒后查找跳过按钮..."
-			delay 3
+		-- 读取文件内容
+		set fileContent to read file appleIDFile as string
+		
+		-- 获取第一行（使用换行符分割）
+		set AppleScript's text item delimiters to return
+		set fileLines to text items of fileContent
+		if length of fileLines = 1 then
+			-- 尝试使用 linefeed 分割
+			set AppleScript's text item delimiters to linefeed
+			set fileLines to text items of fileContent
+		end if
+		set AppleScript's text item delimiters to ""
+		
+		-- 找到第一行有内容的行
+		set firstLine to ""
+		repeat with i from 1 to length of fileLines
+			set lineText to item i of fileLines as string
+			if length of lineText > 0 then
+				set firstLine to lineText
+				exit repeat
+			end if
+		end repeat
+		
+		if firstLine is not "" then
+			-- 解析格式：email----password----phone----api_url
+			set AppleScript's text item delimiters to "----"
+			set accountParts to text items of firstLine
+			set AppleScript's text item delimiters to ""
 			
-			-- 第二步: 在对话框中查找"跳过"按钮
-			set secondButtonClicked to false
+			if length of accountParts >= 2 then
+				-- 直接获取字符串，不进行复杂处理
+				set appleID to (item 1 of accountParts) as string
+				set userPassword to (item 2 of accountParts) as string
+				
+				-- 简单去除前后空格
+				if appleID starts with " " then set appleID to text 2 thru -1 of appleID
+				if appleID ends with " " then set appleID to text 1 thru -2 of appleID
+				if userPassword starts with " " then set userPassword to text 2 thru -1 of userPassword
+				if userPassword ends with " " then set userPassword to text 1 thru -2 of userPassword
+				
+				set end of executionResults to {stepName:"step1_read_file", success:true, message:"成功读取Apple ID: " & appleID, timestamp:(current date) as string}
+				
+				return {appleID, userPassword}
+			else
+				error "文件格式不正确，需要包含----分隔符"
+			end if
+		else
+			error "文件为空或没有有效内容"
+		end if
+		
+	on error errMsg
+		set end of executionResults to {stepName:"step1_read_file", success:false, message:"读取文件失败: " & errMsg, timestamp:(current date) as string}
+		set end of errorMessages to "文件读取失败: " & errMsg
+		set overallSuccess to false
+		error errMsg
+	end try
+end readAppleIDInfo
+
+-- 切换到Messages应用并处理系统弹窗
+on switchToMessagesAndHandleDialogs()
+	try
+		tell application "Messages" to activate
+		delay 3
+		set end of executionResults to {stepName:"step2_switch_app", success:true, message:"成功切换到Messages应用", timestamp:(current date) as string}
+		
+		-- 处理系统弹窗
+		handleSystemDialogs()
+		
+	on error errMsg
+		set end of executionResults to {stepName:"step2_switch_app", success:false, message:"切换到Messages失败: " & errMsg, timestamp:(current date) as string}
+		set end of errorMessages to "应用切换失败: " & errMsg
+		set overallSuccess to false
+		error errMsg
+	end try
+end switchToMessagesAndHandleDialogs
+
+-- 处理系统对话框
+on handleSystemDialogs()
+	tell application "System Events"
+		tell process "Messages"
+			set firstButtonClicked to false
+			
+			-- 第一步: 查找"以后"按钮
 			try
-				set allSheets to every sheet of window 1
-				repeat with currentSheet in allSheets
-					set sheetButtons to every button of currentSheet
-					repeat with sheetButton in sheetButtons
-						try
-							set buttonName to name of sheetButton
-							if buttonName contains "跳过" or buttonName contains "Skip" or buttonName contains "skip" then
-								click sheetButton
-								--log "第二步成功: 在对话框中找到并点击了按钮: " & buttonName
-								set secondButtonClicked to true
-								set end of executionResults to {stepName:"step2_skip_button", success:true, message:"成功在对话框中点击'跳过'按钮: " & buttonName, timestamp:(current date) as string}
-								exit repeat
-							end if
-						end try
-					end repeat
-					if secondButtonClicked then exit repeat
-				end repeat
-			end try
-			
-			-- 如果在sheet中没找到，尝试其他位置
-			if not secondButtonClicked then
-				try
-					-- 尝试在主窗口中查找
-					set allButtons to every button of window 1
-					repeat with currentButton in allButtons
-						try
-							set buttonName to name of currentButton
-							if buttonName contains "跳过" or buttonName contains "Skip" or buttonName contains "skip" then
-								click currentButton
-								--log "第二步成功: 在主窗口中找到并点击了按钮: " & buttonName
-								set secondButtonClicked to true
-								set end of executionResults to {stepName:"step2_skip_button", success:true, message:"成功在主窗口中点击'跳过'按钮: " & buttonName, timestamp:(current date) as string}
-								exit repeat
-							end if
-						end try
-					end repeat
-				end try
-			end if
-			
-			-- 如果还没找到，进行全局搜索
-			if not secondButtonClicked then
-				try
-					set allElements to entire contents
-					repeat with element in allElements
-						try
-							if class of element is button then
+				set allElements to entire contents
+				repeat with element in allElements
+					try
+						if class of element is button then
+							try
 								set elementName to name of element
-								if elementName contains "跳过" or elementName contains "Skip" or elementName contains "skip" then
+								if elementName contains "以后" or elementName contains "Later" or elementName contains "稍后" then
 									click element
-									--log "第二步成功: 全局搜索找到并点击: " & elementName
-									set secondButtonClicked to true
-									set end of executionResults to {stepName:"step2_skip_button", success:true, message:"成功通过全局搜索点击'跳过'按钮: " & elementName, timestamp:(current date) as string}
+									set firstButtonClicked to true
+									set end of executionResults to {stepName:"step3_later_button", success:true, message:"成功点击'以后'按钮: " & elementName, timestamp:(current date) as string}
 									exit repeat
 								end if
-							end if
-						end try
-					end repeat
-				end try
-			end if
-			
-			if not secondButtonClicked then
-				set end of executionResults to {stepName:"step2_skip_button", success:false, message:"未找到'跳过'按钮", timestamp:(current date) as string}
-				set end of errorMessages to "第二步失败：未找到'跳过'按钮"
-				set overallSuccess to false
-			end if
-			
-			-- 第三步: 如果前两个按钮都成功，继续点击"取消"按钮
-			if secondButtonClicked then
-				--log "前两步完成，开始查找取消按钮..."
-				delay 2
+							end try
+						end if
+					end try
+				end repeat
 				
-				set thirdButtonClicked to false
+				if not firstButtonClicked then
+					set end of executionResults to {stepName:"step3_later_button", success:false, message:"未找到'以后'按钮", timestamp:(current date) as string}
+				end if
+			on error errMsg
+				set end of executionResults to {stepName:"step3_later_button", success:false, message:"查找'以后'按钮错误: " & errMsg, timestamp:(current date) as string}
+			end try
+			
+			-- 如果第一个按钮成功点击，处理后续对话框
+			if firstButtonClicked then
+				delay 3
 				
-				-- 在sheet对话框中查找取消按钮
+				-- 第二步: 查找"跳过"按钮
+				set secondButtonClicked to false
 				try
+					-- 在sheet对话框中查找
 					set allSheets to every sheet of window 1
 					repeat with currentSheet in allSheets
 						set sheetButtons to every button of currentSheet
 						repeat with sheetButton in sheetButtons
 							try
 								set buttonName to name of sheetButton
-								if buttonName contains "取消" or buttonName contains "Cancel" or buttonName contains "cancel" or buttonName contains "关闭" or buttonName contains "Close" then
+								if buttonName contains "跳过" or buttonName contains "Skip" or buttonName contains "skip" then
 									click sheetButton
-									--	log "第三步成功: 在对话框中找到并点击了按钮: " & buttonName
-									set thirdButtonClicked to true
-									set end of executionResults to {stepName:"step3_cancel_button", success:true, message:"成功在对话框中点击'取消'按钮: " & buttonName, timestamp:(current date) as string}
+									set secondButtonClicked to true
+									set end of executionResults to {stepName:"step4_skip_button", success:true, message:"成功在对话框中点击'跳过'按钮: " & buttonName, timestamp:(current date) as string}
 									exit repeat
 								end if
 							end try
 						end repeat
-						if thirdButtonClicked then exit repeat
+						if secondButtonClicked then exit repeat
 					end repeat
-				end try
-				
-				-- 如果在sheet中没找到取消按钮，尝试其他位置
-				if not thirdButtonClicked then
-					try
-						-- 尝试在主窗口中查找
-						set allButtons to every button of window 1
-						repeat with currentButton in allButtons
-							try
-								set buttonName to name of currentButton
-								if buttonName contains "取消" or buttonName contains "Cancel" or buttonName contains "cancel" or buttonName contains "关闭" or buttonName contains "Close" then
-									click currentButton
-									--log "第三步成功: 在主窗口中找到并点击了按钮: " & buttonName
-									set thirdButtonClicked to true
-									set end of executionResults to {stepName:"step3_cancel_button", success:true, message:"成功在主窗口中点击'取消'按钮: " & buttonName, timestamp:(current date) as string}
-									exit repeat
-								end if
-							end try
-						end repeat
-					end try
-				end if
-				
-				-- 如果还没找到，进行全局搜索取消按钮
-				if not thirdButtonClicked then
-					try
+					
+					-- 如果在sheet中没找到，尝试全局搜索
+					if not secondButtonClicked then
 						set allElements to entire contents
 						repeat with element in allElements
 							try
 								if class of element is button then
 									set elementName to name of element
-									if elementName contains "取消" or elementName contains "Cancel" or elementName contains "cancel" or elementName contains "关闭" or elementName contains "Close" then
+									if elementName contains "跳过" or elementName contains "Skip" or elementName contains "skip" then
 										click element
-										--	log "第三步成功: 全局搜索找到并点击: " & elementName
-										set thirdButtonClicked to true
-										set end of executionResults to {stepName:"step3_cancel_button", success:true, message:"成功通过全局搜索点击'取消'按钮: " & elementName, timestamp:(current date) as string}
+										set secondButtonClicked to true
+										set end of executionResults to {stepName:"step4_skip_button", success:true, message:"成功通过全局搜索点击'跳过'按钮: " & elementName, timestamp:(current date) as string}
 										exit repeat
 									end if
 								end if
 							end try
 						end repeat
-					end try
-				end if
-				
-				if not thirdButtonClicked then
-					set end of executionResults to {stepName:"step3_cancel_button", success:false, message:"未找到'取消'按钮", timestamp:(current date) as string}
-					set end of errorMessages to "第三步失败：未找到'取消'按钮"
-					set overallSuccess to false
-				end if
-				
-				-- 第四步：打开iMessage信息中的偏好设置
-				if thirdButtonClicked then
-					--log "三个按钮都已成功点击！开始打开iMessage偏好设置..."
-					delay 1
+					end if
 					
-					set preferencesOpened to false
-					set accountsTabOpened to false
+					if not secondButtonClicked then
+						set end of executionResults to {stepName:"step4_skip_button", success:false, message:"未找到'跳过'按钮", timestamp:(current date) as string}
+					end if
+				end try
+				
+				-- 第三步: 如果前两个按钮都成功，点击"取消"按钮
+				if secondButtonClicked then
+					delay 2
+					set thirdButtonClicked to false
 					
 					try
-						-- 确保Messages应用在前台
-						tell application "System Events"
-							tell process "Messages"
-								-- 确保在前台
-								set frontmost to true
-								delay 0.3
-								key code 49 using control down -- Control + Space
-								delay 0.5
-								-- 打开偏好设置（⌘,）
-								keystroke "," using {command down}
-								set preferencesOpened to true
-								set end of executionResults to {stepName:"step4_open_preferences", success:true, message:"成功打开偏好设置", timestamp:(current date) as string}
-							end tell
-						end tell
-						
-						delay 1
-						
-						-- 切换到帐户标签
-						tell application "System Events"
-							tell process "Messages"
+						-- 在sheet对话框中查找取消按钮
+						set allSheets to every sheet of window 1
+						repeat with currentSheet in allSheets
+							set sheetButtons to every button of currentSheet
+							repeat with sheetButton in sheetButtons
 								try
-									-- 优先点击中文"帐户"
-									if exists (button "帐户" of toolbar 1 of window 1) then
-										click button "帐户" of toolbar 1 of window 1
-										set accountsTabOpened to true
-										set end of executionResults to {stepName:"step5_accounts_tab", success:true, message:"成功切换到'帐户'标签", timestamp:(current date) as string}
-									else if exists (button "账户" of toolbar 1 of window 1) then
-										click button "账户" of toolbar 1 of window 1
-										set accountsTabOpened to true
-										set end of executionResults to {stepName:"step5_accounts_tab", success:true, message:"成功切换到'账户'标签", timestamp:(current date) as string}
-									else if exists (button "Accounts" of toolbar 1 of window 1) then
-										click button "Accounts" of toolbar 1 of window 1
-										set accountsTabOpened to true
-										set end of executionResults to {stepName:"step5_accounts_tab", success:true, message:"成功切换到'Accounts'标签", timestamp:(current date) as string}
-									else
-										-- 找不到就点第二个按钮（大多数版本帐户是第二个）
-										click button 2 of toolbar 1 of window 1
-										set accountsTabOpened to true
-										set end of executionResults to {stepName:"step5_accounts_tab", success:true, message:"成功点击第二个工具栏按钮（账户标签）", timestamp:(current date) as string}
+									set buttonName to name of sheetButton
+									if buttonName contains "取消" or buttonName contains "Cancel" or buttonName contains "cancel" or buttonName contains "关闭" or buttonName contains "Close" then
+										click sheetButton
+										set thirdButtonClicked to true
+										set end of executionResults to {stepName:"step5_cancel_button", success:true, message:"成功在对话框中点击'取消'按钮: " & buttonName, timestamp:(current date) as string}
+										exit repeat
 									end if
-								on error errMsg
-									set end of executionResults to {stepName:"step5_accounts_tab", success:false, message:"无法切换到帐户标签：" & errMsg, timestamp:(current date) as string}
-									set end of errorMessages to "账户标签切换失败: " & errMsg
-									set overallSuccess to false
 								end try
-							end tell
-						end tell
+							end repeat
+							if thirdButtonClicked then exit repeat
+						end repeat
 						
-					on error errMsg
-						-- 如果菜单方式失败，尝试快捷键方式
-						try
-							log "菜单方式失败，尝试快捷键方式"
-							tell application "Messages" to set frontmost to true
-							delay 0.5
-							tell application "System Events"
-								keystroke "," using {command down}
-							end tell
-							delay 0.5
-							set preferencesOpened to true
-							set end of executionResults to {stepName:"step4_open_preferences", success:true, message:"通过快捷键成功打开偏好设置", timestamp:(current date) as string}
-							log "已通过快捷键Cmd+,打开偏好设置"
-							log "所有步骤完成！偏好设置已打开！"
-						on error errMsg2
-							set end of executionResults to {stepName:"step4_open_preferences", success:false, message:"打开偏好设置失败: " & errMsg2, timestamp:(current date) as string}
-							set end of errorMessages to "偏好设置打开失败: " & errMsg2
-							set overallSuccess to false
-							log "打开偏好设置失败: " & errMsg2
-						end try
+						-- 如果在sheet中没找到，进行全局搜索
+						if not thirdButtonClicked then
+							set allElements to entire contents
+							repeat with element in allElements
+								try
+									if class of element is button then
+										set elementName to name of element
+										if elementName contains "取消" or elementName contains "Cancel" or elementName contains "cancel" or elementName contains "关闭" or elementName contains "Close" then
+											click element
+											set thirdButtonClicked to true
+											set end of executionResults to {stepName:"step5_cancel_button", success:true, message:"成功通过全局搜索点击'取消'按钮: " & elementName, timestamp:(current date) as string}
+											exit repeat
+										end if
+									end if
+								end try
+							end repeat
+						end if
+						
+						if not thirdButtonClicked then
+							set end of executionResults to {stepName:"step5_cancel_button", success:false, message:"未找到'取消'按钮", timestamp:(current date) as string}
+						end if
 					end try
-					
-				else
-					set end of executionResults to {stepName:"step4_open_preferences", success:false, message:"前置步骤失败，无法打开偏好设置", timestamp:(current date) as string}
-					set end of errorMessages to "前置步骤失败，无法打开偏好设置"
-					set overallSuccess to false
-					log "前两个按钮成功，但取消按钮未找到"
+				end if
+			end if
+		end tell
+	end tell
+end handleSystemDialogs
+
+-- 打开账户标签页
+on openAccountsTab()
+	try
+		-- 打开偏好设置
+		tell application "System Events"
+			tell process "Messages"
+				set frontmost to true
+				delay 0.5
+				keystroke "," using {command down}
+				delay 2
+			end tell
+		end tell
+		
+		set end of executionResults to {stepName:"step6_open_preferences", success:true, message:"成功打开偏好设置", timestamp:(current date) as string}
+		
+		-- 切换到账户标签
+		tell application "System Events"
+			tell process "Messages"
+				-- 等待窗口加载
+				repeat 10 times
+					if exists window 1 then exit repeat
+					delay 1
+				end repeat
+				
+				if not (exists window 1) then
+					error "Messages偏好设置窗口未找到"
 				end if
 				
-			else
-				set end of executionResults to {stepName:"step3_cancel_button", success:false, message:"第二步失败，跳过第三步", timestamp:(current date) as string}
-				set end of errorMessages to "第二步失败，跳过第三步"
-				set overallSuccess to false
-			end if
-			
-		else
-			set end of executionResults to {stepName:"step2_skip_button", success:false, message:"第一步失败，跳过第二步", timestamp:(current date) as string}
-			set end of errorMessages to "第一步失败，跳过第二步"
-			set overallSuccess to false
-			log "第一个按钮未找到"
-		end if
+				-- 尝试多种方式点击账户标签
+				set tabClicked to false
+				
+				-- 方法1：尝试中文"帐户"
+				try
+					if exists (button "帐户" of toolbar 1 of window 1) then
+						click button "帐户" of toolbar 1 of window 1
+						set tabClicked to true
+						set end of executionResults to {stepName:"step7_accounts_tab", success:true, message:"成功点击'帐户'标签", timestamp:(current date) as string}
+					end if
+				end try
+				
+				-- 方法2：尝试简体中文"账户"
+				if not tabClicked then
+					try
+						if exists (button "账户" of toolbar 1 of window 1) then
+							click button "账户" of toolbar 1 of window 1
+							set tabClicked to true
+							set end of executionResults to {stepName:"step7_accounts_tab", success:true, message:"成功点击'账户'标签", timestamp:(current date) as string}
+						end if
+					end try
+				end if
+				
+				-- 方法3：尝试英文"Accounts"
+				if not tabClicked then
+					try
+						if exists (button "Accounts" of toolbar 1 of window 1) then
+							click button "Accounts" of toolbar 1 of window 1
+							set tabClicked to true
+							set end of executionResults to {stepName:"step7_accounts_tab", success:true, message:"成功点击'Accounts'标签", timestamp:(current date) as string}
+						end if
+					end try
+				end if
+				
+				-- 方法4：点击第二个工具栏按钮
+				if not tabClicked then
+					try
+						click button 2 of toolbar 1 of window 1
+						set tabClicked to true
+						set end of executionResults to {stepName:"step7_accounts_tab", success:true, message:"成功点击第二个工具栏按钮", timestamp:(current date) as string}
+					end try
+				end if
+				
+				if tabClicked then
+					set accountsTabOpened to true
+					delay 2 -- 等待页面加载
+				else
+					error "无法找到账户标签按钮"
+				end if
+			end tell
+		end tell
 		
-	end tell
+	on error errMsg
+		set end of executionResults to {stepName:"step6_7_accounts", success:false, message:"打开账户标签失败: " & errMsg, timestamp:(current date) as string}
+		set end of errorMessages to "账户标签操作失败: " & errMsg
+		set overallSuccess to false
+	end try
+end openAccountsTab
+
+-- 登录Apple ID
+on loginAppleID(appleID, userPassword)
+	try
+		tell application "System Events"
+			tell process "Messages"
+				-- 等待账户页面加载
+				delay 2
+				
+				-- 查找登录相关的按钮或链接
+				set loginStarted to false
+				
+				-- 方法1：查找"登录"按钮
+				try
+					if exists (button "登录" of window 1) then
+						click button "登录" of window 1
+						set loginStarted to true
+						delay 2
+					end if
+				end try
+				
+				-- 方法2：查找"Sign In"按钮
+				if not loginStarted then
+					try
+						if exists (button "Sign In" of window 1) then
+							click button "Sign In" of window 1
+							set loginStarted to true
+							delay 2
+						end if
+					end try
+				end if
+				
+				-- 方法3：查找包含"登录"的任何按钮
+				if not loginStarted then
+					try
+						set allButtons to every button of window 1
+						repeat with btn in allButtons
+							if (name of btn as string) contains "登录" or (name of btn as string) contains "Sign" then
+								click btn
+								set loginStarted to true
+								delay 2
+								exit repeat
+							end if
+						end repeat
+					end try
+				end if
+				
+				-- 如果找到登录按钮，尝试填写信息
+				if loginStarted then
+					delay 3 -- 等待登录窗口出现
+					
+					-- 填写Apple ID
+					fillAppleIDField(appleID)
+					
+					-- 填写密码
+					fillPasswordField(userPassword)
+					
+					-- 点击确认登录
+					confirmLogin()
+					
+					set end of executionResults to {stepName:"step8_login", success:true, message:"Apple ID登录流程完成", timestamp:(current date) as string}
+				else
+					-- 如果没有找到登录按钮，可能已经登录或需要其他操作
+					set end of executionResults to {stepName:"step8_login", success:false, message:"未找到登录按钮，可能已经登录", timestamp:(current date) as string}
+				end if
+			end tell
+		end tell
+		
+	on error errMsg
+		set end of executionResults to {stepName:"step8_login", success:false, message:"登录过程失败: " & errMsg, timestamp:(current date) as string}
+		set end of errorMessages to "登录失败: " & errMsg
+		set overallSuccess to false
+	end try
+end loginAppleID
+
+-- 填写Apple ID字段
+on fillAppleIDField(appleID)
+	try
+		tell application "System Events"
+			tell process "Messages"
+				-- 查找用户名/邮箱输入框
+				set fieldFilled to false
+				
+				-- 方法1：查找text field
+				try
+					set textFields to every text field of window 1
+					if length of textFields > 0 then
+						set value of (item 1 of textFields) to appleID
+						set fieldFilled to true
+					end if
+				end try
+				
+				-- 方法2：查找包含placeholder的输入框
+				if not fieldFilled then
+					try
+						repeat with tf in (every text field of window 1)
+							-- 点击输入框并输入
+							click tf
+							delay 0.5
+							keystroke appleID
+							set fieldFilled to true
+							exit repeat
+						end repeat
+					end try
+				end if
+				
+				-- 方法3：通过tab键导航
+				if not fieldFilled then
+					key code 48 -- Tab键
+					delay 0.5
+					keystroke appleID
+					set fieldFilled to true
+				end if
+				
+			end tell
+		end tell
+	on error errMsg
+		error "填写Apple ID失败: " & errMsg
+	end try
+end fillAppleIDField
+
+-- 填写密码字段
+on fillPasswordField(userPassword)
+	try
+		tell application "System Events"
+			tell process "Messages"
+				-- 切换到密码字段（通常是下一个字段）
+				key code 48 -- Tab键
+				delay 0.5
+				
+				-- 输入密码
+				keystroke userPassword
+				delay 0.5
+				
+			end tell
+		end tell
+	on error errMsg
+		error "填写密码失败: " & errMsg
+	end try
+end fillPasswordField
+
+-- 确认登录
+on confirmLogin()
+	try
+		tell application "System Events"
+			tell process "Messages"
+				-- 方法1：按回车键
+				key code 36 -- Return key
+				delay 1
+				
+				-- 方法2：查找确认按钮
+				try
+					if exists (button "确定" of window 1) then
+						click button "确定" of window 1
+					else if exists (button "OK" of window 1) then
+						click button "OK" of window 1
+					else if exists (button "登录" of window 1) then
+						click button "登录" of window 1
+					else if exists (button "Sign In" of window 1) then
+						click button "Sign In" of window 1
+					end if
+				end try
+			end tell
+		end tell
+	on error errMsg
+		error "确认登录失败: " & errMsg
+	end try
+end confirmLogin
+
+-- 生成JSON结果
+on generateJSONResult()
+	set jsonResult to "{"
+	set jsonResult to jsonResult & "\"success\":" & (overallSuccess as string) & ","
+	set jsonResult to jsonResult & "\"timestamp\":\"" & ((current date) as string) & "\","
+	set jsonResult to jsonResult & "\"totalSteps\":" & (length of executionResults) & ","
 	
-end tell
-
--- 构建JSON返回结果
-set jsonResult to "{"
-set jsonResult to jsonResult & "\"success\":" & (overallSuccess as string) & ","
-set jsonResult to jsonResult & "\"timestamp\":\"" & ((current date) as string) & "\","
-set jsonResult to jsonResult & "\"totalSteps\":" & (length of executionResults) & ","
-
--- 添加执行步骤详情
-set jsonResult to jsonResult & "\"steps\":["
-repeat with i from 1 to length of executionResults
-	set currentStep to item i of executionResults
-	set jsonResult to jsonResult & "{"
-	set jsonResult to jsonResult & "\"stepName\":\"" & (stepName of currentStep) & "\","
-	set jsonResult to jsonResult & "\"success\":" & (success of currentStep) & ","
-	set jsonResult to jsonResult & "\"message\":\"" & (message of currentStep) & "\","
-	set jsonResult to jsonResult & "\"timestamp\":\"" & (timestamp of currentStep) & "\""
+	-- 添加执行步骤详情
+	set jsonResult to jsonResult & "\"steps\":["
+	repeat with i from 1 to length of executionResults
+		set currentStep to item i of executionResults
+		set jsonResult to jsonResult & "{"
+		set jsonResult to jsonResult & "\"stepName\":\"" & (stepName of currentStep) & "\","
+		set jsonResult to jsonResult & "\"success\":" & (success of currentStep) & ","
+		set jsonResult to jsonResult & "\"message\":\"" & (message of currentStep) & "\","
+		set jsonResult to jsonResult & "\"timestamp\":\"" & (timestamp of currentStep) & "\""
+		set jsonResult to jsonResult & "}"
+		if i < length of executionResults then
+			set jsonResult to jsonResult & ","
+		end if
+	end repeat
+	set jsonResult to jsonResult & "],"
+	
+	-- 添加错误信息
+	set jsonResult to jsonResult & "\"errors\":["
+	repeat with i from 1 to length of errorMessages
+		set jsonResult to jsonResult & "\"" & (item i of errorMessages) & "\""
+		if i < length of errorMessages then
+			set jsonResult to jsonResult & ","
+		end if
+	end repeat
+	set jsonResult to jsonResult & "],"
+	
+	-- 添加汇总信息
+	if overallSuccess then
+		set jsonResult to jsonResult & "\"summary\":\"Apple ID自动登录流程完成，所有步骤执行成功\""
+	else
+		set jsonResult to jsonResult & "\"summary\":\"Apple ID自动登录流程部分步骤失败，请查看详细错误信息\""
+	end if
+	
 	set jsonResult to jsonResult & "}"
-	if i < length of executionResults then
-		set jsonResult to jsonResult & ","
-	end if
-end repeat
-set jsonResult to jsonResult & "],"
-
--- 添加错误信息
-set jsonResult to jsonResult & "\"errors\":["
-repeat with i from 1 to length of errorMessages
-	set jsonResult to jsonResult & "\"" & (item i of errorMessages) & "\""
-	if i < length of errorMessages then
-		set jsonResult to jsonResult & ","
-	end if
-end repeat
-set jsonResult to jsonResult & "],"
-
--- 添加汇总信息
-if overallSuccess then
-	set jsonResult to jsonResult & "\"summary\":\"所有步骤执行成功，iMessage偏好设置已打开并切换到账户标签\""
-else
-	set jsonResult to jsonResult & "\"summary\":\"部分步骤执行失败，请查看详细错误信息\""
-end if
-
-set jsonResult to jsonResult & "}"
-
--- 返回JSON结果
-return jsonResult
+	
+	return jsonResult
+end generateJSONResult
