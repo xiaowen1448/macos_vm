@@ -362,17 +362,19 @@ on loginAppleIDWithRetry(appleID, userPassword)
 			
 			if loginResult is "SUCCESS" then
 				set loginSuccessful to true
-				set end of executionResults to {stepName:"step8_login_success", success:true, message:"第 " & currentLoginAttempt & " 次尝试登录成功", timestamp:(current date) as string}
+				set end of executionResults to {stepName:"step8_login_success", success:true, message:"第 " & currentLoginAttempt & " 次尝试登录成功，开始调用handleVerificationCode函数", timestamp:(current date) as string}
 				
 				-- 登录成功后处理验证码
 				handleVerificationCode()
+				set end of executionResults to {stepName:"step8_verification_completed", success:true, message:"handleVerificationCode函数执行完成", timestamp:(current date) as string}
 				
 			else if loginResult is "VERIFICATION_NEEDED" then
 				set loginSuccessful to true
-				set end of executionResults to {stepName:"step8_login_verification", success:true, message:"第 " & currentLoginAttempt & " 次尝试需要验证码", timestamp:(current date) as string}
+				set end of executionResults to {stepName:"step8_login_verification", success:true, message:"第 " & currentLoginAttempt & " 次尝试需要验证码，开始调用handleVerificationCode函数", timestamp:(current date) as string}
 				
 				-- 处理验证码
 				handleVerificationCode()
+				set end of executionResults to {stepName:"step8_verification_completed", success:true, message:"handleVerificationCode函数执行完成", timestamp:(current date) as string}
 				
 			else if loginResult is "PASSWORD_ERROR" then
 				-- 密码错误处理
@@ -691,7 +693,8 @@ end quickCheckForSuccess
 -- 处理验证码（带60秒超时重试机制）
 on handleVerificationCode()
 	try
-		set end of executionResults to {stepName:"step9_verification_start", success:true, message:"开始处理验证码流程（60秒超时）", timestamp:(current date) as string}
+		set end of executionResults to {stepName:"step9_verification_start", success:true, message:"handleVerificationCode函数被调用，开始处理验证码流程（60秒超时）", timestamp:(current date) as string}
+		delay 1 -- 确保日志被记录
 		
 		-- 设置60秒超时
 		set verificationTimeout to 60
@@ -737,7 +740,9 @@ on handleVerificationCode()
 						-- 继续下一次尝试
 					end if
 				else
-					set end of executionResults to {stepName:"step9_verification_input_failed", success:false, message:"第 " & verificationAttempts & " 次验证码输入失败", timestamp:(current date) as string}
+					set end of executionResults to {stepName:"step9_verification_input_failed", success:false, message:"第 " & verificationAttempts & " 次验证码输入失败，开始UI调试分析", timestamp:(current date) as string}
+					-- 调用调试函数分析UI结构
+					my debugVerificationUIForMacOS1012()
 				end if
 			else
 				set end of executionResults to {stepName:"step9_verification_window_not_found", success:false, message:"第 " & verificationAttempts & " 次未找到验证码窗口", timestamp:(current date) as string}
@@ -847,55 +852,122 @@ on waitForVerificationWindow()
 	end try
 end waitForVerificationWindow
 
--- 输入测试验证码并点击继续
+-- 输入测试验证码并点击继续（增强版，支持macOS 10.12）
 on inputTestCodeAndContinue()
 	try
-		set testCode to "123456" -- 测试验证码
+		set testCode to "12345" -- 测试验证码
 		set inputSuccess to false
+		set methodUsed to ""
 		
 		tell application "System Events"
 			tell process "Messages"
-				-- 方法1：在主窗口查找验证码输入框
-				try
-					set allTextFields to every text field of window 1
-					repeat with textField in allTextFields
-						try
-							-- 检查是否是验证码输入框
-							set shouldUseThisField to false
-							
-							-- 通过placeholder判断
-							if exists (attribute "AXPlaceholderValue" of textField) then
-								set placeholderText to value of attribute "AXPlaceholderValue" of textField
-								if placeholderText contains "验证码" or placeholderText contains "code" or placeholderText contains "代码" then
-									set shouldUseThisField to true
+				-- 方法0：基于静态文本"输入发送至"查找输入框（macOS 10.12兼容）
+				if not inputSuccess then
+					try
+						set allStaticTexts to every static text of window 1
+						repeat with staticText in allStaticTexts
+							try
+								set textContent to value of staticText as string
+								if textContent contains "输入发送至" or textContent contains "Enter the verification code sent to" then
+									-- 找到提示文本，在其附近查找输入框
+									set textPosition to position of staticText
+									set allTextFields to every text field of window 1
+									repeat with textField in allTextFields
+										try
+											set fieldPosition to position of textField
+											-- 检查输入框是否在提示文本下方
+											if (item 2 of fieldPosition) > (item 2 of textPosition) then
+												click textField
+												delay 0.5
+												keystroke testCode
+												set inputSuccess to true
+												set methodUsed to "方法0-基于输入发送至文本定位"
+												exit repeat
+											end if
+										end try
+									end repeat
+									if inputSuccess then exit repeat
 								end if
-							end if
-							
-							-- 通过位置判断（通常验证码输入框比较短）
-							if not shouldUseThisField then
-								try
-									set fieldSize to size of textField
-									-- 如果输入框比较短，可能是验证码输入框
-									if item 1 of fieldSize < 200 then
-										set shouldUseThisField to true
-									end if
-								end try
-							end if
-							
-							if shouldUseThisField then
-								click textField
-								delay 0.5
-								keystroke "a" using {command down} -- 全选
-								keystroke testCode
-								set inputSuccess to true
-								set end of executionResults to {stepName:"step9b_input_test_code", success:true, message:"在主窗口输入测试验证码: " & testCode, timestamp:(current date) as string}
-								exit repeat
-							end if
-						end try
-					end repeat
-				end try
+							end try
+						end repeat
+					end try
+				end if
 				
-				-- 方法2：在sheet对话框中查找验证码输入框
+				-- 方法1：基于"验证码"静态文本查找输入框
+				if not inputSuccess then
+					try
+						set allStaticTexts to every static text of window 1
+						repeat with staticText in allStaticTexts
+							try
+								set textContent to value of staticText as string
+								if textContent contains "验证码" or textContent contains "verification code" then
+									set textPosition to position of staticText
+									set allTextFields to every text field of window 1
+									repeat with textField in allTextFields
+										try
+											set fieldPosition to position of textField
+											if (item 2 of fieldPosition) > (item 2 of textPosition) then
+												click textField
+												delay 0.5
+												keystroke testCode
+												set inputSuccess to true
+												set methodUsed to "方法1-基于验证码文本定位"
+												exit repeat
+											end if
+										end try
+									end repeat
+									if inputSuccess then exit repeat
+								end if
+							end try
+						end repeat
+					end try
+				end if
+				
+				-- 方法2：通过placeholder属性查找
+				if not inputSuccess then
+					try
+						set allTextFields to every text field of window 1
+						repeat with textField in allTextFields
+							try
+								if exists (attribute "AXPlaceholderValue" of textField) then
+									set placeholderText to value of attribute "AXPlaceholderValue" of textField
+									if placeholderText contains "验证码" or placeholderText contains "code" or placeholderText contains "代码" then
+										click textField
+										delay 0.5
+										keystroke "a" using {command down}
+										keystroke testCode
+										set inputSuccess to true
+										set methodUsed to "方法2-通过placeholder属性"
+										exit repeat
+									end if
+								end if
+							end try
+						end repeat
+					end try
+				end if
+				
+				-- 方法3：通过输入框宽度判断（验证码输入框通常较短）
+				if not inputSuccess then
+					try
+						set allTextFields to every text field of window 1
+						repeat with textField in allTextFields
+							try
+								set fieldSize to size of textField
+								if item 1 of fieldSize < 200 and item 1 of fieldSize > 50 then
+									click textField
+									delay 0.5
+									keystroke "a" using {command down}
+									keystroke testCode
+									set inputSuccess to true
+									set methodUsed to "方法3-通过输入框宽度判断"
+									exit repeat
+								end if
+							end try
+						end repeat
+					end try
+				end if
+				
+				-- 方法4：在sheet对话框中查找（原有方法）
 				if not inputSuccess then
 					try
 						set allSheets to every sheet of window 1
@@ -908,7 +980,7 @@ on inputTestCodeAndContinue()
 									keystroke "a" using {command down}
 									keystroke testCode
 									set inputSuccess to true
-									set end of executionResults to {stepName:"step9b_input_test_code", success:true, message:"在对话框中输入测试验证码: " & testCode, timestamp:(current date) as string}
+									set methodUsed to "方法4-sheet对话框输入"
 									exit repeat
 								end try
 							end repeat
@@ -917,22 +989,46 @@ on inputTestCodeAndContinue()
 					end try
 				end if
 				
-				-- 方法3：如果都没找到，尝试直接输入（假设焦点在验证码输入框）
+				-- 方法5：尝试Tab键导航到输入框
+				if not inputSuccess then
+					try
+						-- 按几次Tab键尝试导航到验证码输入框
+						repeat 5 times
+							key code 48 -- Tab key
+							delay 0.3
+							keystroke testCode
+							delay 0.5
+							-- 检查是否输入成功（简单检查）
+							try
+								set currentValue to value of (first text field of window 1 whose value is not "")
+								if currentValue contains testCode then
+									set inputSuccess to true
+									set methodUsed to "方法5-Tab键导航输入"
+									exit repeat
+								end if
+							end try
+						end repeat
+					end try
+				end if
+				
+				-- 方法6：直接输入（假设焦点已在验证码输入框）
 				if not inputSuccess then
 					try
 						keystroke testCode
 						set inputSuccess to true
-						set end of executionResults to {stepName:"step9b_input_test_code", success:true, message:"通过直接输入方式输入测试验证码: " & testCode, timestamp:(current date) as string}
+						set methodUsed to "方法6-直接输入"
 					end try
 				end if
 			end tell
-		end tell
+	end tell
 		
 		if inputSuccess then
+			-- 记录成功使用的方法
+			set end of executionResults to {stepName:"step9b_input_test_code", success:true, message:"成功输入测试验证码: " & testCode & " (使用" & methodUsed & ")", timestamp:(current date) as string}
 			-- 输入成功后，寻找并点击继续按钮
 			return my findAndClickContinueButton()
 		else
-			set end of executionResults to {stepName:"step9b_input_test_code", success:false, message:"未能找到验证码输入框", timestamp:(current date) as string}
+			set end of executionResults to {stepName:"step9b_input_test_code", success:false, message:"所有6种方法均未能找到验证码输入框，可能是macOS版本兼容性问题", timestamp:(current date) as string}
 			return false
 		end if
 		
@@ -941,6 +1037,86 @@ on inputTestCodeAndContinue()
 		return false
 	end try
 end inputTestCodeAndContinue
+
+-- macOS 10.12 调试函数：分析验证码界面UI结构
+on debugVerificationUIForMacOS1012()
+	try
+		set end of executionResults to {stepName:"debug_ui_analysis", success:true, message:"开始分析macOS 10.12验证码界面UI结构", timestamp:(current date) as string}
+		
+		tell application "System Events"
+			tell process "Messages"
+				-- 分析主窗口的所有UI元素
+				try
+					set windowElements to entire contents of window 1
+					set elementCount to count of windowElements
+					set end of executionResults to {stepName:"debug_ui_count", success:true, message:"主窗口包含 " & elementCount & " 个UI元素", timestamp:(current date) as string}
+					
+					-- 分析所有静态文本
+					set allStaticTexts to every static text of window 1
+					set staticTextCount to count of allStaticTexts
+					set end of executionResults to {stepName:"debug_static_texts", success:true, message:"找到 " & staticTextCount & " 个静态文本元素", timestamp:(current date) as string}
+					
+					repeat with i from 1 to staticTextCount
+						try
+							set staticText to item i of allStaticTexts
+							set textContent to value of staticText as string
+							set textPosition to position of staticText
+							if textContent is not "" then
+								set end of executionResults to {stepName:"debug_text_" & i, success:true, message:"静态文本" & i & ": '" & textContent & "' 位置: " & (item 1 of textPosition) & "," & (item 2 of textPosition), timestamp:(current date) as string}
+							end if
+						end try
+					end repeat
+					
+					-- 分析所有文本输入框
+					set allTextFields to every text field of window 1
+					set textFieldCount to count of allTextFields
+					set end of executionResults to {stepName:"debug_text_fields", success:true, message:"找到 " & textFieldCount & " 个文本输入框", timestamp:(current date) as string}
+					
+					repeat with i from 1 to textFieldCount
+						try
+							set textField to item i of allTextFields
+							set fieldValue to value of textField as string
+							set fieldPosition to position of textField
+							set fieldSize to size of textField
+							set placeholderText to ""
+							try
+								if exists (attribute "AXPlaceholderValue" of textField) then
+									set placeholderText to value of attribute "AXPlaceholderValue" of textField
+								end if
+							end try
+							set end of executionResults to {stepName:"debug_field_" & i, success:true, message:"输入框" & i & ": 值='" & fieldValue & "' placeholder='" & placeholderText & "' 位置:" & (item 1 of fieldPosition) & "," & (item 2 of fieldPosition) & " 大小:" & (item 1 of fieldSize) & "x" & (item 2 of fieldSize), timestamp:(current date) as string}
+						end try
+					end repeat
+					
+					-- 分析sheet对话框
+					set allSheets to every sheet of window 1
+					set sheetCount to count of allSheets
+					if sheetCount > 0 then
+						set end of executionResults to {stepName:"debug_sheets", success:true, message:"找到 " & sheetCount & " 个sheet对话框", timestamp:(current date) as string}
+						repeat with i from 1 to sheetCount
+							try
+								set currentSheet to item i of allSheets
+								set sheetTextFields to every text field of currentSheet
+								set sheetFieldCount to count of sheetTextFields
+								set end of executionResults to {stepName:"debug_sheet_" & i, success:true, message:"Sheet" & i & "包含 " & sheetFieldCount & " 个输入框", timestamp:(current date) as string}
+							end try
+						end repeat
+					else
+						set end of executionResults to {stepName:"debug_sheets", success:true, message:"未找到sheet对话框", timestamp:(current date) as string}
+					end if
+					
+				end try
+				end tell
+			end tell
+			
+			set end of executionResults to {stepName:"debug_ui_analysis", success:true, message:"macOS 10.12 UI结构分析完成", timestamp:(current date) as string}
+			return true
+			
+	on error errMsg
+		set end of executionResults to {stepName:"debug_ui_analysis", success:false, message:"UI结构分析出错: " & errMsg, timestamp:(current date) as string}
+		return false
+end try
+end debugVerificationUIForMacOS1012
 
 -- 寻找并点击继续按钮
 on findAndClickContinueButton()
