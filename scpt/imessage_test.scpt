@@ -7,12 +7,14 @@ property overallSuccess : true
 property accountsTabOpened : false
 property maxLoginAttempts : 3
 property currentLoginAttempt : 0
+property appleID : ""
+property userPassword : ""
 
 -- 主函数
 on run
 	try
 		-- 步骤1：读取Apple ID信息
-		set {appleID, userPassword} to readAppleIDInfo()
+		set {my appleID, my userPassword} to readAppleIDInfo()
 		
 		-- 步骤2：切换到Messages应用并处理弹窗
 		switchToMessagesAndHandleDialogs()
@@ -22,7 +24,7 @@ on run
 		
 		-- 步骤4：登录Apple ID（包含重试机制）
 		if accountsTabOpened then
-			loginAppleIDWithRetry(appleID, userPassword)
+			loginAppleIDWithRetry(my appleID, my userPassword)
 		end if
 		
 		-- 返回JSON结果
@@ -686,34 +688,84 @@ on quickCheckForSuccess()
 	end try
 end quickCheckForSuccess
 
--- 处理验证码
+-- 处理验证码（带60秒超时重试机制）
 on handleVerificationCode()
 	try
-		set end of executionResults to {stepName:"step9_verification_start", success:true, message:"开始处理验证码流程", timestamp:(current date) as string}
+		set end of executionResults to {stepName:"step9_verification_start", success:true, message:"开始处理验证码流程（60秒超时）", timestamp:(current date) as string}
 		
-		-- 等待验证码窗口出现
-		set verificationWindowFound to my waitForVerificationWindow()
+		-- 设置60秒超时
+		set verificationTimeout to 60
+		set verificationStartTime to (current date)
+		set verificationSuccess to false
+		set verificationAttempts to 0
+		set maxVerificationAttempts to 3
 		
-		if verificationWindowFound then
-			-- 检测验证码输入框并输入测试文本
-			set testInputResult to my inputTestCodeAndContinue()
+		repeat while not verificationSuccess and verificationAttempts < maxVerificationAttempts
+			set verificationAttempts to verificationAttempts + 1
+			set end of executionResults to {stepName:"step9_verification_attempt", success:true, message:"第 " & verificationAttempts & " 次验证码尝试", timestamp:(current date) as string}
 			
-			if testInputResult then
-				-- 等待并检查验证码输入后的结果
-				my checkVerificationResult()
+			-- 检查是否超时
+			set currentTime to (current date)
+			set elapsedTime to (currentTime - verificationStartTime)
+			if elapsedTime > verificationTimeout then
+				set end of executionResults to {stepName:"step9_verification_timeout", success:false, message:"验证码处理超时（" & elapsedTime & "秒），准备重新登录", timestamp:(current date) as string}
+				-- 超时后重新尝试登录
+				my retryLoginAfterTimeout()
+				return
 			end if
+			
+			-- 等待验证码窗口出现
+			set verificationWindowFound to my waitForVerificationWindow()
+			
+			if verificationWindowFound then
+				-- 检测验证码输入框并输入测试文本
+				set testInputResult to my inputTestCodeAndContinue()
+				
+				if testInputResult then
+					-- 等待并检查验证码输入后的结果
+					set verificationResult to my checkVerificationResultWithTimeout(currentTime, verificationTimeout)
+					
+					if verificationResult is "SUCCESS" then
+						set verificationSuccess to true
+						set end of executionResults to {stepName:"step9_verification_success", success:true, message:"验证码验证成功", timestamp:(current date) as string}
+					else if verificationResult is "TIMEOUT" then
+						set end of executionResults to {stepName:"step9_verification_timeout", success:false, message:"验证码验证超时，准备重新登录", timestamp:(current date) as string}
+						my retryLoginAfterTimeout()
+						return
+					else if verificationResult is "FAILED" then
+						set end of executionResults to {stepName:"step9_verification_failed", success:false, message:"第 " & verificationAttempts & " 次验证码验证失败，继续尝试", timestamp:(current date) as string}
+						-- 继续下一次尝试
+					end if
+				else
+					set end of executionResults to {stepName:"step9_verification_input_failed", success:false, message:"第 " & verificationAttempts & " 次验证码输入失败", timestamp:(current date) as string}
+				end if
+			else
+				set end of executionResults to {stepName:"step9_verification_window_not_found", success:false, message:"第 " & verificationAttempts & " 次未找到验证码窗口", timestamp:(current date) as string}
+			end if
+			
+			-- 如果不是最后一次尝试，等待一下再继续
+			if not verificationSuccess and verificationAttempts < maxVerificationAttempts then
+				delay 3
+			end if
+		end repeat
+		
+		-- 如果所有尝试都失败了
+		if not verificationSuccess then
+			set end of executionResults to {stepName:"step9_verification_all_failed", success:false, message:"所有验证码尝试均失败，准备重新登录", timestamp:(current date) as string}
+			my retryLoginAfterTimeout()
 		end if
 		
 	on error errMsg
 		set end of executionResults to {stepName:"step9_verification_error", success:false, message:"处理验证码时出错: " & errMsg, timestamp:(current date) as string}
 		set end of errorMessages to "验证码处理失败: " & errMsg
+		my retryLoginAfterTimeout()
 	end try
 end handleVerificationCode
 
 -- 等待验证码窗口出现
 on waitForVerificationWindow()
 	try
-		set maxWaitTime to 30 -- 最多等待30秒
+		set maxWaitTime to 60 -- 最多等待60秒
 		set waitTime to 0
 		set verificationFound to false
 		
@@ -979,7 +1031,219 @@ on findAndClickContinueButton()
 	end try
 end findAndClickContinueButton
 
--- 检查验证码输入后的结果
+-- 检查验证码输入后的结果（带超时检查）
+on checkVerificationResultWithTimeout(startTime, timeoutSeconds)
+	try
+		delay 5 -- 等待验证结果
+		
+		-- 检查是否超时
+		set currentTime to (current date)
+		set elapsedTime to (currentTime - startTime)
+		if elapsedTime > timeoutSeconds then
+			set end of executionResults to {stepName:"step9d_verification_timeout", success:false, message:"验证码检查超时（" & elapsedTime & "秒）", timestamp:(current date) as string}
+			return "TIMEOUT"
+		end if
+		
+		tell application "System Events"
+			tell process "Messages"
+				set verificationSuccess to false
+				set verificationError to false
+				set errorMessage to ""
+				
+				-- 方法1：检查主窗口中的结果文本
+				try
+					set allStaticTexts to every static text of window 1
+					repeat with textElement in allStaticTexts
+						try
+							set textContent to value of textElement as string
+							
+							-- 检查验证码错误信息
+							if textContent contains "验证码错误" or textContent contains "incorrect code" or textContent contains "验证码不正确" or textContent contains "wrong code" or textContent contains "invalid code" then
+								set verificationError to true
+								set errorMessage to textContent
+								set end of executionResults to {stepName:"step9d_verification_result", success:false, message:"验证码错误: " & textContent, timestamp:(current date) as string}
+								exit repeat
+							end if
+							
+							-- 检查验证码过期信息
+							if textContent contains "验证码已过期" or textContent contains "code expired" or textContent contains "验证码超时" then
+								set verificationError to true
+								set errorMessage to textContent
+								set end of executionResults to {stepName:"step9d_verification_result", success:false, message:"验证码过期: " & textContent, timestamp:(current date) as string}
+								exit repeat
+							end if
+							
+							-- 检查验证成功信息
+							if textContent contains "验证成功" or textContent contains "verification successful" or textContent contains "登录成功" or textContent contains "signed in successfully" then
+								set verificationSuccess to true
+								set end of executionResults to {stepName:"step9d_verification_result", success:true, message:"验证码验证成功: " & textContent, timestamp:(current date) as string}
+								exit repeat
+							end if
+							
+						end try
+					end repeat
+				end try
+				
+				-- 方法2：检查sheet对话框中的结果
+				if not verificationSuccess and not verificationError then
+					try
+						set allSheets to every sheet of window 1
+						repeat with currentSheet in allSheets
+							set sheetTexts to every static text of currentSheet
+							repeat with sheetText in sheetTexts
+								try
+									set textContent to value of sheetText as string
+									
+									if textContent contains "验证码错误" or textContent contains "incorrect code" then
+										set verificationError to true
+										set errorMessage to textContent
+										set end of executionResults to {stepName:"step9d_verification_result", success:false, message:"在对话框中发现验证码错误: " & textContent, timestamp:(current date) as string}
+										exit repeat
+									end if
+									
+									if textContent contains "验证成功" or textContent contains "verification successful" then
+										set verificationSuccess to true
+										set end of executionResults to {stepName:"step9d_verification_result", success:true, message:"在对话框中发现验证成功: " & textContent, timestamp:(current date) as string}
+										exit repeat
+									end if
+									
+								end try
+							end repeat
+							if verificationSuccess or verificationError then exit repeat
+						end repeat
+					end try
+				end if
+				
+				-- 方法3：检查是否回到了正常界面（没有验证码对话框）
+				if not verificationSuccess and not verificationError then
+					delay 3 -- 再等待3秒
+					
+					-- 再次检查超时
+					set currentTime to (current date)
+					set elapsedTime to (currentTime - startTime)
+					if elapsedTime > timeoutSeconds then
+						set end of executionResults to {stepName:"step9d_verification_timeout", success:false, message:"验证码检查超时（" & elapsedTime & "秒）", timestamp:(current date) as string}
+						return "TIMEOUT"
+					end if
+					
+					try
+						set hasVerificationDialog to false
+						set allSheets to every sheet of window 1
+						if length of allSheets > 0 then
+							-- 检查是否还有验证码相关的对话框
+							repeat with currentSheet in allSheets
+								set sheetTexts to every static text of currentSheet
+								repeat with sheetText in sheetTexts
+									try
+										set textContent to value of sheetText as string
+										if textContent contains "验证码" or textContent contains "verification code" then
+											set hasVerificationDialog to true
+											exit repeat
+										end if
+									end try
+								end repeat
+								if hasVerificationDialog then exit repeat
+							end repeat
+						end if
+						
+						if not hasVerificationDialog then
+							-- 如果没有验证码对话框了，可能表示验证成功
+							set verificationSuccess to true
+							set end of executionResults to {stepName:"step9d_verification_result", success:true, message:"验证码对话框消失，推测验证成功", timestamp:(current date) as string}
+						else
+							-- 如果还有验证码对话框，可能需要重新输入
+							set end of executionResults to {stepName:"step9d_verification_result", success:false, message:"验证码对话框仍然存在，可能需要重新输入", timestamp:(current date) as string}
+						end if
+					end try
+				end if
+				
+				-- 根据检查结果返回状态
+				if verificationError then
+					set end of errorMessages to "验证码验证失败: " & errorMessage
+					return "FAILED"
+				else if verificationSuccess then
+					set end of executionResults to {stepName:"step9_verification_complete", success:true, message:"验证码流程完成，验证成功", timestamp:(current date) as string}
+					return "SUCCESS"
+				else
+					set end of executionResults to {stepName:"step9d_verification_result", success:false, message:"无法确定验证码验证结果", timestamp:(current date) as string}
+					return "FAILED"
+				end if
+			end tell
+		end tell
+		
+	on error errMsg
+		set end of executionResults to {stepName:"step9d_verification_result", success:false, message:"检查验证码结果时出错: " & errMsg, timestamp:(current date) as string}
+		return "FAILED"
+	end try
+end checkVerificationResultWithTimeout
+
+-- 验证码超时后重新尝试登录
+on retryLoginAfterTimeout()
+	try
+		set end of executionResults to {stepName:"step10_retry_login_start", success:true, message:"验证码超时，开始重新登录流程", timestamp:(current date) as string}
+		
+		-- 关闭当前的验证码对话框
+		tell application "System Events"
+			tell process "Messages"
+				try
+					-- 尝试关闭sheet对话框
+					set allSheets to every sheet of window 1
+					repeat with currentSheet in allSheets
+						try
+							-- 查找取消或关闭按钮
+							set allButtons to every button of currentSheet
+							repeat with btn in allButtons
+								set buttonName to name of btn as string
+								if buttonName contains "取消" or buttonName contains "Cancel" or buttonName contains "关闭" or buttonName contains "Close" then
+									click btn
+									set end of executionResults to {stepName:"step10_close_dialog", success:true, message:"关闭验证码对话框: " & buttonName, timestamp:(current date) as string}
+									exit repeat
+								end if
+							end repeat
+						end try
+					end repeat
+				end try
+				
+				-- 等待对话框关闭
+				delay 2
+				
+				-- 尝试按ESC键关闭对话框
+				try
+					key code 53 -- ESC key
+					delay 1
+				end try
+			end tell
+		end tell
+		
+		-- 等待界面稳定
+		delay 3
+		
+		-- 重新开始登录流程
+		set end of executionResults to {stepName:"step10_restart_login", success:true, message:"准备重新开始登录流程", timestamp:(current date) as string}
+		
+		-- 增加登录重试计数
+		set currentLoginAttempt to currentLoginAttempt + 1
+		
+		-- 检查是否超过最大重试次数
+		if currentLoginAttempt <= maxLoginAttempts then
+			set end of executionResults to {stepName:"step10_retry_login", success:true, message:"开始第 " & currentLoginAttempt & " 次重新登录", timestamp:(current date) as string}
+			
+			-- 调用登录函数（使用全局变量中的用户名和密码）
+			my loginAppleIDSingleAttempt(my appleID, my userPassword, currentLoginAttempt)
+		else
+			set end of executionResults to {stepName:"step10_max_retries_reached", success:false, message:"已达到最大登录重试次数（" & maxLoginAttempts & "次）", timestamp:(current date) as string}
+			set end of errorMessages to "登录重试次数已达上限，登录失败"
+			set overallSuccess to false
+		end if
+		
+	on error errMsg
+		set end of executionResults to {stepName:"step10_retry_login_error", success:false, message:"重新登录过程中出错: " & errMsg, timestamp:(current date) as string}
+		set end of errorMessages to "重新登录失败: " & errMsg
+		set overallSuccess to false
+	end try
+end retryLoginAfterTimeout
+
+-- 检查验证码输入后的结果（保留原函数以兼容）
 on checkVerificationResult()
 	try
 		delay 5 -- 等待验证结果
