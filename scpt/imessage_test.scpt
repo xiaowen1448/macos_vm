@@ -1749,12 +1749,13 @@ on waitForVerificationWindowWithTimeout()
 end waitForVerificationWindowWithTimeout
 
 -- 带超时控制的验证码输入
-on inputVerificationCodeWithTimeout(verificationCode)
-	logDebug("INFO", "inputVerificationCodeWithTimeout", "开始输入验证码，超时时间: " & uiResponseTimeout & " 秒")
+on inputVerificationCodeWithTimeout(verificationCode, timeoutSeconds)
+	logDebug("INFO", "inputVerificationCodeWithTimeout", "开始输入验证码: " & verificationCode & "，超时时间: " & timeoutSeconds & " 秒")
 	set startTime to (current date)
 	
-	repeat while ((current date) - startTime) < uiResponseTimeout
+	repeat while ((current date) - startTime) < timeoutSeconds
 		try
+			logDebug("DEBUG", "inputVerificationCodeWithTimeout", "尝试输入验证码: " & verificationCode)
 			set inputResult to inputVerificationCode(verificationCode)
 			if inputResult then
 				logDebug("INFO", "inputVerificationCodeWithTimeout", "验证码输入成功")
@@ -1767,7 +1768,7 @@ on inputVerificationCodeWithTimeout(verificationCode)
 		end try
 	end repeat
 	
-	logDebug("WARNING", "inputVerificationCodeWithTimeout", "输入验证码超时 (" & uiResponseTimeout & " 秒)")
+	logDebug("WARNING", "inputVerificationCodeWithTimeout", "输入验证码超时 (" & timeoutSeconds & " 秒)")
 	return false
 end inputVerificationCodeWithTimeout
 
@@ -1788,16 +1789,9 @@ on getVerificationCode()
 			end if
 			
 		else if verificationCodeMode is 2 then
-			-- 模式2：API获取
-			set apiCode to getVerificationCodeFromAPI()
-			if apiCode is not "" then
-				logDebug("INFO", "getVerificationCode", "从API获取验证码: " & apiCode)
-				return apiCode
-			else
-				-- API获取失败，回退到自定义验证码
-				logDebug("WARNING", "getVerificationCode", "API获取验证码失败，回退到自定义验证码: " & customVerificationCode)
-				return customVerificationCode
-			end if
+			-- 模式2：API获取（已禁用，直接使用自定义验证码）
+			logDebug("WARNING", "getVerificationCode", "API模式已禁用，使用自定义验证码: " & customVerificationCode)
+			return customVerificationCode
 			
 		else
 			-- 未知模式，使用自定义验证码
@@ -1823,62 +1817,4 @@ on setCustomVerificationCode(newCode)
 	end try
 end setCustomVerificationCode
 
--- 从API获取验证码函数
-on getVerificationCodeFromAPI()
-	try
-		logDebug("INFO", "getVerificationCodeFromAPI", "开始从API获取验证码")
-		
-		-- 读取appleid.txt文件获取API URL（使用与readAppleIDInfo相同的路径）
-		set appleIdFile to getAppleIdFilePath()
-		set fileContent to read file appleIdFile
-		set fileLines to paragraphs of fileContent
-		
-		-- 从第一行按----分隔符获取第四个字段作为API URL
-		set apiUrl to ""
-		if length of fileLines > 0 then
-			set firstLine to item 1 of fileLines as string
-			set AppleScript's text item delimiters to "----"
-			set lineParts to text items of firstLine
-			set AppleScript's text item delimiters to ""
-			
-			if length of lineParts >= 4 then
-				set apiUrl to item 4 of lineParts as string
-				-- 去除前后空格
-				if apiUrl starts with " " then set apiUrl to text 2 thru -1 of apiUrl
-				if apiUrl ends with " " then set apiUrl to text 1 thru -2 of apiUrl
-				logDebug("INFO", "getVerificationCodeFromAPI", "从第四个字段提取API URL: " & apiUrl)
-			else
-				logDebug("ERROR", "getVerificationCodeFromAPI", "appleid.txt格式错误，字段数量不足4个")
-			end if
-		end if
-		
-		if apiUrl is "" then
-			logDebug("ERROR", "getVerificationCodeFromAPI", "未找到API URL")
-			return ""
-		end if
-		
-		logDebug("INFO", "getVerificationCodeFromAPI", "使用API URL: " & apiUrl)
-		
-		-- 使用curl调用API获取验证码
-		set curlCommand to "curl -s '" & apiUrl & "'"
-		set apiResponse to do shell script curlCommand
-		
-		logDebug("INFO", "getVerificationCodeFromAPI", "API响应: " & apiResponse)
-		
-		-- 提取6位数字验证码（确保是独立的6位数字，不是更长数字的一部分）
-		set extractCommand to "echo " & quoted form of apiResponse & " | grep -oE '\\b[0-9]{6}\\b' | head -1"
-		set verificationCode to do shell script extractCommand
-		
-		if length of verificationCode is 6 then
-			logDebug("INFO", "getVerificationCodeFromAPI", "成功获取验证码: " & verificationCode)
-			return verificationCode
-		else
-			logDebug("ERROR", "getVerificationCodeFromAPI", "获取的验证码格式不正确: " & verificationCode)
-			return ""
-		end if
-		
-	on error errMsg
-		logDebug("ERROR", "getVerificationCodeFromAPI", "从API获取验证码时出错: " & errMsg)
-		return ""
-	end try
-end getVerificationCodeFromAPI
+-- API获取验证码函数已删除，只使用自定义验证码模式
