@@ -6,12 +6,22 @@ property errorMessages : {}
 property debugMessages : {}
 property overallSuccess : true
 property accountsTabOpened : false
-property maxLoginAttempts : 3
+property maxLoginAttempts : 5 -- 增加最大登录尝试次数
 property currentLoginAttempt : 0
 property appleID : ""
 property userPassword : ""
 property debugEnabled : true
 property debugLevel : "INFO" -- DEBUG, INFO, WARN, ERROR
+
+-- 新增超时配置参数
+property loginTimeout : 60 -- 单次登录操作超时时间（秒）
+property verificationTimeout : 120 -- 验证码等待超时时间（秒）
+property uiResponseTimeout : 10 -- UI响应超时时间（秒）
+property retryDelay : 5 -- 重试间隔时间（秒）
+property maxPasswordErrors : 3 -- 最大密码错误次数
+property maxVerificationErrors : 2 -- 最大验证失败次数
+property loginStatusCheckInterval : 2 -- 登录状态检查间隔（秒）
+property loginStatusMaxChecks : 15 -- 登录状态最大检查次数
 
 -- Debug日志输出函数
 on logDebug(level, functionName, message)
@@ -38,6 +48,152 @@ on getLevelPriority(level)
 	if level is "ERROR" then return 4
 	return 2 -- 默认INFO级别
 end getLevelPriority
+
+-- 错误分类和处理
+property errorCategories : {}
+property errorRecoveryAttempts : {}
+property maxRecoveryAttempts : 3
+
+-- 错误分类函数
+on categorizeError(errorMessage)
+	logDebug("DEBUG", "categorizeError", "分析错误: " & errorMessage)
+	
+	-- 网络相关错误
+	if errorMessage contains "network" or errorMessage contains "connection" or errorMessage contains "timeout" or errorMessage contains "网络" or errorMessage contains "连接" or errorMessage contains "超时" then
+		return "NETWORK_ERROR"
+	end if
+	
+	-- UI相关错误
+	if errorMessage contains "UI element" or errorMessage contains "window" or errorMessage contains "button" or errorMessage contains "text field" or errorMessage contains "界面" or errorMessage contains "按钮" or errorMessage contains "输入框" then
+		return "UI_ERROR"
+	end if
+	
+	-- 认证相关错误
+	if errorMessage contains "password" or errorMessage contains "Apple ID" or errorMessage contains "authentication" or errorMessage contains "密码" or errorMessage contains "认证" or errorMessage contains "验证" then
+		return "AUTH_ERROR"
+	end if
+	
+	-- 系统相关错误
+	if errorMessage contains "System Events" or errorMessage contains "process" or errorMessage contains "application" or errorMessage contains "系统" or errorMessage contains "进程" or errorMessage contains "应用" then
+		return "SYSTEM_ERROR"
+	end if
+	
+	-- 默认为未知错误
+	return "UNKNOWN_ERROR"
+end categorizeError
+
+-- 错误恢复策略
+on attemptErrorRecovery(errorCategory, errorMessage, context)
+	logDebug("INFO", "attemptErrorRecovery", "尝试恢复错误类型: " & errorCategory & "，上下文: " & context)
+	
+	-- 检查是否已达到最大恢复尝试次数
+	set recoveryKey to errorCategory & "_" & context
+	set currentAttempts to 0
+	try
+		set currentAttempts to errorRecoveryAttempts's item recoveryKey
+	on error
+		set errorRecoveryAttempts to errorRecoveryAttempts & {recoveryKey:0}
+	end try
+	
+	if currentAttempts >= maxRecoveryAttempts then
+		logDebug("ERROR", "attemptErrorRecovery", "已达到最大恢复尝试次数: " & maxRecoveryAttempts)
+		return false
+	end if
+	
+	-- 更新尝试次数
+	set errorRecoveryAttempts's item recoveryKey to currentAttempts + 1
+	
+	-- 根据错误类型执行恢复策略
+	if errorCategory is "NETWORK_ERROR" then
+		return recoverFromNetworkError(errorMessage, context)
+	else if errorCategory is "UI_ERROR" then
+		return recoverFromUIError(errorMessage, context)
+	else if errorCategory is "AUTH_ERROR" then
+		return recoverFromAuthError(errorMessage, context)
+	else if errorCategory is "SYSTEM_ERROR" then
+		return recoverFromSystemError(errorMessage, context)
+	else
+		return recoverFromUnknownError(errorMessage, context)
+	end if
+end attemptErrorRecovery
+
+-- 网络错误恢复
+on recoverFromNetworkError(errorMessage, context)
+	logDebug("INFO", "recoverFromNetworkError", "尝试恢复网络错误")
+	
+	-- 等待网络恢复
+	delay 10
+	
+	-- 检查网络连接
+	try
+		do shell script "ping -c 1 apple.com"
+		logDebug("INFO", "recoverFromNetworkError", "网络连接正常")
+		return true
+	on error
+		logDebug("ERROR", "recoverFromNetworkError", "网络连接仍然异常")
+		return false
+	end try
+end recoverFromNetworkError
+
+-- UI错误恢复
+on recoverFromUIError(errorMessage, context)
+	logDebug("INFO", "recoverFromUIError", "尝试恢复UI错误")
+	
+	try
+		-- 重新激活Messages应用
+		tell application "Messages" to activate
+		delay 3
+		
+		-- 检查应用是否响应
+		tell application "System Events"
+			tell process "Messages"
+				set windowCount to count of windows
+				if windowCount > 0 then
+					logDebug("INFO", "recoverFromUIError", "Messages应用已恢复响应")
+					return true
+				else
+					logDebug("ERROR", "recoverFromUIError", "Messages应用仍无响应")
+					return false
+				end if
+			end tell
+		end tell
+	on error errMsg
+		logDebug("ERROR", "recoverFromUIError", "UI恢复失败: " & errMsg)
+		return false
+	end try
+end recoverFromUIError
+
+-- 认证错误恢复
+on recoverFromAuthError(errorMessage, context)
+	logDebug("INFO", "recoverFromAuthError", "认证错误通常需要用户干预，无法自动恢复")
+	return false
+end recoverFromAuthError
+
+-- 系统错误恢复
+on recoverFromSystemError(errorMessage, context)
+	logDebug("INFO", "recoverFromSystemError", "尝试恢复系统错误")
+	
+	try
+		-- 重启System Events（如果可能）
+		delay 5
+		tell application "System Events" to activate
+		delay 2
+		logDebug("INFO", "recoverFromSystemError", "System Events已重新激活")
+		return true
+	on error errMsg
+		logDebug("ERROR", "recoverFromSystemError", "系统错误恢复失败: " & errMsg)
+		return false
+	end try
+end recoverFromSystemError
+
+-- 未知错误恢复
+on recoverFromUnknownError(errorMessage, context)
+	logDebug("INFO", "recoverFromUnknownError", "尝试通用错误恢复策略")
+	
+	-- 通用恢复策略：等待并重试
+	delay 5
+	return true
+end recoverFromUnknownError
 
 -- 主函数
 on run
@@ -74,7 +230,32 @@ on run
 		
 	on error errMsg
 		logDebug("ERROR", "run", "脚本执行失败: " & errMsg)
-		set end of errorMessages to "脚本执行失败: " & errMsg
+		
+		-- 分析错误类型并尝试恢复
+		set errorCategory to categorizeError(errMsg)
+		logDebug("INFO", "run", "错误分类: " & errorCategory)
+		
+		-- 尝试错误恢复
+		set recoverySuccessful to attemptErrorRecovery(errorCategory, errMsg, "main_execution")
+		if recoverySuccessful then
+			logDebug("INFO", "run", "错误恢复成功，尝试重新执行")
+			try
+				-- 重新执行关键步骤
+				if not accountsTabOpened then
+					openAccountsTab()
+				end if
+				if accountsTabOpened and currentLoginAttempt < maxLoginAttempts then
+					loginAppleIDWithRetry(my appleID, my userPassword)
+				end if
+			on error secondErrMsg
+				logDebug("ERROR", "run", "恢复后重新执行仍失败: " & secondErrMsg)
+				set end of errorMessages to "脚本执行失败（恢复后）: " & secondErrMsg
+			end try
+		else
+			logDebug("ERROR", "run", "错误恢复失败")
+		end if
+		
+		set end of errorMessages to "脚本执行失败: " & errMsg & " (错误类型: " & errorCategory & ")"
 		set overallSuccess to false
 		return generateJSONResult()
 	end try
@@ -413,104 +594,177 @@ on openAccountsTab()
 	end try
 end openAccountsTab
 
--- 带重试机制的登录函数
+-- 带重试机制的登录函数（增强版）
 on loginAppleIDWithRetry(appleID, userPassword)
+	logDebug("INFO", "loginAppleIDWithRetry", "开始带重试机制的登录流程，最大尝试次数: " & maxLoginAttempts)
+	
 	set currentLoginAttempt to 0
 	set loginSuccessful to false
 	set passwordErrorCount to 0
-	set maxPasswordErrors to 2 -- 最多允许2次密码错误
+	set verificationErrorCount to 0
+	set consecutiveFailures to 0
+	set lastErrorType to ""
 	
 	repeat while currentLoginAttempt < maxLoginAttempts and not loginSuccessful
 		set currentLoginAttempt to currentLoginAttempt + 1
+		logDebug("INFO", "loginAppleIDWithRetry", "开始第 " & currentLoginAttempt & " 次登录尝试")
 		set end of executionResults to {stepName:"step8_login_attempt", success:true, message:"开始第 " & currentLoginAttempt & " 次登录尝试", timestamp:(current date) as string}
 		
 		try
-			set loginResult to loginAppleIDSingleAttempt(appleID, userPassword, currentLoginAttempt)
+			-- 使用超时控制的登录尝试
+			set loginStartTime to (current date)
+			set loginResult to loginAppleIDSingleAttemptWithTimeout(appleID, userPassword, currentLoginAttempt, loginTimeout)
+			set loginEndTime to (current date)
+			set loginDuration to (loginEndTime - loginStartTime)
+			
+			logDebug("DEBUG", "loginAppleIDWithRetry", "第 " & currentLoginAttempt & " 次登录尝试完成，耗时: " & loginDuration & " 秒，结果: " & loginResult)
 			
 			if loginResult is "SUCCESS" then
 				set loginSuccessful to true
+				set consecutiveFailures to 0
+				logDebug("INFO", "loginAppleIDWithRetry", "登录成功，开始处理验证码流程")
 				set end of executionResults to {stepName:"step8_login_success", success:true, message:"第 " & currentLoginAttempt & " 次尝试登录成功，开始等待验证码窗口", timestamp:(current date) as string}
 				
-				-- 登录成功后等待验证码窗口
-				set verificationResult to waitForVerificationWindow()
-				set end of executionResults to {stepName:"step8_verification_completed", success:verificationResult, message:"waitForVerificationWindow函数执行完成，结果: " & verificationResult, timestamp:(current date) as string}
+				-- 使用超时控制等待验证码窗口
+				set verificationResult to waitForVerificationWindowWithTimeout(verificationTimeout)
+				set end of executionResults to {stepName:"step8_verification_completed", success:verificationResult, message:"验证码窗口等待完成，结果: " & verificationResult, timestamp:(current date) as string}
 				
-				-- 无论是否找到验证码窗口，都尝试输入测试验证码
+				-- 处理验证码输入
 				set testVerificationCode to "8888" -- 测试验证码
-				set inputResult to inputVerificationCode(testVerificationCode)
-				set end of executionResults to {stepName:"step8_verification_input", success:inputResult, message:"验证码输入测试完成，结果: " & inputResult & "（验证码窗口检测: " & verificationResult & "）", timestamp:(current date) as string}
+				set inputResult to inputVerificationCodeWithTimeout(testVerificationCode, uiResponseTimeout)
+				set end of executionResults to {stepName:"step8_verification_input", success:inputResult, message:"验证码输入完成，结果: " & inputResult, timestamp:(current date) as string}
 				
 			else if loginResult is "VERIFICATION_NEEDED" then
 				set loginSuccessful to true
-				set end of executionResults to {stepName:"step8_login_verification", success:true, message:"第 " & currentLoginAttempt & " 次尝试需要验证码，开始等待验证码窗口", timestamp:(current date) as string}
+				set consecutiveFailures to 0
+				logDebug("INFO", "loginAppleIDWithRetry", "登录需要验证码，开始验证码处理流程")
+				set end of executionResults to {stepName:"step8_login_verification", success:true, message:"第 " & currentLoginAttempt & " 次尝试需要验证码", timestamp:(current date) as string}
 				
-				-- 等待验证码窗口
-				set verificationResult to waitForVerificationWindow()
-				set end of executionResults to {stepName:"step8_verification_completed", success:verificationResult, message:"waitForVerificationWindow函数执行完成，结果: " & verificationResult, timestamp:(current date) as string}
+				-- 使用超时控制等待验证码窗口
+				set verificationResult to waitForVerificationWindowWithTimeout(verificationTimeout)
+				set end of executionResults to {stepName:"step8_verification_completed", success:verificationResult, message:"验证码窗口等待完成，结果: " & verificationResult, timestamp:(current date) as string}
 				
-				-- 无论是否找到验证码窗口，都尝试输入测试验证码
+				-- 处理验证码输入
 				set testVerificationCode to "9999" -- 测试验证码
-				set inputResult to inputVerificationCode(testVerificationCode)
-				set end of executionResults to {stepName:"step8_verification_input", success:inputResult, message:"验证码输入测试完成，结果: " & inputResult & "（验证码窗口检测: " & verificationResult & "）", timestamp:(current date) as string}
+				set inputResult to inputVerificationCodeWithTimeout(testVerificationCode, uiResponseTimeout)
+				set end of executionResults to {stepName:"step8_verification_input", success:inputResult, message:"验证码输入完成，结果: " & inputResult, timestamp:(current date) as string}
 				
 			else if loginResult is "PASSWORD_ERROR" then
 				-- 密码错误处理
 				set passwordErrorCount to passwordErrorCount + 1
+				set consecutiveFailures to consecutiveFailures + 1
+				set lastErrorType to "PASSWORD_ERROR"
+				logDebug("WARN", "loginAppleIDWithRetry", "密码错误，累计次数: " & passwordErrorCount)
 				set end of executionResults to {stepName:"step8_password_error", success:false, message:"第 " & currentLoginAttempt & " 次登录密码错误（累计 " & passwordErrorCount & " 次）", timestamp:(current date) as string}
 				
 				if passwordErrorCount >= maxPasswordErrors then
-					-- 密码错误次数过多，停止重试
+					logDebug("ERROR", "loginAppleIDWithRetry", "密码错误次数超过限制，停止重试")
 					set end of executionResults to {stepName:"step8_password_error_limit", success:false, message:"密码错误次数过多，停止登录尝试", timestamp:(current date) as string}
 					set end of errorMessages to "Apple ID密码不正确，已尝试 " & passwordErrorCount & " 次"
 					set overallSuccess to false
 					exit repeat
 				else
-					-- 继续重试，但给出明确提示
-					set end of executionResults to {stepName:"step8_password_retry", success:true, message:"密码错误，将在3秒后重试", timestamp:(current date) as string}
-					delay 3
+					-- 智能重试延迟：根据错误次数增加延迟时间
+					set dynamicDelay to retryDelay + (passwordErrorCount * 2)
+					logDebug("INFO", "loginAppleIDWithRetry", "密码错误，将在 " & dynamicDelay & " 秒后重试")
+					set end of executionResults to {stepName:"step8_password_retry", success:true, message:"密码错误，将在 " & dynamicDelay & " 秒后重试", timestamp:(current date) as string}
+					delay dynamicDelay
 				end if
 				
 			else if loginResult is "ACCOUNT_ERROR" then
 				-- 账户错误，不需要重试
+				set lastErrorType to "ACCOUNT_ERROR"
+				logDebug("ERROR", "loginAppleIDWithRetry", "账户不存在或无效，停止重试")
 				set end of executionResults to {stepName:"step8_account_error", success:false, message:"Apple ID账户不存在或无效，停止重试", timestamp:(current date) as string}
 				set end of errorMessages to "Apple ID账户不存在或无效"
 				set overallSuccess to false
 				exit repeat
 				
 			else if loginResult is "VERIFICATION_FAILED" then
-				-- 验证失败，可以重试
-				set end of executionResults to {stepName:"step8_verification_failed", success:false, message:"第 " & currentLoginAttempt & " 次登录验证失败，准备重试", timestamp:(current date) as string}
-				set end of errorMessages to "登录验证失败，正在重试"
+				-- 验证失败处理
+				set verificationErrorCount to verificationErrorCount + 1
+				set consecutiveFailures to consecutiveFailures + 1
+				set lastErrorType to "VERIFICATION_FAILED"
+				logDebug("WARN", "loginAppleIDWithRetry", "验证失败，累计次数: " & verificationErrorCount)
+				set end of executionResults to {stepName:"step8_verification_failed", success:false, message:"第 " & currentLoginAttempt & " 次登录验证失败（累计 " & verificationErrorCount & " 次）", timestamp:(current date) as string}
+				
+				if verificationErrorCount >= maxVerificationErrors then
+					logDebug("ERROR", "loginAppleIDWithRetry", "验证失败次数超过限制，停止重试")
+					set end of executionResults to {stepName:"step8_verification_error_limit", success:false, message:"验证失败次数过多，停止登录尝试", timestamp:(current date) as string}
+					set end of errorMessages to "登录验证失败次数过多，已尝试 " & verificationErrorCount & " 次"
+					set overallSuccess to false
+					exit repeat
+				else if currentLoginAttempt < maxLoginAttempts then
+					-- 验证失败后使用更长的延迟时间
+					set verificationDelay to retryDelay + (verificationErrorCount * 3)
+					logDebug("INFO", "loginAppleIDWithRetry", "验证失败，将在 " & verificationDelay & " 秒后重试")
+					set end of executionResults to {stepName:"step8_verification_retry", success:true, message:"验证失败，将在 " & verificationDelay & " 秒后重试", timestamp:(current date) as string}
+					delay verificationDelay
+				end if
+				
+			else if loginResult is "TIMEOUT" then
+				-- 超时处理
+				set consecutiveFailures to consecutiveFailures + 1
+				set lastErrorType to "TIMEOUT"
+				logDebug("WARN", "loginAppleIDWithRetry", "登录操作超时")
+				set end of executionResults to {stepName:"step8_login_timeout", success:false, message:"第 " & currentLoginAttempt & " 次登录操作超时", timestamp:(current date) as string}
 				
 				if currentLoginAttempt < maxLoginAttempts then
-					delay 5 -- 验证失败后等待更长时间
+					-- 超时后使用较长的延迟时间
+					set timeoutDelay to retryDelay + 5
+					logDebug("INFO", "loginAppleIDWithRetry", "超时后将在 " & timeoutDelay & " 秒后重试")
+					set end of executionResults to {stepName:"step8_timeout_retry", success:true, message:"超时后将在 " & timeoutDelay & " 秒后重试", timestamp:(current date) as string}
+					delay timeoutDelay
 				end if
 				
 			else
-				-- 其他登录失败，准备重试
+				-- 其他未知错误
+				set consecutiveFailures to consecutiveFailures + 1
+				set lastErrorType to "UNKNOWN_ERROR"
+				logDebug("WARN", "loginAppleIDWithRetry", "未知登录错误: " & loginResult)
 				set end of executionResults to {stepName:"step8_login_failed", success:false, message:"第 " & currentLoginAttempt & " 次登录失败: " & loginResult, timestamp:(current date) as string}
 				
 				if currentLoginAttempt < maxLoginAttempts then
-					delay 3 -- 等待3秒后重试
+					-- 根据连续失败次数调整延迟时间
+					set adaptiveDelay to retryDelay + (consecutiveFailures * 2)
+					logDebug("INFO", "loginAppleIDWithRetry", "将在 " & adaptiveDelay & " 秒后重试")
+					set end of executionResults to {stepName:"step8_adaptive_retry", success:true, message:"将在 " & adaptiveDelay & " 秒后重试", timestamp:(current date) as string}
+					delay adaptiveDelay
 				end if
 			end if
 			
 		on error errMsg
+			set consecutiveFailures to consecutiveFailures + 1
+			logDebug("ERROR", "loginAppleIDWithRetry", "第 " & currentLoginAttempt & " 次登录出现异常: " & errMsg)
 			set end of executionResults to {stepName:"step8_login_error", success:false, message:"第 " & currentLoginAttempt & " 次登录出现错误: " & errMsg, timestamp:(current date) as string}
 			
+			
 			if currentLoginAttempt < maxLoginAttempts then
-				delay 3 -- 等待3秒后重试
+				-- 异常后使用基础延迟时间
+				logDebug("INFO", "loginAppleIDWithRetry", "异常后将在 " & retryDelay & " 秒后重试")
+				set end of executionResults to {stepName:"step8_exception_retry", success:true, message:"异常后将在 " & retryDelay & " 秒后重试", timestamp:(current date) as string}
+				delay retryDelay
 			end if
 		end try
 	end repeat
 	
+	-- 最终结果处理
 	if not loginSuccessful then
+		logDebug("ERROR", "loginAppleIDWithRetry", "所有登录尝试均失败，最后错误类型: " & lastErrorType)
 		if passwordErrorCount >= maxPasswordErrors then
-			set end of errorMessages to "登录失败：Apple ID或密码不正确"
+			set end of errorMessages to "登录失败：Apple ID或密码不正确，已尝试 " & passwordErrorCount & " 次"
+		else if verificationErrorCount >= maxVerificationErrors then
+			set end of errorMessages to "登录失败：验证失败次数过多，已尝试 " & verificationErrorCount & " 次"
+		else if lastErrorType is "TIMEOUT" then
+			set end of errorMessages to "登录失败：操作超时，请检查网络连接"
+		else if lastErrorType is "ACCOUNT_ERROR" then
+			set end of errorMessages to "登录失败：Apple ID账户不存在或无效"
 		else
-			set end of errorMessages to "所有登录尝试均失败，已达到最大重试次数"
+			set end of errorMessages to "所有登录尝试均失败，已达到最大重试次数 (" & maxLoginAttempts & ")"
 		end if
 		set overallSuccess to false
+	else
+		logDebug("INFO", "loginAppleIDWithRetry", "登录流程成功完成")
 	end if
 end loginAppleIDWithRetry
 
@@ -586,90 +840,119 @@ on loginAppleIDSingleAttempt(appleID, userPassword, attemptNumber)
 	end try
 end loginAppleIDSingleAttempt
 
--- 检查登录结果
+-- 改进的登录结果检查（带状态监控）
 on checkLoginResult()
+	logDebug("INFO", "checkLoginResult", "开始检查登录结果")
 	try
 		tell application "System Events"
 			tell process "Messages"
-				delay 3 -- 增加等待时间，确保错误信息完全显示
+				-- 使用配置的状态检查间隔
+				delay loginStatusCheckInterval
 				
 				-- 检查是否有错误信息
 				set errorFound to false
 				set verificationNeeded to false
 				set loginSuccess to false
 				set errorMessage to ""
+				set checkCount to 0
 				
-				-- 方法1：检查窗口中的所有文本元素（包括错误提示）
-				try
-					set allUIElements to entire contents of window 1
-					repeat with uiElement in allUIElements
-						try
-							set elementValue to ""
+				-- 多次状态检查循环，提高检测准确性
+				repeat while checkCount < loginStatusMaxChecks and not errorFound and not verificationNeeded and not loginSuccess
+					set checkCount to checkCount + 1
+					logDebug("INFO", "checkLoginResult", "第 " & checkCount & " 次状态检查")
+					
+					-- 方法1：检查窗口中的所有文本元素（包括错误提示）
+					try
+						set allUIElements to entire contents of window 1
+						repeat with uiElement in allUIElements
 							try
-								set elementValue to value of uiElement as string
-							on error
+								set elementValue to ""
 								try
-									set elementValue to name of uiElement as string
+									set elementValue to value of uiElement as string
+								on error
+									try
+										set elementValue to name of uiElement as string
+									end try
 								end try
-							end try
-							
-							if elementValue is not "" then
-								-- 检查Apple ID或密码错误的各种表述
-								if elementValue contains "您的 Apple ID 或密码不正确" or elementValue contains "Apple ID 或密码不正确" or elementValue contains "密码不正确" or elementValue contains "incorrect password" or elementValue contains "密码错误" or elementValue contains "wrong password" or elementValue contains "Invalid Apple ID or password" or elementValue contains "Apple ID or password is incorrect" then
-									set errorFound to true
-									set errorMessage to elementValue
-									set end of executionResults to {stepName:"step8_check_result", success:false, message:"检测到密码错误信息: " & elementValue, timestamp:(current date) as string}
-									return "PASSWORD_ERROR"
-								end if
 								
-								-- 检查账户相关错误
-								if elementValue contains "账户不存在" or elementValue contains "account does not exist" or elementValue contains "无效的用户名" or elementValue contains "invalid username" or elementValue contains "Apple ID不存在" or elementValue contains "Apple ID does not exist" then
-									set errorFound to true
-									set errorMessage to elementValue
-									set end of executionResults to {stepName:"step8_check_result", success:false, message:"检测到账户不存在错误: " & elementValue, timestamp:(current date) as string}
-									return "ACCOUNT_ERROR"
-								end if
-								
-								-- 检查验证失败
-								if elementValue contains "验证失败" or elementValue contains "verification failed" or elementValue contains "鉴定失败" or elementValue contains "authentication failed" or elementValue contains "登录失败" or elementValue contains "login failed" then
-									set errorFound to true
-									set errorMessage to elementValue
-									set end of executionResults to {stepName:"step8_check_result", success:false, message:"检测到验证失败错误: " & elementValue, timestamp:(current date) as string}
-									return "VERIFICATION_FAILED"
-								end if
+								if elementValue is not "" then
+									logDebug("DEBUG", "checkLoginResult", "检查UI元素: " & elementValue)
+									
+									-- 检查Apple ID或密码错误的各种表述
+									if elementValue contains "您的 Apple ID 或密码不正确" or elementValue contains "Apple ID 或密码不正确" or elementValue contains "密码不正确" or elementValue contains "incorrect password" or elementValue contains "密码错误" or elementValue contains "wrong password" or elementValue contains "Invalid Apple ID or password" or elementValue contains "Apple ID or password is incorrect" or elementValue contains "登录信息不正确" then
+										set errorFound to true
+										set errorMessage to elementValue
+										logDebug("ERROR", "checkLoginResult", "检测到密码错误: " & elementValue)
+										set end of executionResults to {stepName:"step8_check_result", success:false, message:"检测到密码错误信息: " & elementValue, timestamp:(current date) as string}
+										return "PASSWORD_ERROR"
+									end if
+									
+									-- 检查账户相关错误
+									if elementValue contains "账户不存在" or elementValue contains "account does not exist" or elementValue contains "无效的用户名" or elementValue contains "invalid username" or elementValue contains "Apple ID不存在" or elementValue contains "Apple ID does not exist" or elementValue contains "此Apple ID不存在" or elementValue contains "账户无效" then
+										set errorFound to true
+										set errorMessage to elementValue
+										logDebug("ERROR", "checkLoginResult", "检测到账户错误: " & elementValue)
+										set end of executionResults to {stepName:"step8_check_result", success:false, message:"检测到账户不存在错误: " & elementValue, timestamp:(current date) as string}
+										return "ACCOUNT_ERROR"
+									end if
+									
+									-- 检查验证失败
+									if elementValue contains "验证失败" or elementValue contains "verification failed" or elementValue contains "鉴定失败" or elementValue contains "authentication failed" or elementValue contains "登录失败" or elementValue contains "login failed" or elementValue contains "身份验证失败" then
+										set errorFound to true
+										set errorMessage to elementValue
+										logDebug("ERROR", "checkLoginResult", "检测到验证失败: " & elementValue)
+										set end of executionResults to {stepName:"step8_check_result", success:false, message:"检测到验证失败错误: " & elementValue, timestamp:(current date) as string}
+										return "VERIFICATION_FAILED"
+									end if
 								
 								-- 检查是否需要验证码
-								if elementValue contains "验证码" or elementValue contains "verification code" or elementValue contains "输入验证码" or elementValue contains "enter code" or elementValue contains "双重认证" or elementValue contains "two-factor" then
-									set verificationNeeded to true
-									set end of executionResults to {stepName:"step8_check_result", success:true, message:"检测到需要验证码: " & elementValue, timestamp:(current date) as string}
-								end if
-								
-								-- 检查是否登录成功
-								if elementValue contains "已登录" or elementValue contains "signed in" or elementValue contains "登录成功" or elementValue contains "connected" or elementValue contains "iMessage" then
-									set loginSuccess to true
-									set end of executionResults to {stepName:"step8_check_result", success:true, message:"检测到登录成功信息: " & elementValue, timestamp:(current date) as string}
-								end if
-							end if
-							
-						end try
-					end repeat
-				end try
+										if elementValue contains "验证码" or elementValue contains "verification code" or elementValue contains "输入验证码" or elementValue contains "enter code" or elementValue contains "双重认证" or elementValue contains "two-factor" or elementValue contains "输入代码" or elementValue contains "安全代码" then
+											set verificationNeeded to true
+											logDebug("INFO", "checkLoginResult", "检测到需要验证码: " & elementValue)
+											set end of executionResults to {stepName:"step8_check_result", success:true, message:"检测到需要验证码: " & elementValue, timestamp:(current date) as string}
+										end if
+										
+										-- 检查是否登录成功
+										if elementValue contains "已登录" or elementValue contains "signed in" or elementValue contains "登录成功" or elementValue contains "connected" or elementValue contains "iMessage" or elementValue contains "Messages" or elementValue contains "账户已连接" or elementValue contains "Account connected" then
+											set loginSuccess to true
+											logDebug("INFO", "checkLoginResult", "检测到登录成功: " & elementValue)
+											set end of executionResults to {stepName:"step8_check_result", success:true, message:"检测到登录成功信息: " & elementValue, timestamp:(current date) as string}
+										end if
+									end if
+									
+								end try
+							end repeat
+					end try
+					
+					-- 如果没有明确结果，等待后再次检查
+					if not errorFound and not verificationNeeded and not loginSuccess and checkCount < loginStatusMaxChecks then
+						logDebug("INFO", "checkLoginResult", "状态不明确，等待 " & loginStatusCheckInterval & " 秒后再次检查")
+						delay loginStatusCheckInterval
+					end if
+				end repeat
 				
 				
 				-- 根据检查结果返回相应状态
+				logDebug("INFO", "checkLoginResult", "状态检查完成，错误: " & errorFound & "，验证: " & verificationNeeded & "，成功: " & loginSuccess)
+				
 				if errorFound then
+					logDebug("ERROR", "checkLoginResult", "检测到登录错误")
 					return "LOGIN_ERROR"
 				else if verificationNeeded then
+					logDebug("INFO", "checkLoginResult", "需要验证码")
 					return "VERIFICATION_NEEDED"
 				else if loginSuccess then
+					logDebug("INFO", "checkLoginResult", "登录成功")
 					return "SUCCESS"
 				else
-					-- 如果没有明确的错误或成功信息，假设需要更多时间
+					-- 如果经过多次检查仍无明确结果，进行最后的快速检查
+					logDebug("WARNING", "checkLoginResult", "经过 " & checkCount & " 次检查仍无明确结果，进行最后检查")
 					delay 3
-					-- 再次检查
 					if my quickCheckForSuccess() then
+						logDebug("INFO", "checkLoginResult", "最后检查确认登录成功")
 						return "SUCCESS"
 					else
+						logDebug("WARNING", "checkLoginResult", "状态仍然不明确")
 						return "UNCLEAR_STATUS"
 					end if
 				end if
@@ -1285,3 +1568,77 @@ on generateJSONResult()
 	
 	return jsonResult
 end generateJSONResult
+
+-- 带超时控制的单次登录尝试
+on loginAppleIDSingleAttemptWithTimeout(appleID, userPassword, attemptNumber)
+	logDebug("INFO", "loginAppleIDSingleAttemptWithTimeout", "开始带超时控制的登录尝试，超时时间: " & loginTimeout & " 秒")
+	set startTime to (current date)
+	set timeoutReached to false
+	
+	try
+		-- 在超时时间内尝试登录
+		repeat while ((current date) - startTime) < loginTimeout and not timeoutReached
+			try
+				set loginResult to loginAppleIDSingleAttempt(appleID, userPassword, attemptNumber)
+				if loginResult is not "TIMEOUT" and loginResult is not "UNCLEAR_STATUS" then
+					return loginResult
+				end if
+				delay 2 -- 短暂等待后重试
+			on error errMsg
+				logDebug("WARNING", "loginAppleIDSingleAttemptWithTimeout", "登录过程中出现错误: " & errMsg)
+				delay 2
+			end try
+		end repeat
+		
+		logDebug("WARNING", "loginAppleIDSingleAttemptWithTimeout", "登录操作超时 (" & loginTimeout & " 秒)")
+		return "TIMEOUT"
+	on error errMsg
+		logDebug("ERROR", "loginAppleIDSingleAttemptWithTimeout", "登录过程中发生错误: " & errMsg)
+		return "ERROR"
+	end try
+end loginAppleIDSingleAttemptWithTimeout
+
+-- 带超时控制的验证窗口等待
+on waitForVerificationWindowWithTimeout()
+	logDebug("INFO", "waitForVerificationWindowWithTimeout", "开始等待验证窗口，超时时间: " & verificationTimeout & " 秒")
+	set startTime to (current date)
+	
+	repeat while ((current date) - startTime) < verificationTimeout
+		try
+			if waitForVerificationWindow() then
+				logDebug("INFO", "waitForVerificationWindowWithTimeout", "验证窗口已出现")
+				return true
+			end if
+			delay 2
+		on error errMsg
+			logDebug("WARNING", "waitForVerificationWindowWithTimeout", "等待验证窗口时出现错误: " & errMsg)
+			delay 2
+		end try
+	end repeat
+	
+	logDebug("WARNING", "waitForVerificationWindowWithTimeout", "等待验证窗口超时 (" & verificationTimeout & " 秒)")
+	return false
+end waitForVerificationWindowWithTimeout
+
+-- 带超时控制的验证码输入
+on inputVerificationCodeWithTimeout(verificationCode)
+	logDebug("INFO", "inputVerificationCodeWithTimeout", "开始输入验证码，超时时间: " & uiResponseTimeout & " 秒")
+	set startTime to (current date)
+	
+	repeat while ((current date) - startTime) < uiResponseTimeout
+		try
+			set inputResult to inputVerificationCode(verificationCode)
+			if inputResult then
+				logDebug("INFO", "inputVerificationCodeWithTimeout", "验证码输入成功")
+				return true
+			end if
+			delay 1
+		on error errMsg
+			logDebug("WARNING", "inputVerificationCodeWithTimeout", "输入验证码时出现错误: " & errMsg)
+			delay 1
+		end try
+	end repeat
+	
+	logDebug("WARNING", "inputVerificationCodeWithTimeout", "输入验证码超时 (" & uiResponseTimeout & " 秒)")
+	return false
+end inputVerificationCodeWithTimeout
