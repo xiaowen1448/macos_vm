@@ -1,5 +1,4 @@
 -- Apple ID 自动登录完整脚本（增强版）
--- 格式要求：belle10665@gmail.com----GcxCmGhJY7h3----573018243428----http://appleid-phone-api.vip/api/get_sms.php?id=3837058330
 
 property executionResults : {}
 property errorMessages : {}
@@ -22,6 +21,9 @@ property maxPasswordErrors : 3 -- 最大密码错误次数
 property maxVerificationErrors : 2 -- 最大验证失败次数
 property loginStatusCheckInterval : 2 -- 登录状态检查间隔（秒）
 property loginStatusMaxChecks : 15 -- 登录状态最大检查次数
+property customVerificationCode : "666666" -- 自定义验证码，如果为空则使用默认测试验证码
+property verificationCodeMode : 1 -- 验证码获取方式：1=自定义输入，2=API获取
+property appleIdFilePath : "~/Documents/appleid.txt" -- appleid.txt文件路径，空值时提示没有appleid文本
 
 -- Debug日志输出函数
 on logDebug(level, functionName, message)
@@ -48,6 +50,35 @@ on getLevelPriority(level)
 	if level is "ERROR" then return 4
 	return 2 -- 默认INFO级别
 end getLevelPriority
+
+-- 获取appleid.txt文件路径
+on getAppleIdFilePath()
+	try
+		-- 如果配置路径为空，提示没有appleid文本
+		if appleIdFilePath is "" then
+			error "appleid.txt文件路径未配置，请设置appleIdFilePath参数"
+		else
+			-- 处理~路径，转换为绝对路径
+			set resolvedPath to appleIdFilePath
+			if resolvedPath starts with "~/" then
+				set homePath to (path to home folder) as string
+				-- 移除末尾的冒号并替换为POSIX路径格式
+				if homePath ends with ":" then set homePath to text 1 thru -2 of homePath
+				set resolvedPath to homePath & ":" & (text 3 thru -1 of resolvedPath)
+				-- 将/替换为:
+				set AppleScript's text item delimiters to "/"
+				set pathParts to text items of resolvedPath
+				set AppleScript's text item delimiters to ":"
+				set resolvedPath to pathParts as string
+				set AppleScript's text item delimiters to ""
+			end if
+			return resolvedPath
+		end if
+	on error errMsg
+		logDebug("ERROR", "getAppleIdFilePath", "获取appleid.txt路径失败: " & errMsg)
+		error "获取appleid.txt路径失败: " & errMsg
+	end try
+end getAppleIdFilePath
 
 -- 错误分类和处理
 property errorCategories : {}
@@ -89,11 +120,14 @@ on attemptErrorRecovery(errorCategory, errorMessage, context)
 	-- 检查是否已达到最大恢复尝试次数
 	set recoveryKey to errorCategory & "_" & context
 	set currentAttempts to 0
-	try
-		set currentAttempts to errorRecoveryAttempts's item recoveryKey
-	on error
-		set errorRecoveryAttempts to errorRecoveryAttempts & {recoveryKey:0}
-	end try
+	
+	-- 查找现有的恢复尝试次数
+	repeat with recoveryRecord in errorRecoveryAttempts
+		if (recoveryRecord's keyName as string) is recoveryKey then
+			set currentAttempts to recoveryRecord's attemptCount
+			exit repeat
+		end if
+	end repeat
 	
 	if currentAttempts >= maxRecoveryAttempts then
 		logDebug("ERROR", "attemptErrorRecovery", "已达到最大恢复尝试次数: " & maxRecoveryAttempts)
@@ -101,7 +135,19 @@ on attemptErrorRecovery(errorCategory, errorMessage, context)
 	end if
 	
 	-- 更新尝试次数
-	set errorRecoveryAttempts's item recoveryKey to currentAttempts + 1
+	set newAttempts to currentAttempts + 1
+	set foundExisting to false
+	repeat with i from 1 to length of errorRecoveryAttempts
+		if (item i of errorRecoveryAttempts)'s keyName is recoveryKey then
+			set item i of errorRecoveryAttempts to {keyName:recoveryKey, attemptCount:newAttempts}
+			set foundExisting to true
+			exit repeat
+		end if
+	end repeat
+	
+	if not foundExisting then
+		set end of errorRecoveryAttempts to {keyName:recoveryKey, attemptCount:newAttempts}
+	end if
 	
 	-- 根据错误类型执行恢复策略
 	if errorCategory is "NETWORK_ERROR" then
@@ -266,16 +312,16 @@ on readAppleIDInfo()
 	try
 		logDebug("DEBUG", "readAppleIDInfo", "开始读取Apple ID信息")
 		
-		-- 获取用户Documents目录下的appleid.txt文件
-		set documentsPath to (path to documents folder) as string
-		set appleIDFile to documentsPath & "appleid.txt"
+		-- 获取appleid.txt文件路径
+		set appleIDFile to getAppleIdFilePath()
 		logDebug("DEBUG", "readAppleIDInfo", "目标文件路径: " & appleIDFile)
 		
 		-- 检查文件是否存在
 		tell application "System Events"
 			if not (exists file appleIDFile) then
-				logDebug("ERROR", "readAppleIDInfo", "appleid.txt文件不存在")
-				error "~/Documents/appleid.txt 文件不存在，请在Documents目录下创建该文件"
+				logDebug("ERROR", "readAppleIDInfo", "appleid.txt文件不存在，路径: " & appleIDFile)
+				logDebug("INFO", "readAppleIDInfo", "请确保文件存在于指定路径，或检查appleIdFilePath配置")
+				error "找不到文件\"file " & appleIDFile & "\"。请检查文件是否存在于指定路径。"
 			end if
 		end tell
 		logDebug("DEBUG", "readAppleIDInfo", "文件存在性检查通过")
@@ -535,16 +581,47 @@ on openAccountsTab()
 					error "Messages偏好设置窗口未找到"
 				end if
 				
+				-- 首先调试工具栏信息
+				try
+					set toolbarExists to exists toolbar 1 of window 1
+					set toolbarButtonCount to 0
+					set buttonNames to {}
+					
+					if toolbarExists then
+						set toolbarButtons to every button of toolbar 1 of window 1
+						set toolbarButtonCount to count of toolbarButtons
+						
+						-- 收集所有按钮名称
+						repeat with i from 1 to toolbarButtonCount
+							try
+								set buttonName to name of button i of toolbar 1 of window 1
+								set end of buttonNames to ("按钮 " & i & ": " & buttonName)
+							on error
+								set end of buttonNames to ("按钮 " & i & ": 无法获取名称")
+							end try
+						end repeat
+					end if
+				on error debugErr
+					set toolbarExists to false
+					set toolbarButtonCount to 0
+				end try
+				
 				-- 尝试多种方式点击账户标签
 				set tabClicked to false
+				set clickMethod to ""
+				set clickedButtonName to ""
 				
 				-- 方法1：尝试中文"帐户"
 				try
 					if exists (button "帐户" of toolbar 1 of window 1) then
 						click button "帐户" of toolbar 1 of window 1
 						set tabClicked to true
+						set clickMethod to "方法1"
+						set clickedButtonName to "帐户"
 						set end of executionResults to {stepName:"step7_accounts_tab", success:true, message:"成功点击'帐户'标签", timestamp:(current date) as string}
 					end if
+				on error method1Err
+					-- 记录错误但不输出日志
 				end try
 				
 				-- 方法2：尝试简体中文"账户"
@@ -553,8 +630,12 @@ on openAccountsTab()
 						if exists (button "账户" of toolbar 1 of window 1) then
 							click button "账户" of toolbar 1 of window 1
 							set tabClicked to true
+							set clickMethod to "方法2"
+							set clickedButtonName to "账户"
 							set end of executionResults to {stepName:"step7_accounts_tab", success:true, message:"成功点击'账户'标签", timestamp:(current date) as string}
 						end if
+					on error method2Err
+						-- 记录错误但不输出日志
 					end try
 				end if
 				
@@ -564,30 +645,77 @@ on openAccountsTab()
 						if exists (button "Accounts" of toolbar 1 of window 1) then
 							click button "Accounts" of toolbar 1 of window 1
 							set tabClicked to true
+							set clickMethod to "方法3"
+							set clickedButtonName to "Accounts"
 							set end of executionResults to {stepName:"step7_accounts_tab", success:true, message:"成功点击'Accounts'标签", timestamp:(current date) as string}
 						end if
+					on error method3Err
+						-- 记录错误但不输出日志
 					end try
 				end if
 				
 				-- 方法4：点击第二个工具栏按钮
 				if not tabClicked then
 					try
-						click button 2 of toolbar 1 of window 1
-						set tabClicked to true
-						set end of executionResults to {stepName:"step7_accounts_tab", success:true, message:"成功点击第二个工具栏按钮", timestamp:(current date) as string}
+						if exists button 2 of toolbar 1 of window 1 then
+							click button 2 of toolbar 1 of window 1
+							set tabClicked to true
+							set clickMethod to "方法4"
+							set clickedButtonName to "第二个按钮"
+							set end of executionResults to {stepName:"step7_accounts_tab", success:true, message:"成功点击第二个工具栏按钮", timestamp:(current date) as string}
+						end if
+					on error method4Err
+						-- 记录错误但不输出日志
 					end try
 				end if
 				
-				if tabClicked then
-					set accountsTabOpened to true
-					delay 2 -- 等待页面加载
-				else
-					error "无法找到账户标签按钮"
+				-- 方法5：尝试通过索引遍历所有按钮
+				if not tabClicked then
+					try
+						set buttonCount to count of (every button of toolbar 1 of window 1)
+						repeat with i from 1 to buttonCount
+							try
+								set buttonName to name of button i of toolbar 1 of window 1
+								if buttonName contains "账户" or buttonName contains "帐户" or buttonName contains "Accounts" or buttonName contains "Account" then
+									click button i of toolbar 1 of window 1
+									set tabClicked to true
+									set clickMethod to "方法5"
+									set clickedButtonName to buttonName
+									set end of executionResults to {stepName:"step7_accounts_tab", success:true, message:"通过索引成功点击账户按钮: " & buttonName, timestamp:(current date) as string}
+									exit repeat
+								end if
+							end try
+						end repeat
+					on error method5Err
+						-- 记录错误但不输出日志
+					end try
 				end if
 			end tell
 		end tell
 		
+		-- 在System Events块外部进行日志记录
+		logDebug("DEBUG", "openAccountsTab", "工具栏是否存在: " & toolbarExists)
+		logDebug("DEBUG", "openAccountsTab", "工具栏按钮数量: " & toolbarButtonCount)
+		
+		-- 输出按钮信息
+		repeat with buttonInfo in buttonNames
+			logDebug("DEBUG", "openAccountsTab", buttonInfo)
+		end repeat
+		
+		if tabClicked then
+			set accountsTabOpened to true
+			logDebug("INFO", "openAccountsTab", "账户标签页成功打开，使用" & clickMethod & "，按钮名称: " & clickedButtonName)
+			delay 2 -- 等待页面加载
+		else
+			set accountsTabOpened to false
+			logDebug("ERROR", "openAccountsTab", "所有方法都无法找到账户标签按钮")
+			set end of executionResults to {stepName:"step7_accounts_tab", success:false, message:"所有方法都无法找到账户标签按钮", timestamp:(current date) as string}
+			-- 不抛出错误，让脚本继续执行并记录详细信息
+		end if
+		
 	on error errMsg
+		set accountsTabOpened to false
+		logDebug("ERROR", "openAccountsTab", "打开账户标签页时发生异常: " & errMsg)
 		set end of executionResults to {stepName:"step6_7_accounts", success:false, message:"打开账户标签失败: " & errMsg, timestamp:(current date) as string}
 		set end of errorMessages to "账户标签操作失败: " & errMsg
 		set overallSuccess to false
@@ -630,7 +758,7 @@ on loginAppleIDWithRetry(appleID, userPassword)
 				set end of executionResults to {stepName:"step8_verification_completed", success:verificationResult, message:"验证码窗口等待完成，结果: " & verificationResult, timestamp:(current date) as string}
 				
 				-- 处理验证码输入
-				set testVerificationCode to "8888" -- 测试验证码
+				set testVerificationCode to getVerificationCode()
 				set inputResult to inputVerificationCodeWithTimeout(testVerificationCode, uiResponseTimeout)
 				set end of executionResults to {stepName:"step8_verification_input", success:inputResult, message:"验证码输入完成，结果: " & inputResult, timestamp:(current date) as string}
 				
@@ -645,7 +773,7 @@ on loginAppleIDWithRetry(appleID, userPassword)
 				set end of executionResults to {stepName:"step8_verification_completed", success:verificationResult, message:"验证码窗口等待完成，结果: " & verificationResult, timestamp:(current date) as string}
 				
 				-- 处理验证码输入
-				set testVerificationCode to "9999" -- 测试验证码
+				set testVerificationCode to getVerificationCode()
 				set inputResult to inputVerificationCodeWithTimeout(testVerificationCode, uiResponseTimeout)
 				set end of executionResults to {stepName:"step8_verification_input", success:inputResult, message:"验证码输入完成，结果: " & inputResult, timestamp:(current date) as string}
 				
@@ -1642,3 +1770,115 @@ on inputVerificationCodeWithTimeout(verificationCode)
 	logDebug("WARNING", "inputVerificationCodeWithTimeout", "输入验证码超时 (" & uiResponseTimeout & " 秒)")
 	return false
 end inputVerificationCodeWithTimeout
+
+-- 获取验证码函数
+on getVerificationCode()
+	try
+		logDebug("INFO", "getVerificationCode", "验证码获取模式: " & verificationCodeMode)
+		
+		if verificationCodeMode is 1 then
+			-- 模式1：自定义输入，直接使用customVerificationCode，绝不调用API
+			logDebug("INFO", "getVerificationCode", "强制使用自定义验证码（模式1）: " & customVerificationCode)
+			-- 额外检查：确保不会意外使用appleid.txt中的数字
+			if customVerificationCode contains "61659" or customVerificationCode contains "250813" then
+				logDebug("ERROR", "getVerificationCode", "检测到自定义验证码包含appleid.txt中的数字，强制使用666666")
+				return "666666"
+			else
+				return customVerificationCode
+			end if
+			
+		else if verificationCodeMode is 2 then
+			-- 模式2：API获取
+			set apiCode to getVerificationCodeFromAPI()
+			if apiCode is not "" then
+				logDebug("INFO", "getVerificationCode", "从API获取验证码: " & apiCode)
+				return apiCode
+			else
+				-- API获取失败，回退到自定义验证码
+				logDebug("WARNING", "getVerificationCode", "API获取验证码失败，回退到自定义验证码: " & customVerificationCode)
+				return customVerificationCode
+			end if
+			
+		else
+			-- 未知模式，使用自定义验证码
+			logDebug("WARNING", "getVerificationCode", "未知的验证码模式: " & verificationCodeMode & "，使用自定义验证码: " & customVerificationCode)
+			return customVerificationCode
+		end if
+		
+	on error errMsg
+		logDebug("ERROR", "getVerificationCode", "获取验证码时出错: " & errMsg)
+		return customVerificationCode -- 出错时返回自定义验证码
+	end try
+end getVerificationCode
+
+-- 设置自定义验证码函数
+on setCustomVerificationCode(newCode)
+	try
+		set customVerificationCode to newCode
+		logDebug("INFO", "setCustomVerificationCode", "已设置自定义验证码: " & newCode)
+		return true
+	on error errMsg
+		logDebug("ERROR", "setCustomVerificationCode", "设置自定义验证码时出错: " & errMsg)
+		return false
+	end try
+end setCustomVerificationCode
+
+-- 从API获取验证码函数
+on getVerificationCodeFromAPI()
+	try
+		logDebug("INFO", "getVerificationCodeFromAPI", "开始从API获取验证码")
+		
+		-- 读取appleid.txt文件获取API URL（使用与readAppleIDInfo相同的路径）
+		set appleIdFile to getAppleIdFilePath()
+		set fileContent to read file appleIdFile
+		set fileLines to paragraphs of fileContent
+		
+		-- 从第一行按----分隔符获取第四个字段作为API URL
+		set apiUrl to ""
+		if length of fileLines > 0 then
+			set firstLine to item 1 of fileLines as string
+			set AppleScript's text item delimiters to "----"
+			set lineParts to text items of firstLine
+			set AppleScript's text item delimiters to ""
+			
+			if length of lineParts >= 4 then
+				set apiUrl to item 4 of lineParts as string
+				-- 去除前后空格
+				if apiUrl starts with " " then set apiUrl to text 2 thru -1 of apiUrl
+				if apiUrl ends with " " then set apiUrl to text 1 thru -2 of apiUrl
+				logDebug("INFO", "getVerificationCodeFromAPI", "从第四个字段提取API URL: " & apiUrl)
+			else
+				logDebug("ERROR", "getVerificationCodeFromAPI", "appleid.txt格式错误，字段数量不足4个")
+			end if
+		end if
+		
+		if apiUrl is "" then
+			logDebug("ERROR", "getVerificationCodeFromAPI", "未找到API URL")
+			return ""
+		end if
+		
+		logDebug("INFO", "getVerificationCodeFromAPI", "使用API URL: " & apiUrl)
+		
+		-- 使用curl调用API获取验证码
+		set curlCommand to "curl -s '" & apiUrl & "'"
+		set apiResponse to do shell script curlCommand
+		
+		logDebug("INFO", "getVerificationCodeFromAPI", "API响应: " & apiResponse)
+		
+		-- 提取6位数字验证码（确保是独立的6位数字，不是更长数字的一部分）
+		set extractCommand to "echo " & quoted form of apiResponse & " | grep -oE '\\b[0-9]{6}\\b' | head -1"
+		set verificationCode to do shell script extractCommand
+		
+		if length of verificationCode is 6 then
+			logDebug("INFO", "getVerificationCodeFromAPI", "成功获取验证码: " & verificationCode)
+			return verificationCode
+		else
+			logDebug("ERROR", "getVerificationCodeFromAPI", "获取的验证码格式不正确: " & verificationCode)
+			return ""
+		end if
+		
+	on error errMsg
+		logDebug("ERROR", "getVerificationCodeFromAPI", "从API获取验证码时出错: " & errMsg)
+		return ""
+	end try
+end getVerificationCodeFromAPI
