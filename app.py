@@ -1102,6 +1102,12 @@ def client_management_page():
     """客户端管理页面"""
     return render_template('client_management.html')
 
+@app.route('/json_parser')
+@login_required
+def json_parser_page():
+    """JSON解析功能页面"""
+    return render_template('json_parser.html')
+
 @app.route('/api/clone_vm', methods=['POST'])
 @login_required
 def api_clone_vm():
