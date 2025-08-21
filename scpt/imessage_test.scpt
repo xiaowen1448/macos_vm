@@ -669,8 +669,6 @@ end checkLoginBusyStatus
 
 
 --验证码输入函数
-inputVerificationCode()
-
 on inputVerificationCode()
 	
 	try
