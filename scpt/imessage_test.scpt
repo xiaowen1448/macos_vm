@@ -12,9 +12,9 @@ property userPassword : ""
 property debugEnabled : true
 property debugLevel : "INFO" -- DEBUG, INFO, WARN, ERROR
 
--- 新增超时配置参数
-property loginTimeout : 60 -- 单次登录操作超时时间（秒）
-property verificationTimeout : 120 -- 验证码等待超时时间（秒）
+-- 监控配置参数（移除超时限制）
+-- property loginTimeout : 60 -- 已移除：单次登录操作超时时间
+-- property verificationTimeout : 120 -- 已移除：验证码等待超时时间
 property uiResponseTimeout : 10 -- UI响应超时时间（秒）
 property retryDelay : 5 -- 重试间隔时间（秒）
 property maxPasswordErrors : 3 -- 最大密码错误次数
@@ -47,13 +47,11 @@ on run
 		--步骤5：执行登录
 		 findAndClickLoginButton()
 
-		 --开始执行超时时间检测
-
-	
-		
+		-- 步骤6：开始检测执行结果
+		set loginResult to monitorLoginResult()
 		
 		-- 返回结果
-		return "Login process completed"
+		return loginResult
 		
 	on error errMsg
 		set end of errorMessages to "脚本执行失败: " & errMsg
@@ -329,8 +327,6 @@ on openAccountsTab()
 			end tell
 		end tell
 		
-		
-		
 		-- 切换到账户标签
 		tell application "System Events"
 			tell process "Messages"
@@ -518,82 +514,133 @@ on findAndClickLoginButton()
 			tell process "Messages"
 				set loginButtonClicked to false
 				
-				-- 先等待界面稳定
+				-- 先等待界面稳定,查找按钮，点击登录
 				delay 1
-				
-				-- 方法1：在主窗口查找"登录"按钮
-				try
-					set allButtons to every button of window 1
-					repeat with btn in allButtons
-						set buttonName to name of btn as string
-						if buttonName contains "登录" or buttonName contains "Sign In" or buttonName contains "登入" or buttonName contains "iMessage" then
-							click btn
+				tell window "帐户"
+						if exists button "登录" of group 1 of group 1 then
+							--display dialog "检测到登录 "
+							click button "登录" of group 1 of group 1
 							set loginButtonClicked to true
-		
-							delay 2 -- 等待登录界面出现
-							exit repeat
 						end if
-					end repeat
-				end try
-				
-				-- 方法2：在sheet对话框中查找登录按钮
-				if not loginButtonClicked then
-					try
-						set allSheets to every sheet of window 1
-						repeat with currentSheet in allSheets
-							set sheetButtons to every button of currentSheet
-							repeat with sheetButton in sheetButtons
-								try
-									set buttonName to name of sheetButton
-									if buttonName contains "登录" or buttonName contains "Sign In" or buttonName contains "登入" then
-										click sheetButton
-										set loginButtonClicked to true
-				
-										delay 2
-										exit repeat
-									end if
-								end try
-							end repeat
-							if loginButtonClicked then exit repeat
-						end repeat
-					end try
+					end tell
+				if not loginButtonClicked then	
 				end if
-				
-				-- 方法3：查找"添加账户"、"Add Account"等按钮
-				if not loginButtonClicked then
-					try
-						repeat with btn in (every button of window 1)
-							set buttonName to name of btn as string
-							if buttonName contains "添加" or buttonName contains "Add" or buttonName contains "新增" or buttonName contains "+" then
-								click btn
-								set loginButtonClicked to true
-		
-								delay 3 -- 等待添加账户界面出现
-								exit repeat
-							end if
-						end repeat
-					end try
-				end if
-				
-				-- 方法5：使用回车键（作为最后的尝试）
-				if not loginButtonClicked then
-					try
-						key code 36 -- Return key
-						set loginButtonClicked to true
-		
-						delay 2
-					end try
-				end if
-				
-				if not loginButtonClicked then
-	
-				end if
-				
 				return loginButtonClicked
 			end tell
 		end tell
 	on error errMsg
-		
 		return false
 	end try
 end findAndClickLoginButton
+checkLoginStatus()
+-- 检测登录状态函数
+on checkLoginStatus()
+	try
+		tell application "System Events"
+			tell process "Messages"
+			
+				-- 匹配出错
+				try
+					tell window "帐户"
+						set errorTexts to every static text of group 1 of group 1
+						repeat with t in errorTexts
+							set msg to (value of t as text)
+							if msg contains "出错" or msg contains "incorrect" then
+								display dialog "检测到错误提示: " & msg
+								return "LOGIN_ERROR"
+								exit repeat
+							end if
+						end repeat
+					end tell
+					
+				end try
+				
+				-- 匹配登录按钮
+				try
+					tell window "帐户"
+						if exists button "登录" of group 1 of group 1 then
+							--display dialog "检测到登录 "
+							return "LOGIN_BUTTON_IN"
+							
+						end if
+						
+					end tell
+					
+				end try
+				
+				-- 匹配您的 Apple ID 或密码不正确。
+				try
+					tell window "帐户"
+						set errorTexts to every static text of group 1 of group 1
+						repeat with t in errorTexts
+							set msg to (value of t as text)
+							if msg contains "不正确。" or msg contains "incorrect" then
+								display dialog "检测到错误提示: " & msg
+								return "LOGIN_PASSWORD_ERROR"
+								exit repeat
+							end if
+						end repeat
+					end tell
+					
+				end try
+				
+				-- 默认返回未知状态
+				return "UNKNOWN"
+			end tell
+		end tell
+	on error errMsg
+		log "检测登录状态时出错: " & errMsg
+		return "CHECK_ERROR"
+	end try
+end checkLoginStatus
+
+
+--匹配登录后进度窗体，busy indicator，返回结果后，则该窗体消失，未返回则此窗体存在
+on checkLoginBusyStatus()
+	
+	--sheet 1 of window "帐户" of application process "Messages" of application "System Events", busy indicator 1 of sheet 1 of window "帐户" of application process "Messages" of application "System Events", button "取消" of sheet 1 of window "帐户" of application process "Messages" of application "System Events"
+	try
+		tell application "System Events"
+			tell process "Messages"
+				tell window "帐户"
+					if exists sheet 1 then
+						
+						if exists button "取消" of sheet 1 then
+							
+							return "LOGIN_BUSY"
+						else
+							return "UNKNOWN"
+						end if
+					end if
+					
+				end tell
+			end tell
+		end tell
+		
+	end try
+	
+end checkLoginBusyStatus
+
+
+--匹配登录后验证码输入框
+on checkLoginMsgStatus()
+	
+	--sheet 1 of window "帐户" of application process "Messages" of application "System Events", busy indicator 1 of sheet 1 of window "帐户" of application process "Messages" of application "System Events", button "取消" of sheet 1 of window "帐户" of application process "Messages" of application "System Events"
+	try
+		tell application "System Events"
+			tell process "Messages"
+				tell window "帐户"
+					-- 首先检查是否有验证码输入框
+					try
+						if static text "输入发送至 " of group 2 of group 1 of UI element 1 of scroll area 1 of sheet 1 of window "帐户" exists then
+							return "VERIFICATION_NEEDED"
+						end if
+					end try
+					
+				end tell
+			end tell
+		end tell
+		
+	end try
+	
+end checkLoginMsgStatus
