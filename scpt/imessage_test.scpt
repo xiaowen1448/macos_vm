@@ -532,8 +532,10 @@ on findAndClickLoginButton()
 		return false
 	end try
 end findAndClickLoginButton
-checkLoginStatus()
+
+
 -- 检测登录状态函数
+checkLoginStatus()
 on checkLoginStatus()
 	try
 		tell application "System Events"
@@ -632,6 +634,8 @@ on checkLoginMsgStatus()
 					try
 						if static text "输入发送至 " of group 2 of group 1 of UI element 1 of scroll area 1 of sheet 1 exists then
 							return "VERIFICATION_NEEDED"
+						else
+							return "NO_VERIFICATION_NEEDED"
 						end if
 					end try
 					
