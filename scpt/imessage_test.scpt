@@ -22,7 +22,7 @@ property maxPasswordErrors : 3 -- 最大密码错误次数
 property maxVerificationErrors : 2 -- 最大验证失败次数
 property loginStatusCheckInterval : 2 -- 登录状态检查间隔（秒）
 property loginStatusMaxChecks : 15 -- 登录状态最大检查次数
-property customVerificationCode : "66666" -- 自定义验证码，如果为空则使用默认测试验证码
+property customVerificationCode : "666666" -- 自定义验证码，如果为空则使用默认测试验证码
 property verificationCodeMode : 1 -- 验证码获取方式：1=自定义输入，2=API获取
 property appleIdFilePath : "~/Documents/appleid.txt" -- appleid.txt文件路径，空值时提示没有appleid文本
 
@@ -666,6 +666,8 @@ on continuousMonitorLoginResult()
 	try
 		set maxRetryAttempts to 3 -- 最大重试次数
 		set currentRetryCount to 0
+		set maxVerificationAttempts to 3 -- 验证码最大尝试次数
+		set currentVerificationCount to 0 -- 当前验证码尝试次数
 		
 		-- 主监控循环
 		repeat
@@ -680,16 +682,26 @@ on continuousMonitorLoginResult()
 				set msgStatus to checkLoginMsgStatus()
 				
 				if msgStatus is "VERIFICATION_NEEDED" then
-					-- 需要双重验证码，自动输入测试验证码
-					set verificationResult to inputVerificationCode()
-					if verificationResult is true then
-						-- 验证码输入成功，重置重试计数并继续监控
-						set currentRetryCount to 0
-						delay 3
-						-- 继续监控循环
-					else
-						return "验证码输入失败，请检查验证码或手动处理"
-					end if
+				-- 检查验证码尝试次数
+				if currentVerificationCount >= maxVerificationAttempts then
+					return "验证码输入失败，已达到最大尝试次数（3次），脚本退出"
+				end if
+				
+				-- 增加验证码尝试次数
+				set currentVerificationCount to currentVerificationCount + 1
+				log "验证码输入尝试第 " & currentVerificationCount & " 次"
+				
+				-- 需要双重验证码，自动输入测试验证码
+				set verificationResult to inputVerificationCode()
+				if verificationResult is true then
+					-- 验证码输入成功，退出脚本
+					log "验证码输入成功，脚本退出"
+					return "验证码输入成功，脚本已退出"
+				else
+					log "验证码输入失败，第 " & currentVerificationCount & " 次尝试"
+					-- 等待5秒后继续循环，会再次检查尝试次数
+					delay 5
+				end if
 				else if msgStatus is "NO_VERIFICATION_NEEDED" then
 					-- 第三步：检查登录状态
 					set loginStatus to checkLoginStatus()
@@ -708,25 +720,9 @@ on continuousMonitorLoginResult()
 							
 							-- 继续监控循环
 						else
-							-- 达到最大重试次数，最后检查一次是否需要验证码
-							delay 2
-							set finalMsgStatus to checkLoginMsgStatus()
-							if finalMsgStatus is "VERIFICATION_NEEDED" then
-								-- 出现验证码输入框，进行验证码输入
-								set verificationResult to inputVerificationCode()
-								if verificationResult is true then
-									-- 验证码输入成功，重置重试计数并继续监控
-									set currentRetryCount to 0
-									delay 3
-									-- 继续监控循环
-								else
-									return "验证码输入失败，请检查验证码或手动处理"
-								end if
-							else
-								-- 确实没有验证码，登录失败
-								return "登录失败，已达到最大重试次数"
-							end if
-						end if
+						-- 达到最大重试次数，登录失败
+						return "登录失败，已达到最大重试次数"
+					end if
 					else if loginStatus is "LOGIN_SUCCESS" then
 						-- 登录成功
 						return "登录成功"
