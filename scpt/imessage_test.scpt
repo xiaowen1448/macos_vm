@@ -595,7 +595,7 @@ on checkLoginStatus()
 end checkLoginStatus
 
 
---匹配登录后进度窗体，busy indicator，返回结果后，则该窗体消失，未返回则此窗体存在
+--匹配登录后判断菊花是否存在，busy indicator，
 on checkLoginBusyStatus()
 	
 	--sheet 1 of window "帐户" of application process "Messages" of application "System Events", busy indicator 1 of sheet 1 of window "帐户" of application process "Messages" of application "System Events", button "取消" of sheet 1 of window "帐户" of application process "Messages" of application "System Events"
@@ -603,14 +603,12 @@ on checkLoginBusyStatus()
 		tell application "System Events"
 			tell process "Messages"
 				tell window "帐户"
-					if exists sheet 1 then
-						
-						if exists button "取消" of sheet 1 then
-							
-							return "LOGIN_BUSY"
-						else
-							return "UNKNOWN"
-						end if
+				if exists (busy indicator 1 of sheet 1) then
+						--display dialog "菊花转出现了"
+						return  "LOGIN_BUSY"
+					else
+						--display dialog "没有菊花转"
+						return  "LOGIN_NO_BUSY"
 					end if
 					
 				end tell
