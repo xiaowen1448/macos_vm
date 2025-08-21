@@ -12,16 +12,17 @@ property userPassword : ""
 property debugEnabled : true
 property debugLevel : "INFO" -- DEBUG, INFO, WARN, ERROR
 
+
+
 -- 监控配置参数（移除超时限制）
--- property loginTimeout : 60 -- 已移除：单次登录操作超时时间
--- property verificationTimeout : 120 -- 已移除：验证码等待超时时间
+property verificationTimeout : 20 -- 已移除：验证码等待超时时间
 property uiResponseTimeout : 10 -- UI响应超时时间（秒）
 property retryDelay : 5 -- 重试间隔时间（秒）
 property maxPasswordErrors : 3 -- 最大密码错误次数
 property maxVerificationErrors : 2 -- 最大验证失败次数
 property loginStatusCheckInterval : 2 -- 登录状态检查间隔（秒）
 property loginStatusMaxChecks : 15 -- 登录状态最大检查次数
-property customVerificationCode : "666666" -- 自定义验证码，如果为空则使用默认测试验证码
+property customVerificationCode : "66666" -- 自定义验证码，如果为空则使用默认测试验证码
 property verificationCodeMode : 1 -- 验证码获取方式：1=自定义输入，2=API获取
 property appleIdFilePath : "~/Documents/appleid.txt" -- appleid.txt文件路径，空值时提示没有appleid文本
 
@@ -38,17 +39,16 @@ on run
 		switchToMessagesAndHandleDialogs()
 		
 		-- 步骤3：打开账户标签页
-		openAccountsTab()	
-
+		openAccountsTab()
+		
 		--步骤4：填写账户和密码
-
 		fillLoginCredentials(my appleID, my userPassword)
-			
+		
 		--步骤5：执行登录
-		 findAndClickLoginButton()
-
-		-- 步骤6：开始检测执行结果
-		set loginResult to monitorLoginResult()
+		findAndClickLoginButton()
+		
+		-- 步骤6：开始持续监控登录结果（包含步骤7：自动输入验证码）
+		set loginResult to continuousMonitorLoginResult()
 		
 		-- 返回结果
 		return loginResult
@@ -84,7 +84,7 @@ on getAppleIdFilePath()
 			return resolvedPath
 		end if
 	on error errMsg
-
+		
 		error "获取appleid.txt路径失败: " & errMsg
 	end try
 end getAppleIdFilePath
@@ -132,7 +132,7 @@ on readAppleIDInfo()
 			set accountParts to text items of firstLine
 			set AppleScript's text item delimiters to ""
 			
-			if length of accountParts >= 2 then
+			if length of accountParts ≥ 2 then
 				-- 直接获取字符串，不进行复杂处理
 				set appleID to (item 1 of accountParts) as string
 				set userPassword to (item 2 of accountParts) as string
@@ -143,7 +143,7 @@ on readAppleIDInfo()
 				if userPassword starts with " " then set userPassword to text 2 thru -1 of userPassword
 				if userPassword ends with " " then set userPassword to text 1 thru -2 of userPassword
 				
-	
+				
 				
 				return {appleID, userPassword}
 			else
@@ -174,7 +174,7 @@ on switchToMessagesAndHandleDialogs()
 		
 		
 	on error errMsg
-
+		
 		
 		set end of errorMessages to "应用切换失败: " & errMsg
 		set overallSuccess to false
@@ -199,7 +199,7 @@ on handleSystemDialogs()
 								if elementName contains "以后" or elementName contains "Later" or elementName contains "稍后" then
 									click element
 									set firstButtonClicked to true
-				
+									
 									exit repeat
 								end if
 							end try
@@ -208,10 +208,10 @@ on handleSystemDialogs()
 				end repeat
 				
 				if not firstButtonClicked then
-	
+					
 				end if
 			on error errMsg
-	
+				
 			end try
 			
 			-- 如果第一个按钮成功点击，处理后续对话框
@@ -231,7 +231,7 @@ on handleSystemDialogs()
 								if buttonName contains "跳过" or buttonName contains "Skip" or buttonName contains "skip" then
 									click sheetButton
 									set secondButtonClicked to true
-		
+									
 									exit repeat
 								end if
 							end try
@@ -249,7 +249,7 @@ on handleSystemDialogs()
 									if elementName contains "跳过" or elementName contains "Skip" or elementName contains "skip" then
 										click element
 										set secondButtonClicked to true
-		
+										
 										exit repeat
 									end if
 								end if
@@ -258,7 +258,7 @@ on handleSystemDialogs()
 					end if
 					
 					if not secondButtonClicked then
-		
+						
 					end if
 				end try
 				
@@ -278,7 +278,7 @@ on handleSystemDialogs()
 									if buttonName contains "取消" or buttonName contains "Cancel" or buttonName contains "cancel" or buttonName contains "关闭" or buttonName contains "Close" then
 										click sheetButton
 										set thirdButtonClicked to true
-			
+										
 										exit repeat
 									end if
 								end try
@@ -296,7 +296,7 @@ on handleSystemDialogs()
 										if elementName contains "取消" or elementName contains "Cancel" or elementName contains "cancel" or elementName contains "关闭" or elementName contains "Close" then
 											click element
 											set thirdButtonClicked to true
-			
+											
 											exit repeat
 										end if
 									end if
@@ -305,7 +305,7 @@ on handleSystemDialogs()
 						end if
 						
 						if not thirdButtonClicked then
-			
+							
 						end if
 					end try
 				end if
@@ -377,7 +377,7 @@ on openAccountsTab()
 						set tabClicked to true
 						set clickMethod to "方法1"
 						set clickedButtonName to "帐户"
-	
+						
 					end if
 				on error method1Err
 					-- 记录错误但不输出日志
@@ -391,7 +391,7 @@ on openAccountsTab()
 							set tabClicked to true
 							set clickMethod to "方法2"
 							set clickedButtonName to "账户"
-	
+							
 						end if
 					on error method2Err
 						-- 记录错误但不输出日志
@@ -406,7 +406,7 @@ on openAccountsTab()
 							set tabClicked to true
 							set clickMethod to "方法3"
 							set clickedButtonName to "Accounts"
-	
+							
 						end if
 					on error method3Err
 						-- 记录错误但不输出日志
@@ -421,7 +421,7 @@ on openAccountsTab()
 							set tabClicked to true
 							set clickMethod to "方法4"
 							set clickedButtonName to "第二个按钮"
-	
+							
 						end if
 					on error method4Err
 						-- 记录错误但不输出日志
@@ -440,7 +440,7 @@ on openAccountsTab()
 									set tabClicked to true
 									set clickMethod to "方法5"
 									set clickedButtonName to buttonName
-		
+									
 									exit repeat
 								end if
 							end try
@@ -457,13 +457,13 @@ on openAccountsTab()
 			delay 2 -- 等待页面加载
 		else
 			set accountsTabOpened to false
-
+			
 			-- 不抛出错误，让脚本继续执行并记录详细信息
 		end if
 		
 	on error errMsg
 		set accountsTabOpened to false
-
+		
 		set end of errorMessages to "账户标签操作失败: " & errMsg
 		set overallSuccess to false
 	end try
@@ -479,7 +479,7 @@ on fillLoginCredentials(appleID, userPassword)
 				
 				-- 等待登录界面加载
 				delay 2
-			
+				
 				-- 方法1：尝试通用的键盘输入方法
 				if not credentialsFilled then
 					try
@@ -494,7 +494,7 @@ on fillLoginCredentials(appleID, userPassword)
 						delay 0.5
 						
 						set credentialsFilled to true
-			
+						
 					end try
 				end if
 				return credentialsFilled
@@ -517,13 +517,13 @@ on findAndClickLoginButton()
 				-- 先等待界面稳定,查找按钮，点击登录
 				delay 1
 				tell window "帐户"
-						if exists button "登录" of group 1 of group 1 then
-							--display dialog "检测到登录 "
-							click button "登录" of group 1 of group 1
-							set loginButtonClicked to true
-						end if
-					end tell
-				if not loginButtonClicked then	
+					if exists button "登录" of group 1 of group 1 then
+						--log "检测到登录 "
+						click button "登录" of group 1 of group 1
+						set loginButtonClicked to true
+					end if
+				end tell
+				if not loginButtonClicked then
 				end if
 				return loginButtonClicked
 			end tell
@@ -533,57 +533,104 @@ on findAndClickLoginButton()
 	end try
 end findAndClickLoginButton
 
+-- 检测登录忙碌状态函数
+on checkLoginProcessingStatus()
+	delay 3
+	try
+		tell application "System Events"
+			tell process "Messages"
+				tell window "帐户"
+					if exists (busy indicator 1 of sheet 1) then
+						--log "菊花转出现了"
+						return "LOGIN_BUSY"
+					else
+						--log "没有菊花转"
+						return "LOGIN_NO_BUSY"
+					end if
+					
+				end tell
+			end tell
+		end tell
+	on error errMsg
+		return "LOGIN_NO_BUSY"
+	end try
+end checkLoginProcessingStatus
 
--- 检测登录状态函数
-checkLoginStatus()
+-- 检测登录消息状态函数
+on checkLoginMsgStatus()
+	try
+		tell application "System Events"
+			tell process "Messages"
+				-- 检查是否需要双重验证码
+				try
+					-- 检查验证码输入框
+					if exists (text field 1 of group 1 of tab group 1 of window 1 whose description contains "验证码" or description contains "verification" or description contains "code") then
+						return "VERIFICATION_NEEDED"
+					end if
+					
+					-- 检查双重验证相关文本
+					set allTexts to every static text of group 1 of tab group 1 of window 1
+					repeat with textElement in allTexts
+						set textValue to value of textElement as string
+						if textValue contains "双重验证" or textValue contains "Two-Factor" or textValue contains "验证码" or textValue contains "Verification Code" then
+							return "VERIFICATION_NEEDED"
+						end if
+					end repeat
+				end try
+				
+				-- 默认返回不需要验证
+				return "NO_VERIFICATION_NEEDED"
+			end tell
+		end tell
+	on error errMsg
+		return "CHECK_ERROR"
+	end try
+end checkLoginMsgStatus
+
+
+-- 检测登录状态函数（增强版）
 on checkLoginStatus()
 	try
 		tell application "System Events"
 			tell process "Messages"
-			
-				-- 匹配出错
+				
+				-- 检查是否有密码错误提示
 				try
 					tell window "帐户"
 						set errorTexts to every static text of group 1 of group 1
 						repeat with t in errorTexts
 							set msg to (value of t as text)
-							if msg contains "出错" or msg contains "incorrect" then
-								display dialog "检测到错误提示: " & msg
-								return "LOGIN_ERROR"
-								exit repeat
-							end if
-						end repeat
-					end tell
-					
-				end try
-				
-				-- 匹配登录按钮
-				try
-					tell window "帐户"
-						if exists button "登录" of group 1 of group 1 then
-							--display dialog "检测到登录 "
-							return "LOGIN_BUTTON_IN"
-							
-						end if
-						
-					end tell
-					
-				end try
-				
-				-- 匹配您的 Apple ID 或密码不正确。
-				try
-					tell window "帐户"
-						set errorTexts to every static text of group 1 of group 1
-						repeat with t in errorTexts
-							set msg to (value of t as text)
-							if msg contains "不正确。" or msg contains "incorrect" then
-								display dialog "检测到错误提示: " & msg
+							if msg contains "密码错误" or msg contains "密码不正确" or msg contains "Password incorrect" or msg contains "Wrong password" or msg contains "不正确。" or msg contains "incorrect" then
 								return "LOGIN_PASSWORD_ERROR"
 								exit repeat
 							end if
 						end repeat
 					end tell
-					
+				end try
+				
+				-- 检查是否有一般登录错误提示
+				try
+					tell window "帐户"
+						set errorTexts to every static text of group 1 of group 1
+						repeat with t in errorTexts
+							set msg to (value of t as text)
+							if msg contains "登录失败" or msg contains "登录错误" or msg contains "Login failed" or msg contains "Login error" or msg contains "Authentication failed" or msg contains "出错" then
+								return "LOGIN_ERROR"
+								exit repeat
+							end if
+						end repeat
+					end tell
+				end try
+				
+				-- 检查是否还有登录按钮（表示需要登录或登录失败）
+				try
+					tell window "帐户"
+						if exists button "登录" of group 1 of group 1 then
+							--log "检测到登录 "
+							return "LOGIN_BUTTON_IN"
+						end if
+						
+					end tell
 				end try
 				
 				-- 默认返回未知状态
@@ -591,7 +638,6 @@ on checkLoginStatus()
 			end tell
 		end tell
 	on error errMsg
-		log "检测登录状态时出错: " & errMsg
 		return "CHECK_ERROR"
 	end try
 end checkLoginStatus
@@ -605,12 +651,12 @@ on checkLoginBusyStatus()
 		tell application "System Events"
 			tell process "Messages"
 				tell window "帐户"
-				if exists (busy indicator 1 of sheet 1) then
-						--display dialog "菊花转出现了"
-						return  "LOGIN_BUSY"
+					if exists (busy indicator 1 of sheet 1) then
+						--log "菊花转出现了"
+						return "LOGIN_BUSY"
 					else
-						--display dialog "没有菊花转"
-						return  "LOGIN_NO_BUSY"
+						--log "没有菊花转"
+						return "LOGIN_NO_BUSY"
 					end if
 					
 				end tell
@@ -622,27 +668,115 @@ on checkLoginBusyStatus()
 end checkLoginBusyStatus
 
 
---匹配登录后验证码输入框
-on checkLoginMsgStatus()
+--验证码输入函数
+inputVerificationCode()
+
+on inputVerificationCode()
 	
-	--sheet 1 of window "帐户" of application process "Messages" of application "System Events", busy indicator 1 of sheet 1 of window "帐户" of application process "Messages" of application "System Events", button "取消" of sheet 1 of window "帐户" of application process "Messages" of application "System Events"
 	try
 		tell application "System Events"
 			tell process "Messages"
-				tell window "帐户"
-					-- 首先检查是否有验证码输入框
-					try
-						if static text "输入发送至 " of group 2 of group 1 of UI element 1 of scroll area 1 of sheet 1 exists then
-							return "VERIFICATION_NEEDED"
-						else
-							return "NO_VERIFICATION_NEEDED"
-						end if
-					end try
-					
-				end tell
+				-- 查找验证码输入框
+				
+				-- 检查是否存在验证码输入提示文本
+				if static text "输入发送至 " of group 2 of group 1 of UI element 1 of scroll area 1 of sheet 1 of window "帐户" exists then
+					-- 输入验证码
+					keystroke customVerificationCode
+					delay 1
+					return true
+				else
+					return false
+				end if
 			end tell
 		end tell
-		
 	end try
 	
-end checkLoginMsgStatus
+end inputVerificationCode
+
+-- 持续监控函数（新版本）
+on continuousMonitorLoginResult()
+	try
+		set maxRetryAttempts to 3 -- 最大重试次数
+		set currentRetryCount to 0
+		
+		-- 主监控循环
+		repeat
+			-- 第一步：检查登录忙碌状态
+			set busyStatus to checkLoginProcessingStatus()
+			
+			if busyStatus is "LOGIN_BUSY" then
+				-- 如果正在登录中，等待5秒后继续检测
+				delay 5
+			else if busyStatus is "LOGIN_NO_BUSY" then
+				-- 第二步：检查登录消息状态
+				set msgStatus to checkLoginMsgStatus()
+				
+				if msgStatus is "VERIFICATION_NEEDED" then
+					-- 需要双重验证码，自动输入测试验证码
+					set verificationResult to inputVerificationCode()
+					if verificationResult is true then
+						-- 验证码输入成功，重置重试计数并继续监控
+						set currentRetryCount to 0
+						delay 3
+						-- 继续监控循环
+					else
+						return "验证码输入失败，请检查验证码或手动处理"
+					end if
+				else if msgStatus is "NO_VERIFICATION_NEEDED" then
+					-- 第三步：检查登录状态
+					set loginStatus to checkLoginStatus()
+					log "登录状态检测结果: " & loginStatus
+					
+					if loginStatus is "LOGIN_ERROR" or loginStatus is "LOGIN_BUTTON_IN" or loginStatus is "LOGIN_PASSWORD_ERROR" then
+						-- 检测到登录失败，进行重试
+						if currentRetryCount < maxRetryAttempts then
+							set currentRetryCount to currentRetryCount + 1
+							
+							-- 等待3秒后重新登录
+							delay 3
+							
+							-- 重新登录
+							findAndClickLoginButton()
+							
+							-- 继续监控循环
+						else
+							-- 达到最大重试次数，最后检查一次是否需要验证码
+							delay 2
+							set finalMsgStatus to checkLoginMsgStatus()
+							if finalMsgStatus is "VERIFICATION_NEEDED" then
+								-- 出现验证码输入框，进行验证码输入
+								set verificationResult to inputVerificationCode()
+								if verificationResult is true then
+									-- 验证码输入成功，重置重试计数并继续监控
+									set currentRetryCount to 0
+									delay 3
+									-- 继续监控循环
+								else
+									return "验证码输入失败，请检查验证码或手动处理"
+								end if
+							else
+								-- 确实没有验证码，登录失败
+								return "登录失败，已达到最大重试次数"
+							end if
+						end if
+					else if loginStatus is "LOGIN_SUCCESS" then
+						-- 登录成功
+						return "登录成功"
+					else
+						-- 其他状态，继续监控
+						delay 5
+					end if
+				else
+					-- 消息状态检测出错，继续监控
+					delay 5
+				end if
+			else
+				-- 忙碌状态检测出错，继续监控
+				delay 5
+			end if
+		end repeat
+		
+	on error errMsg
+		return "监控过程出错: " & errMsg
+	end try
+end continuousMonitorLoginResult
