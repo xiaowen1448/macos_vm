@@ -630,7 +630,7 @@ on checkLoginMsgStatus()
 				tell window "帐户"
 					-- 首先检查是否有验证码输入框
 					try
-						if static text "输入发送至 " of group 2 of group 1 of UI element 1 of scroll area 1 of sheet 1 of window "帐户" exists then
+						if static text "输入发送至 " of group 2 of group 1 of UI element 1 of scroll area 1 of sheet 1 exists then
 							return "VERIFICATION_NEEDED"
 						end if
 					end try
