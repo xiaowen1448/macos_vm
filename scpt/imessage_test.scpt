@@ -556,6 +556,7 @@ on checkLoginProcessingStatus()
 	end try
 end checkLoginProcessingStatus
 
+
 -- 检测登录消息状态函数
 on checkLoginMsgStatus()
 	try
@@ -564,18 +565,10 @@ on checkLoginMsgStatus()
 				-- 检查是否需要双重验证码
 				try
 					-- 检查验证码输入框
-					if exists (text field 1 of group 1 of tab group 1 of window 1 whose description contains "验证码" or description contains "verification" or description contains "code") then
+					if static text "输入发送至 " of group 2 of group 1 of UI element 1 of scroll area 1 of sheet 1 of window "帐户" exists then
 						return "VERIFICATION_NEEDED"
 					end if
 					
-					-- 检查双重验证相关文本
-					set allTexts to every static text of group 1 of tab group 1 of window 1
-					repeat with textElement in allTexts
-						set textValue to value of textElement as string
-						if textValue contains "双重验证" or textValue contains "Two-Factor" or textValue contains "验证码" or textValue contains "Verification Code" then
-							return "VERIFICATION_NEEDED"
-						end if
-					end repeat
 				end try
 				
 				-- 默认返回不需要验证
@@ -586,6 +579,7 @@ on checkLoginMsgStatus()
 		return "CHECK_ERROR"
 	end try
 end checkLoginMsgStatus
+
 
 
 -- 检测登录状态函数（增强版）
@@ -642,30 +636,6 @@ on checkLoginStatus()
 	end try
 end checkLoginStatus
 
-
---匹配登录后判断菊花是否存在，busy indicator，
-on checkLoginBusyStatus()
-	
-	--sheet 1 of window "帐户" of application process "Messages" of application "System Events", busy indicator 1 of sheet 1 of window "帐户" of application process "Messages" of application "System Events", button "取消" of sheet 1 of window "帐户" of application process "Messages" of application "System Events"
-	try
-		tell application "System Events"
-			tell process "Messages"
-				tell window "帐户"
-					if exists (busy indicator 1 of sheet 1) then
-						--log "菊花转出现了"
-						return "LOGIN_BUSY"
-					else
-						--log "没有菊花转"
-						return "LOGIN_NO_BUSY"
-					end if
-					
-				end tell
-			end tell
-		end tell
-		
-	end try
-	
-end checkLoginBusyStatus
 
 
 --验证码输入函数
