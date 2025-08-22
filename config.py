@@ -38,8 +38,14 @@ appleid_delete_dir = r'web\config\ID_delete'
 # Apple ID已使用目录
 appleid_install_dir = r'web\config\ID_install'
 
-# 脚本本地上传路径
-script_upload_dir = r'D:\macos_vm\macos_sh'
+# 脚本本地上传路径（支持多个目录）
+script_upload_dirs = [
+    r'D:\macos_vm\macos_script\macos_sh',
+    r'D:\macos_vm\macos_script\macos_scpt'
+]
+
+# 兼容性：保持原有的单一目录配置（已废弃，请使用script_upload_dirs）
+script_upload_dir = r'D:\macos_vm\macos_script\macos_sh'
 
 
 # 虚拟机macos用户名
