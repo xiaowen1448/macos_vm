@@ -713,9 +713,7 @@
                             <button class="btn btn-warning btn-sm me-2" id="batchChangeWumaBtn" onclick="batchChangeWuma()" disabled>
                                 <i class="fas fa-exchange-alt me-2"></i>批量更改五码
                             </button>
-                            <button class="btn btn-info btn-sm me-2" id="batchChangeJUBtn" onclick="batchChangeJU()" disabled>
-                                <i class="fas fa-cogs me-2"></i>批量更改JU值
-                            </button>
+
                             <button class="btn btn-danger btn-sm me-2" id="batchDeleteBtn" onclick="batchDelete()" disabled>
                                 <i class="fas fa-trash me-2"></i>批量删除
                             </button>
@@ -4307,21 +4305,7 @@
             showBatchChangeModal();
         }
         
-        // 批量更改JU值功能
-        function batchChangeJU() {
-            const batchBtn = document.getElementById('batchChangeJUBtn');
-            
-            // 检查按钮是否被禁用
-            if (batchBtn.disabled) {
-                alert('请先启动虚拟机，然后再执行批量更改JU值操作');
-                return;
-            }
-            
-            console.log('开始批量更改JU值...');
-            
-            // 显示批量更改JU值模态对话框
-            showBatchChangeJUModal();
-        }
+
         
         // 批量删除功能
         function batchDelete() {
@@ -4455,93 +4439,7 @@
             loadRunningVMsList();
         }
         
-        // 显示批量更改JU值模态对话框
-        function showBatchChangeJUModal() {
-            // 创建模态对话框HTML
-            const modalHTML = `
-                <div class="modal fade" id="batchChangeJUModal" tabindex="-1" aria-labelledby="batchChangeJUModalLabel" aria-hidden="true">
-                    <div class="modal-dialog modal-lg">
-                        <div class="modal-content">
-                            <div class="modal-header">
-                                <h5 class="modal-title" id="batchChangeJUModalLabel">
-                                    <i class="fas fa-cogs me-2"></i>批量更改JU值
-                                </h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                            </div>
-                            <div class="modal-body">
-                                <div class="row g-3">
-                                    <!-- 执行进度显示 -->
-                                    <div class="col-12">
-                                        <div id="juProgressSection" style="display: none;">
-                                            <div class="mb-3">
-                                                <h6 class="text-info mb-2">
-                                                    <i class="fas fa-cogs me-2"></i>JU值更改进度
-                                                </h6>
-                                                <div class="progress mb-2" style="height: 25px;">
-                                                    <div class="progress-bar bg-info progress-bar-striped progress-bar-animated" 
-                                                         role="progressbar" 
-                                                         style="width: 0%" 
-                                                         id="juProgressBar">
-                                                        <span id="juProgressText">准备更改...</span>
-                                                    </div>
-                                                </div>
-                                                <div class="text-center">
-                                                    <small id="juProgressDetails" class="text-muted">正在初始化...</small>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- 虚拟机列表 -->
-                                    <div class="col-12">
-                                        <div class="card">
-                                            <div class="card-header">
-                                                <h6 class="mb-0"><i class="fas fa-server me-2"></i>已选择虚拟机列表</h6>
-                                            </div>
-                                            <div class="card-body">
-                                                <div id="runningVMsListJU" style="max-height: 400px; overflow-y: auto;">
-                                                    <div class="text-center">
-                                                        <div class="spinner-border text-primary" role="status">
-                                                            <span class="visually-hidden">加载中...</span>
-                                                        </div>
-                                                        <p class="mt-2">正在获取虚拟机列表...</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                                    <i class="fas fa-times me-2"></i>取消
-                                </button>
-                                <button type="button" class="btn btn-info" id="executeBatchChangeJUBtn" onclick="executeBatchChangeJU()">
-                                    <i class="fas fa-play me-2"></i>确定执行
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            // 移除已存在的模态对话框
-            const existingModal = document.getElementById('batchChangeJUModal');
-            if (existingModal) {
-                existingModal.remove();
-            }
-            
-            // 添加模态对话框到页面
-            document.body.insertAdjacentHTML('beforeend', modalHTML);
-            
-            // 显示模态对话框
-            const modal = new bootstrap.Modal(document.getElementById('batchChangeJUModal'));
-            modal.show();
-            
-            // 加载选中的虚拟机列表
-            loadRunningVMsListJU();
-        }
-        
+
         // 显示批量删除模态对话框
         function showBatchDeleteModal() {
             // 创建模态对话框HTML
@@ -4763,75 +4661,7 @@
         }
         
         // 加载选中的虚拟机列表（JU值）
-        function loadRunningVMsListJU() {
-            const vmListContainer = document.getElementById('runningVMsListJU');
-            
-            if (selectedVMs.size === 0) {
-                vmListContainer.innerHTML = `
-                    <div class="alert alert-warning">
-                        <i class="fas fa-exclamation-triangle me-2"></i>
-                        请先选择虚拟机
-                    </div>
-                `;
-                return;
-            }
-            
-            // 从前端数据中筛选选中的虚拟机
-            const selectedVMData = Array.from(selectedVMs).map(vmName => {
-                // 在当前页面的虚拟机数据中查找
-                let vmData = vmDataList.find(vm => vm.name === vmName);
-                if (!vmData) {
-                    // 如果在当前页面找不到，从totalVMs中查找
-                    vmData = totalVMs.find(vm => vm.name === vmName);
-                }
-                return vmData;
-            }).filter(vm => vm); // 过滤掉未找到的虚拟机
-            
-            if (selectedVMData.length === 0) {
-                vmListContainer.innerHTML = `
-                    <div class="alert alert-warning">
-                        <i class="fas fa-exclamation-triangle me-2"></i>
-                        未找到选中的虚拟机数据
-                    </div>
-                `;
-                return;
-            }
-            
-            let vmListHTML = '<div class="list-group">';
-            
-            selectedVMData.forEach(vm => {
-                let statusBadge;
-                if (vm.status === 'running') {
-                    statusBadge = '<span class="badge bg-success">运行中</span>';
-                } else if (vm.status === 'starting') {
-                    statusBadge = '<span class="badge bg-warning"><i class="fas fa-spinner fa-spin"></i> 重启中</span>';
-                } else if (vm.status === 'stopped') {
-                    statusBadge = '<span class="badge bg-secondary">已停止</span>';
-                } else {
-                    statusBadge = '<span class="badge bg-info">未知</span>';
-                }
-                
-                vmListHTML += `
-                    <div class="list-group-item">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h6 class="mb-1">${vm.name}</h6>
-                                <small class="text-muted">IP: ${vm.ip || '获取中...'}</small>
-                                <br>
-                                <small class="text-muted">状态: ${vm.status}</small>
-                            </div>
-                            ${statusBadge}
-                        </div>
-                    </div>
-                `;
-            });
-            
-            vmListHTML += '</div>';
-            vmListHTML += `<div class="mt-3"><small class="text-muted">已选择 ${selectedVMData.length} 个虚拟机</small></div>`;
-            
-            vmListContainer.innerHTML = vmListHTML;
-        }
-        
+
         // 加载选中的已关机虚拟机列表
         function loadStoppedVMsList() {
             const vmListContainer = document.getElementById('stoppedVMsList');
@@ -4941,22 +4771,37 @@
             })
             .then(response => response.json())
             .then(data => {
-                executeBtn.innerHTML = originalText;
-                executeBtn.disabled = false;
-                
                 if (data.success) {
-                    // 隐藏进度条并显示完成状态
-                    hideWumaProgress();
-                    
-                    // 更新按钮状态为执行完毕
-                    executeBtn.innerHTML = '<i class="fas fa-check me-2"></i>执行完毕';
-                    executeBtn.disabled = true;
-                    executeBtn.classList.remove('btn-warning');
-                    executeBtn.classList.add('btn-success');
-                    
-                    // 不关闭模态对话框，保持页面展示
-                    console.log('批量更改结果:', data.results);
+                    // 如果返回了ju_task_id，说明正在执行JU值更改任务
+                    if (data.ju_task_id) {
+                        // 更新进度条显示为JU值更改阶段
+                        const progressText = document.getElementById('wumaProgressText');
+                        if (progressText) {
+                            progressText.textContent = '五码更改完成，正在执行JU值更改...';
+                        }
+                        
+                        // 监控JU值更改进度
+                        monitorJUProgress(data.ju_task_id, executeBtn, originalText);
+                    } else {
+                        // 没有JU值更改任务，直接完成
+                        executeBtn.innerHTML = originalText;
+                        executeBtn.disabled = false;
+                        
+                        // 隐藏进度条并显示完成状态
+                        hideWumaProgress();
+                        
+                        // 更新按钮状态为执行完毕
+                        executeBtn.innerHTML = '<i class="fas fa-check me-2"></i>执行完毕';
+                        executeBtn.disabled = true;
+                        executeBtn.classList.remove('btn-warning');
+                        executeBtn.classList.add('btn-success');
+                        
+                        console.log('批量更改结果:', data.results);
+                    }
                 } else {
+                    executeBtn.innerHTML = originalText;
+                    executeBtn.disabled = false;
+                    
                     // 隐藏进度条
                     hideWumaProgress();
                     console.error('批量更改五码失败:', data.message);
@@ -4974,87 +4819,7 @@
             });
         }
         
-        // 执行批量更改JU值
-        function executeBatchChangeJU() {
-            const executeBtn = document.getElementById('executeBatchChangeJUBtn');
-            const originalText = executeBtn.innerHTML;
-            
-            // 检查是否有选中的虚拟机
-            if (selectedVMs.size === 0) {
-                return;
-            }
-            
-            // 检查选中的虚拟机中是否有运行中的
-            const selectedRunningVMs = Array.from(selectedVMs).filter(vmName => {
-                const vmData = vmDataList.find(vm => vm.name === vmName);
-                if (vmData) {
-                    return vmData.status === 'running';
-                }
-                const totalVMData = totalVMs.find(vm => vm.name === vmName);
-                return totalVMData && totalVMData.status === 'running';
-            });
-            
-            if (selectedRunningVMs.length === 0) {
-                return;
-            }
-            
-            // 显示进度条
-            showJUProgress(selectedRunningVMs);
-            
-            // 显示加载状态
-            executeBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>执行中...';
-            executeBtn.disabled = true;
-            
-            // 调用后端API
-            fetch('/api/batch_change_ju', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    selected_vms: selectedRunningVMs
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success && data.task_id) {
-                    // 开始监控任务进度
-                    monitorJUProgress(data.task_id, executeBtn, originalText);
-                } else {
-                    executeBtn.innerHTML = originalText;
-                    executeBtn.disabled = false;
-                    
-                    if (data.success) {
-                        // 隐藏进度条并显示完成状态
-                        hideJUProgress();
-                        
-                        // 更新按钮状态为执行完毕
-                        executeBtn.innerHTML = '<i class="fas fa-check me-2"></i>执行完毕';
-                        executeBtn.disabled = true;
-                        executeBtn.classList.remove('btn-info');
-                        executeBtn.classList.add('btn-success');
-                        
-                        // 不关闭模态对话框，保持页面展示
-                        console.log('批量更改JU值结果:', data.results);
-                    } else {
-                        // 隐藏进度条
-                        hideJUProgress();
-                        console.error('批量更改JU值失败:', data.message);
-                    }
-                }
-            })
-            .catch(error => {
-                executeBtn.innerHTML = originalText;
-                executeBtn.disabled = false;
-                
-                // 隐藏进度条
-                hideJUProgress();
-                
-                console.error('网络错误:', error.message);
-                console.error('批量更改JU值错误:', error);
-            });
-        }
-        
+
         // 执行批量删除
         function executeBatchDelete() {
             const executeBtn = document.getElementById('executeBatchDeleteBtn');
@@ -5273,8 +5038,8 @@
             
             // 完成进度
             progressBar.style.width = '100%';
-            progressText.textContent = '五码更改完成！';
-            progressDetails.textContent = '所有虚拟机的五码已成功更改';
+            progressText.textContent = '五码和JU值更改完成！';
+            progressDetails.textContent = '所有虚拟机的五码和JU值已成功更改，正在重启虚拟机';
             
             // 延迟隐藏进度条
             setTimeout(() => {
@@ -5285,218 +5050,72 @@
             }, 2000);
         }
         
-        // 显示JU值更改进度
-        function showJUProgress(vmList) {
-            const progressSection = document.getElementById('juProgressSection');
-            const progressBar = document.getElementById('juProgressBar');
-            const progressText = document.getElementById('juProgressText');
-            const progressDetails = document.getElementById('juProgressDetails');
-            
-            // 显示进度条区域
-            progressSection.style.display = 'block';
-            
-            // 初始化进度条样式
-            progressBar.style.transition = 'width 0.5s ease-in-out';
-            progressBar.style.width = '0%';
-            progressText.textContent = `正在执行更改JU值...`;
-            progressDetails.textContent = `准备更改 ${vmList.length} 个虚拟机的JU值`;
-        }
-        
-        // 监控JU值更改任务进度
+        // 监控JU值更改进度
         function monitorJUProgress(taskId, executeBtn, originalText) {
-            const progressSection = document.getElementById('juProgressSection');
-            const progressBar = document.getElementById('juProgressBar');
-            const progressText = document.getElementById('juProgressText');
-            const progressDetails = document.getElementById('juProgressDetails');
+            const progressText = document.getElementById('wumaProgressText');
+            const progressDetails = document.getElementById('wumaProgressDetails');
+            const progressBar = document.getElementById('wumaProgressBar');
             
-            let checkCount = 0;
-            const maxChecks = 300; // 最多检查5分钟
-            let lastProgress = 0;
-            
-            function checkProgress() {
-                checkCount++;
-                
+            const checkProgress = () => {
                 fetch(`/api/batch_change_ju_status/${taskId}`)
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
-                            const task = data;
+                            // 更新进度条
+                            const progress = data.progress || 0;
+                            progressBar.style.width = `${progress}%`;
                             
-                            // 平滑更新进度条，避免闪烁
-                            const targetProgress = task.progress;
-                            if (targetProgress > lastProgress) {
-                                // 使用CSS transition实现平滑过渡
-                                progressBar.style.transition = 'width 0.5s ease-in-out';
-                                progressBar.style.width = targetProgress + '%';
-                                lastProgress = targetProgress;
-                            }
-                            
-                            // 更新进度文字
-                            if (targetProgress > 0) {
-                                progressText.textContent = `正在更改虚拟机JU值... ${targetProgress}%`;
-                            } else {
-                                progressText.textContent = `正在执行更改JU值...`;
+                            // 更新进度文本
+                            if (progressText) {
+                                progressText.textContent = `JU值更改进度: ${data.current || 0}/${data.total || 0}`;
                             }
                             
                             // 更新详细信息
-                            if (task.results && task.results.length > 0) {
-                                const currentResult = task.results[task.results.length - 1];
-                                if (currentResult.success) {
-                                    if (currentResult.message.includes('正在重启')) {
-                                        progressDetails.textContent = `${currentResult.vm_name}: 脚本执行完毕，虚拟机正在重启中`;
-                                    } else {
-                                        progressDetails.textContent = `${currentResult.vm_name}: ${currentResult.message}`;
-                                    }
-                                } else {
-                                    progressDetails.textContent = `${currentResult.vm_name}: 失败 - ${currentResult.message}`;
-                                }
+                            if (progressDetails && data.logs && data.logs.length > 0) {
+                                const latestLog = data.logs[data.logs.length - 1];
+                                progressDetails.textContent = latestLog.message || '正在处理...';
                             }
                             
-                            // 检查任务是否完成
-                            if (task.status === 'completed') {
+                            // 检查任务状态
+                            if (data.status === 'completed') {
+                                // 任务完成
+                                executeBtn.innerHTML = originalText;
+                                executeBtn.disabled = false;
+                                
+                                // 隐藏进度条并显示完成状态
+                                hideWumaProgress();
+                                
                                 // 更新按钮状态为执行完毕
-                                executeBtn.innerHTML = '<i class="fas fa-check me-2"></i>执行完毕';
+                                executeBtn.innerHTML = '<i class="fas fa-check me-2"></i>五码JU更改完毕';
                                 executeBtn.disabled = true;
-                                executeBtn.classList.remove('btn-info');
+                                executeBtn.classList.remove('btn-warning');
                                 executeBtn.classList.add('btn-success');
                                 
-                                // 显示完成状态
-                                progressBar.style.transition = 'width 0.5s ease-in-out';
-                                progressBar.style.width = '100%';
-                                progressText.textContent = 'JU值更改完成！';
-                                progressDetails.textContent = '所有虚拟机的JU值已成功更改，虚拟机正在重启中';
-                                
-                                // 延迟隐藏进度条
-                                setTimeout(() => {
-                                    progressSection.style.display = 'none';
-                                    progressBar.style.width = '0%';
-                                    progressBar.style.transition = 'none';
-                                    progressText.textContent = '准备更改...';
-                                    progressDetails.textContent = '正在初始化...';
-                                }, 3000);
-                                
-                                // 不关闭模态对话框，保持页面展示
-                                console.log('批量更改JU值完成:', task.results);
-                                return;
-                            } else if (task.status === 'failed') {
+                                console.log('批量更改五码JU完成，结果:', data.results);
+                            } else if (data.status === 'failed') {
+                                // 任务失败
                                 executeBtn.innerHTML = originalText;
                                 executeBtn.disabled = false;
                                 
-                                // 显示失败状态
-                                progressBar.style.transition = 'width 0.5s ease-in-out';
-                                progressBar.style.width = '100%';
-                                progressText.textContent = 'JU值更改失败！';
-                                progressDetails.textContent = '批量更改JU值过程中出现错误';
-                                
-                                // 延迟隐藏进度条
-                                setTimeout(() => {
-                                    progressSection.style.display = 'none';
-                                    progressBar.style.width = '0%';
-                                    progressBar.style.transition = 'none';
-                                    progressText.textContent = '准备更改...';
-                                    progressDetails.textContent = '正在初始化...';
-                                }, 3000);
-                                
-                                console.error('批量更改JU值失败:', task);
-                                return;
-                            }
-                            
-                            // 继续监控
-                            if (checkCount < maxChecks) {
-                                setTimeout(checkProgress, 1000);
+                                hideWumaProgress();
+                                console.error('JU值更改任务失败');
                             } else {
-                                executeBtn.innerHTML = originalText;
-                                executeBtn.disabled = false;
-                                
-                                // 超时处理
-                                progressBar.style.transition = 'width 0.5s ease-in-out';
-                                progressBar.style.width = '100%';
-                                progressText.textContent = 'JU值更改超时！';
-                                progressDetails.textContent = '任务执行时间过长，请检查系统状态';
-                                
-                                setTimeout(() => {
-                                    progressSection.style.display = 'none';
-                                    progressBar.style.width = '0%';
-                                    progressBar.style.transition = 'none';
-                                    progressText.textContent = '准备更改...';
-                                    progressDetails.textContent = '正在初始化...';
-                                }, 3000);
-                                
-                                console.error('批量更改JU值超时');
+                                // 任务仍在进行中，继续监控
+                                setTimeout(checkProgress, 2000);
                             }
                         } else {
-                            executeBtn.innerHTML = originalText;
-                            executeBtn.disabled = false;
-                            
-                            // 显示错误状态
-                            progressBar.style.transition = 'width 0.5s ease-in-out';
-                            progressBar.style.width = '100%';
-                            progressText.textContent = 'JU值更改失败！';
-                            progressDetails.textContent = '无法获取任务状态';
-                            
-                            setTimeout(() => {
-                                progressSection.style.display = 'none';
-                                progressBar.style.width = '0%';
-                                progressBar.style.transition = 'none';
-                                progressText.textContent = '准备更改...';
-                                progressDetails.textContent = '正在初始化...';
-                            }, 3000);
-                            
-                            console.error('获取任务状态失败:', data.message);
+                            console.error('获取JU值更改进度失败:', data.message);
+                            setTimeout(checkProgress, 2000);
                         }
                     })
                     .catch(error => {
-                        executeBtn.innerHTML = originalText;
-                        executeBtn.disabled = false;
-                        
-                        // 显示错误状态
-                        progressBar.style.transition = 'width 0.5s ease-in-out';
-                        progressBar.style.width = '100%';
-                        progressText.textContent = 'JU值更改失败！';
-                        progressDetails.textContent = '网络错误，无法获取任务状态';
-                        
-                        setTimeout(() => {
-                            progressSection.style.display = 'none';
-                            progressBar.style.width = '0%';
-                            progressBar.style.transition = 'none';
-                            progressText.textContent = '准备更改...';
-                            progressDetails.textContent = '正在初始化...';
-                        }, 3000);
-                        
-                        console.error('监控任务进度失败:', error);
+                        console.error('监控JU值更改进度时出错:', error);
+                        setTimeout(checkProgress, 2000);
                     });
-            }
+            };
             
             // 开始监控
             checkProgress();
-        }
-        
-        // 隐藏JU值更改进度
-        function hideJUProgress() {
-            const progressSection = document.getElementById('juProgressSection');
-            const progressBar = document.getElementById('juProgressBar');
-            const progressText = document.getElementById('juProgressText');
-            const progressDetails = document.getElementById('juProgressDetails');
-            
-            // 清除定时器（如果存在）
-            if (progressSection.dataset.progressInterval) {
-                clearInterval(parseInt(progressSection.dataset.progressInterval));
-            }
-            
-            // 完成进度
-            progressBar.style.transition = 'width 0.5s ease-in-out';
-            progressBar.style.width = '100%';
-            progressText.textContent = 'JU值更改完成！';
-            progressDetails.textContent = '所有虚拟机的JU值已成功更改';
-            
-            // 延迟隐藏进度条
-            setTimeout(() => {
-                progressSection.style.display = 'none';
-                progressBar.style.width = '0%';
-                progressBar.style.transition = 'none';
-                progressText.textContent = '准备更改...';
-                progressDetails.textContent = '正在初始化...';
-            }, 2000);
         }
         
         // 检查选中虚拟机的状态并更新批量操作按钮
@@ -5506,16 +5125,11 @@
             if (selectedVMs.size === 0) {
                 // 没有选中任何虚拟机，禁用所有按钮
                 const batchWumaBtn = document.getElementById('batchChangeWumaBtn');
-                const batchJUBtn = document.getElementById('batchChangeJUBtn');
                 const batchDeleteBtn = document.getElementById('batchDeleteBtn');
                 
                 batchWumaBtn.disabled = true;
                 batchWumaBtn.classList.remove('btn-warning');
                 batchWumaBtn.classList.add('btn-secondary');
-                
-                batchJUBtn.disabled = true;
-                batchJUBtn.classList.remove('btn-info');
-                batchJUBtn.classList.add('btn-secondary');
                 
                 batchDeleteBtn.disabled = true;
                 batchDeleteBtn.classList.remove('btn-danger');
@@ -5553,7 +5167,6 @@
             console.log('选中的已停止虚拟机:', selectedStoppedVMs.map(vm => vm.name));
             
             const batchWumaBtn = document.getElementById('batchChangeWumaBtn');
-            const batchJUBtn = document.getElementById('batchChangeJUBtn');
             const batchDeleteBtn = document.getElementById('batchDeleteBtn');
             const batchIMLoginBtn = document.getElementById('batchIMLoginBtn');
             
@@ -5563,10 +5176,6 @@
                 batchWumaBtn.disabled = false;
                 batchWumaBtn.classList.remove('btn-secondary');
                 batchWumaBtn.classList.add('btn-warning');
-                
-                batchJUBtn.disabled = false;
-                batchJUBtn.classList.remove('btn-secondary');
-                batchJUBtn.classList.add('btn-info');
                 
                 // 启用批量IM登录按钮（需要运行中的虚拟机，且不能包含已关机的虚拟机）
                 batchIMLoginBtn.disabled = false;
@@ -5579,10 +5188,6 @@
                 batchWumaBtn.disabled = true;
                 batchWumaBtn.classList.remove('btn-warning');
                 batchWumaBtn.classList.add('btn-secondary');
-                
-                batchJUBtn.disabled = true;
-                batchJUBtn.classList.remove('btn-info');
-                batchJUBtn.classList.add('btn-secondary');
                 
                 // 禁用批量IM登录按钮
                 batchIMLoginBtn.disabled = true;

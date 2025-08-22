@@ -5160,7 +5160,7 @@ def api_batch_change_wuma():
                     continue
                 
                 # 执行mount_efi.sh脚本
-                mount_cmd = f'ssh {vm_username}@{vm_ip} "~/mount_efi.sh"'
+                mount_cmd = f'ssh -o StrictHostKeyChecking=no {vm_username}@{vm_ip} "~/mount_efi.sh"'
                 logger.info(f"执行mount命令: {mount_cmd}")
                 mount_result = subprocess.run(mount_cmd, shell=True, capture_output=True, text=True, timeout=60)
                 
@@ -5171,7 +5171,7 @@ def api_batch_change_wuma():
                     logger.info(f"mount_efi.sh执行成功")
                 
                 # 传输plist文件到虚拟机
-                scp_cmd = f'scp "{plist_file_path}" {vm_username}@{vm_ip}:{boot_config_path}'
+                scp_cmd = f'scp -o StrictHostKeyChecking=no "{plist_file_path}" {vm_username}@{vm_ip}:{boot_config_path}'
                 logger.info(f"执行scp命令: {scp_cmd}")
                 scp_result = subprocess.run(scp_cmd, shell=True, capture_output=True, text=True, timeout=60)
                 
@@ -5196,28 +5196,6 @@ def api_batch_change_wuma():
                     f.write(wuma_line + '\n')
                 
                 used_wuma_lines.append(wuma_line)
-                
-                # 重启虚拟机
-                logger.info(f"开始重启虚拟机 {vm_name}")
-                restart_cmd = [vmrun_path, 'stop', vm_path]
-                logger.info(f"停止虚拟机: {restart_cmd}")
-                stop_result = subprocess.run(restart_cmd, capture_output=True, timeout=30)
-                
-                if stop_result.returncode != 0:
-                    logger.warning(f"停止虚拟机失败: {stop_result.stderr}")
-                else:
-                    logger.info(f"虚拟机停止成功")
-                
-                time.sleep(5)  # 等待虚拟机完全停止
-                
-                restart_cmd = [vmrun_path, 'start', vm_path, 'nogui']
-                logger.info(f"启动虚拟机: {restart_cmd}")
-                start_result = subprocess.run(restart_cmd, capture_output=True, timeout=30)
-                
-                if start_result.returncode != 0:
-                    logger.warning(f"启动虚拟机失败: {start_result.stderr}")
-                else:
-                    logger.info(f"虚拟机启动成功")
                 
                 results.append({
                     'vm_name': vm_name,
@@ -5248,11 +5226,41 @@ def api_batch_change_wuma():
         
         logger.info(f"批量更改五码完成 - 成功: {success_count}/{total_count}")
         
-        return jsonify({
-            'success': True,
-            'message': f'批量更改五码完成！成功处理 {success_count}/{total_count} 个虚拟机',
-            'results': results
-        })
+        # 如果五码更改成功，自动执行批量更改JU值任务
+        if success_count > 0:
+            # 获取成功更改五码的虚拟机列表
+            successful_vms = [r['vm_name'] for r in results if r['success']]
+            logger.info(f"开始为成功更改五码的虚拟机执行批量更改JU值: {successful_vms}")
+            
+            # 创建JU值更改任务ID
+            ju_task_id = f"batch_change_ju_{int(time.time())}"
+            tasks[ju_task_id] = {
+                'status': 'running',
+                'progress': 0,
+                'total': len(successful_vms),
+                'current': 0,
+                'results': [],
+                'logs': []
+            }
+            
+            # 启动JU值更改后台任务
+            import threading
+            thread = threading.Thread(target=batch_change_ju_worker, args=(ju_task_id, successful_vms))
+            thread.daemon = True
+            thread.start()
+            
+            return jsonify({
+                'success': True,
+                'message': f'批量更改五码完成！成功处理 {success_count}/{total_count} 个虚拟机，正在自动执行JU值更改',
+                'results': results,
+                'ju_task_id': ju_task_id
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'message': f'批量更改五码完成！成功处理 {success_count}/{total_count} 个虚拟机',
+                'results': results
+            })
         
     except Exception as e:
         logger.error(f"批量更改五码失败: {str(e)}")
@@ -5414,7 +5422,7 @@ def batch_change_ju_worker(task_id, selected_vms):
                 tasks[task_id]['results'].append({
                     'vm_name': vm_name,
                     'success': True,
-                    'message': '脚本执行完毕，虚拟机正在重启中'
+                    'message': '五码和JU值更改完毕，虚拟机正在重启中'
                 })
                 
                 logger.info(f"虚拟机 {vm_name} 批量更改JU值完成")

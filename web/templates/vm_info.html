@@ -2276,7 +2276,7 @@
                 .then(data => {
                     if (data.success) {
                         alert('虚拟机删除成功');
-                        refreshVMData();
+                        refreshData();
                     } else {
                         alert('删除失败: ' + data.message);
                     }
@@ -2326,7 +2326,7 @@
             .then(data => {
                 if (data.success) {
                     alert('虚拟机启动成功');
-                    refreshVMData();
+                    refreshData();
                 } else {
                     alert('启动失败: ' + data.message);
                 }
