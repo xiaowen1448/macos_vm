@@ -1,4 +1,6 @@
 -- Apple ID 自动登录完整脚本（增强版）
+-- 新增功能：登录结果包含JSON格式输出，便于程序化处理
+-- JSON格式包含：timestamp（时间戳）、apple_id（Apple ID）、success（成功状态）、status（状态码）、message（消息）
 
 property executionResults : {}
 property errorMessages : {}
@@ -26,6 +28,23 @@ property customVerificationCode : "666666" -- 自定义验证码，如果为空�
 property verificationCodeMode : 2 -- 验证码获取方式：1=自定义输入，2=API获取
 property appleIdFilePath : "~/Documents/appleid.txt" -- appleid.txt文件路径，空值时提示没有appleid文本
 
+-- 生成JSON格式的登录结果
+on generateLoginResultJSON(success, status, message, appleId)
+	try
+		set currentTime to (current date) as string
+		set jsonResult to "{" & "\""
+		set jsonResult to jsonResult & "timestamp\":\"" & currentTime & "\","
+		set jsonResult to jsonResult & "\"apple_id\":\"" & appleId & "\","
+		set jsonResult to jsonResult & "\"success\":" & (success as string) & ","
+		set jsonResult to jsonResult & "\"status\":\"" & status & "\","
+		set jsonResult to jsonResult & "\"message\":\"" & message & "\""
+		set jsonResult to jsonResult & "}"
+		return jsonResult
+	on error errMsg
+		return "{\"error\":\"JSON生成失败: " & errMsg & "\"}"
+	end try
+end generateLoginResultJSON
+
 
 
 
@@ -50,13 +69,16 @@ on run
 		-- 步骤6：开始持续监控登录结果（包含步骤7：自动输入验证码）
 		set loginResult to continuousMonitorLoginResult()
 		
-		-- 返回结果
+		-- 返回结果（包含JSON格式）
 		return loginResult
 		
 	on error errMsg
 		set end of errorMessages to "脚本执行失败: " & errMsg
 		set overallSuccess to false
-		return "Login process failed: " & errMsg
+		set resultMessage to "Login process failed: " & errMsg
+		set jsonResult to generateLoginResultJSON(false, "SCRIPT_ERROR", resultMessage, my appleID)
+		log "JSON结果: " & jsonResult
+		return resultMessage & "\n" & jsonResult
 	end try
 end run
 
@@ -690,18 +712,14 @@ on checkLoginStatus()
 					end tell
 				end try
 				
-				--检测是否成功				
+				--检测是否成功	return "IM_SUCESSFULL"
 				try
 					tell window "帐户"
-						set errorTexts to every static text of sheet 1
-						repeat with t in errorTexts
-							set msg to (value of t as text)
-							if (textValue contains "活跃") or (textValue contains "在线") or (textValue contains "已连接") then
-								log "检测到活跃状态: " & textValue
-								return "IM_SUCESSFULL"
-								exit repeat
-							end if
-						end repeat
+						if exists button "注销" of tab group 1 of group 1  then
+							--log "检测到登录 "
+							return "IM_SUCESSFULL"
+						end if
+						
 					end tell
 				end try
 				
@@ -986,7 +1004,10 @@ on continuousMonitorLoginResult()
 							-- 继续监控循环
 						else
 						-- 达到最大重试次数，登录失败
-						return "登录失败，已达到最大重试次数"
+						set resultMessage to "登录失败，已达到最大重试次数"
+				set jsonResult to generateLoginResultJSON(false, "LOGIN_FAILED", resultMessage, my appleID)
+				log "JSON结果: " & jsonResult
+				return resultMessage & "\n" & jsonResult
 					end if
 					else if loginStatus is "LOGIN_SUCCESS" then
 					-- 登录成功，检查iMessage状态
@@ -995,12 +1016,21 @@ on continuousMonitorLoginResult()
 					log "iMessage状态检测结果: " & imStatus
 					
 					if imStatus is "IM_ERROR" then
-						return "登录成功，但iMessage激活失败，此Apple ID不可用，脚本已退出"
-					else if imStatus is "IM_SUCESSFULL" then
-						return "登录成功，iMessage激活成功，脚本已退出"
-					else
-						return "登录成功，iMessage状态未知: " & imStatus & "，脚本已退出"
-					end if
+					set resultMessage to "登录成功，但iMessage激活失败，此Apple ID不可用，脚本已退出"
+					set jsonResult to generateLoginResultJSON(false, "IM_ERROR", resultMessage, my appleID)
+					log "JSON结果: " & jsonResult
+					return resultMessage & "\n" & jsonResult
+				else if imStatus is "IM_SUCESSFULL" then
+					set resultMessage to "登录成功，iMessage激活成功，脚本已退出"
+					set jsonResult to generateLoginResultJSON(true, "IM_SUCCESS", resultMessage, my appleID)
+					log "JSON结果: " & jsonResult
+					return resultMessage & "\n" & jsonResult
+				else
+					set resultMessage to "登录成功，iMessage状态未知: " & imStatus & "，脚本已退出"
+					set jsonResult to generateLoginResultJSON(false, imStatus, resultMessage, my appleID)
+					log "JSON结果: " & jsonResult
+					return resultMessage & "\n" & jsonResult
+				end if
 					else
 						-- 其他状态，继续监控
 						delay 5
@@ -1016,6 +1046,9 @@ on continuousMonitorLoginResult()
 		end repeat
 		
 	on error errMsg
-		return "监控过程出错: " & errMsg
+		set resultMessage to "监控过程出错: " & errMsg
+		set jsonResult to generateLoginResultJSON(false, "MONITOR_ERROR", resultMessage, my appleID)
+		log "JSON结果: " & jsonResult
+		return resultMessage & "\n" & jsonResult
 	end try
 end continuousMonitorLoginResult
