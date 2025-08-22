@@ -409,6 +409,7 @@
                                             <thead>
                                                 <tr>
                                                     <th>脚本名称</th>
+                                                    <th>类型</th>
                                                     <th>脚本备注</th>
                                                     <th>大小</th>
                                                     <th>修改时间</th>
@@ -417,7 +418,7 @@
                                             </thead>
                                             <tbody id="scriptTableBody">
                                                 <tr>
-                                                    <td colspan="5" class="text-center text-muted">
+                                                    <td colspan="6" class="text-center text-muted">
                                                         <i class="fas fa-spinner fa-spin me-2"></i>加载中...
                                                     </td>
                                                 </tr>
@@ -846,7 +847,7 @@
             tbody.innerHTML = '';
             
             if (scripts.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">未找到匹配的脚本</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">未找到匹配的脚本</td></tr>';
                 // 清空分页信息
                 document.getElementById('startRecord').textContent = '0';
                 document.getElementById('endRecord').textContent = '0';
@@ -866,9 +867,18 @@
             // 显示搜索结果
             scripts.slice(startIndex, endIndex).forEach(script => {
                 const row = document.createElement('tr');
+                const scriptType = script.type === 'applescript' ? 'AppleScript' : 'Shell';
+                const typeIcon = script.type === 'applescript' ? 'fas fa-apple' : 'fas fa-terminal';
+                const typeBadge = script.type === 'applescript' ? 'badge bg-info' : 'badge bg-success';
+                
                 row.innerHTML = `
                     <td>
                         <strong>${script.name}</strong>
+                    </td>
+                    <td>
+                        <span class="${typeBadge}">
+                            <i class="${typeIcon} me-1"></i>${scriptType}
+                        </span>
                     </td>
                     <td>${script.note || '<span class="text-muted">-</span>'}</td>
                     <td>${script.size}</td>
@@ -897,7 +907,7 @@
             
             // 显示加载状态
             const tbody = document.getElementById('scriptTableBody');
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted"><i class="fas fa-spinner fa-spin me-2"></i>加载中...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted"><i class="fas fa-spinner fa-spin me-2"></i>加载中...</td></tr>';
             
             const requestUrl = `/api/scripts?page=${page}&page_size=${pageSize}&_t=${Date.now()}`;
             console.log(`发送请求: ${requestUrl}`);
@@ -990,7 +1000,7 @@
             console.log('更新脚本表格:', { page, pagination, scriptsCount: scripts.length });
             
             if (!pagination || pagination.total_count === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">暂无脚本文件</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">暂无脚本文件</td></tr>';
                 // 清空分页信息
                 document.getElementById('startRecord').textContent = '0';
                 document.getElementById('endRecord').textContent = '0';
@@ -1025,8 +1035,17 @@
             // 直接使用传入的脚本数据
             scripts.forEach(script => {
                 const row = document.createElement('tr');
+                const scriptType = script.type === 'applescript' ? 'AppleScript' : 'Shell';
+                const typeIcon = script.type === 'applescript' ? 'fas fa-apple' : 'fas fa-terminal';
+                const typeBadge = script.type === 'applescript' ? 'badge bg-info' : 'badge bg-success';
+                
                 row.innerHTML = `
                     <td><strong>${script.name}</strong></td>
+                    <td>
+                        <span class="${typeBadge}">
+                            <i class="${typeIcon} me-1"></i>${scriptType}
+                        </span>
+                    </td>
                     <td>${script.note || '<span class="text-muted">无备注</span>'}</td>
                     <td>${script.size}</td>
                     <td>${script.modified_time}</td>
@@ -1053,7 +1072,7 @@
             
             // 显示加载状态
             const tbody = document.getElementById('scriptTableBody');
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted"><i class="fas fa-spinner fa-spin me-2"></i>刷新中...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted"><i class="fas fa-spinner fa-spin me-2"></i>刷新中...</td></tr>';
             
             // 重置分页信息
             document.getElementById('startRecord').textContent = '0';

@@ -103,6 +103,68 @@ def get_vmrun_path():
         else:
             raise FileNotFoundError(f"vmrun.exe not found at {vmrun_path} or {backup_path}")
 
+# 通用函数 - 扫描脚本文件
+def scan_scripts_from_directories():
+    """从配置的多个目录扫描脚本文件"""
+    scripts = []
+    
+    # 使用新的多目录配置
+    for scripts_dir in script_upload_dirs:
+        if os.path.exists(scripts_dir):
+            logger.debug(f"扫描脚本目录: {scripts_dir}")
+            for filename in os.listdir(scripts_dir):
+                # 支持.sh和.scpt文件
+                if filename.endswith('.sh') or filename.endswith('.scpt'):
+                    file_path = os.path.join(scripts_dir, filename)
+                    try:
+                        # 获取文件信息
+                        stat = os.stat(file_path)
+                        size = stat.st_size
+                        modified_time = datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+                        
+                        # 格式化文件大小
+                        if size < 1024:
+                            size_str = f"{size}B"
+                        elif size < 1024 * 1024:
+                            size_str = f"{size // 1024}KB"
+                        else:
+                            size_str = f"{size // (1024 * 1024)}MB"
+                        
+                        # 尝试读取脚本备注（从同名的.txt文件）
+                        note_file = file_path.replace('.sh', '.txt').replace('.scpt', '.txt')
+                        note = ""
+                        if os.path.exists(note_file):
+                            try:
+                                with open(note_file, 'r', encoding='utf-8') as f:
+                                    note = f.read().strip()
+                            except Exception as e:
+                                logger.warning(f"读取备注文件失败 {note_file}: {str(e)}")
+                        
+                        # 确定脚本类型
+                        script_type = 'shell' if filename.endswith('.sh') else 'applescript'
+                        
+                        scripts.append({
+                            'name': filename,
+                            'size': size_str,
+                            'modified_time': modified_time,
+                            'path': file_path,
+                            'note': note,
+                            'type': script_type,
+                            'directory': scripts_dir
+                        })
+                        
+                        logger.debug(f"找到脚本文件: {filename}, 类型: {script_type}, 大小: {size_str}")
+                        
+                    except Exception as e:
+                        logger.error(f"处理脚本文件 {filename} 时出错: {str(e)}")
+                        continue
+        else:
+            logger.warning(f"脚本目录不存在: {scripts_dir}")
+    
+    # 按文件名排序
+    scripts.sort(key=lambda x: x['name'])
+    return scripts
+
 # 通用函数 - 获取虚拟机列表
 def get_vm_list_from_directory(vm_dir, vm_type_name):
     """从指定目录获取虚拟机列表"""
@@ -526,12 +588,18 @@ def send_script_generic(vm_type_name):
                 'message': f'无法获取虚拟机 {vm_name} 的IP地址'
             })
         
-        # 检查脚本文件是否存在
-        script_path = os.path.join(r'D:\macos_vm\macos_sh', script_name)
-        if not os.path.exists(script_path):
+        # 检查脚本文件是否存在（从配置的多个目录中查找）
+        script_path = None
+        for script_dir in script_upload_dirs:
+            potential_path = os.path.join(script_dir, script_name)
+            if os.path.exists(potential_path):
+                script_path = potential_path
+                break
+        
+        if not script_path:
             return jsonify({
                 'success': False,
-                'message': f'脚本文件 {script_name} 不存在'
+                'message': f'脚本文件 {script_name} 在配置的目录中不存在'
             })
         
         # 检查虚拟机状态和SSH互信
@@ -2868,90 +2936,39 @@ def api_scripts():
         logger.info(f"收到分页请求: page={page}, page_size={page_size}")
         logger.info(f"请求参数: {dict(request.args)}")
         
-        scripts_dir = r'D:\macos_vm\macos_sh'
-        scripts = []
+        # 使用新的通用脚本扫描函数
+        scripts = scan_scripts_from_directories()
         
-        if os.path.exists(scripts_dir):
-            for filename in os.listdir(scripts_dir):
-                if filename.endswith('.sh'):
-                    file_path = os.path.join(scripts_dir, filename)
-                    try:
-                        # 获取文件信息
-                        stat = os.stat(file_path)
-                        size = stat.st_size
-                        modified_time = datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
-                        
-                        # 格式化文件大小
-                        if size < 1024:
-                            size_str = f"{size}B"
-                        elif size < 1024 * 1024:
-                            size_str = f"{size // 1024}KB"
-                        else:
-                            size_str = f"{size // (1024 * 1024)}MB"
-                        
-                        # 尝试读取脚本备注（从同名的.txt文件）
-                        note_file = file_path.replace('.sh', '.txt')
-                        note = ""
-                        if os.path.exists(note_file):
-                            try:
-                                with open(note_file, 'r', encoding='utf-8') as f:
-                                    note = f.read().strip()
-                            except Exception as e:
-                                logger.warning(f"读取备注文件失败 {note_file}: {str(e)}")
-                        
-                        scripts.append({
-                            'name': filename,
-                            'size': size_str,
-                            'modified_time': modified_time,
-                            'path': file_path,
-                            'note': note
-                        })
-                        
-                        logger.debug(f"找到脚本文件: {filename}, 大小: {size_str}, 修改时间: {modified_time}")
-                        
-                    except Exception as e:
-                        logger.error(f"处理脚本文件 {filename} 时出错: {str(e)}")
-                        continue
-            
-            # 按文件名排序
-            scripts.sort(key=lambda x: x['name'])
-            
-            # 计算分页信息
-            total_count = len(scripts)
-            total_pages = (total_count + page_size - 1) // page_size
-            start_index = (page - 1) * page_size
-            end_index = min(start_index + page_size, total_count)
-            
-            # 获取当前页的数据
-            current_page_scripts = scripts[start_index:end_index]
-            
-            # 确保end_index反映实际返回的数据数量
-            actual_end_index = start_index + len(current_page_scripts)
-            
-            logger.info(f"分页计算详情: total_count={total_count}, page_size={page_size}, page={page}")
-            logger.info(f"分页索引: start_index={start_index}, end_index={end_index}, actual_end_index={actual_end_index}")
-            logger.info(f"当前页脚本数量: {len(current_page_scripts)}")
-            logger.info(f"脚本文件名列表: {[script['name'] for script in current_page_scripts]}")
-            logger.info(f"成功获取 {len(current_page_scripts)} 个脚本文件（第 {page} 页，共 {total_pages} 页）")
-            logger.info(f"返回的pagination数据: {{'current_page': {page}, 'page_size': {page_size}, 'total_count': {total_count}, 'total_pages': {total_pages}, 'start_index': {start_index}, 'end_index': {actual_end_index}}}")
-            return jsonify({
-                'success': True,
-                'scripts': current_page_scripts,
-                'pagination': {
-                    'current_page': page,
-                    'page_size': page_size,
-                    'total_count': total_count,
-                    'total_pages': total_pages,
-                    'start_index': start_index,
-                    'end_index': actual_end_index
-                }
-            })
-        else:
-            logger.warning(f"脚本目录不存在: {scripts_dir}")
-            return jsonify({
-                'success': False,
-                'message': f'脚本目录不存在: {scripts_dir}'
-            })
+        # 计算分页信息
+        total_count = len(scripts)
+        total_pages = (total_count + page_size - 1) // page_size
+        start_index = (page - 1) * page_size
+        end_index = min(start_index + page_size, total_count)
+        
+        # 获取当前页的数据
+        current_page_scripts = scripts[start_index:end_index]
+        
+        # 确保end_index反映实际返回的数据数量
+        actual_end_index = start_index + len(current_page_scripts)
+        
+        logger.info(f"分页计算详情: total_count={total_count}, page_size={page_size}, page={page}")
+        logger.info(f"分页索引: start_index={start_index}, end_index={end_index}, actual_end_index={actual_end_index}")
+        logger.info(f"当前页脚本数量: {len(current_page_scripts)}")
+        logger.info(f"脚本文件名列表: {[script['name'] for script in current_page_scripts]}")
+        logger.info(f"成功获取 {len(current_page_scripts)} 个脚本文件（第 {page} 页，共 {total_pages} 页）")
+        logger.info(f"返回的pagination数据: {{'current_page': {page}, 'page_size': {page_size}, 'total_count': {total_count}, 'total_pages': {total_pages}, 'start_index': {start_index}, 'end_index': {actual_end_index}}}")
+        return jsonify({
+            'success': True,
+            'scripts': current_page_scripts,
+            'pagination': {
+                'current_page': page,
+                'page_size': page_size,
+                'total_count': total_count,
+                'total_pages': total_pages,
+                'start_index': start_index,
+                'end_index': actual_end_index
+            }
+        })
             
     except Exception as e:
         logger.error(f"获取脚本列表失败: {str(e)}")
@@ -2966,65 +2983,14 @@ def api_all_scripts():
     """获取所有脚本文件列表（不分页）"""
     logger.info("收到获取所有脚本列表请求")
     try:
-        scripts_dir = r'D:\macos_vm\macos_sh'
-        scripts = []
+        # 使用新的通用脚本扫描函数
+        scripts = scan_scripts_from_directories()
         
-        if os.path.exists(scripts_dir):
-            for filename in os.listdir(scripts_dir):
-                if filename.endswith('.sh'):
-                    file_path = os.path.join(scripts_dir, filename)
-                    try:
-                        # 获取文件信息
-                        stat = os.stat(file_path)
-                        size = stat.st_size
-                        modified_time = datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
-                        
-                        # 格式化文件大小
-                        if size < 1024:
-                            size_str = f"{size}B"
-                        elif size < 1024 * 1024:
-                            size_str = f"{size // 1024}KB"
-                        else:
-                            size_str = f"{size // (1024 * 1024)}MB"
-                        
-                        # 尝试读取脚本备注（从同名的.txt文件）
-                        note_file = file_path.replace('.sh', '.txt')
-                        note = ""
-                        if os.path.exists(note_file):
-                            try:
-                                with open(note_file, 'r', encoding='utf-8') as f:
-                                    note = f.read().strip()
-                            except Exception as e:
-                                logger.warning(f"读取备注文件失败 {note_file}: {str(e)}")
-                        
-                        scripts.append({
-                            'name': filename,
-                            'size': size_str,
-                            'modified_time': modified_time,
-                            'path': file_path,
-                            'note': note
-                        })
-                        
-                        logger.debug(f"找到脚本文件: {filename}, 大小: {size_str}, 修改时间: {modified_time}")
-                        
-                    except Exception as e:
-                        logger.error(f"处理脚本文件 {filename} 时出错: {str(e)}")
-                        continue
-            
-            # 按文件名排序
-            scripts.sort(key=lambda x: x['name'])
-            
-            logger.info(f"成功获取 {len(scripts)} 个脚本文件")
-            return jsonify({
-                'success': True,
-                'scripts': scripts
-            })
-        else:
-            logger.warning(f"脚本目录不存在: {scripts_dir}")
-            return jsonify({
-                'success': False,
-                'message': f'脚本目录不存在: {scripts_dir}'
-            })
+        logger.info(f"成功获取 {len(scripts)} 个脚本文件")
+        return jsonify({
+            'success': True,
+            'scripts': scripts
+        })
             
     except Exception as e:
         logger.error(f"获取所有脚本列表失败: {str(e)}")
@@ -3072,7 +3038,8 @@ def api_add_script():
                 'message': '脚本文件名只能包含字母、数字、下划线、连字符和点，且必须以.sh结尾'
             })
         
-        scripts_dir = r'D:\macos_vm\macos_sh'
+        # 使用配置的第一个脚本目录（.sh脚本目录）
+        scripts_dir = script_upload_dirs[0]  # D:\macos_vm\macos_script\macos_sh
         script_path = os.path.join(scripts_dir, script_name)
         note_path = script_path.replace('.sh', '.txt')
         
@@ -3136,15 +3103,21 @@ def api_edit_script():
                 'message': '缺少必要参数'
             })
         
-        scripts_dir = r'D:\macos_vm\macos_sh'
-        script_path = os.path.join(scripts_dir, script_name)
-        note_path = script_path.replace('.sh', '.txt')
+        # 从配置的多个目录中查找脚本文件
+        script_path = None
+        for script_dir in script_upload_dirs:
+            potential_path = os.path.join(script_dir, script_name)
+            if os.path.exists(potential_path):
+                script_path = potential_path
+                break
         
-        if not os.path.exists(script_path):
+        if not script_path:
             return jsonify({
                 'success': False,
                 'message': f'脚本文件不存在: {script_name}'
             })
+        
+        note_path = script_path.replace('.sh', '.txt').replace('.scpt', '.txt')
         
         # 保存脚本内容
         try:
@@ -3211,16 +3184,21 @@ def api_delete_script():
                 'message': '脚本名称不能包含中文字符'
             })
         
-        scripts_dir = r'D:\macos_vm\macos_sh'
-        script_path = os.path.join(scripts_dir, script_name)
-        note_path = script_path.replace('.sh', '.txt')
+        # 从配置的多个目录中查找脚本文件
+        script_path = None
+        for script_dir in script_upload_dirs:
+            potential_path = os.path.join(script_dir, script_name)
+            if os.path.exists(potential_path):
+                script_path = potential_path
+                break
         
-        # 检查脚本文件是否存在
-        if not os.path.exists(script_path):
+        if not script_path:
             return jsonify({
                 'success': False,
                 'message': f'脚本文件不存在: {script_name}'
             })
+        
+        note_path = script_path.replace('.sh', '.txt').replace('.scpt', '.txt')
         
         try:
             # 删除脚本文件
@@ -3257,15 +3235,21 @@ def api_get_script_content(script_name):
     """获取脚本内容"""
     logger.info(f"获取脚本内容: {script_name}")
     try:
-        scripts_dir = r'D:\macos_vm\macos_sh'
-        script_path = os.path.join(scripts_dir, script_name)
-        note_path = script_path.replace('.sh', '.txt')
+        # 从配置的多个目录中查找脚本文件
+        script_path = None
+        for script_dir in script_upload_dirs:
+            potential_path = os.path.join(script_dir, script_name)
+            if os.path.exists(potential_path):
+                script_path = potential_path
+                break
         
-        if not os.path.exists(script_path):
+        if not script_path:
             return jsonify({
                 'success': False,
                 'message': f'脚本文件不存在: {script_name}'
             })
+        
+        note_path = script_path.replace('.sh', '.txt').replace('.scpt', '.txt')
         
         # 读取脚本内容
         try:
@@ -3316,11 +3300,15 @@ def api_vm_send_script():
                 'message': '缺少必要参数'
             })
         
-        # 检查脚本文件是否存在
-        scripts_dir = r'D:\macos_vm\macos_sh'
-        script_path = os.path.join(scripts_dir, script_name)
+        # 从配置的多个目录中查找脚本文件
+        script_path = None
+        for script_dir in script_upload_dirs:
+            potential_path = os.path.join(script_dir, script_name)
+            if os.path.exists(potential_path):
+                script_path = potential_path
+                break
         
-        if not os.path.exists(script_path):
+        if not script_path:
             return jsonify({
                 'success': False,
                 'message': f'脚本文件不存在: {script_name}'
