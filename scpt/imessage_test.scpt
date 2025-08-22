@@ -690,6 +690,22 @@ on checkLoginStatus()
 					end tell
 				end try
 				
+				--检测是否成功				
+				try
+					tell window "帐户"
+						set errorTexts to every static text of sheet 1
+						repeat with t in errorTexts
+							set msg to (value of t as text)
+							if (textValue contains "活跃") or (textValue contains "在线") or (textValue contains "已连接") then
+								log "检测到活跃状态: " & textValue
+								return "IM_SUCESSFULL"
+								exit repeat
+							end if
+						end repeat
+					end tell
+				end try
+				
+				
 				-- 检查是否有密码错误提示
 				try
 					tell window "帐户"
