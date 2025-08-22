@@ -280,46 +280,52 @@
         
         /* 表格列宽分配 */
         .appleid-table th:nth-child(1), .appleid-table td:nth-child(1) {
-            width: 8%; /* 序号 */
+            width: 6%; /* 序号 */
             text-align: center;
-            min-width: 60px;
+            min-width: 50px;
         }
         
         .appleid-table th:nth-child(2), .appleid-table td:nth-child(2) {
-            width: 20%; /* 账户名 */
-            min-width: 150px;
+            width: 18%; /* 账户名 */
+            min-width: 140px;
         }
         
         .appleid-table th:nth-child(3), .appleid-table td:nth-child(3) {
-            width: 15%; /* 密码 */
-            min-width: 120px;
+            width: 12%; /* 密码 */
+            min-width: 100px;
         }
         
         .appleid-table th:nth-child(4), .appleid-table td:nth-child(4) {
-            width: 37%; /* 接码地址 */
-            min-width: 200px;
+            width: 15%; /* 手机号码 - 新增 */
+            min-width: 120px;
+            text-align: center;
         }
         
         .appleid-table th:nth-child(5), .appleid-table td:nth-child(5) {
-            width: 10%; /* 状态 */
+            width: 32%; /* 接码地址 */
+            min-width: 180px;
+        }
+        
+        .appleid-table th:nth-child(6), .appleid-table td:nth-child(6) {
+            width: 9%; /* 状态 */
             text-align: center;
-            min-width: 80px;
-            max-width: 80px;
+            min-width: 70px;
+            max-width: 70px;
             white-space: nowrap;
             overflow: hidden;
         }
         
-        .appleid-table th:nth-child(6), .appleid-table td:nth-child(6) {
+        .appleid-table th:nth-child(7), .appleid-table td:nth-child(7) {
             width: 8%; /* 删除 */
             text-align: center;
-            min-width: 80px;
-            max-width: 80px;
+            min-width: 70px;
+            max-width: 70px;
             white-space: nowrap;
             overflow: hidden;
         }
         
         /* 删除列按钮样式优化 */
-        .appleid-table td:nth-child(6) .btn {
+        .appleid-table td:nth-child(7) .btn {
             padding: 0.2rem 0.4rem;
             font-size: 0.7rem;
             white-space: nowrap;
@@ -327,7 +333,7 @@
             height: 28px;
         }
         
-        .appleid-table td:nth-child(6) .btn i {
+        .appleid-table td:nth-child(7) .btn i {
             font-size: 0.65rem;
         }
         
@@ -339,7 +345,9 @@
         
         /* 长文本处理 */
         .appleid-table td:nth-child(2),
-        .appleid-table td:nth-child(3) {
+        .appleid-table td:nth-child(3),
+        .appleid-table td:nth-child(4),
+        .appleid-table td:nth-child(5) {
             max-width: 0;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -347,7 +355,7 @@
         }
         
         /* 接码地址列特殊处理 */
-        .appleid-table td:nth-child(4) {
+        .appleid-table td:nth-child(5) {
             max-width: 0;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -358,7 +366,8 @@
         
         /* 鼠标悬停显示完整内容 */
         .appleid-table td:nth-child(2):hover,
-        .appleid-table td:nth-child(3):hover {
+        .appleid-table td:nth-child(3):hover,
+        .appleid-table td:nth-child(4):hover {
             white-space: normal;
             word-break: break-all;
             position: relative;
@@ -368,7 +377,7 @@
         }
         
         /* 接码地址列悬停效果 */
-        .appleid-table td:nth-child(4):hover {
+        .appleid-table td:nth-child(5):hover {
             white-space: normal;
             word-break: break-all;
             position: relative;
@@ -390,11 +399,11 @@
         }
         
         /* 链接图标悬停效果 */
-        .appleid-table td:nth-child(4) i.fas.fa-link {
+        .appleid-table td:nth-child(5) i.fas.fa-link {
             transition: all 0.3s ease;
         }
         
-        .appleid-table td:nth-child(4) i.fas.fa-link:hover {
+        .appleid-table td:nth-child(5) i.fas.fa-link:hover {
             color: #007bff !important;
             transform: scale(1.1);
         }
@@ -926,6 +935,7 @@
                                     <th><i class="fas fa-hashtag me-1"></i>序号</th>
                                     <th><i class="fas fa-user me-1"></i>账户名</th>
                                     <th><i class="fas fa-key me-1"></i>密码</th>
+                                    <th><i class="fas fa-phone me-1"></i>手机号码</th>
                                     <th><i class="fas fa-link me-1"></i>接码地址</th>
                                     <th><i class="fas fa-info-circle me-1"></i>状态</th>
                                     <th><i class="fas fa-trash me-1"></i>删除</th>
@@ -1362,7 +1372,7 @@
             // 显示加载状态
             document.getElementById('appleIdDataContainer').style.display = 'block';
             const tbody = document.getElementById('previewTableBody');
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center"><i class="fas fa-spinner fa-spin me-2"></i>正在加载文件内容...</td></tr>';
+                        tbody.innerHTML = '<tr><td colspan="7" class="text-center"><i class="fas fa-spinner fa-spin me-2"></i>正在加载文件内容...</td></tr>';
 
             // 加载文件内容
             loadAppleIdFileContent(filename);
@@ -1388,6 +1398,7 @@
                         allAppleIdData.push({
                             account: parts[0],
                             password: parts[1],
+                            phone: parts[2], // 手机号码字段
                             smsAddress: parts[3],
                             status: 'valid', // 默认状态为有效
                             originalLine: line,
@@ -1475,7 +1486,7 @@
                     } else {
                         console.error('获取文件内容失败:', data.message);
                         const tbody = document.getElementById('previewTableBody');
-                        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">
+                        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">
                             <i class="fas fa-exclamation-triangle me-2"></i>加载失败：${data.message}
                         </td></tr>`;
                     }
@@ -1483,7 +1494,7 @@
                 .catch(error => {
                     console.error('网络错误:', error);
                     const tbody = document.getElementById('previewTableBody');
-                    tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">
+                    tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">
                         <i class="fas fa-exclamation-triangle me-2"></i>网络错误：${error.message}
                     </td></tr>`;
                 });
@@ -1513,13 +1524,16 @@
                     row.innerHTML = `
                         <td>${startIndex + index + 1}</td>
                         <td>
-                            <i class="fas fa-user me-1" style="color: #000000;"></i>${item.account}
+                            <i class="fas fa-user me-1" style="color: #000000;"></i><span class="truncated-text" title="${item.account}">${truncateText(item.account, 20)}</span>
                         </td>
                         <td>
-                            <i class="fas fa-key me-1" style="color: #000000;"></i>${item.password}
+                            <i class="fas fa-key me-1" style="color: #000000;"></i><span class="truncated-text" title="${item.password}">${truncateText(item.password, 15)}</span>
                         </td>
                         <td>
-                            <i class="fas fa-link me-1" style="color: #000000; cursor: pointer;" onclick="copyToClipboard('${item.smsAddress.replace(/'/g, "\\'").replace(/"/g, '\\"')}', this)" title="点击复制完整链接"></i>
+                            <i class="fas fa-phone me-1" style="color: #000000;"></i><span class="truncated-text" title="${item.phone || ''}">${truncateText(item.phone || '', 15)}</span>
+                        </td>
+                        <td>
+                            <i class="fas fa-link me-1" style="color: #000000; cursor: pointer;" onclick="copyToClipboard(\`${item.smsAddress}\`, this)" title="点击复制完整链接"></i>
                             <span class="truncated-link" title="${item.smsAddress.replace(/"/g, '&quot;')}">${truncateUrl(item.smsAddress)}</span>
                         </td>
                         <td style="text-align: center;">
@@ -1538,7 +1552,7 @@
                 document.getElementById('paginationContainer').style.display = 'flex';
                 updatePagination();
             } else {
-                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">没有有效的Apple ID数据</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">没有有效的Apple ID数据</td></tr>';
                 document.getElementById('paginationContainer').style.display = 'none';
             }
             
@@ -1574,6 +1588,17 @@
                 return `${start}...${end}`;
             }
             return url;
+        }
+        
+        // 截断文本显示
+        function truncateText(text, maxLength) {
+            if (!text) return '';
+            
+            // 如果文本长度超过指定长度，则截断显示
+            if (text.length > maxLength) {
+                return text.substring(0, maxLength) + '...';
+            }
+            return text;
         }
         
         // 复制文本到剪贴板
