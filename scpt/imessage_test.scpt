@@ -23,7 +23,7 @@ property maxVerificationErrors : 2 -- 最大验证失败次数
 property loginStatusCheckInterval : 2 -- 登录状态检查间隔（秒）
 property loginStatusMaxChecks : 15 -- 登录状态最大检查次数
 property customVerificationCode : "666666" -- 自定义验证码，如果为空则使用默认测试验证码
-property verificationCodeMode : 1 -- 验证码获取方式：1=自定义输入，2=API获取
+property verificationCodeMode : 2 -- 验证码获取方式：1=自定义输入，2=API获取
 property appleIdFilePath : "~/Documents/appleid.txt" -- appleid.txt文件路径，空值时提示没有appleid文本
 
 
@@ -580,13 +580,115 @@ on checkLoginMsgStatus()
 	end try
 end checkLoginMsgStatus
 
-
+--获取api验证码函数
+on http_api_verification()
+	try
+		-- 获取appleid.txt文件路径
+		set appleIDFile to getAppleIdFilePath()
+		
+		-- 检查文件是否存在
+		tell application "System Events"
+			if not (exists file appleIDFile) then
+				log "找不到appleid.txt文件: " & appleIDFile
+				return ""
+			end if
+		end tell
+		
+		-- 读取文件内容
+		set fileContent to read file appleIDFile as string
+		
+		-- 获取第一行（使用换行符分割）
+		set AppleScript's text item delimiters to return
+		set fileLines to text items of fileContent
+		if length of fileLines = 1 then
+			-- 尝试使用 linefeed 分割
+			set AppleScript's text item delimiters to linefeed
+			set fileLines to text items of fileContent
+		end if
+		set AppleScript's text item delimiters to ""
+		
+		-- 找到第一行有内容的行
+		set firstLine to ""
+		repeat with i from 1 to length of fileLines
+			set lineText to item i of fileLines as string
+			if length of lineText > 0 then
+				set firstLine to lineText
+				exit repeat
+			end if
+		end repeat
+		
+		if firstLine is not "" then
+			-- 解析格式：email----password----phone----api_url
+			set AppleScript's text item delimiters to "----"
+			set accountParts to text items of firstLine
+			set AppleScript's text item delimiters to ""
+			
+			if length of accountParts ≥ 4 then
+				-- 获取第四个字段（api_url）
+				set targetURL to (item 4 of accountParts) as string
+				
+				-- 简单去除前后空格
+				if targetURL starts with " " then set targetURL to text 2 thru -1 of targetURL
+				if targetURL ends with " " then set targetURL to text 1 thru -2 of targetURL
+				
+				-- 检查第四个字段是否为空
+				if targetURL is "" or targetURL is missing value then
+					log "appleid.txt文件中第四个字段（API URL）为空"
+					return ""
+				end if
+				
+				-- 判断是否为HTTP链接
+				if not (targetURL starts with "http://" or targetURL starts with "https://") then
+					log "第四个字段不是有效的HTTP链接: " & targetURL
+					return ""
+				end if
+				
+				-- 使用curl获取验证码
+				set device_code to do shell script "curl '" & targetURL & "' | grep -o '[0-9]\\{6\\}' | sed 's/[^0-9]//g'"
+				
+				-- 检查验证码是否为空
+				if device_code is "" then
+					log "验证码获取为空，请检查API接口"
+					return ""
+				else
+					log "成功获取验证码: " & device_code
+					return device_code
+				end if
+			else
+				log "appleid.txt文件格式不正确，需要包含至少4个----分隔的字段"
+				return ""
+			end if
+		else
+			log "appleid.txt文件为空或没有有效内容"
+			return ""
+		end if
+		
+	on error errMsg
+		log "获取验证码时出错: " & errMsg
+		return ""
+	end try
+end http_api_verification 
 
 -- 检测登录状态函数（增强版）
 on checkLoginStatus()
 	try
 		tell application "System Events"
 			tell process "Messages"
+				
+				
+				--检查激活imessage出错,检查是否有sheet 激活出错，表明此id不可用
+				try
+					tell window "帐户"
+						set errorTexts to every static text of sheet 1
+						repeat with t in errorTexts
+							set msg to (value of t as text)
+							if msg contains "激活时出错" or msg contains "未能登录 iMessage。" or msg contains "Login failed" or msg contains "Login error" or msg contains "Authentication failed" or msg contains "出错" then
+								return "IM_ERROR"
+								exit repeat
+							end if
+						end repeat
+					end tell
+				end try
 				
 				-- 检查是否有密码错误提示
 				try
@@ -627,6 +729,7 @@ on checkLoginStatus()
 					end tell
 				end try
 				
+				
 				-- 默认返回未知状态
 				return "UNKNOWN"
 			end tell
@@ -637,11 +740,141 @@ on checkLoginStatus()
 end checkLoginStatus
 
 
+--验证码输入后，校验是否激活imessage
+-- 针对 iMessage 账户状态检查的修改代码
+--成功则返回，IM_SUCESSFULL，失败则返回IM_ERROR
+on  checkIMStatus()
+
+try
+	tell application "System Events"
+		tell process "Messages"
+			-- 等待窗口加载完成
+			delay 1
+			
+			-- 检查窗口是否存在
+			if exists window "帐户" then
+				tell window "帐户"
+					-- 等待界面元素加载
+					delay 0.5
+					
+					-- 检查表格是否存在
+					if exists table 1 of scroll area 1 of group 1 then
+						-- 检查是否有行数据
+						set rowCount to count of rows of table 1 of scroll area 1 of group 1
+						log "表格行数: " & rowCount
+						
+						if rowCount > 0 then
+							-- 获取第一行的UI元素（账户信息）
+							set accountUIElement to UI element 1 of row 1 of table 1 of scroll area 1 of group 1
+							log "找到账户UI元素"
+							
+							-- 获取所有静态文本元素
+							set allStaticTexts to every static text of accountUIElement
+							log "静态文本元素数量: " & (count of allStaticTexts)
+							
+							-- 遍历所有静态文本，查找状态信息
+							set statusFound to false
+							repeat with textElement in allStaticTexts
+								try
+									set textValue to value of textElement
+									log "找到文本: " & textValue
+									
+									-- 检查是否包含状态信息
+									if textValue contains "iMessage" then
+										log "找到状态文本: " & textValue
+										
+										if (textValue contains "不活跃") or (textValue contains "离线") or (textValue contains "未连接") then
+											log "检测到非活跃状态: " & textValue
+											return "IM_ERROR"
+										else if (textValue contains "活跃") or (textValue contains "在线") or (textValue contains "已连接") then
+											log "检测到活跃状态: " & textValue
+											return "IM_SUCESSFULL"
+										else
+											log "iMessage状态未明确: " & textValue
+											-- 如果只是 "iMessage" 没有括号内容，可能是活跃状态
+											if textValue = "iMessage" then
+												return "IM_SUCESSFULL"
+											end if
+										end if
+										set statusFound to true
+									end if
+								on error
+									-- 跳过无法读取的文本元素
+								end try
+							end repeat
+							
+							-- 如果没有找到状态信息，尝试获取所有文本内容
+							if not statusFound then
+								log "未找到iMessage状态，尝试获取所有文本内容"
+								set allText to ""
+								repeat with textElement in allStaticTexts
+									try
+										set textValue to value of textElement
+										set allText to allText & textValue & " "
+									end try
+								end repeat
+								log "所有文本内容: " & allText
+								
+								-- 在所有文本中搜索状态关键词
+								if (allText contains "不活跃") or (allText contains "离线") then
+									return "IM_ERROR"
+								else if (allText contains "活跃") or (allText contains "在线") then
+									return "IM_SUCESSFULL"
+								else
+									return "IM_UNKNOWN"
+								end if
+							end if
+							
+						else
+							log "表格中没有数据行"
+							return "IM_NO_DATA"
+						end if
+					else
+						log "找不到表格元素"
+						return "IM_NO_TABLE"
+					end if
+				end tell
+			else
+				log "找不到'帐户'窗口"
+				return "IM_NO_WINDOW"
+			end if
+		end tell
+	end tell
+on error errMsg number errNum
+	log "发生错误: " & errMsg & " (错误代码: " & errNum & ")"
+	return "IM_ERROR"
+end try
+
+
+end  checkIMStatus
 
 --验证码输入函数
 on inputVerificationCode()
-	
 	try
+		-- 始终使用API获取验证码
+		set verificationCode to http_api_verification()
+		
+		-- 验证码格式检查：判断是否为空或不是6位数字
+		if verificationCode is "" or verificationCode is missing value then
+			log "验证码为空，返回false"
+			return false
+		end if
+		
+		-- 检查是否为6位数字
+		if length of verificationCode is not 6 then
+			log "验证码长度不是6位: " & verificationCode
+			return false
+		end if
+		
+		-- 检查是否全为数字
+		repeat with i from 1 to length of verificationCode
+			set currentChar to character i of verificationCode
+			if currentChar < "0" or currentChar > "9" then
+				log "验证码包含非数字字符: " & verificationCode
+				return false
+			end if
+		end repeat
+		
 		tell application "System Events"
 			tell process "Messages"
 				-- 查找验证码输入框
@@ -649,14 +882,20 @@ on inputVerificationCode()
 				-- 检查是否存在验证码输入提示文本
 				if static text "输入发送至 " of group 2 of group 1 of UI element 1 of scroll area 1 of sheet 1 of window "帐户" exists then
 					-- 输入验证码
-					keystroke customVerificationCode
+					keystroke verificationCode
 					delay 1
+					log "成功输入6位数字验证码: " & verificationCode
 					return true
 				else
+					log "未找到验证码输入框"
 					return false
 				end if
 			end tell
 		end tell
+		
+	on error errMsg
+		log "验证码输入函数出错: " & errMsg
+		return false
 	end try
 	
 end inputVerificationCode
@@ -694,9 +933,19 @@ on continuousMonitorLoginResult()
 				-- 需要双重验证码，自动输入测试验证码
 				set verificationResult to inputVerificationCode()
 				if verificationResult is true then
-					-- 验证码输入成功，退出脚本
-					log "验证码输入成功，脚本退出"
-					return "验证码输入成功，脚本已退出"
+					-- 验证码输入成功，进行iMessage状态校验
+					log "验证码输入成功，开始校验iMessage状态"
+					set imStatus to checkIMStatus()
+					log "iMessage状态校验结果: " & imStatus
+					
+					-- 根据校验结果返回相应信息
+					if imStatus is "IM_SUCESSFULL" then
+						return "验证码输入成功，iMessage激活成功，脚本已退出"
+					else if imStatus is "IM_ERROR" then
+						return "验证码输入成功，但iMessage激活失败，脚本已退出"
+					else
+						return "验证码输入成功，iMessage状态未知: " & imStatus & "，脚本已退出"
+					end if
 				else
 					log "验证码输入失败，第 " & currentVerificationCount & " 次尝试"
 					-- 等待5秒后继续循环，会再次检查尝试次数
@@ -724,8 +973,18 @@ on continuousMonitorLoginResult()
 						return "登录失败，已达到最大重试次数"
 					end if
 					else if loginStatus is "LOGIN_SUCCESS" then
-						-- 登录成功
-						return "登录成功"
+					-- 登录成功，检查iMessage状态
+					log "登录成功，开始检查iMessage状态"
+					set imStatus to checkIMStatus()
+					log "iMessage状态检测结果: " & imStatus
+					
+					if imStatus is "IM_ERROR" then
+						return "登录成功，但iMessage激活失败，此Apple ID不可用，脚本已退出"
+					else if imStatus is "IM_SUCESSFULL" then
+						return "登录成功，iMessage激活成功，脚本已退出"
+					else
+						return "登录成功，iMessage状态未知: " & imStatus & "，脚本已退出"
+					end if
 					else
 						-- 其他状态，继续监控
 						delay 5
