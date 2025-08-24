@@ -1175,6 +1175,12 @@ def client_management_page():
 def json_parser_page():
     """JSON解析功能页面"""
     return render_template('json_parser.html')
+
+@app.route('/misc_management')
+@login_required
+def misc_management_page():
+    """杂项管理页面"""
+    return render_template('misc_management.html')
     
 @app.route('/api/clone_vm', methods=['POST'])
 @login_required
@@ -7242,6 +7248,332 @@ def api_execute_im_test():
             'success': False,
             'message': f'执行IM测试失败: {str(e)}'
         })
+
+# 手机号管理相关API
+@app.route('/api/phone_config_list')
+def get_phone_config_list():
+    """获取手机号配置文件列表"""
+    try:
+        phone_unused_path = os.path.join(os.getcwd(), phone_unused_dir)
+        configs = []
+        
+        if os.path.exists(phone_unused_path):
+            for file in os.listdir(phone_unused_path):
+                if file.endswith('.txt'):
+                    file_path = os.path.join(phone_unused_path, file)
+                    configs.append({
+                        'name': file,
+                        'is_default': file == 'default.txt'
+                    })
+        
+        return jsonify({
+            'success': True,
+            'configs': configs
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        })
+
+@app.route('/api/phone_list')
+def get_phone_list():
+    """获取手机号列表"""
+    try:
+        page = int(request.args.get('page', 1))
+        size = int(request.args.get('size', 5))
+        config = request.args.get('config', 'default.txt')
+        # 如果config为空字符串，使用默认值
+        if not config or config.strip() == '':
+            config = 'default.txt'
+        
+        phone_unused_path = os.path.join(os.getcwd(), phone_unused_dir)
+        phone_delete_path = os.path.join(os.getcwd(), phone_delete_dir)
+        
+        phones = []
+        active_count = 0
+        deleted_count = 0
+        used_count = 0
+        
+        # 读取有效手机号
+        unused_file = os.path.join(phone_unused_path, config)
+        if os.path.exists(unused_file):
+            with open(unused_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    phone = line.strip()
+                    if phone:
+                        phones.append({
+                            'number': phone,
+                            'status': 'active',
+                            'add_time': '未知'
+                        })
+                        active_count += 1
+        
+        # 读取已删除手机号（从_bak文件中读取）
+        config_name = config.replace('.txt', '')
+        bak_file = os.path.join(phone_delete_path, f"{config_name}_bak.txt")
+        if os.path.exists(bak_file):
+            with open(bak_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    phone = line.strip()
+                    if phone:
+                        phones.append({
+                            'number': phone,
+                            'status': 'deleted',
+                            'add_time': '未知'
+                        })
+                        deleted_count += 1
+        
+        # 读取已使用手机号（从已删除文件中读取）
+        delete_file = os.path.join(phone_delete_path, config)
+        if os.path.exists(delete_file):
+            with open(delete_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    phone = line.strip()
+                    if phone:
+                        phones.append({
+                            'number': phone,
+                            'status': 'used',
+                            'add_time': '未知'
+                        })
+                        used_count += 1
+        
+        # 分页处理
+        total_records = len(phones)
+        start = (page - 1) * size
+        end = start + size
+        page_phones = phones[start:end]
+        
+        return jsonify({
+            'success': True,
+            'phones': page_phones,
+            'total': active_count,  # 总手机号数 = 有效手机号数
+            'active': active_count,  # 有效手机号数
+            'deleted': deleted_count,  # 已删除数量（从_bak文件读取）
+            'used': used_count,  # 已使用数量
+            'page': page,
+            'size': size,
+            'total_records': total_records  # 用于分页的总记录数
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        })
+
+@app.route('/api/upload_phone_file', methods=['POST'])
+def upload_phone_file():
+    """上传手机号文件"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({
+                'success': False,
+                'message': '没有选择文件'
+            })
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({
+                'success': False,
+                'message': '没有选择文件'
+            })
+        
+        # 检查文件格式
+        allowed_extensions = ['.txt', '.csv']
+        file_extension = os.path.splitext(file.filename)[1].lower()
+        if file_extension not in allowed_extensions:
+            return jsonify({
+                'success': False,
+                'message': '只支持.txt和.csv格式文件'
+            })
+        
+        phone_unused_path = os.path.join(os.getcwd(), phone_unused_dir)
+        os.makedirs(phone_unused_path, exist_ok=True)
+        
+        # 处理自定义文件名
+        custom_name = request.form.get('custom_name')
+        if custom_name:
+            # 确保自定义文件名有正确的扩展名
+            if not custom_name.endswith('.txt'):
+                custom_name += '.txt'
+            filename = custom_name
+        else:
+            # 如果是csv文件，转换为txt格式保存
+            if file_extension == '.csv':
+                filename = os.path.splitext(file.filename)[0] + '.txt'
+            else:
+                filename = file.filename
+        
+        file_path = os.path.join(phone_unused_path, filename)
+        
+        # 如果是csv文件，需要转换格式
+        if file_extension == '.csv':
+            import csv
+            import io
+            
+            # 读取csv内容
+            file_content = file.read().decode('utf-8')
+            csv_reader = csv.reader(io.StringIO(file_content))
+            
+            # 转换为txt格式并保存
+            with open(file_path, 'w', encoding='utf-8') as txt_file:
+                for row in csv_reader:
+                    if row:  # 跳过空行
+                        txt_file.write('----'.join(row) + '\n')
+        else:
+            # 直接保存txt文件
+            file.save(file_path)
+        
+        return jsonify({
+            'success': True,
+            'message': '文件上传成功'
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        })
+
+@app.route('/api/delete_phone', methods=['POST'])
+def delete_phone():
+    """删除手机号（备份原文件并将删除的行写入bak文件）"""
+    try:
+        data = request.get_json()
+        phone_number = data.get('phone')
+        
+        if not phone_number:
+            return jsonify({
+                'success': False,
+                'message': '手机号不能为空'
+            })
+        
+        phone_unused_path = os.path.join(os.getcwd(), phone_unused_dir)
+        phone_delete_path = os.path.join(os.getcwd(), phone_delete_dir)
+        os.makedirs(phone_delete_path, exist_ok=True)
+        
+        # 从所有配置文件中查找并删除该手机号
+        moved = False
+        for file in os.listdir(phone_unused_path):
+            if file.endswith('.txt'):
+                unused_file = os.path.join(phone_unused_path, file)
+                
+                # 读取原文件
+                lines = []
+                if os.path.exists(unused_file):
+                    with open(unused_file, 'r', encoding='utf-8') as f:
+                        lines = f.readlines()
+                
+                # 查找并移除手机号
+                new_lines = []
+                deleted_lines = []
+                found = False
+                for line in lines:
+                    if line.strip() == phone_number:
+                        found = True
+                        moved = True
+                        deleted_lines.append(line)
+                    else:
+                        new_lines.append(line)
+                
+                if found:
+                    # 创建备份文件名（原文件名_bak）
+                    file_name_without_ext = os.path.splitext(file)[0]
+                    file_ext = os.path.splitext(file)[1]
+                    bak_file_name = f"{file_name_without_ext}_bak{file_ext}"
+                    bak_file_path = os.path.join(phone_delete_path, bak_file_name)
+                    
+                    # 将删除的行写入bak文件
+                    with open(bak_file_path, 'a', encoding='utf-8') as f:
+                        f.writelines(deleted_lines)
+                    
+                    # 重写原文件（移除删除的行）
+                    with open(unused_file, 'w', encoding='utf-8') as f:
+                        f.writelines(new_lines)
+        
+        if moved:
+            return jsonify({
+                'success': True,
+                'message': '手机号删除成功，原文件已备份'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': '未找到该手机号'
+            })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        })
+
+@app.route('/api/restore_phone', methods=['POST'])
+def restore_phone():
+    """恢复手机号（从删除目录移回）"""
+    try:
+        data = request.get_json()
+        phone_number = data.get('phone')
+        
+        if not phone_number:
+            return jsonify({
+                'success': False,
+                'message': '手机号不能为空'
+            })
+        
+        phone_unused_path = os.path.join(os.getcwd(), phone_unused_dir)
+        phone_delete_path = os.path.join(os.getcwd(), phone_delete_dir)
+        
+        # 从删除目录中查找并恢复该手机号
+        restored = False
+        for file in os.listdir(phone_delete_path):
+            if file.endswith('.txt'):
+                delete_file = os.path.join(phone_delete_path, file)
+                unused_file = os.path.join(phone_unused_path, file)
+                
+                # 读取删除文件
+                lines = []
+                if os.path.exists(delete_file):
+                    with open(delete_file, 'r', encoding='utf-8') as f:
+                        lines = f.readlines()
+                
+                # 查找并移除手机号
+                new_lines = []
+                found = False
+                for line in lines:
+                    if line.strip() == phone_number:
+                        found = True
+                        restored = True
+                        # 添加到有效文件
+                        with open(unused_file, 'a', encoding='utf-8') as f:
+                            f.write(line)
+                    else:
+                        new_lines.append(line)
+                
+                if found:
+                    # 重写删除文件
+                    with open(delete_file, 'w', encoding='utf-8') as f:
+                        f.writelines(new_lines)
+        
+        if restored:
+            return jsonify({
+                'success': True,
+                'message': '手机号恢复成功'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': '未找到该手机号'
+            })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        })
+
+# 处理@vite/client请求，避免404错误（通常由浏览器开发者工具或扩展产生）
+@app.route('/@vite/client')
+def vite_client():
+    """处理vite客户端请求，返回204状态码"""
+    return '', 204
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

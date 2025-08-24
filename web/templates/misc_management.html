@@ -1,0 +1,1574 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>发信管理 - MacOS VM 管理平台</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .sidebar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: 2px 0 15px rgba(102, 126, 234, 0.3);
+            min-height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 1000;
+            width: 280px;
+            color: white;
+        }
+        
+        .main-content {
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .navbar {
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .accordion-button:not(.collapsed) {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: none;
+            box-shadow: none;
+        }
+        
+        .accordion-button {
+            background: transparent;
+            color: white;
+            border: none;
+            box-shadow: none;
+            font-weight: 600;
+        }
+        
+        .accordion-button:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+        
+        .accordion-button:focus {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            box-shadow: none;
+        }
+        
+        .accordion-button::after {
+            filter: invert(1);
+        }
+        
+        .nav-link {
+            color: rgba(255, 255, 255, 0.8);
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin: 4px 8px;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+        
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+            transform: translateX(5px);
+        }
+        
+        .nav-link.active {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        .accordion-item {
+            background: transparent;
+            border: none;
+        }
+        
+        .accordion-body {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            margin: 0 8px;
+        }
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .card-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px 15px 0 0 !important;
+            border: none;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 8px;
+        }
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+        }
+        .table {
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .table thead th {
+            background-color: #f8f9fa;
+            border: none;
+            font-weight: 600;
+        }
+        .pagination {
+            justify-content: center;
+        }
+        .page-link {
+            border-radius: 8px;
+            margin: 0 2px;
+            border: none;
+            color: #667eea;
+        }
+        .page-link:hover {
+            background-color: #667eea;
+            color: white;
+        }
+        .page-item.active .page-link {
+            background-color: #667eea;
+            border-color: #667eea;
+        }
+        .form-control, .form-select {
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+        .alert {
+            border-radius: 10px;
+            border: none;
+        }
+        
+        .floating-menu-toggle {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1001;
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            color: #667eea;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        @media (max-width: 768px) {
+            .floating-menu-toggle {
+                display: flex;
+            }
+        }
+
+        .navbar {
+            box-sizing: border-box;
+        }
+        
+        .container-fluid {
+            height: 100%;
+            display: flex;
+            align-items: center;
+        }
+        
+        /* 统计卡片样式 */
+        .phone-stats {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            min-width: 150px;
+            flex: 1;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #0d6efd;
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+        
+        /* 表格样式 */
+        .phone-table {
+            margin-bottom: 0;
+        }
+        
+        .phone-table th {
+            background-color: #f8f9fa;
+            border-bottom: 2px solid #dee2e6;
+            font-weight: 600;
+            color: #495057;
+            padding: 15px 12px;
+        }
+        
+        .phone-table td {
+            padding: 12px;
+            vertical-align: middle;
+        }
+        
+        .phone-table tbody tr:hover {
+            background-color: #f8f9fa;
+        }
+        
+        /* 表格列宽分配 */
+        .phone-table th:nth-child(1), .phone-table td:nth-child(1) {
+            width: 10%; /* 序号 */
+            text-align: center;
+            min-width: 60px;
+        }
+        
+        .phone-table th:nth-child(2), .phone-table td:nth-child(2) {
+            width: 40%; /* 手机号 */
+            min-width: 120px;
+        }
+        
+        .phone-table th:nth-child(3), .phone-table td:nth-child(3) {
+            width: 25%; /* 状态 */
+            text-align: center;
+            min-width: 80px;
+        }
+        
+        .phone-table th:nth-child(4), .phone-table td:nth-child(4) {
+            width: 25%; /* 操作 */
+            text-align: center;
+            min-width: 80px;
+        }
+        
+
+        
+        /* 加载状态样式 */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #6c757d;
+        }
+        
+        .loading .spinner-border {
+            width: 3rem;
+            height: 3rem;
+        }
+        
+        /* 按钮样式 */
+        .btn-info {
+            background-color: #17a2b8;
+            border-color: #17a2b8;
+        }
+        
+        .btn-info:hover {
+            background-color: #138496;
+            border-color: #117a8b;
+        }
+        
+        .btn-success {
+            background-color: #28a745;
+            border-color: #28a745;
+        }
+        
+        .btn-success:hover {
+            background-color: #218838;
+            border-color: #1e7e34;
+        }
+        
+        .btn-danger {
+            background-color: #dc3545;
+            border-color: #dc3545;
+        }
+        
+        .btn-danger:hover {
+            background-color: #c82333;
+            border-color: #bd2130;
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        /* 状态徽章样式 */
+        .badge {
+            font-size: 0.75em;
+            padding: 0.35em 0.65em;
+        }
+        
+        .bg-success {
+            background-color: #28a745 !important;
+        }
+        
+        .bg-danger {
+            background-color: #dc3545 !important;
+        }
+        
+        /* 分页样式 */
+        .pagination-sm .page-link {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+        }
+        
+        .pagination-sm .page-item.active .page-link {
+            background-color: #007bff;
+            border-color: #007bff;
+        }
+        
+        /* 文件信息显示样式 */
+        .phone-data-container .alert {
+            border-radius: 8px;
+            border: none;
+            padding: 15px;
+        }
+        
+        /* 侧边栏标题样式 */
+        .sidebar-header {
+            border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+            padding-bottom: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 60px;
+        }
+        
+        .brand-text {
+            color: white;
+            font-weight: 700;
+            font-size: 1.2rem;
+            letter-spacing: 0.5px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        
+        .sidebar-header h4 {
+            margin-bottom: 5px !important;
+        }
+        
+        .sidebar-header small {
+            font-size: 0.85rem;
+            opacity: 0.8;
+        }
+
+        html, body { width: 100%; overflow-x: hidden !important; }
+        .main-content { 
+            margin-left: 280px; 
+            width: calc(100vw - 280px); 
+            min-width: 0; 
+            padding: 20px;
+            min-height: 100vh;
+            overflow-x: auto;
+            box-sizing: border-box;
+        }
+    </style>
+</head>
+<body>
+    <!-- 移动端菜单按钮 -->
+    <button class="floating-menu-toggle" id="menuToggle">
+        <i class="fas fa-bars"></i>
+    </button>
+    
+    <!-- 左侧菜单 -->
+    <nav class="sidebar p-3">
+                <div class="sidebar-header text-center mb-4">
+                <h4 class="mb-0">
+                                                <span class="brand-text">MacOS VM 虚拟机管理平台</span>
+                </h4>
+                
+            </div>
+                <div class="accordion" id="accordionMenu">
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingVM">
+                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseVM" aria-expanded="false" aria-controls="collapseVM">
+                        虚拟机管理
+                    </button>
+                </h2>
+                <div id="collapseVM" class="accordion-collapse collapse" aria-labelledby="headingVM" data-bs-parent="#accordionMenu">
+                    <div class="accordion-body p-0">
+                        <ul class="nav flex-column">
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('clone_vm_page') }}">虚拟机批量克隆</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('vm_management_page') }}">虚拟机信息管理</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('vm_info_page') }}">虚拟机成品管理</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('vm_script_page') }}">虚拟机脚本管理</a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingClient">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseClient" aria-expanded="false" aria-controls="collapseClient">
+                        客户端管理
+                    </button>
+                </h2>
+                <div id="collapseClient" class="accordion-collapse collapse" aria-labelledby="headingClient" data-bs-parent="#accordionMenu">
+                    <div class="accordion-body p-0">
+                        <ul class="nav flex-column">
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('client_management_page') }}">ScptRunner客户端管理</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('json_parser_page') }}"><i class="fas fa-code me-2"></i>JSON解析功能</a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingBoot">
+                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseBoot" aria-expanded="true" aria-controls="collapseBoot">
+                        杂项管理
+                    </button>
+                </h2>
+                <div id="collapseBoot" class="accordion-collapse collapse show" aria-labelledby="headingBoot" data-bs-parent="#accordionMenu">
+                    <div class="accordion-body p-0">
+                        <ul class="nav flex-column">
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('wuma_page') }}">虚拟机五码管理</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('mupan_page') }}">虚拟机母盘管理</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('id_management_page') }}">Apple ID管理</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link active" href="{{ url_for('misc_management_page') }}">发信管理</a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingEncrypt">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseEncrypt" aria-expanded="false" aria-controls="collapseEncrypt">
+                        数据加密功能
+                    </button>
+                </h2>
+                <div id="collapseEncrypt" class="accordion-collapse collapse" aria-labelledby="headingEncrypt" data-bs-parent="#accordionMenu">
+                    <div class="accordion-body p-0">
+                        <ul class="nav flex-column">
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('encrypt_code_page') }}">代码加密</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('encrypt_wuma_page') }}">五码加密</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('encrypt_id_page') }}">ID加密</a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingProxy">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseProxy" aria-expanded="false" aria-controls="collapseProxy">
+                        代理IP配置
+                    </button>
+                </h2>
+                <div id="collapseProxy" class="accordion-collapse collapse" aria-labelledby="headingProxy" data-bs-parent="#accordionMenu">
+                    <div class="accordion-body p-0">
+                        <ul class="nav flex-column">
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('proxy_assign_page') }}">代理IP分配</a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingSoft">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSoft" aria-expanded="false" aria-controls="collapseSoft">
+                        虚拟机软件管理
+                    </button>
+                </h2>
+                <div id="collapseSoft" class="accordion-collapse collapse" aria-labelledby="headingSoft" data-bs-parent="#accordionMenu">
+                    <div class="accordion-body p-0">
+                        <ul class="nav flex-column">
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('soft_version_page') }}">版本查看</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('soft_env_page') }}">环境变量</a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingSystem">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSystem" aria-expanded="false" aria-controls="collapseSystem">
+                        系统管理
+                    </button>
+                </h2>
+                <div id="collapseSystem" class="accordion-collapse collapse" aria-labelledby="headingSystem" data-bs-parent="#accordionMenu">
+                    <div class="accordion-body p-0">
+                        <ul class="nav flex-column">
+                            <li class="nav-item">
+                                <a class="nav-link" href="#">系统版本</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="#">系统插件管理</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="#">用户管理</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="#">授权管理</a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+            </nav>
+            
+            <!-- 右侧内容区域 -->
+            <div class="main-content">
+                <!-- 顶部导航栏 -->
+                <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm">
+                    <div class="container-fluid">
+                        <span class="navbar-brand mb-0 h1">
+                            <i class="fas fa-cogs me-2"></i>发信管理
+                        </span>
+                        <div class="d-flex">
+                            <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary me-3">
+                                <i class="fas fa-home me-2"></i>主页
+                            </a>
+                            <div class="dropdown me-3">
+                                <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="langDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                    语言
+                                </button>
+                                <ul class="dropdown-menu" aria-labelledby="langDropdown">
+                                    <li><a class="dropdown-item" href="?lang=zh">中文</a></li>
+                                    <li><a class="dropdown-item" href="?lang=en">English</a></li>
+                                </ul>
+                            </div>
+                            <a href="{{ url_for('logout') }}" class="btn btn-outline-secondary">登出</a>
+                        </div>
+                    </div>
+                </nav>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h4 class="mb-0">
+                                <i class="fas fa-mobile-alt me-2"></i>发信手机号管理
+                            </h4>
+                            <div class="btn-group">
+                                <div class="dropdown me-2">
+                                    <button class="btn btn-info dropdown-toggle" type="button" id="configFileDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                        <i class="fas fa-file-text me-2"></i>选择配置文件
+                                    </button>
+                                    <ul class="dropdown-menu" id="configFileDropdownMenu" aria-labelledby="configFileDropdown">
+                                        <!-- 配置文件选项将在这里动态加载 -->
+                                    </ul>
+                                </div>
+                                <div class="form-check me-3" style="display: inline-flex; align-items: center;">
+                                    <input class="form-check-input" type="checkbox" id="setDefaultConfig" onchange="toggleDefaultConfig()">
+                                    <label class="form-check-label ms-1" for="setDefaultConfig" style="margin-bottom: 0; font-size: 14px; color: #495057;">
+                                        设为默认
+                                    </label>
+                                </div>
+                                <button class="btn btn-success me-2" onclick="openUploadPhoneModal()">
+                                    <i class="fas fa-upload me-2"></i>上传手机号文本
+                                </button>
+                                <button class="btn btn-primary" onclick="refreshPhoneData()">
+                                    <i class="fas fa-sync-alt me-2"></i>刷新数据
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <!-- 手机号统计信息 -->
+                        <div class="phone-stats" id="phoneStats">
+                            <div class="stat-card">
+                                <div class="stat-number" id="totalPhones">-</div>
+                                <div class="stat-label">总手机号数</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number" id="deletedPhones">-</div>
+                                <div class="stat-label">已删除</div>
+                            </div>
+                        </div>
+                        
+
+                        
+                        <!-- 加载状态 -->
+                        <div class="loading" id="loading">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">加载中...</span>
+                            </div>
+                            <p class="mt-2">正在获取手机号信息...</p>
+                        </div>
+                
+                        <!-- 手机号数据展示区域 -->
+                        <div class="phone-data-container" id="phoneDataContainer" style="display: none;">
+                            <!-- 表格容器 -->
+                            <div class="table-responsive" id="table-container">
+                                <table class="table table-hover phone-table">
+                                    <thead>
+                                        <tr>
+                                            <th><i class="fas fa-hashtag me-1"></i>序号</th>
+                                            <th><i class="fas fa-phone me-1"></i>手机号</th>
+                                            <th><i class="fas fa-info-circle me-1"></i>状态</th>
+                                            <th><i class="fas fa-cogs me-1"></i>操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="phoneTableBody">
+                                        <!-- 数据将通过JavaScript动态加载 -->
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <!-- 分页控件 -->
+                            <div class="d-flex justify-content-between align-items-center mt-3" id="paginationContainer" style="display: none;">
+                                <div class="d-flex align-items-center">
+                                    <div class="text-muted me-3">
+                                        <i class="fas fa-info-circle me-1"></i>
+                                        显示 <span id="startRecord" class="fw-bold">0</span> - <span id="endRecord" class="fw-bold">0</span> 条，共 <span id="totalRecords" class="fw-bold">0</span> 条记录
+                                    </div>
+                                    <div class="d-flex align-items-center">
+                                        <label class="form-label mb-0 me-2">每页显示:</label>
+                                        <select class="form-select form-select-sm" id="pageSizeSelect" style="width: auto;" onchange="changePageSize()">
+                                            <option value="5" selected>5</option>
+                                            <option value="10">10</option>
+                                            <option value="20">20</option>
+                                            <option value="50">50</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <nav aria-label="手机号列表分页">
+                                    <ul class="pagination pagination-sm mb-0" id="phonePagination">
+                                        <!-- 分页将通过JavaScript动态生成 -->
+                                    </ul>
+                                </nav>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+    <!-- 上传手机号文件模态框 -->
+    <div class="modal fade" id="uploadPhoneModal" tabindex="-1" aria-labelledby="uploadPhoneModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="uploadPhoneModalLabel">
+                        <i class="fas fa-upload me-2"></i>上传手机号文本文件
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="uploadPhoneForm">
+                        <div class="mb-3">
+                            <label for="phoneFile" class="form-label">选择手机号文本文件</label>
+                            <input type="file" class="form-control" id="phoneFile" accept=".txt,.csv" onchange="validatePhoneFile()">
+                            <div class="form-text">支持 .txt 和 .csv 格式的文件</div>
+                            <div id="phoneFileValidationMessage" class="mt-2"></div>
+                        </div>
+                        <div class="mb-3" id="phoneFilenameSection" style="display: none;">
+                            <label for="customPhoneFilename" class="form-label">重新修改文件名（可选）</label>
+                            <input type="text" class="form-control" id="customPhoneFilename" placeholder="输入自定义文件名，不包含.txt扩展名">
+                            <div class="form-text">如果不填写，将使用原文件名</div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" id="uploadPhoneBtn" onclick="uploadPhoneFile()" disabled>
+                        <i class="fas fa-upload me-2"></i>上传文件
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 删除确认模态框 -->
+    <div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-labelledby="deleteConfirmModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteConfirmModalLabel">
+                        <i class="fas fa-exclamation-triangle text-warning me-2"></i>确认删除
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>确定要删除这个手机号吗？</p>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>注意：</strong>删除的手机号将会移动到phone_delete目录下的备份文件中<br>
+                    </div>
+                    <input type="hidden" id="deletePhoneNumber" value="">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-danger" id="confirmDeleteBtn" onclick="confirmDelete()">
+                        <i class="fas fa-trash me-2"></i>确认删除
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentPage = 1;
+        let pageSize = 5;
+        let totalRecords = 0;
+        let currentConfigFile = ''; // 当前选择的配置文件
+        
+        // 页面加载时初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            // 显示加载状态
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('phoneDataContainer').style.display = 'none';
+            
+            // 先加载默认文件设置
+            const defaultConfig = localStorage.getItem('defaultPhoneConfig');
+            if (defaultConfig) {
+                currentConfigFile = defaultConfig;
+                console.log('初始化时设置当前文件为默认文件:', currentConfigFile);
+            }
+            
+            // 加载配置文件列表
+            loadConfigFiles();
+            
+            // 延迟加载默认文件，确保文件列表已加载完成
+            setTimeout(() => {
+                loadDefaultConfigFile();
+            }, 500);
+        });
+        
+        // 打开上传手机号模态框
+        function openUploadPhoneModal() {
+            const modal = new bootstrap.Modal(document.getElementById('uploadPhoneModal'));
+            modal.show();
+        }
+        
+        // 验证手机号文件
+        function validatePhoneFile() {
+            const fileInput = document.getElementById('phoneFile');
+            const file = fileInput.files[0];
+            const validationMessage = document.getElementById('phoneFileValidationMessage');
+            const uploadBtn = document.getElementById('uploadPhoneBtn');
+            const filenameSection = document.getElementById('phoneFilenameSection');
+            
+            if (file) {
+                const fileName = file.name;
+                const fileExtension = fileName.split('.').pop().toLowerCase();
+                
+                if (fileExtension === 'txt' || fileExtension === 'csv') {
+                    validationMessage.innerHTML = `<div class="alert alert-success"><i class="fas fa-check-circle me-2"></i>文件验证成功: ${fileName}</div>`;
+                    uploadBtn.disabled = false;
+                    filenameSection.style.display = 'block';
+                    
+                    // 设置默认文件名（去掉扩展名）
+                    const defaultName = fileName.substring(0, fileName.lastIndexOf('.'));
+                    document.getElementById('customPhoneFilename').value = defaultName;
+                } else {
+                    validationMessage.innerHTML = `<div class="alert alert-danger"><i class="fas fa-exclamation-triangle me-2"></i>不支持的文件格式。请选择 .txt 或 .csv 文件。</div>`;
+                    uploadBtn.disabled = true;
+                    filenameSection.style.display = 'none';
+                }
+            } else {
+                validationMessage.innerHTML = '';
+                uploadBtn.disabled = true;
+                filenameSection.style.display = 'none';
+            }
+        }
+        
+        // 切换默认配置
+        function toggleDefaultConfig() {
+            const checkbox = document.getElementById('setDefaultConfig');
+            const isChecked = checkbox.checked;
+            
+            if (isChecked) {
+                if (currentConfigFile) {
+                    // 设置为默认配置
+                    localStorage.setItem('defaultPhoneConfig', currentConfigFile);
+                    console.log('设置默认配置:', currentConfigFile);
+                    
+                    // 更新下拉按钮显示
+                    updateDropdownButtonText();
+                } else {
+                    // 如果没有选择配置文件，取消勾选
+                    checkbox.checked = false;
+                    console.log('没有选择配置文件，无法设为默认');
+                }
+            } else {
+                // 取消默认配置
+                localStorage.removeItem('defaultPhoneConfig');
+                console.log('取消默认配置');
+                
+                // 更新下拉按钮显示
+                updateDropdownButtonText();
+            }
+        }
+        
+        // 更新下拉按钮文本显示
+        function updateDropdownButtonText() {
+            const dropdownButton = document.getElementById('configFileDropdown');
+            const defaultConfig = localStorage.getItem('defaultPhoneConfig');
+            
+            if (currentConfigFile) {
+                if (defaultConfig === currentConfigFile) {
+                    dropdownButton.innerHTML = `<i class="fas fa-file-text me-2"></i>${currentConfigFile} <span class="badge bg-success ms-2">默认</span>`;
+                } else {
+                    dropdownButton.innerHTML = `<i class="fas fa-file-text me-2"></i>${currentConfigFile}`;
+                }
+            } else {
+                dropdownButton.innerHTML = '<i class="fas fa-file-text me-2"></i>选择配置文件';
+            }
+        }
+        
+        // 更新默认配置复选框状态
+        function updateDefaultConfigCheckbox() {
+            const checkbox = document.getElementById('setDefaultConfig');
+            const defaultConfig = localStorage.getItem('defaultPhoneConfig');
+            
+            if (!checkbox) {
+                console.error('找不到复选框元素');
+                return;
+            }
+            
+            if (defaultConfig === currentConfigFile && currentConfigFile) {
+                checkbox.checked = true;
+                console.log('复选框状态：已勾选（当前文件为默认）');
+            } else {
+                checkbox.checked = false;
+                console.log('复选框状态：未勾选（当前文件不是默认）');
+            }
+        }
+        
+        // 加载默认配置文件
+        function loadDefaultConfigFile() {
+            const defaultConfig = localStorage.getItem('defaultPhoneConfig');
+            if (defaultConfig) {
+                console.log('加载默认配置文件:', defaultConfig);
+                // 直接选择默认文件
+                selectConfigFile(defaultConfig);
+            } else {
+                // 如果没有默认文件，更新按钮文本为初始状态
+                updateDropdownButtonText();
+            }
+        }
+        
+        // 更新统计信息
+        function updatePhoneStats(stats) {
+            document.getElementById('totalPhones').textContent = stats.total || 0;
+            document.getElementById('deletedPhones').textContent = stats.deleted || 0;
+        }
+        
+
+        
+        // 更改页面大小
+        function changePageSize() {
+            pageSize = parseInt(document.getElementById('pageSizeSelect').value);
+            currentPage = 1;
+            loadPhoneData(currentPage);
+        }
+        
+        // 加载配置文件列表
+        function loadConfigFiles() {
+            fetch('/api/phone_config_list')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const dropdownMenu = document.getElementById('configFileDropdownMenu');
+                        const dropdownButton = document.getElementById('configFileDropdown');
+                        
+                        dropdownMenu.innerHTML = '';
+                        
+                        if (data.configs.length === 0) {
+                            dropdownMenu.innerHTML = '<li><span class="dropdown-item-text text-muted">暂无配置文件</span></li>';
+                            dropdownButton.innerHTML = '<i class="fas fa-file-text me-2"></i>选择配置文件';
+                        } else {
+                            // 获取本地存储的默认配置
+                            const localDefaultConfig = localStorage.getItem('defaultPhoneConfig');
+                            
+                            data.configs.forEach(config => {
+                                const li = document.createElement('li');
+                                const a = document.createElement('a');
+                                const isActive = config.name === currentConfigFile;
+                                a.className = `dropdown-item ${isActive ? 'active' : ''}`;
+                                a.href = '#';
+                                a.textContent = config.name;
+                                a.onclick = (e) => {
+                                    e.preventDefault();
+                                    selectConfigFile(config.name);
+                                };
+                                
+                                li.appendChild(a);
+                                dropdownMenu.appendChild(li);
+                            });
+                            
+                            // 确保复选框状态正确
+                            if (localDefaultConfig && currentConfigFile === localDefaultConfig) {
+                                const checkbox = document.getElementById('setDefaultConfig');
+                                if (checkbox) {
+                                    checkbox.checked = true;
+                                    console.log('文件列表加载完成，自动勾选默认文件复选框');
+                                }
+                            }
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('加载配置文件失败:', error);
+                });
+        }
+        
+        // 选择配置文件
+        function selectConfigFile(configName) {
+            console.log('选择的配置文件:', configName);
+            
+            if (!configName) {
+                document.getElementById('phoneDataContainer').style.display = 'none';
+                return;
+            }
+            
+            // 保存当前选择的配置文件
+            currentConfigFile = configName;
+            window.currentConfigFile = configName; // 确保全局可访问
+            
+            console.log('更新当前文件为:', currentConfigFile);
+            
+            // 更新下拉按钮显示
+            updateDropdownButtonText();
+            
+            // 立即更新默认配置复选框状态
+            console.log('调用updateDefaultConfigCheckbox前 - 当前文件:', currentConfigFile);
+            updateDefaultConfigCheckbox();
+            console.log('调用updateDefaultConfigCheckbox后 - 复选框状态:', document.getElementById('setDefaultConfig').checked);
+            
+            // 检查当前文件是否为默认文件
+            const defaultConfig = localStorage.getItem('defaultPhoneConfig');
+            console.log('调试信息 - 默认文件:', defaultConfig, '当前文件:', currentConfigFile, '是否匹配:', defaultConfig === currentConfigFile);
+            
+            if (defaultConfig === currentConfigFile) {
+                // 如果当前文件是默认文件，确保复选框勾选
+                const checkbox = document.getElementById('setDefaultConfig');
+                if (checkbox && !checkbox.checked) {
+                    checkbox.checked = true;
+                    console.log('当前选择的文件是默认文件，自动勾选复选框');
+                }
+            } else {
+                // 如果当前文件不是默认文件，自动将其设置为默认文件并勾选复选框
+                localStorage.setItem('defaultPhoneConfig', currentConfigFile);
+                console.log('当前选择的文件不是默认文件，自动设置为默认文件:', currentConfigFile);
+                
+                const checkbox = document.getElementById('setDefaultConfig');
+                if (checkbox) {
+                    checkbox.checked = true;
+                    console.log('自动勾选复选框');
+                }
+                
+                // 更新下拉按钮显示
+                updateDropdownButtonText();
+            }
+            
+            // 显示数据容器
+            document.getElementById('phoneDataContainer').style.display = 'block';
+            
+            // 重新加载数据
+            currentPage = 1;
+            loadPhoneData(currentPage, configName);
+        }
+        
+        // 加载手机号数据
+        function loadPhoneData(page = 1, configFile = null) {
+            // 显示加载状态
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('phoneDataContainer').style.display = 'none';
+            
+            // 如果没有指定配置文件，使用全局变量currentConfigFile
+            if (!configFile) {
+                configFile = currentConfigFile || window.currentConfigFile || '';
+            }
+            
+            const url = `/api/phone_list?page=${page}&size=${pageSize}&config=${configFile || ''}`;
+            
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    // 隐藏加载状态
+                    document.getElementById('loading').style.display = 'none';
+                    
+                    if (data.success) {
+                        // 更新统计信息（直接使用后端返回的数据）
+                        const stats = {
+                            total: data.total || 0,      // 总手机号数
+                            deleted: data.deleted || 0   // 已删除数量（从_bak文件读取）
+                        };
+                        updatePhoneStats(stats);
+                        
+                        // 显示数据容器
+                        document.getElementById('phoneDataContainer').style.display = 'block';
+                        
+                        // 渲染表格和分页（使用total_records进行分页）
+                        renderPhoneTable(data.phones || []);
+                        renderPagination(data.total_records || 0, data.page || 1, data.size || pageSize);
+                        
+                        // 更新记录信息（使用total_records）
+                        totalRecords = data.total_records || 0;
+                        updateRecordInfo(page, data.size || pageSize, totalRecords);
+                        
+                        // 显示分页容器
+                        if (totalRecords > 0) {
+                            document.getElementById('paginationContainer').style.display = 'flex';
+                        } else {
+                            document.getElementById('paginationContainer').style.display = 'none';
+                        }
+                    } else {
+                        console.error('加载手机号数据失败:', data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('加载手机号数据失败:', error);
+                    document.getElementById('loading').style.display = 'none';
+                });
+        }
+        
+        // 更新记录信息
+        function updateRecordInfo(page, size, total) {
+            const startRecord = total > 0 ? (page - 1) * size + 1 : 0;
+            const endRecord = Math.min(page * size, total);
+            
+            document.getElementById('startRecord').textContent = startRecord;
+            document.getElementById('endRecord').textContent = endRecord;
+            document.getElementById('totalRecords').textContent = total;
+        }
+        
+        // 渲染手机号表格
+        function renderPhoneTable(phones) {
+            const tbody = document.getElementById('phoneTableBody');
+            tbody.innerHTML = '';
+            
+            if (!phones || phones.length === 0) {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td colspan="5" class="text-center text-muted py-4">
+                        <i class="fas fa-inbox fa-2x mb-2"></i><br>
+                        暂无手机号数据
+                    </td>
+                `;
+                tbody.appendChild(row);
+                return;
+            }
+            
+            phones.forEach((phone, index) => {
+                const row = document.createElement('tr');
+                const globalIndex = (currentPage - 1) * pageSize + index + 1;
+                
+                // 状态显示
+                let statusBadge = '';
+                let statusText = '';
+                if (phone.status === 'deleted') {
+                    statusBadge = 'bg-danger';
+                    statusText = '已删除';
+                } else if (phone.status === 'active') {
+                    statusBadge = 'bg-success';
+                    statusText = '有效';
+                } else if (phone.status === 'used') {
+                    statusBadge = 'bg-warning';
+                    statusText = '已使用';
+                } else {
+                    statusBadge = 'bg-secondary';
+                    statusText = '未知';
+                }
+                
+                row.innerHTML = `
+                    <td class="text-center">${globalIndex}</td>
+                    <td class="phone-number">
+                        <i class="fas fa-phone me-1" style="color: #000000;"></i>${phone.number || '-'}
+                    </td>
+                    <td class="text-center">
+                        <span class="badge ${statusBadge}">${statusText}</span>
+                    </td>
+                    <td class="text-center">
+                        <div class="btn-group" role="group">
+                            ${phone.status === 'deleted' ? 
+                                `<button class="btn btn-sm btn-success" onclick="restorePhone('${phone.number}')" title="恢复手机号">
+                                    <i class="fas fa-undo"></i>
+                                </button>` :
+                                phone.status === 'active' ?
+                                `<button class="btn btn-sm btn-danger" onclick="deletePhone('${phone.number}')" title="删除手机号">
+                                    <i class="fas fa-trash"></i>
+                                </button>` :
+                                '-'
+                            }
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+        
+        // 渲染分页
+        function renderPagination(total, page, size) {
+            const totalPages = Math.ceil(total / size);
+            const pagination = document.getElementById('phonePagination');
+            pagination.innerHTML = '';
+            
+            if (totalPages <= 1) {
+                return;
+            }
+            
+            // 首页
+            const firstLi = document.createElement('li');
+            firstLi.className = `page-item ${page <= 1 ? 'disabled' : ''}`;
+            firstLi.innerHTML = `
+                <a class="page-link" href="#" onclick="changePage(1)" title="首页">
+                    <i class="fas fa-angle-double-left"></i>
+                </a>
+            `;
+            pagination.appendChild(firstLi);
+            
+            // 上一页
+            const prevLi = document.createElement('li');
+            prevLi.className = `page-item ${page <= 1 ? 'disabled' : ''}`;
+            prevLi.innerHTML = `
+                <a class="page-link" href="#" onclick="changePage(${page - 1})" title="上一页">
+                    <i class="fas fa-angle-left"></i>
+                </a>
+            `;
+            pagination.appendChild(prevLi);
+            
+            // 计算显示的页码范围
+            let startPage = Math.max(1, page - 2);
+            let endPage = Math.min(totalPages, page + 2);
+            
+            // 确保显示5个页码（如果可能）
+            if (endPage - startPage < 4) {
+                if (startPage === 1) {
+                    endPage = Math.min(totalPages, startPage + 4);
+                } else if (endPage === totalPages) {
+                    startPage = Math.max(1, endPage - 4);
+                }
+            }
+            
+            // 如果起始页不是1，显示省略号
+            if (startPage > 1) {
+                if (startPage > 2) {
+                    const ellipsisLi = document.createElement('li');
+                    ellipsisLi.className = 'page-item disabled';
+                    ellipsisLi.innerHTML = '<span class="page-link">...</span>';
+                    pagination.appendChild(ellipsisLi);
+                }
+            }
+            
+            // 页码
+            for (let i = startPage; i <= endPage; i++) {
+                const li = document.createElement('li');
+                li.className = `page-item ${i === page ? 'active' : ''}`;
+                li.innerHTML = `<a class="page-link" href="#" onclick="changePage(${i})">${i}</a>`;
+                pagination.appendChild(li);
+            }
+            
+            // 如果结束页不是最后一页，显示省略号
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) {
+                    const ellipsisLi = document.createElement('li');
+                    ellipsisLi.className = 'page-item disabled';
+                    ellipsisLi.innerHTML = '<span class="page-link">...</span>';
+                    pagination.appendChild(ellipsisLi);
+                }
+            }
+            
+            // 下一页
+            const nextLi = document.createElement('li');
+            nextLi.className = `page-item ${page >= totalPages ? 'disabled' : ''}`;
+            nextLi.innerHTML = `
+                <a class="page-link" href="#" onclick="changePage(${page + 1})" title="下一页">
+                    <i class="fas fa-angle-right"></i>
+                </a>
+            `;
+            pagination.appendChild(nextLi);
+            
+            // 尾页
+            const lastLi = document.createElement('li');
+            lastLi.className = `page-item ${page >= totalPages ? 'disabled' : ''}`;
+            lastLi.innerHTML = `
+                <a class="page-link" href="#" onclick="changePage(${totalPages})" title="尾页">
+                    <i class="fas fa-angle-double-right"></i>
+                </a>
+            `;
+            pagination.appendChild(lastLi);
+        }
+        
+        // 切换页面
+        function changePage(page) {
+            if (page < 1) return;
+            currentPage = page;
+            loadPhoneData(page);
+        }
+        
+        // 上传手机号文件
+        function uploadPhoneFile() {
+            const fileInput = document.getElementById('phoneFile');
+            const file = fileInput.files[0];
+            const fileNameInput = document.getElementById('customPhoneFilename');
+            const uploadBtn = document.getElementById('uploadPhoneBtn');
+            
+            if (!file) {
+                console.error('请选择要上传的文件');
+                return;
+            }
+            
+            // 验证文件（这里不需要调用validatePhoneFile，因为按钮只有在文件验证通过后才会启用）
+            
+            // 显示上传状态
+            uploadBtn.disabled = true;
+            uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 上传中...';
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            // 如果用户修改了文件名，添加到表单数据中
+            const customFileName = fileNameInput.value.trim();
+            if (customFileName && customFileName !== file.name.replace(/\.[^/.]+$/, "")) {
+                formData.append('custom_name', customFileName);
+            }
+            
+            fetch('/api/upload_phone_file', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // 关闭模态框
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('uploadPhoneModal'));
+                    modal.hide();
+                    
+                    // 重置表单
+                    document.getElementById('uploadPhoneForm').reset();
+                    document.getElementById('phoneFilenameSection').style.display = 'none';
+                    document.getElementById('phoneFileValidationMessage').innerHTML = '';
+                    document.getElementById('uploadPhoneBtn').disabled = true;
+                    
+                    // 显示成功消息
+                    showSuccess('手机号文件上传成功！');
+                    
+                    // 重新加载数据
+                    loadConfigFiles();
+                    loadPhoneData(currentPage);
+                } else {
+                    console.error('上传失败:', data.message);
+                }
+            })
+            .catch(error => {
+                console.error('上传失败:', error);
+            })
+            .finally(() => {
+                // 恢复按钮状态
+                uploadBtn.disabled = false;
+                uploadBtn.innerHTML = '<i class="fas fa-upload me-2"></i>上传文件';
+            });
+        }
+        
+        // 显示提示信息
+        function showToast(message, type = 'info') {
+            // 创建提示元素
+            const toast = document.createElement('div');
+            toast.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+            toast.style.cssText = `
+                top: 20px;
+                right: 20px;
+                z-index: 9999;
+                min-width: 300px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            `;
+            
+            toast.innerHTML = `
+                <i class="fas fa-${type === 'success' ? 'check-circle' : 'info-circle'} me-2"></i>
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            `;
+            
+            // 添加到页面
+            document.body.appendChild(toast);
+            
+            // 3秒后自动移除
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            }, 3000);
+        }
+        
+        // 显示成功消息
+        function showSuccess(message) {
+            showToast(message, 'success');
+        }
+        
+        // 显示加载状态
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('phoneDataContainer').style.display = 'none';
+        }
+        
+        // 删除手机号
+        function deletePhone(phoneNumber) {
+            console.log('🔵 deletePhone函数被调用，手机号:', phoneNumber);
+            
+            try {
+                // 检查模态框元素是否存在
+                const modalElement = document.getElementById('deleteConfirmModal');
+                if (!modalElement) {
+                    console.error('❌ 删除确认模态框不存在');
+                    showToast('删除确认对话框不存在，请刷新页面重试', 'danger');
+                    return;
+                }
+                
+                // 检查隐藏输入字段是否存在
+                const hiddenInput = document.getElementById('deletePhoneNumber');
+                if (!hiddenInput) {
+                    console.error('❌ 删除手机号隐藏字段不存在');
+                    showToast('删除手机号字段不存在，请刷新页面重试', 'danger');
+                    return;
+                }
+                
+                // 设置删除手机号
+                hiddenInput.value = phoneNumber;
+                console.log('设置删除手机号:', phoneNumber);
+                
+                // 显示删除确认对话框
+                const deleteModal = new bootstrap.Modal(modalElement);
+                console.log('显示删除确认对话框...');
+                deleteModal.show();
+                
+                console.log('✅ 删除确认对话框已显示');
+                
+            } catch (error) {
+                console.error('删除功能出错:', error);
+                showToast('删除功能出错: ' + error.message, 'danger');
+            }
+        }
+        
+        // 确认删除
+        function confirmDelete() {
+            console.log('🔴 confirmDelete函数被调用');
+            
+            try {
+                const phoneNumber = document.getElementById('deletePhoneNumber').value;
+                const deleteModal = bootstrap.Modal.getInstance(document.getElementById('deleteConfirmModal'));
+                
+                console.log('确认删除，手机号:', phoneNumber);
+                
+                // 显示加载状态
+                const confirmBtn = document.getElementById('confirmDeleteBtn');
+                const originalText = confirmBtn.innerHTML;
+                confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>删除中...';
+                confirmBtn.disabled = true;
+                
+                // 发送删除请求
+                fetch('/api/delete_phone', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ phone: phoneNumber })
+                })
+                .then(response => {
+                    console.log('删除响应状态:', response.status);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('删除响应数据:', data);
+                    confirmBtn.innerHTML = originalText;
+                    confirmBtn.disabled = false;
+                    
+                    if (data.success) {
+                        console.log('✅ 删除成功！');
+                        showToast('删除成功！手机号已移动到phone_delete目录', 'success');
+                        
+                        // 确保模态框正确关闭
+                        if (deleteModal) {
+                            deleteModal.hide();
+                        }
+                        
+                        // 重新加载数据
+                        setTimeout(() => {
+                            // 直接使用全局变量currentConfigFile
+                            let configFile = currentConfigFile || window.currentConfigFile || '';
+                            
+                            console.log('删除成功后重新加载数据，配置文件:', configFile);
+                            console.log('当前页码:', currentPage);
+                            
+                            // 强制刷新配置文件列表和数据
+                            loadConfigFiles();
+                            loadPhoneData(currentPage, configFile);
+                        }, 500);
+                    } else {
+                        console.log('❌ 删除失败:', data.message);
+                        showToast('删除失败：' + data.message, 'danger');
+                    }
+                })
+                .catch(error => {
+                    console.error('删除请求错误:', error);
+                    console.error('错误详情:', error.message);
+                    confirmBtn.innerHTML = originalText;
+                    confirmBtn.disabled = false;
+                    showToast('删除失败：网络错误', 'danger');
+                });
+            } catch (error) {
+                console.error('确认删除功能出错:', error);
+                console.error('错误堆栈:', error.stack);
+                showToast('删除功能出错: ' + error.message, 'danger');
+                
+                // 重置按钮状态
+                const confirmBtn = document.getElementById('confirmDeleteBtn');
+                if (confirmBtn) {
+                    confirmBtn.innerHTML = '<i class="fas fa-trash me-2"></i>确认删除';
+                    confirmBtn.disabled = false;
+                }
+            }
+        }
+        
+        // 恢复手机号
+        function restorePhone(phoneNumber) {
+            if (!confirm('确定要恢复这个手机号吗？')) {
+                return;
+            }
+            
+            fetch('/api/restore_phone', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ phone: phoneNumber })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('手机号恢复成功');
+                    loadPhoneData(currentPage);
+                } else {
+                    alert('恢复失败: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('恢复失败:', error);
+                alert('恢复失败');
+            });
+        }
+        
+        // 刷新数据
+        function refreshPhoneData() {
+            loadConfigFiles();
+            loadPhoneData(currentPage);
+        }
+        
+        // 移动端菜单切换
+        const menuToggle = document.getElementById('menuToggle');
+        if (menuToggle) {
+            menuToggle.addEventListener('click', function() {
+                const sidebar = document.getElementById('sidebar');
+                if (sidebar) {
+                    sidebar.classList.toggle('show');
+                }
+            });
+        }
+
+        // 点击外部关闭移动端菜单
+        document.addEventListener('click', function(event) {
+            const sidebar = document.getElementById('sidebar');
+            const menuToggle = document.getElementById('menuToggle');
+            
+            if (sidebar && menuToggle && !sidebar.contains(event.target) && !menuToggle.contains(event.target)) {
+                 sidebar.classList.remove('show');
+             }
+         });
+        
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            // 显示初始加载状态
+            showLoading();
+            
+            // 加载配置文件和数据
+            loadConfigFiles();
+            
+            // 绑定每页显示数量变化事件
+            const pageSizeSelect = document.getElementById('pageSizeSelect');
+            if (pageSizeSelect) {
+                pageSizeSelect.addEventListener('change', function() {
+                    changePageSize(parseInt(this.value));
+                });
+            }
+            
+            // 绑定文件选择事件
+            const phoneFileInput = document.getElementById('phoneFile');
+            if (phoneFileInput) {
+                phoneFileInput.addEventListener('change', function(e) {
+                    const file = e.target.files[0];
+                    if (file) {
+                        // 显示文件信息
+                        const selectedFileName = document.getElementById('selectedFileName');
+                        const selectedFileSize = document.getElementById('selectedFileSize');
+                        const fileInfo = document.getElementById('fileInfo');
+                        const phoneFileName = document.getElementById('phoneFileName');
+                        
+                        if (selectedFileName) selectedFileName.textContent = file.name;
+                        if (selectedFileSize) selectedFileSize.textContent = (file.size / 1024).toFixed(2) + ' KB';
+                        if (fileInfo) fileInfo.style.display = 'block';
+                        
+                        // 自动填充文件名（去掉扩展名）
+                        const nameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
+                        if (phoneFileName) phoneFileName.value = nameWithoutExt;
+                    } else {
+                        const fileInfo = document.getElementById('fileInfo');
+                        if (fileInfo) fileInfo.style.display = 'none';
+                    }
+                });
+            }
+        });
+    </script>
+        </div>
+    </div>
+</body>
+</html>

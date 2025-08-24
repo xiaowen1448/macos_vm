@@ -38,6 +38,12 @@ appleid_delete_dir = r'web\config\ID_delete'
 # Apple ID已使用目录
 appleid_install_dir = r'web\config\ID_install'
 
+# 发信手机号未使用目录
+phone_unused_dir = r'web\config\phone_unused'
+
+# 发信手机号已删除目录
+phone_delete_dir = r'web\config\phone_delete'
+
 # 脚本本地上传路径（支持多个目录）
 script_upload_dirs = [
     r'D:\macos_vm\macos_script\macos_sh',

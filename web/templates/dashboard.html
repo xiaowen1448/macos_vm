@@ -581,6 +581,9 @@
                             <li class="nav-item">
                                 <a class="nav-link" href="{{ url_for('id_management_page') }}">Apple ID管理</a>
                             </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('misc_management_page') }}">发信管理</a>
+                            </li>
                         </ul>
                     </div>
                 </div>
@@ -745,12 +748,16 @@
 
         // 更新统计数据的函数
         function updateStats() {
-            // 这里可以添加AJAX调用来获取实时数据
-            // 目前使用模拟数据
-            document.getElementById('totalVMs').textContent = '12';
-            document.getElementById('runningVMs').textContent = '8';
-            document.getElementById('totalWuma').textContent = '156';
-            document.getElementById('totalAppleIds').textContent = '89';
+            // 检查元素是否存在再更新，避免null错误
+            const totalVMs = document.getElementById('totalVMs');
+            const runningVMs = document.getElementById('runningVMs');
+            const totalWuma = document.getElementById('totalWuma');
+            const totalAppleIds = document.getElementById('totalAppleIds');
+            
+            if (totalVMs) totalVMs.textContent = '12';
+            if (runningVMs) runningVMs.textContent = '8';
+            if (totalWuma) totalWuma.textContent = '156';
+            if (totalAppleIds) totalAppleIds.textContent = '89';
         }
 
         // 页面加载时更新统计数据
