@@ -451,6 +451,26 @@
                     </div>
                 </div>
             </div>
+             <!-- 发信管理主菜单 -->
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingMessaging">
+                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseMessaging" aria-expanded="false" aria-controls="collapseMessaging">
+                        发信管理
+                    </button>
+                </h2>
+                <div id="collapseMessaging" class="accordion-collapse collapse " aria-labelledby="headingMessaging" data-bs-parent="#accordionMenu">
+                    <div class="accordion-body p-0">
+                        <ul class="nav flex-column">
+                            <li class="nav-item">
+                                <a class="nav-link active" href="{{ url_for('phone_management_page') }}"><i class="fas fa-phone me-2"></i>手机号管理</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('mass_messaging_page') }}"><i class="fas fa-broadcast-tower me-2"></i>群发管理</a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
             <div class="accordion-item">
                 <h2 class="accordion-header" id="headingBoot">
                     <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseBoot" aria-expanded="false" aria-controls="collapseBoot">
@@ -470,7 +490,7 @@
                                 <a class="nav-link" href="{{ url_for('id_management_page') }}">Apple ID管理</a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('misc_management_page') }}">发信管理</a>
+                                <a class="nav-link" href="{{ url_for('phone_management_page') }}">手机号管理</a>
                             </li>
                         </ul>
                     </div>

@@ -609,6 +609,26 @@
                     </div>
                 </div>
             </div>
+              <!-- 发信管理主菜单 -->
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingMessaging">
+                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseMessaging" aria-expanded="false" aria-controls="collapseMessaging">
+                        发信管理
+                    </button>
+                </h2>
+                <div id="collapseMessaging" class="accordion-collapse collapse " aria-labelledby="headingMessaging" data-bs-parent="#accordionMenu">
+                    <div class="accordion-body p-0">
+                        <ul class="nav flex-column">
+                            <li class="nav-item">
+                                <a class="nav-link active" href="{{ url_for('phone_management_page') }}"><i class="fas fa-phone me-2"></i>手机号管理</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('mass_messaging_page') }}"><i class="fas fa-broadcast-tower me-2"></i>群发管理</a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
                     <div class="accordion-item">
                         <h2 class="accordion-header" id="headingBoot">
                             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseBoot" aria-expanded="false" aria-controls="collapseBoot">
@@ -628,7 +648,7 @@
                                         <a class="nav-link" href="{{ url_for('id_management_page') }}">Apple ID管理</a>
                                     </li>
                                     <li class="nav-item">
-                                        <a class="nav-link" href="{{ url_for('misc_management_page') }}">发信管理</a>
+                                        <a class="nav-link" href="{{ url_for('phone_management_page') }}">手机号管理</a>
                                     </li>
                                 </ul>
                             </div>
@@ -5356,11 +5376,13 @@
         function checkSelectedVMsRunningState() {
             console.log('检查选中虚拟机状态，当前选中的虚拟机:', Array.from(selectedVMs));
             
+            // 获取所有批量操作按钮
+            const batchWumaBtn = document.getElementById('batchChangeWumaBtn');
+            const batchDeleteBtn = document.getElementById('batchDeleteBtn');
+            const batchIMLoginBtn = document.getElementById('batchIMLoginBtn');
+            
             if (selectedVMs.size === 0) {
                 // 没有选中任何虚拟机，禁用所有按钮
-                const batchWumaBtn = document.getElementById('batchChangeWumaBtn');
-                const batchDeleteBtn = document.getElementById('batchDeleteBtn');
-                
                 batchWumaBtn.disabled = true;
                 batchWumaBtn.classList.remove('btn-warning');
                 batchWumaBtn.classList.add('btn-secondary');
@@ -5399,10 +5421,6 @@
             
             console.log('选中的运行中/重启中虚拟机:', selectedRunningVMs.map(vm => vm.name));
             console.log('选中的已停止虚拟机:', selectedStoppedVMs.map(vm => vm.name));
-            
-            const batchWumaBtn = document.getElementById('batchChangeWumaBtn');
-            const batchDeleteBtn = document.getElementById('batchDeleteBtn');
-            const batchIMLoginBtn = document.getElementById('batchIMLoginBtn');
             
             // 更新批量更改按钮状态（需要运行中的虚拟机，且不能包含已关机的虚拟机）
             if (selectedRunningVMs.length > 0 && selectedStoppedVMs.length === 0) {
