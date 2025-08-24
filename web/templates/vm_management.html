@@ -460,6 +460,73 @@
             opacity: 0.8;
         }
 
+        /* 静态文本框样式 */
+        .static-message {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            max-width: 400px;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            font-size: 14px;
+            line-height: 1.4;
+            display: none;
+            animation: slideInRight 0.3s ease-out;
+        }
+
+        .static-message.warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+        }
+
+        .static-message.error {
+            background-color: #ffe0b3;
+            border: 1px solid #ffcc80;
+            color: #cc5500;
+        }
+
+        .static-message.info {
+            background-color: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+
+        .static-message.success {
+            background-color: #d4f6d4;
+            border: 1px solid #90ee90;
+            color: #006600;
+        }
+
+        .static-message .close-btn {
+            position: absolute;
+            top: 8px;
+            right: 12px;
+            background: none;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            color: inherit;
+            opacity: 0.7;
+        }
+
+        .static-message .close-btn:hover {
+            opacity: 1;
+        }
+
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
 </style>
 </head>
 <body>
@@ -2087,15 +2154,15 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert(`SSH互信设置成功！\n\n虚拟机: ${vmName}\n状态: ${data.message}`);
+                    showStaticMessage(`SSH互信设置成功！\n\n虚拟机: ${vmName}\n状态: ${data.message}`, 'success');
                     // 刷新SSH状态
                     loadVMDetails(vmName);
                 } else {
-                    alert(`SSH互信设置失败！\n\n错误: ${data.message}`);
+                    showStaticMessage(`SSH互信设置失败！\n\n错误: ${data.message}`, 'error');
                 }
             })
             .catch(error => {
-                alert(`网络错误: ${error.message}`);
+                showStaticMessage(`网络错误: ${error.message}`, 'error');
             })
             .finally(() => {
                 // 恢复按钮状态
@@ -2193,36 +2260,130 @@
 
         // 删除单个虚拟机
         function deleteVM(vmName) {
-            // 检查虚拟机状态
-            const vm = totalVMs.find(v => v.name === vmName);
-            if (vm && vm.status === 'running') {
-                alert(`无法删除虚拟机 "${vmName}"，该虚拟机正在运行中。请先停止虚拟机，然后执行删除操作。`);
-                return;
-            }
+            console.log('🔵 deleteVM函数被调用，虚拟机名称:', vmName);
             
-            if (confirm(`确定要删除虚拟机 "${vmName}" 吗？此操作不可恢复。`)) {
-                // 直接调用后端删除API
+            try {
+                // 检查虚拟机状态
+                const vm = totalVMs.find(v => v.name === vmName);
+                if (vm && vm.status === 'running') {
+                    showToast(`无法删除虚拟机 "${vmName}"，该虚拟机正在运行中。请先停止虚拟机，然后执行删除操作。`, 'warning');
+                    return;
+                }
+                
+                // 检查模态框元素是否存在
+                const modalElement = document.getElementById('deleteConfirmModal');
+                if (!modalElement) {
+                    console.error('❌ 删除确认模态框不存在');
+                    showToast('删除确认对话框不存在，请刷新页面重试', 'danger');
+                    return;
+                }
+                
+                // 检查隐藏输入字段是否存在
+                const hiddenInput = document.getElementById('deleteVMName');
+                if (!hiddenInput) {
+                    console.error('❌ 删除虚拟机名称隐藏字段不存在');
+                    showToast('删除虚拟机名称字段不存在，请刷新页面重试', 'danger');
+                    return;
+                }
+                
+                // 设置删除虚拟机名称
+                hiddenInput.value = vmName;
+                console.log('设置删除虚拟机名称:', vmName);
+                
+                // 显示删除确认对话框
+                const deleteModal = new bootstrap.Modal(modalElement);
+                console.log('显示删除确认对话框...');
+                deleteModal.show();
+                
+                console.log('✅ 删除确认对话框已显示');
+                
+            } catch (error) {
+                console.error('删除功能出错:', error);
+                showToast('删除功能出错: ' + error.message, 'danger');
+            }
+        }
+        
+        // 确认删除
+        function confirmDelete() {
+            console.log('🔴 confirmDelete函数被调用');
+            
+            try {
+                const vmName = document.getElementById('deleteVMName').value;
+                const deleteModal = bootstrap.Modal.getInstance(document.getElementById('deleteConfirmModal'));
+                
+                console.log('确认删除，虚拟机名称:', vmName);
+                
+                // 显示加载状态
+                const confirmBtn = document.getElementById('confirmDeleteBtn');
+                const originalText = confirmBtn.innerHTML;
+                confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>删除中...';
+                confirmBtn.disabled = true;
+                
+                const requestData = {
+                    vm_names: [vmName]
+                };
+                
+                console.log('发送删除请求:', requestData);
+                
+                // 发送删除请求
                 fetch('/api/vm_10_12_delete', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'Accept': 'application/json'
                     },
-                    body: JSON.stringify({
-                        vm_names: [vmName]
-                    })
+                    credentials: 'same-origin',
+                    body: JSON.stringify(requestData)
                 })
-                .then(response => response.json())
+                .then(response => {
+                    console.log('删除响应状态:', response.status);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
                 .then(data => {
+                    console.log('删除响应数据:', data);
+                    confirmBtn.innerHTML = originalText;
+                    confirmBtn.disabled = false;
+                    
                     if (data.success) {
-                        alert('虚拟机删除成功');
-                        refreshVMData();
+                        console.log('✅ 删除成功！');
+                        showToast('虚拟机删除成功！', 'success');
+                        
+                        // 确保模态框正确关闭
+                        if (deleteModal) {
+                            deleteModal.hide();
+                        }
+                        
+                        // 重新加载数据
+                        setTimeout(() => {
+                            refreshData();
+                        }, 500);
                     } else {
-                        alert('删除失败: ' + data.message);
+                        console.log('❌ 删除失败:', data.message);
+                        showToast('删除失败：' + data.message, 'danger');
                     }
                 })
                 .catch(error => {
-                    alert('操作失败: ' + error.message);
+                    console.error('删除请求错误:', error);
+                    console.error('错误详情:', error.message);
+                    confirmBtn.innerHTML = originalText;
+                    confirmBtn.disabled = false;
+                    showToast('删除失败：网络错误', 'danger');
                 });
+            } catch (error) {
+                console.error('确认删除功能出错:', error);
+                console.error('错误堆栈:', error.stack);
+                showToast('删除功能出错: ' + error.message, 'danger');
+                
+                // 重置按钮状态
+                const confirmBtn = document.getElementById('confirmDeleteBtn');
+                if (confirmBtn) {
+                    confirmBtn.innerHTML = '<i class="fas fa-trash me-2"></i>确认删除';
+                    confirmBtn.disabled = false;
+                }
             }
         }
 
@@ -2264,6 +2425,17 @@
 
         // 启动虚拟机
         function startVM(vmName) {
+            document.getElementById('startVMName').value = vmName;
+            const modal = new bootstrap.Modal(document.getElementById('startConfirmModal'));
+            modal.show();
+        }
+        
+        // 确认启动虚拟机
+        function confirmStart() {
+            const vmName = document.getElementById('startVMName').value;
+            const modal = bootstrap.Modal.getInstance(document.getElementById('startConfirmModal'));
+            modal.hide();
+            
             fetch('/api/vm_10_12_start', {
                 method: 'POST',
                 headers: {
@@ -2274,19 +2446,30 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert('虚拟机启动成功');
-                    refreshVMData();
+                    showToast('虚拟机启动成功', 'success');
+                    refreshData();
                 } else {
-                    alert('启动失败: ' + data.message);
+                    showToast('启动失败: ' + data.message, 'error');
                 }
             })
             .catch(error => {
-                alert('操作失败: ' + error.message);
+                showToast('操作失败: ' + error.message, 'error');
             });
         }
 
         // 停止虚拟机
         function stopVM(vmName) {
+            document.getElementById('stopVMName').value = vmName;
+            const modal = new bootstrap.Modal(document.getElementById('stopConfirmModal'));
+            modal.show();
+        }
+        
+        // 确认停止虚拟机
+        function confirmStop() {
+            const vmName = document.getElementById('stopVMName').value;
+            const modal = bootstrap.Modal.getInstance(document.getElementById('stopConfirmModal'));
+            modal.hide();
+            
             fetch('/api/vm_10_12_stop', {
                 method: 'POST',
                 headers: {
@@ -2297,44 +2480,53 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert('虚拟机停止成功');
-                    refreshVMData();
+                    showToast('虚拟机停止成功', 'success');
+                    refreshData();
                 } else {
-                    alert('停止失败: ' + data.message);
+                    showToast('停止失败: ' + data.message, 'error');
                 }
             })
             .catch(error => {
-                alert('操作失败: ' + error.message);
+                showToast('操作失败: ' + error.message, 'error');
             });
         }
 
         // 重启虚拟机
         function restartVM(vmName) {
-            if (confirm(`确定要重启虚拟机 "${vmName}" 吗？`)) {
-                fetch('/api/vm_10_12_restart', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ vm_name: vmName })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        alert('虚拟机重启中...');
-                        // 延迟刷新数据，给虚拟机一些启动时间
-                        setTimeout(() => {
-                            loadVMData(currentPage);
-                        }, 3000);
-                    } else {
-                        alert('重启失败: ' + data.message);
-                    }
-                })
-                .catch(error => {
-                    console.error('重启虚拟机失败:', error);
-                    alert('重启失败: ' + error.message);
-                });
-            }
+            document.getElementById('restartVMName').value = vmName;
+            const modal = new bootstrap.Modal(document.getElementById('restartConfirmModal'));
+            modal.show();
+        }
+        
+        // 确认重启虚拟机
+        function confirmRestart() {
+            const vmName = document.getElementById('restartVMName').value;
+            const modal = bootstrap.Modal.getInstance(document.getElementById('restartConfirmModal'));
+            modal.hide();
+            
+            fetch('/api/vm_10_12_restart', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ vm_name: vmName })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('虚拟机重启成功', 'success');
+                    // 延迟刷新数据，给虚拟机一些启动时间
+                    setTimeout(() => {
+                        loadVMData(currentPage);
+                    }, 3000);
+                } else {
+                    showToast('重启失败: ' + data.message, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('重启虚拟机失败:', error);
+                showToast('重启失败: ' + error.message, 'error');
+            });
         }
 
         // 获取虚拟机详细信息
@@ -2345,7 +2537,7 @@
                 if (data.success) {
                     showVMInfoModal(data.vm_info);
                 } else {
-                    alert('获取信息失败: ' + data.message);
+                    showStaticMessage('获取信息失败: ' + data.message, 'error');
                 }
             })
             .catch(error => {
@@ -2358,12 +2550,12 @@
             // 检查虚拟机状态
             const vm = getVMByName(vmName);
             if (!vm) {
-                alert('虚拟机信息不存在');
+                showStaticMessage('虚拟机信息不存在', 'error');
                 return;
             }
             
             if (vm.status !== 'running') {
-                alert('虚拟机未运行，无法发送脚本');
+                showStaticMessage('虚拟机未运行，无法发送脚本', 'warning');
                 return;
             }
             
@@ -2374,12 +2566,12 @@
                     if (data.success && data.scripts.length > 0) {
                         showScriptSelectionDialog(vmName, data.scripts);
                     } else {
-                        alert('没有可用的脚本文件');
+                        showStaticMessage('没有可用的脚本文件', 'warning');
                     }
                 })
                 .catch(error => {
                     console.error('获取脚本列表失败:', error);
-                    alert('获取脚本列表失败: ' + error.message);
+                    showStaticMessage('获取脚本列表失败: ' + error.message, 'error');
                 });
         }
 
@@ -2393,7 +2585,7 @@
             }
             
             if (vm.status !== 'running') {
-                alert('虚拟机未运行，无法执行脚本');
+                showStaticMessage('虚拟机未运行，无法执行脚本', 'warning');
                 return;
             }
             
@@ -2678,14 +2870,14 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        alert(`脚本 ${scriptName} 发送成功到虚拟机 ${vmName}！\n\n文件路径: /Users/wx/${scriptName}`);
+                        showStaticMessage(`脚本 ${scriptName} 发送成功到虚拟机 ${vmName}！\n\n文件路径: /Users/wx/${scriptName}`, 'success');
                     } else {
-                        alert(`发送失败: ${data.message}`);
+                        showStaticMessage(`发送失败: ${data.message}`, 'error');
                     }
                 })
                 .catch(error => {
                     console.error('发送脚本出错:', error);
-                    alert('发送脚本时出错: ' + error.message);
+                    showStaticMessage('发送脚本时出错: ' + error.message, 'error');
                 });
             }
         }
@@ -2804,7 +2996,7 @@
         // 批量发送选中的脚本
         function sendAllSelectedScripts(vmName) {
             if (selectedScripts.size === 0) {
-                alert('请先选择要发送的脚本');
+                showStaticMessage('请先选择要发送的脚本', 'warning');
                 return;
             }
             
@@ -2978,7 +3170,7 @@
                     if (modal) {
                         modal.hide();
                     }
-                    alert(`批量操作完成！\n⚠️ 没有成功发送的脚本，无法添加权限`);
+                    showStaticMessage(`批量操作完成！\n⚠️ 没有成功发送的脚本，无法添加权限`, 'warning');
                 }, 1000);
                 return;
             }
@@ -3035,7 +3227,7 @@
                                 if (modal) {
                                     modal.hide();
                                 }
-                                alert(`批量操作完成！\n✅ 成功发送 ${successfulScripts.length} 个脚本到虚拟机 ${vmName}\n✅ 已为所有脚本添加执行权限`);
+                                showStaticMessage(`批量操作完成！\n✅ 成功发送 ${successfulScripts.length} 个脚本到虚拟机 ${vmName}\n✅ 已为所有脚本添加执行权限`, 'success');
                             }, 1000);
                         }
                     })
@@ -3056,7 +3248,7 @@
                                 if (modal) {
                                     modal.hide();
                                 }
-                                alert(`批量操作完成！\n✅ 成功发送 ${successfulScripts.length} 个脚本到虚拟机 ${vmName}\n⚠️ 部分脚本权限添加失败`);
+                                showStaticMessage(`批量操作完成！\n✅ 成功发送 ${successfulScripts.length} 个脚本到虚拟机 ${vmName}\n⚠️ 部分脚本权限添加失败`, 'warning');
                             }, 1000);
                         }
                     });
@@ -3804,7 +3996,7 @@
             }
             
             if (vm.status !== 'running') {
-                alert('虚拟机未运行，无法添加执行权限');
+                showStaticMessage('虚拟机未运行，无法添加执行权限', 'warning');
                 return;
             }
             
@@ -3837,9 +4029,9 @@
                 }
                 
                 if (data.success) {
-                    alert(`✅ 执行权限添加成功！\n\n${data.message}`);
+                    showStaticMessage(`✅ 执行权限添加成功！\n\n${data.message}`, 'success');
                 } else {
-                    alert(`❌ 执行权限添加失败！\n\n${data.message}`);
+                    showStaticMessage(`❌ 执行权限添加失败！\n\n${data.message}`, 'error');
                 }
             })
             .catch(error => {
@@ -3850,7 +4042,7 @@
                 }
                 
                 console.error('添加执行权限失败:', error);
-                alert('添加执行权限失败: ' + error.message);
+                showStaticMessage('添加执行权限失败: ' + error.message, 'error');
             });
         }
 
@@ -3911,7 +4103,7 @@
             }
             
             if (!scriptNames || scriptNames.length === 0) {
-                alert('请选择要添加执行权限的脚本');
+                showStaticMessage('请选择要添加执行权限的脚本', 'warning');
                 return;
             }
             
@@ -3944,9 +4136,9 @@
                 }
                 
                 if (data.success) {
-                    alert(`✅ 批量执行权限添加成功！\n\n${data.message}`);
+                    showStaticMessage(`✅ 批量执行权限添加成功！\n\n${data.message}`, 'success');
                 } else {
-                    alert(`❌ 批量执行权限添加失败！\n\n${data.message}`);
+                    showStaticMessage(`❌ 批量执行权限添加失败！\n\n${data.message}`, 'error');
                 }
             })
             .catch(error => {
@@ -3957,7 +4149,7 @@
                 }
                 
                 console.error('批量添加执行权限失败:', error);
-                alert('批量添加执行权限失败: ' + error.message);
+                showStaticMessage('批量添加执行权限失败: ' + error.message, 'error');
             });
         }
 
@@ -4298,7 +4490,7 @@
             
             // 检查按钮是否被禁用
             if (batchBtn.disabled) {
-                alert('请先启动虚拟机，然后再执行批量更改五码操作');
+                showStaticMessage('请先启动虚拟机，然后再执行批量更改五码操作', 'warning');
                 return;
             }
             
@@ -4316,7 +4508,7 @@
             
             // 检查按钮是否被禁用
             if (batchBtn.disabled) {
-                alert('请先选择已关机的虚拟机，然后再执行批量删除操作');
+                showStaticMessage('请先选择已关机的虚拟机，然后再执行批量删除操作', 'warning');
                 return;
             }
             
@@ -4637,7 +4829,9 @@
                 } else if (vm.status === 'starting') {
                     statusBadge = '<span class="badge bg-warning"><i class="fas fa-spinner fa-spin"></i> 重启中</span>';
                 } else if (vm.status === 'stopped') {
-                    statusBadge = '<span class="badge bg-secondary">已停止</span>';
+                    statusBadge = '<span class="badge bg-danger">已删除</span>';
+                } else if (vm.status === 'deleted') {
+                    statusBadge = '<span class="badge bg-danger">已删除</span>';
                 } else {
                     statusBadge = '<span class="badge bg-info">未知</span>';
                 }
@@ -4703,10 +4897,18 @@
             let vmListHTML = '<div class="list-group">';
             
             selectedVMData.forEach(vm => {
-                const isStopped = vm.status === 'stopped';
-                const statusBadge = isStopped ? 
-                    '<span class="badge bg-secondary">已停止</span>' : 
-                    '<span class="badge bg-success">运行中</span>';
+                let statusBadge;
+                if (vm.status === 'running') {
+                    statusBadge = '<span class="badge bg-success">运行中</span>';
+                } else if (vm.status === 'starting') {
+                    statusBadge = '<span class="badge bg-warning"><i class="fas fa-spinner fa-spin"></i> 启动中</span>';
+                } else if (vm.status === 'stopped') {
+                    statusBadge = '<span class="badge bg-secondary">已停止</span>';
+                } else if (vm.status === 'deleted') {
+                    statusBadge = '<span class="badge bg-danger">已删除</span>';
+                } else {
+                    statusBadge = '<span class="badge bg-info">未知</span>';
+                }
                 
                 vmListHTML += `
                     <div class="list-group-item">
@@ -4830,7 +5032,7 @@
             
             // 检查是否有选中的虚拟机
             if (selectedVMs.size === 0) {
-                alert('请先选择虚拟机');
+                showStaticMessage('请先选择虚拟机', 'warning');
                 return;
             }
             
@@ -4845,7 +5047,7 @@
             });
             
             if (selectedStoppedVMs.length === 0) {
-                alert('请选择已关机的虚拟机');
+                showStaticMessage('请选择已关机的虚拟机', 'warning');
                 return;
             }
             
@@ -4874,21 +5076,44 @@
                 executeBtn.disabled = false;
                 
                 if (data.success) {
-                    // 隐藏进度条并显示完成状态
+                    // 显示删除完成状态，不关闭弹窗
                     hideDeleteProgress();
                     
-                    // 关闭模态对话框
-                    const modal = bootstrap.Modal.getInstance(document.getElementById('batchDeleteModal'));
-                    modal.hide();
+                    // 更新确认删除按钮状态为执行完毕
+                    executeBtn.innerHTML = '<i class="fas fa-check me-2"></i>执行完毕';
+                    executeBtn.disabled = true;
+                    executeBtn.classList.remove('btn-danger');
+                    executeBtn.classList.add('btn-success');
+                    
+                    // 不自动关闭模态对话框，保留静态弹窗
+                    // const modal = bootstrap.Modal.getInstance(document.getElementById('batchDeleteModal'));
+                    // modal.hide();
                     
                     console.log('批量删除结果:', data.results);
+                    
+                    // 更新已删除虚拟机的状态为已删除
+                    selectedStoppedVMs.forEach(vmName => {
+                        // 更新vmDataList中的状态
+                        const vmData = vmDataList.find(vm => vm.name === vmName);
+                        if (vmData) {
+                            vmData.status = 'deleted';
+                        }
+                        // 更新totalVMs中的状态
+                        const totalVMData = totalVMs.find(vm => vm.name === vmName);
+                        if (totalVMData) {
+                            totalVMData.status = 'deleted';
+                        }
+                    });
+                    
+                    // 重新加载虚拟机列表显示
+                    loadStoppedVMsList();
                     
                     // 刷新虚拟机列表
                     loadVMData();
                 } else {
                     // 隐藏进度条
                     hideDeleteProgress();
-                    alert('批量删除失败: ' + data.message);
+                    showStaticMessage('批量删除失败: ' + data.message, 'error');
                 }
             })
             .catch(error => {
@@ -4898,7 +5123,7 @@
                 // 隐藏进度条
                 hideDeleteProgress();
                 
-                alert('网络错误: ' + error.message);
+                showStaticMessage('网络错误: ' + error.message, 'error');
                 console.error('批量删除错误:', error);
             });
         }
@@ -4961,13 +5186,8 @@
             progressText.textContent = '删除完成！';
             progressDetails.textContent = '所有虚拟机已成功删除';
             
-            // 延迟隐藏进度条
-            setTimeout(() => {
-                progressSection.style.display = 'none';
-                progressBar.style.width = '0%';
-                progressText.textContent = '准备删除...';
-                progressDetails.textContent = '正在初始化...';
-            }, 2000);
+            // 不自动隐藏进度条和弹窗，保留静态显示
+            // 用户可以手动关闭弹窗
         }
         
         // 显示五码更改进度
@@ -5535,9 +5755,43 @@
             }
         }
 
+        // 显示静态文本框函数
+        function showStaticMessage(message, type = 'warning', duration = 5000) {
+            const container = document.getElementById('staticMessageContainer');
+            if (!container) return;
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `static-message ${type}`;
+            messageDiv.style.display = 'block';
+            messageDiv.innerHTML = `
+                ${message}
+                <button class="close-btn" onclick="this.parentElement.style.display='none'">&times;</button>
+            `;
+            
+            container.appendChild(messageDiv);
+            
+            // 自动隐藏
+            setTimeout(() => {
+                if (messageDiv.parentElement) {
+                    messageDiv.style.display = 'none';
+                    setTimeout(() => {
+                        if (messageDiv.parentElement) {
+                            messageDiv.parentElement.removeChild(messageDiv);
+                        }
+                    }, 300);
+                }
+            }, duration);
+        }
 
+        // 重写alert函数
+        window.alert = function(message) {
+            showStaticMessage(message, 'warning');
+        };
 
     </script>
+
+    <!-- 静态文本框容器 -->
+    <div id="staticMessageContainer"></div>
 
     <!-- 批量IM登录模态框 -->
     <div class="modal fade" id="batchIMLoginModal" tabindex="-1" aria-labelledby="batchIMLoginModalLabel" aria-hidden="true">
@@ -5590,6 +5844,126 @@
         </div>
     </div>
 
+    <!-- 删除确认模态框 -->
+    <div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-labelledby="deleteConfirmModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title" id="deleteConfirmModalLabel">
+                        <i class="fas fa-exclamation-triangle me-2"></i>确认删除
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning" role="alert">
+                        <i class="fas fa-warning me-2"></i>
+                        <strong>警告：</strong>此操作不可恢复！
+                    </div>
+                    <p class="mb-0">您确定要删除这个虚拟机吗？</p>
+                    <input type="hidden" id="deleteVMName" value="">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>取消
+                    </button>
+                    <button type="button" class="btn btn-danger" id="confirmDeleteBtn" onclick="confirmDelete()">
+                        <i class="fas fa-trash me-2"></i>确认删除
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 启动虚拟机确认模态框 -->
+    <div class="modal fade" id="startConfirmModal" tabindex="-1" aria-labelledby="startConfirmModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title" id="startConfirmModalLabel">
+                        <i class="fas fa-play me-2"></i>确认启动
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info" role="alert">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>提示：</strong>启动虚拟机可能需要一些时间。
+                    </div>
+                    <p class="mb-0">您确定要启动这个虚拟机吗？</p>
+                    <input type="hidden" id="startVMName" value="">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>取消
+                    </button>
+                    <button type="button" class="btn btn-success" id="confirmStartBtn" onclick="confirmStart()">
+                        <i class="fas fa-play me-2"></i>确认启动
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 停止虚拟机确认模态框 -->
+    <div class="modal fade" id="stopConfirmModal" tabindex="-1" aria-labelledby="stopConfirmModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-warning text-white">
+                    <h5 class="modal-title" id="stopConfirmModalLabel">
+                        <i class="fas fa-stop me-2"></i>确认停止
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning" role="alert">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>注意：</strong>停止虚拟机将中断所有正在运行的程序。
+                    </div>
+                    <p class="mb-0">您确定要停止这个虚拟机吗？</p>
+                    <input type="hidden" id="stopVMName" value="">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>取消
+                    </button>
+                    <button type="button" class="btn btn-warning" id="confirmStopBtn" onclick="confirmStop()">
+                        <i class="fas fa-stop me-2"></i>确认停止
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 重启虚拟机确认模态框 -->
+    <div class="modal fade" id="restartConfirmModal" tabindex="-1" aria-labelledby="restartConfirmModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title" id="restartConfirmModalLabel">
+                        <i class="fas fa-redo me-2"></i>确认重启
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info" role="alert">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>提示：</strong>重启虚拟机将中断所有正在运行的程序并重新启动。
+                    </div>
+                    <p class="mb-0">您确定要重启这个虚拟机吗？</p>
+                    <input type="hidden" id="restartVMName" value="">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>取消
+                    </button>
+                    <button type="button" class="btn btn-info" id="confirmRestartBtn" onclick="confirmRestart()">
+                        <i class="fas fa-redo me-2"></i>确认重启
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 添加模态框关闭事件监听器 -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -5598,6 +5972,103 @@
                 modal.addEventListener('hidden.bs.modal', onModalHidden);
             }
         });
+        
+        // showToast函数 - 显示提示信息
+        function showToast(message, type = 'info') {
+            // 创建toast容器（如果不存在）
+            let toastContainer = document.getElementById('toast-container');
+            if (!toastContainer) {
+                toastContainer = document.createElement('div');
+                toastContainer.id = 'toast-container';
+                toastContainer.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    z-index: 9999;
+                    max-width: 400px;
+                `;
+                document.body.appendChild(toastContainer);
+            }
+            
+            // 创建toast元素
+            const toast = document.createElement('div');
+            const toastId = 'toast-' + Date.now();
+            toast.id = toastId;
+            
+            // 根据类型设置样式
+            let bgClass, iconClass;
+            switch(type) {
+                case 'success':
+                    bgClass = 'bg-warning';
+                    iconClass = 'fas fa-check-circle';
+                    break;
+                case 'danger':
+                case 'error':
+                    bgClass = 'bg-danger';
+                    iconClass = 'fas fa-exclamation-circle';
+                    break;
+                case 'warning':
+                    bgClass = 'bg-warning';
+                    iconClass = 'fas fa-exclamation-triangle';
+                    break;
+                default:
+                    bgClass = 'bg-info';
+                    iconClass = 'fas fa-info-circle';
+            }
+            
+            toast.className = `toast show ${bgClass} text-white mb-2`;
+            toast.style.cssText = `
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                animation: slideInRight 0.3s ease-out;
+            `;
+            
+            toast.innerHTML = `
+                <div class="toast-body d-flex align-items-center">
+                    <i class="${iconClass} me-2"></i>
+                    <span class="flex-grow-1">${message}</span>
+                    <button type="button" class="btn-close btn-close-white ms-2" onclick="removeToast('${toastId}')"></button>
+                </div>
+            `;
+            
+            // 添加CSS动画
+            if (!document.getElementById('toast-animations')) {
+                const style = document.createElement('style');
+                style.id = 'toast-animations';
+                style.textContent = `
+                    @keyframes slideInRight {
+                        from { transform: translateX(100%); opacity: 0; }
+                        to { transform: translateX(0); opacity: 1; }
+                    }
+                    @keyframes slideOutRight {
+                        from { transform: translateX(0); opacity: 1; }
+                        to { transform: translateX(100%); opacity: 0; }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+            
+            // 添加到容器
+            toastContainer.appendChild(toast);
+            
+            // 自动移除
+            setTimeout(() => {
+                removeToast(toastId);
+            }, 4000);
+        }
+        
+        // 移除toast
+        function removeToast(toastId) {
+            const toast = document.getElementById(toastId);
+            if (toast) {
+                toast.style.animation = 'slideOutRight 0.3s ease-in';
+                setTimeout(() => {
+                    if (toast.parentNode) {
+                        toast.parentNode.removeChild(toast);
+                    }
+                }, 300);
+            }
+        }
     </script>
 
 </body>

@@ -268,6 +268,74 @@
             font-size: 0.85rem;
             opacity: 0.8;
         }
+        
+        /* 静态文本框样式 */
+        .static-message {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            max-width: 400px;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            font-size: 14px;
+            line-height: 1.4;
+            opacity: 0;
+            transform: translateX(100%);
+            transition: all 0.3s ease;
+        }
+        
+        .static-message.show {
+            opacity: 1;
+            transform: translateX(0);
+        }
+        
+        .static-message.warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+        }
+        
+        .static-message.error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        
+        .static-message.info {
+            background-color: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        
+        .static-message.success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        
+        .static-message .close-btn {
+            position: absolute;
+            top: 8px;
+            right: 12px;
+            background: none;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            color: inherit;
+            opacity: 0.7;
+            padding: 0;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .static-message .close-btn:hover {
+            opacity: 1;
+        }
     </style>
 </head>
 <body>
@@ -659,9 +727,47 @@
                 </div>
             </main>
 
+    <!-- 静态文本框容器 -->
+    <div id="staticMessageContainer"></div>
+
     <script>
         let eventSource = null;
         let isCloning = false;
+        
+        // 静态文本框函数
+        function showStaticMessage(message, type = 'info', duration = 5000) {
+            const container = document.getElementById('staticMessageContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `static-message ${type}`;
+            messageDiv.innerHTML = `
+                ${message}
+                <button class="close-btn" onclick="this.parentElement.remove()">&times;</button>
+            `;
+            
+            container.appendChild(messageDiv);
+            
+            // 显示动画
+            setTimeout(() => {
+                messageDiv.classList.add('show');
+            }, 10);
+            
+            // 自动隐藏
+            if (duration > 0) {
+                setTimeout(() => {
+                    messageDiv.classList.remove('show');
+                    setTimeout(() => {
+                        if (messageDiv.parentElement) {
+                            messageDiv.remove();
+                        }
+                    }, 300);
+                }, duration);
+            }
+        }
+        
+        // 替换alert函数
+        function alert(message) {
+            showStaticMessage(message, 'warning', 5000);
+        }
         
         // 表单提交处理
         document.getElementById('cloneForm').addEventListener('submit', function(e) {
