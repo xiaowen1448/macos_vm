@@ -1176,11 +1176,17 @@ def json_parser_page():
     """JSON解析功能页面"""
     return render_template('json_parser.html')
 
-@app.route('/misc_management')
+@app.route('/phone_management')
 @login_required
-def misc_management_page():
-    """杂项管理页面"""
-    return render_template('misc_management.html')
+def phone_management_page():
+    """手机号管理页面"""
+    return render_template('phone_management.html')
+
+@app.route('/mass_messaging')
+@login_required
+def mass_messaging_page():
+    """群发管理页面"""
+    return render_template('mass_messaging.html')
     
 @app.route('/api/clone_vm', methods=['POST'])
 @login_required

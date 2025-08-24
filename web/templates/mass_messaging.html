@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>群发管理 - MacOS VM 管理平台</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .sidebar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: 2px 0 15px rgba(102, 126, 234, 0.3);
+            min-height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 1000;
+            width: 280px;
+            color: white;
+        }
+        
+        .main-content {
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .navbar {
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .accordion-button:not(.collapsed) {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: none;
+            box-shadow: none;
+        }
+        
+        .accordion-button {
+            background: transparent;
+            color: white;
+            border: none;
+            box-shadow: none;
+            font-weight: 600;
+        }
+        
+        .accordion-button:focus {
+            box-shadow: none;
+            border: none;
+        }
+        
+        .accordion-button::after {
+            filter: brightness(0) invert(1);
+        }
+        
+        .accordion-item {
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .nav-link {
+            color: rgba(255, 255, 255, 0.8);
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin: 2px 10px;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+        }
+        
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            transform: translateX(5px);
+        }
+        
+        .nav-link.active {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            font-weight: 600;
+        }
+        
+        .nav-link i {
+            width: 20px;
+            text-align: center;
+        }
+        
+        .sidebar-header {
+            border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+            padding-bottom: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 60px;
+        }
+        
+        .brand-text {
+            color: white;
+            font-weight: 700;
+            font-size: 1.2rem;
+            letter-spacing: 0.5px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        
+        .sidebar-header h4 {
+            margin-bottom: 5px !important;
+            border-bottom: none;
+            border: none;
+            outline: none;
+        }
+        
+        .sidebar-header h4::after {
+            display: none;
+        }
+        
+        .sidebar-header h4::before {
+            display: none;
+        }
+        
+        .sidebar-header small {
+            font-size: 0.85rem;
+            opacity: 0.8;
+        }
+        
+        .main-container {
+            margin-left: 280px;
+            padding: 20px;
+            min-height: 100vh;
+            margin-top: 70px;
+            background: white;
+        }
+        
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+        }
+        
+        .card-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px 15px 0 0 !important;
+            border: none;
+            padding: 20px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 10px;
+            padding: 10px 25px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .form-control {
+            border-radius: 10px;
+            border: 2px solid #e9ecef;
+            padding: 12px 15px;
+            transition: all 0.3s ease;
+        }
+        
+        .form-control:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+        
+        .table {
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        .table thead th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            font-weight: 600;
+        }
+        
+        .table tbody tr {
+            transition: all 0.3s ease;
+        }
+        
+        .table tbody tr:hover {
+            background-color: #f8f9fa;
+            transform: scale(1.01);
+        }
+        
+        .alert {
+            border-radius: 10px;
+            border: none;
+        }
+        
+        .badge {
+            border-radius: 20px;
+            padding: 8px 12px;
+        }
+        
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+            }
+            
+            .sidebar.show {
+                transform: translateX(0);
+            }
+            
+            .main-container {
+                margin-left: 0;
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 侧边栏 -->
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-header text-center mb-4 p-3">
+            <h4 class="mb-0">
+                <i class="fas fa-desktop me-2"></i>
+                <span class="brand-text">ScptRunner客户端管理</span>
+            </h4>
+        </div>
+        
+        <div class="accordion" id="accordionMenu">
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingVM">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseVM" aria-expanded="false" aria-controls="collapseVM">
+                        虚拟机管理
+                    </button>
+                </h2>
+                <div id="collapseVM" class="accordion-collapse collapse" aria-labelledby="headingVM" data-bs-parent="#accordionMenu">
+                    <div class="accordion-body p-0">
+                        <ul class="nav flex-column">
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('clone_vm_page') }}">虚拟机批量克隆</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('vm_management_page') }}">虚拟机信息管理</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('vm_info_page') }}">虚拟机成品管理</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('vm_script_page') }}">虚拟机脚本管理</a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingClient">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseClient" aria-expanded="false" aria-controls="collapseClient">
+                        客户端管理
+                    </button>
+                </h2>
+                <div id="collapseClient" class="accordion-collapse collapse" aria-labelledby="headingClient" data-bs-parent="#accordionMenu">
+                    <div class="accordion-body p-0">
+                        <ul class="nav flex-column">
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('client_management_page') }}">ScptRunner客户端管理</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('json_parser_page') }}"><i class="fas fa-code me-2"></i>JSON解析功能</a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <!-- 手机号管理主菜单 -->
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingMessaging">
+                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseMessaging" aria-expanded="true" aria-controls="collapseMessaging">
+                        手机号管理
+                    </button>
+                </h2>
+                <div id="collapseMessaging" class="accordion-collapse collapse show" aria-labelledby="headingMessaging" data-bs-parent="#accordionMenu">
+                    <div class="accordion-body p-0">
+                        <ul class="nav flex-column">
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('phone_management_page') }}"><i class="fas fa-phone me-2"></i>手机号管理</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link active" href="{{ url_for('mass_messaging_page') }}"><i class="fas fa-broadcast-tower me-2"></i>群发管理</a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+              <!-- 发信管理主菜单 -->
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingMessaging">
+                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseMessaging" aria-expanded="false" aria-controls="collapseMessaging">
+                        发信管理
+                    </button>
+                </h2>
+                <div id="collapseMessaging" class="accordion-collapse collapse " aria-labelledby="headingMessaging" data-bs-parent="#accordionMenu">
+                    <div class="accordion-body p-0">
+                        <ul class="nav flex-column">
+                            <li class="nav-item">
+                                <a class="nav-link active" href="{{ url_for('phone_management_page') }}"><i class="fas fa-phone me-2"></i>手机号管理</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('mass_messaging_page') }}"><i class="fas fa-broadcast-tower me-2"></i>群发管理</a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingBoot">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseBoot" aria-expanded="false" aria-controls="collapseBoot">
+                        杂项管理
+                    </button>
+                </h2>
+                <div id="collapseBoot" class="accordion-collapse collapse" aria-labelledby="headingBoot" data-bs-parent="#accordionMenu">
+                    <div class="accordion-body p-0">
+                        <ul class="nav flex-column">
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('wuma_page') }}">虚拟机五码管理</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('mupan_page') }}">虚拟机母盘管理</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('id_management_page') }}">Apple ID管理</a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingEncrypt">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseEncrypt" aria-expanded="false" aria-controls="collapseEncrypt">
+                        数据加密功能
+                    </button>
+                </h2>
+                <div id="collapseEncrypt" class="accordion-collapse collapse" aria-labelledby="headingEncrypt" data-bs-parent="#accordionMenu">
+                    <div class="accordion-body p-0">
+                        <ul class="nav flex-column">
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('encrypt_code_page') }}">代码加密</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('encrypt_wuma_page') }}">五码加密</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('encrypt_id_page') }}">id加密</a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingProxy">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseProxy" aria-expanded="false" aria-controls="collapseProxy">
+                        代理IP配置
+                    </button>
+                </h2>
+                <div id="collapseProxy" class="accordion-collapse collapse" aria-labelledby="headingProxy" data-bs-parent="#accordionMenu">
+                    <div class="accordion-body p-0">
+                        <ul class="nav flex-column">
+                            <li class="nav-item">
+                                <a class="nav-link" href="#">代理配置管理</a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingSoftware">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSoftware" aria-expanded="false" aria-controls="collapseSoftware">
+                        虚拟机软件管理
+                    </button>
+                </h2>
+                <div id="collapseSoftware" class="accordion-collapse collapse" aria-labelledby="headingSoftware" data-bs-parent="#accordionMenu">
+                    <div class="accordion-body p-0">
+                        <ul class="nav flex-column">
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('vm_trust_page') }}">虚拟机信任管理</a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主内容区域 -->
+    <div class="main-container">
+        <!-- 顶部导航栏 -->
+        <div class="navbar navbar-expand-lg navbar-light bg-white shadow-sm" style="position: fixed; top: 0; left: 280px; right: 0; z-index: 1000;">
+            <div class="container-fluid">
+                <span class="navbar-brand mb-0 h1">
+                    <i class="fas fa-broadcast-tower me-2"></i>群发管理
+                </span>
+                <div class="navbar-nav ms-auto">
+                    <a class="nav-link" href="{{ url_for('dashboard') }}">
+                        <i class="fas fa-home me-1"></i>主页
+                    </a>
+                    <a class="nav-link" href="{{ url_for('logout') }}">
+                        <i class="fas fa-sign-out-alt me-1"></i>登出
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- 页面内容 -->
+        <div class="container-fluid mt-4">
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-broadcast-tower me-2"></i>群发消息管理
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <!-- 群发消息表单 -->
+                            <form id="massMessageForm">
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <label for="messageTitle" class="form-label">消息标题</label>
+                                        <input type="text" class="form-control" id="messageTitle" placeholder="请输入消息标题">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="messageType" class="form-label">消息类型</label>
+                                        <select class="form-control" id="messageType">
+                                            <option value="text">文本消息</option>
+                                            <option value="image">图片消息</option>
+                                            <option value="mixed">图文混合</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="row mb-3">
+                                    <div class="col-12">
+                                        <label for="messageContent" class="form-label">消息内容</label>
+                                        <textarea class="form-control" id="messageContent" rows="5" placeholder="请输入要群发的消息内容"></textarea>
+                                    </div>
+                                </div>
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <label for="targetGroup" class="form-label">目标群组</label>
+                                        <select class="form-control" id="targetGroup">
+                                            <option value="all">全部用户</option>
+                                            <option value="active">活跃用户</option>
+                                            <option value="vip">VIP用户</option>
+                                            <option value="custom">自定义群组</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="sendTime" class="form-label">发送时间</label>
+                                        <input type="datetime-local" class="form-control" id="sendTime">
+                                    </div>
+                                </div>
+                                <div class="row mb-3">
+                                    <div class="col-12">
+                                        <button type="button" class="btn btn-primary me-2" onclick="sendMassMessage()">
+                                            <i class="fas fa-paper-plane me-1"></i>立即发送
+                                        </button>
+                                        <button type="button" class="btn btn-secondary me-2" onclick="scheduleMassMessage()">
+                                            <i class="fas fa-clock me-1"></i>定时发送
+                                        </button>
+                                        <button type="button" class="btn btn-outline-primary" onclick="previewMessage()">
+                                            <i class="fas fa-eye me-1"></i>预览消息
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 群发历史记录 -->
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">
+                                <i class="fas fa-history me-2"></i>群发历史记录
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>发送时间</th>
+                                            <th>消息标题</th>
+                                            <th>消息类型</th>
+                                            <th>目标群组</th>
+                                            <th>发送状态</th>
+                                            <th>成功数量</th>
+                                            <th>失败数量</th>
+                                            <th>操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="massMessageHistory">
+                                        <tr>
+                                            <td>2024-01-15 10:30:00</td>
+                                            <td>系统维护通知</td>
+                                            <td><span class="badge bg-primary">文本消息</span></td>
+                                            <td>全部用户</td>
+                                            <td><span class="badge bg-success">发送成功</span></td>
+                                            <td>1,250</td>
+                                            <td>15</td>
+                                            <td>
+                                                <button class="btn btn-sm btn-outline-primary me-1" onclick="viewMessageDetail(1)">
+                                                    <i class="fas fa-eye"></i>
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-secondary" onclick="resendMessage(1)">
+                                                    <i class="fas fa-redo"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td>2024-01-14 15:45:00</td>
+                                            <td>新功能发布</td>
+                                            <td><span class="badge bg-info">图文混合</span></td>
+                                            <td>VIP用户</td>
+                                            <td><span class="badge bg-warning">部分失败</span></td>
+                                            <td>890</td>
+                                            <td>45</td>
+                                            <td>
+                                                <button class="btn btn-sm btn-outline-primary me-1" onclick="viewMessageDetail(2)">
+                                                    <i class="fas fa-eye"></i>
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-secondary" onclick="resendMessage(2)">
+                                                    <i class="fas fa-redo"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 消息预览模态框 -->
+    <div class="modal fade" id="messagePreviewModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">消息预览</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="messagePreviewContent">
+                    <!-- 预览内容将在这里显示 -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                    <button type="button" class="btn btn-primary" onclick="confirmSendMessage()">确认发送</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 发送群发消息
+        function sendMassMessage() {
+            const title = document.getElementById('messageTitle').value;
+            const content = document.getElementById('messageContent').value;
+            const type = document.getElementById('messageType').value;
+            const targetGroup = document.getElementById('targetGroup').value;
+            
+            if (!title || !content) {
+                alert('请填写消息标题和内容');
+                return;
+            }
+            
+            // 这里添加发送逻辑
+            console.log('发送群发消息:', { title, content, type, targetGroup });
+            alert('消息发送成功！');
+        }
+        
+        // 定时发送消息
+        function scheduleMassMessage() {
+            const sendTime = document.getElementById('sendTime').value;
+            if (!sendTime) {
+                alert('请选择发送时间');
+                return;
+            }
+            
+            // 这里添加定时发送逻辑
+            console.log('定时发送消息:', sendTime);
+            alert('消息已安排定时发送！');
+        }
+        
+        // 预览消息
+        function previewMessage() {
+            const title = document.getElementById('messageTitle').value;
+            const content = document.getElementById('messageContent').value;
+            const type = document.getElementById('messageType').value;
+            
+            if (!title || !content) {
+                alert('请填写消息标题和内容');
+                return;
+            }
+            
+            const previewContent = `
+                <div class="card">
+                    <div class="card-header">
+                        <h6>${title}</h6>
+                        <small class="text-muted">消息类型: ${type}</small>
+                    </div>
+                    <div class="card-body">
+                        <p>${content.replace(/\n/g, '<br>')}</p>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('messagePreviewContent').innerHTML = previewContent;
+            new bootstrap.Modal(document.getElementById('messagePreviewModal')).show();
+        }
+        
+        // 确认发送消息
+        function confirmSendMessage() {
+            sendMassMessage();
+            bootstrap.Modal.getInstance(document.getElementById('messagePreviewModal')).hide();
+        }
+        
+        // 查看消息详情
+        function viewMessageDetail(id) {
+            console.log('查看消息详情:', id);
+            // 这里添加查看详情的逻辑
+        }
+        
+        // 重新发送消息
+        function resendMessage(id) {
+            if (confirm('确定要重新发送这条消息吗？')) {
+                console.log('重新发送消息:', id);
+                // 这里添加重新发送的逻辑
+            }
+        }
+    </script>
+</body>
+</html>
