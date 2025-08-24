@@ -2623,7 +2623,7 @@
                                 </h5>
                                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                             </div>
-                            <div class="modal-body">
+                            <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
                                 <div class="alert alert-info">
                                     <i class="fas fa-info-circle me-2"></i>
                                     <strong>目标虚拟机：</strong>${vmName}
@@ -2737,7 +2737,7 @@
             // 创建脚本选择页面
             const pageHTML = `
                 <div class="modal fade" id="scriptSelectionPageModal" tabindex="-1" data-bs-backdrop="static">
-                    <div class="modal-dialog modal-xl">
+                    <div class="modal-dialog modal-lg">
                         <div class="modal-content">
                             <div class="modal-header bg-primary text-white">
                                 <h5 class="modal-title">
@@ -2745,7 +2745,7 @@
                                 </h5>
                                 <button type="button" class="btn-close btn-close-white" onclick="closeScriptSelectionPage()"></button>
                             </div>
-                            <div class="modal-body">
+                            <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
                                 <div class="alert alert-info">
                                     <i class="fas fa-info-circle me-2"></i>
                                     <strong>目标虚拟机：</strong>${vmName}
@@ -3444,14 +3444,23 @@
                                 </h5>
                                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                             </div>
-                            <div class="modal-body">
+                            <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
                                 <div class="row">
-                                    <div class="col-md-6">
+                                    <div class="col-12">
                                         <h6 class="text-primary mb-3">基本信息</h6>
                                         <table class="table table-sm">
+                                            <style>
+                                                .text-ellipsis {
+                                                    max-width: 150px;
+                                                    white-space: nowrap;
+                                                    overflow: hidden;
+                                                    text-overflow: ellipsis;
+                                                    display: inline-block;
+                                                }
+                                            </style>
                                             <tr>
                                                 <td><strong>虚拟机名称:</strong></td>
-                                                <td>${vmInfo.name}</td>
+                                                <td><span class="text-ellipsis" title="${vmInfo.name}">${vmInfo.name}</span></td>
                                             </tr>
                                             <tr>
                                                 <td><strong>状态:</strong></td>
@@ -3463,7 +3472,7 @@
                                             </tr>
                                             <tr>
                                                 <td><strong>IP地址:</strong></td>
-                                                <td>${vmInfo.ip || '<span class="text-muted">-</span>'}</td>
+                                                <td><span class="text-ellipsis" title="${vmInfo.ip || '-'}">${vmInfo.ip || '<span class="text-muted">-</span>'}</span></td>
                                             </tr>
                                             <tr>
                                                 <td><strong>SSH状态:</strong></td>
@@ -3497,7 +3506,9 @@
                         </tr>
                                         </table>
                                     </div>
-                                    <div class="col-md-6">
+                                </div>
+                                <div class="row mt-3">
+                                    <div class="col-12">
                                         <h6 class="text-primary mb-3">文件信息</h6>
                                         <table class="table table-sm">
                                             <tr>
