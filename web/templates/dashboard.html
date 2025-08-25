@@ -478,6 +478,14 @@
             display: flex;
             align-items: center;
         }
+        
+        /* 统一布局规则 */
+        .sidebar { width: 280px; }
+        .col-md-9.col-lg-10 { width: calc(100vw - 280px); min-width: 0; margin: 0; height: calc(100vh - 80px); overflow-y: auto; overflow-x: hidden; }
+        .main-wrapper { padding: 20px; }
+        .main-content { background: white; border-radius: 10px; padding: 20px; }
+        .card-body { padding: 1.5rem; }
+        .table-responsive { border-radius: 8px; overflow: hidden; }
     </style>
 </head>
 <body>
@@ -511,8 +519,8 @@
     </div>
 
     <!-- 侧边栏 -->
-    <nav class="sidebar" id="sidebar">
-        <div class="sidebar-header text-center mb-4 p-3">
+    <nav class="col-md-3 col-lg-2 sidebar p-3" id="sidebar">
+        <div class="sidebar-header text-center mb-4">
             <h4 class="mb-0">
                 <span class="brand-text">MacOS VM 虚拟机管理平台</span>
             </h4>
@@ -600,9 +608,6 @@
                             </li>
                             <li class="nav-item">
                                 <a class="nav-link" href="{{ url_for('id_management_page') }}">Apple ID管理</a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('phone_management_page') }}">手机号管理</a>
                             </li>
                         </ul>
                     </div>

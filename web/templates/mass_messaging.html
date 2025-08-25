@@ -227,11 +227,19 @@
                 padding: 15px;
             }
         }
+        
+        /* 统一布局规则 */
+        .sidebar { width: 280px; }
+        .col-md-9.col-lg-10 { width: calc(100vw - 280px); min-width: 0; margin: 0; height: calc(100vh - 80px); overflow-y: auto; overflow-x: hidden; }
+        .main-wrapper { padding: 20px; }
+        .main-content { background: white; border-radius: 10px; padding: 20px; }
+        .card-body { padding: 1.5rem; }
+        .table-responsive { border-radius: 8px; overflow: hidden; }
     </style>
 </head>
 <body>
     <!-- 侧边栏 -->
-    <nav class="sidebar" id="sidebar">
+    <nav class="col-md-3 col-lg-2 sidebar p-3" id="sidebar">
         <div class="sidebar-header text-center mb-4 p-3">
             <h4 class="mb-0">
                 <i class="fas fa-desktop me-2"></i>
@@ -424,66 +432,526 @@
 
         <!-- 页面内容 -->
         <div class="container-fluid mt-4">
-            <div class="row">
-                <div class="col-12">
+            <!-- 功能导航标签 -->
+            <ul class="nav nav-tabs mb-4" id="mainTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="template-tab" data-bs-toggle="tab" data-bs-target="#template" type="button" role="tab">
+                        <i class="fas fa-file-alt me-2"></i>发送模版管理
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="send-tab" data-bs-toggle="tab" data-bs-target="#send" type="button" role="tab">
+                        <i class="fas fa-paper-plane me-2"></i>群发消息
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="receipt-tab" data-bs-toggle="tab" data-bs-target="#receipt" type="button" role="tab">
+                        <i class="fas fa-receipt me-2"></i>发送回执
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="phone-tab" data-bs-toggle="tab" data-bs-target="#phone" type="button" role="tab">
+                        <i class="fas fa-mobile-alt me-2"></i>手机号管理
+                    </button>
+                </li>
+            </ul>
+
+            <div class="tab-content" id="mainTabContent">
+                <!-- 发送模版管理 -->
+                <div class="tab-pane fade show active" id="template" role="tabpanel">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">
+                                        <i class="fas fa-plus me-2"></i>创建新模版
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <form id="templateForm">
+                                        <div class="mb-3">
+                                            <label for="templateName" class="form-label">模版名称</label>
+                                            <input type="text" class="form-control" id="templateName" placeholder="请输入模版名称">
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="templateCategory" class="form-label">模版分类</label>
+                                            <select class="form-control" id="templateCategory">
+                                                <option value="marketing">营销推广</option>
+                                                <option value="notification">系统通知</option>
+                                                <option value="greeting">问候祝福</option>
+                                                <option value="reminder">提醒通知</option>
+                                                <option value="custom">自定义</option>
+                                            </select>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="templateContent" class="form-label">模版内容</label>
+                                            <textarea class="form-control" id="templateContent" rows="6" placeholder="请输入模版内容，可使用变量如：{姓名}、{日期}等"></textarea>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="templateVariables" class="form-label">可用变量</label>
+                                            <input type="text" class="form-control" id="templateVariables" placeholder="如：姓名,日期,金额（用逗号分隔）">
+                                        </div>
+                                        <button type="button" class="btn btn-primary w-100" onclick="saveTemplate()">
+                                            <i class="fas fa-save me-1"></i>保存模版
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-8">
+                            <div class="card">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <h5 class="mb-0">
+                                        <i class="fas fa-list me-2"></i>模版列表
+                                    </h5>
+                                    <div class="input-group" style="width: 300px;">
+                                        <input type="text" class="form-control" id="templateSearch" placeholder="搜索模版...">
+                                        <button class="btn btn-outline-secondary" type="button" onclick="searchTemplates()">
+                                            <i class="fas fa-search"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div class="table-responsive">
+                                        <table class="table table-hover">
+                                            <thead>
+                                                <tr>
+                                                    <th>模版名称</th>
+                                                    <th>分类</th>
+                                                    <th>创建时间</th>
+                                                    <th>使用次数</th>
+                                                    <th>操作</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="templateList">
+                                                <tr>
+                                                    <td>新年祝福模版</td>
+                                                    <td><span class="badge bg-success">问候祝福</span></td>
+                                                    <td>2024-01-15 10:30</td>
+                                                    <td>25</td>
+                                                    <td>
+                                                        <button class="btn btn-sm btn-outline-primary me-1" onclick="editTemplate(1)" title="编辑">
+                                                            <i class="fas fa-edit"></i>
+                                                        </button>
+                                                        <button class="btn btn-sm btn-outline-success me-1" onclick="useTemplate(1)" title="使用">
+                                                            <i class="fas fa-paper-plane"></i>
+                                                        </button>
+                                                        <button class="btn btn-sm btn-outline-danger" onclick="deleteTemplate(1)" title="删除">
+                                                            <i class="fas fa-trash"></i>
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <td>产品推广模版</td>
+                                                    <td><span class="badge bg-primary">营销推广</span></td>
+                                                    <td>2024-01-14 15:20</td>
+                                                    <td>12</td>
+                                                    <td>
+                                                        <button class="btn btn-sm btn-outline-primary me-1" onclick="editTemplate(2)" title="编辑">
+                                                            <i class="fas fa-edit"></i>
+                                                        </button>
+                                                        <button class="btn btn-sm btn-outline-success me-1" onclick="useTemplate(2)" title="使用">
+                                                            <i class="fas fa-paper-plane"></i>
+                                                        </button>
+                                                        <button class="btn btn-sm btn-outline-danger" onclick="deleteTemplate(2)" title="删除">
+                                                            <i class="fas fa-trash"></i>
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 群发消息 -->
+                <div class="tab-pane fade" id="send" role="tabpanel">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">
+                                        <i class="fas fa-broadcast-tower me-2"></i>群发消息设置
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <form id="massMessageForm">
+                                        <div class="row mb-3">
+                                            <div class="col-md-6">
+                                                <label for="messageTitle" class="form-label">消息标题</label>
+                                                <input type="text" class="form-control" id="messageTitle" placeholder="请输入消息标题">
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label for="selectedTemplate" class="form-label">选择模版</label>
+                                                <select class="form-control" id="selectedTemplate" onchange="loadTemplate()">
+                                                    <option value="">请选择模版（可选）</option>
+                                                    <option value="1">新年祝福模版</option>
+                                                    <option value="2">产品推广模版</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="row mb-3">
+                                            <div class="col-12">
+                                                <label for="messageContent" class="form-label">消息内容</label>
+                                                <textarea class="form-control" id="messageContent" rows="5" placeholder="请输入要群发的消息内容"></textarea>
+                                            </div>
+                                        </div>
+                                        <div class="row mb-3">
+                                            <div class="col-md-6">
+                                                <label for="sendTime" class="form-label">发送时间</label>
+                                                <input type="datetime-local" class="form-control" id="sendTime">
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label for="sendInterval" class="form-label">发送间隔（秒）</label>
+                                                <input type="number" class="form-control" id="sendInterval" value="5" min="1" placeholder="每条消息间隔时间">
+                                            </div>
+                                        </div>
+                                        <div class="row mb-3">
+                                            <div class="col-12">
+                                                <button type="button" class="btn btn-primary me-2" onclick="sendMassMessage()">
+                                                    <i class="fas fa-paper-plane me-1"></i>开始群发
+                                                </button>
+                                                <button type="button" class="btn btn-secondary me-2" onclick="scheduleMassMessage()">
+                                                    <i class="fas fa-clock me-1"></i>定时发送
+                                                </button>
+                                                <button type="button" class="btn btn-outline-primary" onclick="previewMessage()">
+                                                    <i class="fas fa-eye me-1"></i>预览消息
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">
+                                        <i class="fas fa-users me-2"></i>已选择手机号
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <span>已选择: <strong id="selectedCount">0</strong> 个号码</span>
+                                            <button class="btn btn-sm btn-outline-danger" onclick="clearSelectedPhones()">
+                                                <i class="fas fa-trash me-1"></i>清空
+                                            </button>
+                                        </div>
+                                        <div id="selectedPhonesList" class="border rounded p-2" style="max-height: 200px; overflow-y: auto;">
+                                            <small class="text-muted">请在手机号管理标签页选择要群发的手机号码</small>
+                                        </div>
+                                    </div>
+                                    <button class="btn btn-outline-primary w-100" onclick="showPhoneSelector()">
+                                        <i class="fas fa-plus me-1"></i>选择手机号码
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 发送回执 -->
+                <div class="tab-pane fade" id="receipt" role="tabpanel">
                     <div class="card">
-                        <div class="card-header">
+                        <div class="card-header d-flex justify-content-between align-items-center">
                             <h5 class="mb-0">
-                                <i class="fas fa-broadcast-tower me-2"></i>群发消息管理
+                                <i class="fas fa-receipt me-2"></i>发送回执查询
                             </h5>
+                            <div class="d-flex gap-2">
+                                <select class="form-select" id="receiptFilter" onchange="filterReceipts()">
+                                    <option value="all">全部状态</option>
+                                    <option value="success">发送成功</option>
+                                    <option value="failed">发送失败</option>
+                                    <option value="pending">发送中</option>
+                                </select>
+                                <input type="date" class="form-control" id="receiptDate" onchange="filterReceipts()">
+                                <button class="btn btn-outline-primary" onclick="exportReceipts()">
+                                    <i class="fas fa-download me-1"></i>导出
+                                </button>
+                            </div>
                         </div>
                         <div class="card-body">
-                            <!-- 群发消息表单 -->
-                            <form id="massMessageForm">
-                                <div class="row mb-3">
-                                    <div class="col-md-6">
-                                        <label for="messageTitle" class="form-label">消息标题</label>
-                                        <input type="text" class="form-control" id="messageTitle" placeholder="请输入消息标题">
+                            <div class="row mb-3">
+                                <div class="col-md-3">
+                                    <div class="card bg-primary text-white">
+                                        <div class="card-body text-center">
+                                            <h4 id="totalSent">1,265</h4>
+                                            <small>总发送数</small>
+                                        </div>
                                     </div>
-                                    <div class="col-md-6">
-                                        <label for="messageType" class="form-label">消息类型</label>
-                                        <select class="form-control" id="messageType">
-                                            <option value="text">文本消息</option>
-                                            <option value="image">图片消息</option>
-                                            <option value="mixed">图文混合</option>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="card bg-success text-white">
+                                        <div class="card-body text-center">
+                                            <h4 id="successSent">1,180</h4>
+                                            <small>成功发送</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="card bg-danger text-white">
+                                        <div class="card-body text-center">
+                                            <h4 id="failedSent">85</h4>
+                                            <small>发送失败</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="card bg-warning text-white">
+                                        <div class="card-body text-center">
+                                            <h4 id="successRate">93.3%</h4>
+                                            <small>成功率</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>发送时间</th>
+                                            <th>手机号码</th>
+                                            <th>消息内容</th>
+                                            <th>发送状态</th>
+                                            <th>失败原因</th>
+                                            <th>重试次数</th>
+                                            <th>操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="receiptList">
+                                        <tr>
+                                            <td>2024-01-15 10:30:15</td>
+                                            <td>138****1234</td>
+                                            <td>新年快乐！祝您身体健康...</td>
+                                            <td><span class="badge bg-success">发送成功</span></td>
+                                            <td>-</td>
+                                            <td>0</td>
+                                            <td>
+                                                <button class="btn btn-sm btn-outline-primary" onclick="viewReceiptDetail(1)" title="查看详情">
+                                                    <i class="fas fa-eye"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td>2024-01-15 10:30:20</td>
+                                            <td>139****5678</td>
+                                            <td>新年快乐！祝您身体健康...</td>
+                                            <td><span class="badge bg-danger">发送失败</span></td>
+                                            <td>号码无效</td>
+                                            <td>2</td>
+                                            <td>
+                                                <button class="btn btn-sm btn-outline-primary me-1" onclick="viewReceiptDetail(2)" title="查看详情">
+                                                    <i class="fas fa-eye"></i>
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-warning" onclick="retryMessage(2)" title="重新发送">
+                                                    <i class="fas fa-redo"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td>2024-01-15 10:30:25</td>
+                                            <td>150****9012</td>
+                                            <td>新年快乐！祝您身体健康...</td>
+                                            <td><span class="badge bg-warning">发送中</span></td>
+                                            <td>-</td>
+                                            <td>0</td>
+                                            <td>
+                                                <button class="btn btn-sm btn-outline-primary" onclick="viewReceiptDetail(3)" title="查看详情">
+                                                    <i class="fas fa-eye"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <nav>
+                                <ul class="pagination justify-content-center">
+                                    <li class="page-item disabled">
+                                        <a class="page-link" href="#">上一页</a>
+                                    </li>
+                                    <li class="page-item active">
+                                        <a class="page-link" href="#">1</a>
+                                    </li>
+                                    <li class="page-item">
+                                        <a class="page-link" href="#">2</a>
+                                    </li>
+                                    <li class="page-item">
+                                        <a class="page-link" href="#">3</a>
+                                    </li>
+                                    <li class="page-item">
+                                        <a class="page-link" href="#">下一页</a>
+                                    </li>
+                                </ul>
+                            </nav>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 手机号管理 -->
+                <div class="tab-pane fade" id="phone" role="tabpanel">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="card">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <h5 class="mb-0">
+                                        <i class="fas fa-mobile-alt me-2"></i>手机号码列表
+                                    </h5>
+                                    <div class="d-flex gap-2">
+                                        <div class="input-group" style="width: 250px;">
+                                            <input type="text" class="form-control" id="phoneSearch" placeholder="搜索手机号...">
+                                            <button class="btn btn-outline-secondary" onclick="searchPhones()">
+                                                <i class="fas fa-search"></i>
+                                            </button>
+                                        </div>
+                                        <button class="btn btn-success" onclick="selectAllPhones()">
+                                            <i class="fas fa-check-double me-1"></i>全选
+                                        </button>
+                                        <button class="btn btn-outline-secondary" onclick="clearAllSelection()">
+                                            <i class="fas fa-times me-1"></i>清空选择
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div class="table-responsive">
+                                        <table class="table table-hover">
+                                            <thead>
+                                                <tr>
+                                                    <th width="50">
+                                                        <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll()">
+                                                    </th>
+                                                    <th>手机号码</th>
+                                                    <th>归属地</th>
+                                                    <th>运营商</th>
+                                                    <th>状态</th>
+                                                    <th>最后使用</th>
+                                                    <th>成功率</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="phoneList">
+                                                <tr>
+                                                    <td>
+                                                        <input type="checkbox" class="phone-checkbox" value="13812341234" onchange="updateSelection()">
+                                                    </td>
+                                                    <td>138****1234</td>
+                                                    <td>北京</td>
+                                                    <td>中国移动</td>
+                                                    <td><span class="badge bg-success">正常</span></td>
+                                                    <td>2024-01-15</td>
+                                                    <td>95%</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>
+                                                        <input type="checkbox" class="phone-checkbox" value="13956785678" onchange="updateSelection()">
+                                                    </td>
+                                                    <td>139****5678</td>
+                                                    <td>上海</td>
+                                                    <td>中国移动</td>
+                                                    <td><span class="badge bg-warning">异常</span></td>
+                                                    <td>2024-01-10</td>
+                                                    <td>78%</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>
+                                                        <input type="checkbox" class="phone-checkbox" value="15090129012" onchange="updateSelection()">
+                                                    </td>
+                                                    <td>150****9012</td>
+                                                    <td>广州</td>
+                                                    <td>中国联通</td>
+                                                    <td><span class="badge bg-success">正常</span></td>
+                                                    <td>2024-01-14</td>
+                                                    <td>92%</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>
+                                                        <input type="checkbox" class="phone-checkbox" value="18123456789" onchange="updateSelection()">
+                                                    </td>
+                                                    <td>181****6789</td>
+                                                    <td>深圳</td>
+                                                    <td>中国电信</td>
+                                                    <td><span class="badge bg-success">正常</span></td>
+                                                    <td>2024-01-13</td>
+                                                    <td>88%</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="mb-0">
+                                        <i class="fas fa-filter me-2"></i>筛选条件
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <label class="form-label">运营商</label>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="mobile" checked>
+                                            <label class="form-check-label" for="mobile">中国移动</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="unicom" checked>
+                                            <label class="form-check-label" for="unicom">中国联通</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="telecom" checked>
+                                            <label class="form-check-label" for="telecom">中国电信</label>
+                                        </div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">状态</label>
+                                        <select class="form-select" id="statusFilter">
+                                            <option value="all">全部状态</option>
+                                            <option value="normal">正常</option>
+                                            <option value="abnormal">异常</option>
+                                            <option value="disabled">禁用</option>
                                         </select>
                                     </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">成功率范围</label>
+                                        <div class="row">
+                                            <div class="col-6">
+                                                <input type="number" class="form-control" id="minSuccessRate" placeholder="最小%" min="0" max="100">
+                                            </div>
+                                            <div class="col-6">
+                                                <input type="number" class="form-control" id="maxSuccessRate" placeholder="最大%" min="0" max="100">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button class="btn btn-primary w-100 mb-2" onclick="applyFilters()">
+                                        <i class="fas fa-filter me-1"></i>应用筛选
+                                    </button>
+                                    <button class="btn btn-outline-secondary w-100" onclick="resetFilters()">
+                                        <i class="fas fa-undo me-1"></i>重置筛选
+                                    </button>
                                 </div>
-                                <div class="row mb-3">
-                                    <div class="col-12">
-                                        <label for="messageContent" class="form-label">消息内容</label>
-                                        <textarea class="form-control" id="messageContent" rows="5" placeholder="请输入要群发的消息内容"></textarea>
+                            </div>
+                            <div class="card mt-3">
+                                <div class="card-header">
+                                    <h5 class="mb-0">
+                                        <i class="fas fa-info-circle me-2"></i>选择统计
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row text-center">
+                                        <div class="col-6">
+                                            <h4 class="text-primary" id="selectedPhoneCount">0</h4>
+                                            <small>已选择</small>
+                                        </div>
+                                        <div class="col-6">
+                                            <h4 class="text-info" id="totalPhoneCount">4</h4>
+                                            <small>总数量</small>
+                                        </div>
                                     </div>
                                 </div>
-                                <div class="row mb-3">
-                                    <div class="col-md-6">
-                                        <label for="targetGroup" class="form-label">目标群组</label>
-                                        <select class="form-control" id="targetGroup">
-                                            <option value="all">全部用户</option>
-                                            <option value="active">活跃用户</option>
-                                            <option value="vip">VIP用户</option>
-                                            <option value="custom">自定义群组</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <label for="sendTime" class="form-label">发送时间</label>
-                                        <input type="datetime-local" class="form-control" id="sendTime">
-                                    </div>
-                                </div>
-                                <div class="row mb-3">
-                                    <div class="col-12">
-                                        <button type="button" class="btn btn-primary me-2" onclick="sendMassMessage()">
-                                            <i class="fas fa-paper-plane me-1"></i>立即发送
-                                        </button>
-                                        <button type="button" class="btn btn-secondary me-2" onclick="scheduleMassMessage()">
-                                            <i class="fas fa-clock me-1"></i>定时发送
-                                        </button>
-                                        <button type="button" class="btn btn-outline-primary" onclick="previewMessage()">
-                                            <i class="fas fa-eye me-1"></i>预览消息
-                                        </button>
-                                    </div>
-                                </div>
-                            </form>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -655,6 +1123,157 @@
                 // 这里添加重新发送的逻辑
             }
         }
+
+        // 模板管理功能
+        function saveTemplate() {
+            const name = document.getElementById('templateName').value;
+            const content = document.getElementById('templateContent').value;
+            
+            if (!name || !content) {
+                alert('请填写模板名称和内容');
+                return;
+            }
+            
+            alert('模板保存成功！');
+            // 这里可以添加实际的保存逻辑
+        }
+
+        function editTemplate(id) {
+            alert('编辑模板功能开发中...');
+        }
+
+        function deleteTemplate(id) {
+            if (confirm('确定要删除这个模板吗？')) {
+                alert('删除模板功能开发中...');
+            }
+        }
+
+        function useTemplate(id) {
+            // 切换到群发消息标签页
+            const massTab = new bootstrap.Tab(document.getElementById('mass-tab'));
+            massTab.show();
+            
+            // 填充模板内容到群发消息表单
+            document.getElementById('messageContent').value = '这是模板内容示例...';
+            alert('模板已应用到群发消息');
+        }
+
+        // 发送回执功能
+        function filterReceipts() {
+            const filter = document.getElementById('receiptFilter').value;
+            const date = document.getElementById('receiptDate').value;
+            
+            alert(`筛选条件：状态=${filter}, 日期=${date}`);
+            // 这里可以添加实际的筛选逻辑
+        }
+
+        function exportReceipts() {
+            alert('导出回执功能开发中...');
+        }
+
+        function viewReceiptDetail(id) {
+            alert(`查看回执详情：ID=${id}`);
+        }
+
+        function retryMessage(id) {
+            if (confirm('确定要重新发送这条消息吗？')) {
+                alert(`重新发送消息：ID=${id}`);
+            }
+        }
+
+        // 手机号管理功能
+        function searchPhones() {
+            const keyword = document.getElementById('phoneSearch').value;
+            alert(`搜索手机号：${keyword}`);
+        }
+
+        function selectAllPhones() {
+            const checkboxes = document.querySelectorAll('.phone-checkbox');
+            checkboxes.forEach(cb => cb.checked = true);
+            updateSelection();
+        }
+
+        function clearAllSelection() {
+            const checkboxes = document.querySelectorAll('.phone-checkbox');
+            checkboxes.forEach(cb => cb.checked = false);
+            document.getElementById('selectAllCheckbox').checked = false;
+            updateSelection();
+        }
+
+        function toggleSelectAll() {
+            const selectAll = document.getElementById('selectAllCheckbox').checked;
+            const checkboxes = document.querySelectorAll('.phone-checkbox');
+            checkboxes.forEach(cb => cb.checked = selectAll);
+            updateSelection();
+        }
+
+        function updateSelection() {
+            const checkboxes = document.querySelectorAll('.phone-checkbox');
+            const selectedCount = document.querySelectorAll('.phone-checkbox:checked').length;
+            const totalCount = checkboxes.length;
+            
+            document.getElementById('selectedPhoneCount').textContent = selectedCount;
+            document.getElementById('totalPhoneCount').textContent = totalCount;
+            
+            // 更新全选复选框状态
+            const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+            if (selectedCount === 0) {
+                selectAllCheckbox.indeterminate = false;
+                selectAllCheckbox.checked = false;
+            } else if (selectedCount === totalCount) {
+                selectAllCheckbox.indeterminate = false;
+                selectAllCheckbox.checked = true;
+            } else {
+                selectAllCheckbox.indeterminate = true;
+            }
+            
+            // 更新群发消息页面的选中手机号显示
+            updateSelectedPhonesDisplay();
+        }
+
+        function updateSelectedPhonesDisplay() {
+            const selectedPhones = document.querySelectorAll('.phone-checkbox:checked');
+            const selectedList = document.getElementById('selectedPhonesList');
+            const selectedCount = document.getElementById('selectedPhonesCount');
+            
+            selectedCount.textContent = selectedPhones.length;
+            
+            let html = '';
+            selectedPhones.forEach(phone => {
+                const phoneNumber = phone.value;
+                const maskedNumber = phoneNumber.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2');
+                html += `<span class="badge bg-primary me-1 mb-1">${maskedNumber}</span>`;
+            });
+            
+            selectedList.innerHTML = html || '<span class="text-muted">未选择手机号</span>';
+        }
+
+        function applyFilters() {
+            const mobile = document.getElementById('mobile').checked;
+            const unicom = document.getElementById('unicom').checked;
+            const telecom = document.getElementById('telecom').checked;
+            const status = document.getElementById('statusFilter').value;
+            const minRate = document.getElementById('minSuccessRate').value;
+            const maxRate = document.getElementById('maxSuccessRate').value;
+            
+            alert(`应用筛选条件：移动=${mobile}, 联通=${unicom}, 电信=${telecom}, 状态=${status}, 成功率=${minRate}-${maxRate}%`);
+        }
+
+        function resetFilters() {
+            document.getElementById('mobile').checked = true;
+            document.getElementById('unicom').checked = true;
+            document.getElementById('telecom').checked = true;
+            document.getElementById('statusFilter').value = 'all';
+            document.getElementById('minSuccessRate').value = '';
+            document.getElementById('maxSuccessRate').value = '';
+            
+            alert('筛选条件已重置');
+        }
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            updateSelection();
+        });
     </script>
 </body>
 </html>

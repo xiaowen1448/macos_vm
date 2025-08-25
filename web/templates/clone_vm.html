@@ -19,13 +19,12 @@
         .sidebar {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             box-shadow: 2px 0 15px rgba(102, 126, 234, 0.3);
+            min-height: 100vh;
             position: fixed;
             top: 0;
             left: 0;
             z-index: 1000;
             width: 280px;
-            height: 100vh;
-            overflow-y: auto;
             color: white;
         }
         
@@ -259,7 +258,6 @@
             text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         }
         
-        
         .sidebar-header h4 {
             margin-bottom: 5px !important;
         }
@@ -336,6 +334,14 @@
         .static-message .close-btn:hover {
             opacity: 1;
         }
+        
+        /* 布局样式 */
+        .col-md-9.col-lg-10 { width: calc(100vw - 280px); min-width: 0; margin: 0; height: calc(100vh - 80px); overflow: auto; }
+        .main-wrapper { display: flex; height: 100vh; }
+        .sidebar { width: 280px; }
+        .main-content { flex: 1; min-width: 0; overflow: auto; }
+        .card-body { overflow: visible; }
+        .table-responsive { overflow: auto; }
     </style>
 </head>
 <body>
@@ -364,7 +370,7 @@
     </div>
     
     <!-- 左侧菜单 -->
-            <nav class="sidebar p-3" style="position: fixed; left: 0; top: 0; width: 280px; height: 100vh; overflow-y: auto; z-index: 1000;">
+            <nav class="col-md-3 col-lg-2 sidebar p-3">
                     <div class="sidebar-header text-center mb-4">
                 <h4 class="mb-0">
                                                 <span class="brand-text">MacOS VM 虚拟机管理平台</span>
@@ -453,9 +459,6 @@
                                     </li>
                                     <li class="nav-item">
                                         <a class="nav-link" href="{{ url_for('id_management_page') }}" onclick="handleIdManagementClick()">Apple ID管理</a>
-                                    </li>
-                                    <li class="nav-item">
-                                        <a class="nav-link" href="{{ url_for('phone_management_page') }}">手机号管理</a>
                                     </li>
                                 </ul>
                             </div>
