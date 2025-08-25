@@ -1428,6 +1428,13 @@
                         console.warn(`第${index + 1}行格式错误:`, line);
                     }
                 });
+            } else {
+                // 当文件为空时，显示友好提示
+                console.log('文件内容为空，显示空状态提示');
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted">
+                    <i class="fas fa-inbox me-2"></i>当前文件为空，暂无可用ID
+                </td></tr>`;
+                return;
             }
             
             // 重置分页

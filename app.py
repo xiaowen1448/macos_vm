@@ -5820,9 +5820,17 @@ def api_appleid_file_content():
                 continue
         
         if not content:
+            # 当文件为空时，返回成功状态而不是错误
+            logger.info(f"文件 {filename} 为空，返回空内容")
             return jsonify({
-                'success': False,
-                'message': f'无法读取文件 {filename}，请检查文件编码'
+                'success': True,
+                'file_info': {
+                    'name': filename,
+                    'size': 0,
+                    'lines': 0,
+                    'modified': datetime.fromtimestamp(os.path.getmtime(file_path)).strftime('%Y-%m-%d %H:%M:%S') if os.path.exists(file_path) else ''
+                },
+                'content': []
             })
         
         lines = content.split('\n') if content else []

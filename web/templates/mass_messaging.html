@@ -282,11 +282,38 @@
                 justify-content: center;
             }
         }
+        
+        /* 侧边栏标题样式 */
+        .sidebar-header {
+            border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+            padding-bottom: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 60px;
+        }
+        
+        .brand-text {
+            color: white;
+            font-weight: 700;
+            font-size: 1.2rem;
+            letter-spacing: 0.5px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        
+        .sidebar-header h4 {
+            margin-bottom: 5px !important;
+        }
+        
+        .sidebar-header small {
+            font-size: 0.85rem;
+            opacity: 0.8;
+        }
 
         </style>
     <!-- 左侧菜单 -->
     <nav class="col-md-3 col-lg-2 sidebar p-3">
-                <div class="sidebar-header text-center mb-4 p-3">
+                <div class="sidebar-header text-center mb-4">
                 <h4 class="mb-0">
                                                 <span class="brand-text">MacOS VM 虚拟机管理平台</span>
                 </h4>
@@ -674,8 +701,18 @@
                             <input type="text" class="form-control" id="taskName" placeholder="请输入任务名称">
                         </div>
                         <div class="mb-3">
-                            <label for="clientId" class="form-label">客户端ID</label>
-                            <input type="text" class="form-control" id="clientId" placeholder="请输入客户端ID">
+                            <label for="clientIds" class="form-label">选择客户端 <small class="text-muted">(可多选)</small></label>
+                            <select class="form-control" id="clientIds" multiple size="4">
+                                <option value="" disabled>正在加载客户端列表...</option>
+                            </select>
+                            <small class="form-text text-muted">按住Ctrl键可选择多个客户端</small>
+                        </div>
+                        <div class="mb-3">
+                            <label for="phoneNumbers" class="form-label">选择手机号 <small class="text-muted">(可多选)</small></label>
+                            <select class="form-control" id="phoneNumbers" multiple size="6">
+                                <option value="" disabled>正在加载手机号列表...</option>
+                            </select>
+                            <small class="form-text text-muted">按住Ctrl键可选择多个手机号</small>
                         </div>
                         <div class="mb-3">
                             <label for="taskTemplate" class="form-label">选择模版</label>
@@ -766,7 +803,76 @@
     <script>
         // 新建群发任务
         function createNewTask() {
+            // 加载客户端和手机号列表
+            loadClientList();
+            loadPhoneList();
             new bootstrap.Modal(document.getElementById('newTaskModal')).show();
+        }
+
+        // 加载客户端列表
+        async function loadClientList() {
+            const clientSelect = document.getElementById('clientIds');
+            clientSelect.innerHTML = '<option value="" disabled>正在加载客户端列表...</option>';
+            
+            try {
+                const response = await fetch('/api/scan_clients', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success && data.clients) {
+                    clientSelect.innerHTML = '';
+                    data.clients.forEach(client => {
+                        const option = document.createElement('option');
+                        option.value = client.id || client.ip;
+                        option.textContent = `${client.ip} (${client.vm_name || '未知虚拟机'})`;
+                        clientSelect.appendChild(option);
+                    });
+                    
+                    if (data.clients.length === 0) {
+                        clientSelect.innerHTML = '<option value="" disabled>暂无可用客户端</option>';
+                    }
+                } else {
+                    clientSelect.innerHTML = '<option value="" disabled>加载客户端列表失败</option>';
+                }
+            } catch (error) {
+                console.error('加载客户端列表失败:', error);
+                clientSelect.innerHTML = '<option value="" disabled>加载客户端列表失败</option>';
+            }
+        }
+
+        // 加载手机号列表
+        async function loadPhoneList() {
+            const phoneSelect = document.getElementById('phoneNumbers');
+            phoneSelect.innerHTML = '<option value="" disabled>正在加载手机号列表...</option>';
+            
+            try {
+                const response = await fetch('/api/phone_list?page=1&size=100');
+                const data = await response.json();
+                
+                if (data.success && data.phones) {
+                    phoneSelect.innerHTML = '';
+                    data.phones.forEach(phone => {
+                        const option = document.createElement('option');
+                        option.value = phone.phone_number || phone;
+                        option.textContent = phone.phone_number || phone;
+                        phoneSelect.appendChild(option);
+                    });
+                    
+                    if (data.phones.length === 0) {
+                        phoneSelect.innerHTML = '<option value="" disabled>暂无可用手机号</option>';
+                    }
+                } else {
+                    phoneSelect.innerHTML = '<option value="" disabled>加载手机号列表失败</option>';
+                }
+            } catch (error) {
+                console.error('加载手机号列表失败:', error);
+                phoneSelect.innerHTML = '<option value="" disabled>加载手机号列表失败</option>';
+            }
         }
 
         // 新建模版
@@ -777,16 +883,42 @@
         // 保存新任务
         function saveNewTask() {
             const taskName = document.getElementById('taskName').value;
-            const clientId = document.getElementById('clientId').value;
+            const clientSelect = document.getElementById('clientIds');
+            const phoneSelect = document.getElementById('phoneNumbers');
             const taskMessage = document.getElementById('taskMessage').value;
             
-            if (!taskName || !clientId || !taskMessage) {
-                alert('请填写所有必填字段');
+            // 获取选中的客户端
+            const selectedClients = Array.from(clientSelect.selectedOptions).map(option => option.value);
+            // 获取选中的手机号
+            const selectedPhones = Array.from(phoneSelect.selectedOptions).map(option => option.value);
+            
+            if (!taskName || selectedClients.length === 0 || selectedPhones.length === 0 || !taskMessage) {
+                alert('请填写任务名称、选择至少一个客户端、至少一个手机号，并输入消息内容');
                 return;
             }
             
-            alert('任务创建成功！');
+            // 构建任务数据
+            const taskData = {
+                name: taskName,
+                clients: selectedClients,
+                phones: selectedPhones,
+                message: taskMessage,
+                template: document.getElementById('taskTemplate').value,
+                schedule: document.getElementById('taskSchedule').value
+            };
+            
+            console.log('创建任务数据:', taskData);
+            
+            // 显示选择的信息
+            const clientInfo = selectedClients.length > 1 ? `${selectedClients.length}个客户端` : selectedClients[0];
+            const phoneInfo = selectedPhones.length > 1 ? `${selectedPhones.length}个手机号` : selectedPhones[0];
+            
+            alert(`任务创建成功！\n客户端: ${clientInfo}\n手机号: ${phoneInfo}`);
             bootstrap.Modal.getInstance(document.getElementById('newTaskModal')).hide();
+            
+            // 清空表单
+            document.getElementById('newTaskForm').reset();
+            
             // 这里可以添加实际的保存逻辑和刷新列表
         }
 
