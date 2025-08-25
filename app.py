@@ -1187,6 +1187,91 @@ def phone_management_page():
 def mass_messaging_page():
     """群发管理页面"""
     return render_template('mass_messaging.html')
+
+# 群发管理API路由
+@app.route('/api/mass_messaging/templates', methods=['GET'])
+@login_required
+def api_get_templates():
+    """获取发送模板列表"""
+    try:
+        # 这里应该从数据库或文件中获取模板数据
+        templates = [
+            {'id': 1, 'name': '营销模板1', 'content': '您好，我们有新产品推荐...', 'type': 'marketing'},
+            {'id': 2, 'name': '通知模板1', 'content': '重要通知：...', 'type': 'notification'}
+        ]
+        return jsonify({'success': True, 'data': templates})
+    except Exception as e:
+        logger.error(f"获取模板列表失败: {str(e)}")
+        return jsonify({'success': False, 'message': str(e)})
+
+@app.route('/api/mass_messaging/templates', methods=['POST'])
+@login_required
+def api_save_template():
+    """保存发送模板"""
+    try:
+        data = request.get_json()
+        # 这里应该保存到数据库或文件
+        logger.info(f"保存模板: {data}")
+        return jsonify({'success': True, 'message': '模板保存成功'})
+    except Exception as e:
+        logger.error(f"保存模板失败: {str(e)}")
+        return jsonify({'success': False, 'message': str(e)})
+
+@app.route('/api/mass_messaging/templates/<int:template_id>', methods=['DELETE'])
+@login_required
+def api_delete_template(template_id):
+    """删除发送模板"""
+    try:
+        # 这里应该从数据库或文件中删除模板
+        logger.info(f"删除模板ID: {template_id}")
+        return jsonify({'success': True, 'message': '模板删除成功'})
+    except Exception as e:
+        logger.error(f"删除模板失败: {str(e)}")
+        return jsonify({'success': False, 'message': str(e)})
+
+@app.route('/api/mass_messaging/send', methods=['POST'])
+@login_required
+def api_send_mass_message():
+    """发送群发消息"""
+    try:
+        data = request.get_json()
+        # 这里应该实现实际的群发逻辑
+        logger.info(f"群发消息: {data}")
+        return jsonify({'success': True, 'message': '消息发送成功', 'task_id': 'task_123'})
+    except Exception as e:
+        logger.error(f"群发消息失败: {str(e)}")
+        return jsonify({'success': False, 'message': str(e)})
+
+@app.route('/api/mass_messaging/receipts', methods=['GET'])
+@login_required
+def api_get_receipts():
+    """获取发送回执"""
+    try:
+        # 这里应该从数据库中获取回执数据
+        receipts = [
+            {'id': 1, 'phone': '138****1234', 'status': 'success', 'send_time': '2025-01-15 10:30:00', 'content': '测试消息'},
+            {'id': 2, 'phone': '139****5678', 'status': 'failed', 'send_time': '2025-01-15 10:30:01', 'content': '测试消息', 'error': '号码无效'}
+        ]
+        return jsonify({'success': True, 'data': receipts})
+    except Exception as e:
+        logger.error(f"获取回执失败: {str(e)}")
+        return jsonify({'success': False, 'message': str(e)})
+
+@app.route('/api/mass_messaging/phone_numbers', methods=['GET'])
+@login_required
+def api_get_phone_numbers():
+    """获取手机号码列表"""
+    try:
+        # 这里应该从数据库或文件中获取手机号码
+        phone_numbers = [
+            {'id': 1, 'phone': '138****1234', 'status': 'active', 'group': '客户组A'},
+            {'id': 2, 'phone': '139****5678', 'status': 'active', 'group': '客户组B'},
+            {'id': 3, 'phone': '137****9012', 'status': 'inactive', 'group': '客户组A'}
+        ]
+        return jsonify({'success': True, 'data': phone_numbers})
+    except Exception as e:
+        logger.error(f"获取手机号码列表失败: {str(e)}")
+        return jsonify({'success': False, 'message': str(e)})
     
 @app.route('/api/clone_vm', methods=['POST'])
 @login_required

@@ -471,11 +471,11 @@
              <!-- 发信管理主菜单 -->
             <div class="accordion-item">
                 <h2 class="accordion-header" id="headingMessaging">
-                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseMessaging" aria-expanded="false" aria-controls="collapseMessaging">
+                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseMessaging" aria-expanded="true" aria-controls="collapseMessaging">
                         发信管理
                     </button>
                 </h2>
-                <div id="collapseMessaging" class="accordion-collapse collapse " aria-labelledby="headingMessaging" data-bs-parent="#accordionMenu">
+                <div id="collapseMessaging" class="accordion-collapse collapse show" aria-labelledby="headingMessaging" data-bs-parent="#accordionMenu">
                     <div class="accordion-body p-0">
                         <ul class="nav flex-column">
                             <li class="nav-item">
@@ -1576,6 +1576,9 @@
                     changePageSize(parseInt(this.value));
                 });
             }
+            
+            // 保持发信管理菜单栏展开状态
+            // 移除了自动关闭菜单的功能，让用户手动控制菜单展开/折叠
             
             // 绑定文件选择事件
             const phoneFileInput = document.getElementById('phoneFile');
