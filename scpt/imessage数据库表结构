@@ -1,4 +1,34 @@
-在较新的 macOS（例如 macOS Ventura、Sonoma）里，message 表常见字段如下（不同版本会略有差异）：
+1. 核心关联表
+表名	与 message 的关系	作用
+handle	message.handle_id → handle.ROWID	联系人信息（手机号或 Apple ID）
+attachment	通过 message_attachment_join 关联	附件信息（图片、视频、文件）
+message_attachment_join	message.ROWID → message_attachment_join.message_id	中间表，建立消息与附件的多对多关系
+chat	chat_message_join.chat_id → chat.ROWID	聊天会话信息（群聊或单聊）
+chat_message_join	chat_message_join.message_id → message.ROWID	中间表，将消息归属到聊天会话
+chat_handle_join	chat_handle_join.chat_id → chat.ROWID	群聊成员表，将联系人与群聊关联
+message_summary_info	message_summary_info.message_id → message.ROWID	一些摘要信息，如表情、撤回状态等
+
+2. 辅助表
+表名	作用
+attachment_summary	附件摘要信息，可能用于快速索引
+message_image	对部分图片的缩略图索引
+message_attachment	旧版本中可能存在，用于关联附件
+message_summary	消息摘要或搜索优化信息
+chat_summary	会话摘要信息，如最后一条消息、未读数
+message_action	消息操作记录（撤回、编辑等）
+
+查询思路
+
+文本消息 + 联系人 → message + handle
+
+消息附件 → message + message_attachment_join + attachment
+
+会话信息 → message + chat_message_join + chat
+
+群聊成员 → chat + chat_handle_join + handle
+
+消息摘要/状态 → message_summary_info 或 message_action
+
 
 查看表结构
 
@@ -39,6 +69,7 @@ cache_roomnames	TEXT	群聊标识
 destination_caller_id	TEXT	接收方 Caller ID
 group_title	TEXT	群聊标题（如果有）
 
+关联联系人表信息
  .schema handle
 CREATE TABLE handle (ROWID INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE, id TEXT NOT NULL, country TEXT, service TEXT NOT NULL, uncanonicalized_id TEXT, UNIQUE (id, service) );
 列名	说明
@@ -47,6 +78,43 @@ id	手机号 / Apple ID（例如 +8613812345678 或 example@icloud.com）
 country	国家代码
 service	iMessage / SMS 等服务类型
 uncanonicalized_id	规范化前的号码（有时为空）
+
+在 iMessage 数据库 (chat.db) 中，消息的内容和类型信息分布在两个表里：
+
+message 表：存储消息文本、发送信息、状态等
+
+attachment 表：存储附件文件路径和类型
+
+message_attachment_join 表：连接 message 和 attachment 表（多对多关系）
+
+ .schema message_attachment_join
+CREATE TABLE message_attachment_join (message_id INTEGER REFERENCES message (ROWID) ON DELETE CASCADE, attachment_id INTEGER REFERENCES attachment (ROWID) ON DELETE CASCADE, UNIQUE(message_id, attachment_id));
+CREATE INDEX message_attachment_join_idx_attachment_id ON message_attachment_join(attachment_id);
+CREATE INDEX message_attachment_join_idx_message_id ON message_attachment_join(message_id);
+CREATE TRIGGER after_insert_on_message_attachment_join AFTER INSERT ON message_attachment_join BEGIN     UPDATE message       SET cache_has_attachments = 1     WHERE       message.ROWID = NEW.message_id; END;
+CREATE TRIGGER after_delete_on_message_attachment_join AFTER DELETE ON message_attachment_join BEGIN     DELETE FROM attachment         WHERE attachment.ROWID = OLD.attachment_id     AND         (SELECT 1 from message_attachment_join WHERE attachment_id = OLD.attachment_id LIMIT 1) IS NULL; END;
+
+ .schema attachment
+CREATE TABLE attachment (ROWID INTEGER PRIMARY KEY AUTOINCREMENT, guid TEXT UNIQUE NOT NULL, created_date INTEGER DEFAULT 0, start_date INTEGER DEFAULT 0, filename TEXT, uti TEXT, mime_type TEXT, transfer_state INTEGER DEFAULT 0, is_outgoing INTEGER DEFAULT 0, user_info BLOB, transfer_name TEXT, total_bytes INTEGER DEFAULT 0, is_sticker INTEGER DEFAULT 0, sticker_user_info BLOB, attribution_info BLOB, hide_attachment INTEGER DEFAULT 0);
+CREATE TRIGGER after_delete_on_attachment AFTER DELETE ON attachment BEGIN   SELECT delete_attachment_path(OLD.filename); END;
+CREATE TRIGGER before_delete_on_attachment BEFORE DELETE ON attachment BEGIN   SELECT before_delete_attachment_path(OLD.ROWID, OLD.guid); END;
+
+表结构
+
+1. 关联表结构
+message_attachment_join
+字段	说明
+message_id	对应 message.ROWID
+attachment_id	对应 attachment.ROWID
+attachment
+字段	说明
+ROWID	附件 ID
+filename	附件路径
+mime_type	附件类型，例如 public.jpeg, public.png
+transfer_name	文件原始名称
+transfer_size	文件大小
+total_bytes	文件字节数
+
 测试sql
 
 export LANG=zh_CN.UTF-8
@@ -54,7 +122,8 @@ sqlite3 /Users/wx/Library/Messages/chat.db
 
 .headers on
 .mode column
-
+长文本
+使用 .mode list 或 .mode line
 
 单表查询，
 select ROWID as "消息唯一ID",account as "发送账号",handle_id as "联系人ID",text as "消息正文 ", service as "服务类型",is_sent as "是否发送" ,is_delivered as "是否送达",is_read as  "是否已读" from message;
@@ -62,3 +131,47 @@ select ROWID as "消息唯一ID",account as "发送账号",handle_id as "联系�
 关联handle表查询出关联的联系人信息
 
  select m.ROWID as "消息唯一ID",m.account as "发送账号",h.id as "联系人ID",m.text as "消息正文 ", m.service as "服务类型",m.is_sent as "是否发送" ,m.is_delivered as "是否送达",m.is_read as  "是否已读" from  message m LEFT JOIN  handle h ON  m.handle_id = h.ROWID
+
+
+
+ 字段对应关系
+message → handle
+
+message.handle_id → handle.ROWID
+
+用于表示消息对应的联系人（收件人）
+
+handle.id 就是手机号或 Apple ID
+
+示例 SQL：
+SELECT m.text, h.id AS contact
+FROM message m
+LEFT JOIN handle h ON m.handle_id = h.ROWID;
+
+message → attachment
+
+一个消息可能有多个附件（图片/视频），一个附件也可能关联多个消息
+
+通过 中间表 message_attachment_join 建立关系：
+
+========================================================================
+message
+  | (handle_id)
+  v
+handle
+
+message
+  | (ROWID)
+  v
+message_attachment_join
+  | (attachment_id)
+  v
+attachment
+每条消息可能对应一个 handle（接收者）
+
+每条消息可以关联多条 attachment（通过 message_attachment_join）
+
+每个附件也可能被多条消息引用（例如转发、群发场景）
+
+=========================================================================
+
