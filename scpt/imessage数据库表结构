@@ -175,3 +175,16 @@ attachment
 
 =========================================================================
 
+export LANG=zh_CN.UTF-8
+sqlite3 /Users/wx/Library/Messages/chat.db
+
+.headers on
+.mode column
+长文本
+使用 .mode list 或 .mode line
+
+select ROWID,filename,transfer_name  from attachment;
+select * from message_attachment_join;
+select m.ROWID as "消息唯一ID",m.account as "发送账号",h.id as "联系人ID",m.text as "消息正文 ", m.service as "服务类型",m.is_sent as "是否发送" ,m.is_delivered as "是否送达",m.is_read as  "是否已读" from  message m LEFT JOIN  handle h ON  m.handle_id = h.ROWID;
+
+

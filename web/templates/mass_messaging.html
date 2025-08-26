@@ -336,9 +336,6 @@
                                 <a class="nav-link" href="{{ url_for('vm_management_page') }}">虚拟机信息管理</a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('vm_info_page') }}">虚拟机成品管理</a>
-                            </li>
-                            <li class="nav-item">
                                 <a class="nav-link" href="{{ url_for('vm_script_page') }}">虚拟机脚本管理</a>
                             </li>
                         </ul>
@@ -755,23 +752,17 @@
                             <input type="text" class="form-control" id="templateName" placeholder="请输入模版名称">
                         </div>
                         <div class="mb-3">
-                            <label for="templateCategory" class="form-label">模版分类</label>
-                            <select class="form-control" id="templateCategory">
-                                <option value="marketing">营销推广</option>
-                                <option value="notification">系统通知</option>
-                                <option value="greeting">问候祝福</option>
-                                <option value="reminder">提醒通知</option>
-                                <option value="custom">自定义</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
                             <label for="templateContent" class="form-label">模版内容</label>
-                            <textarea class="form-control" id="templateContent" rows="6" placeholder="请输入模版内容，可使用变量如：{姓名}、{日期}等"></textarea>
+                            <textarea class="form-control" id="templateContent" rows="6" placeholder="请输入模版内容"></textarea>
                         </div>
-                        <div class="mb-3">
-                            <label for="templateVariables" class="form-label">可用变量</label>
-                            <input type="text" class="form-control" id="templateVariables" placeholder="如：姓名,日期,金额（用逗号分隔）">
+
+                         <div class="mb-3">
+                            <label for="templateContent" class="form-label">模版附件</label>
+                              <button class="btn btn-success me-2" >
+                                    <i class="fas fa-upload me-2"></i>上传附件
+                              </button>
                         </div>
+                        
                     </form>
                 </div>
                 <div class="modal-footer">
@@ -921,6 +912,7 @@
             
             // 这里可以添加实际的保存逻辑和刷新列表
         }
+
 
         // 保存新模版
         function saveNewTemplate() {

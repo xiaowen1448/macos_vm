@@ -394,9 +394,6 @@
                                         <a class="nav-link" href="{{ url_for('vm_management_page') }}" onclick="handleVMManagementClick()">虚拟机克隆列表</a>
                                     </li>
                                     <li class="nav-item">
-                                        <a class="nav-link" href="{{ url_for('vm_info_page') }}" onclick="handleVMInfoClick()">虚拟机成品信息</a>
-                                    </li>
-                                    <li class="nav-item">
                                         <a class="nav-link" href="{{ url_for('vm_script_page') }}" onclick="handleVMScriptClick()">虚拟机脚本管理</a>
                                     </li>
                                 </ul>
@@ -594,11 +591,11 @@
                                         </div>
                                         <div class="col-md-4">
                                             <label for="cloneCount" class="form-label">克隆数量</label>
-                                            <input type="number" class="form-control form-control-sm" id="cloneCount" name="cloneCount" min="1" max="100" value="3" style="width: 50%;" required>
+                                            <input type="number" class="form-control form-control-sm" id="cloneCount" name="cloneCount" min="1" max="100" value="2" style="width: 50%;" required>
                                         </div>
                                         <div class="col-md-4">
                                             <label for="targetDir" class="form-label">虚拟克隆目录</label>
-                                            <input type="text" class="form-control" style="width: 60%;" id="targetDir" name="targetDir" 
+                                            <input type="text" class="form-control" style="width: 65%;" id="targetDir" name="targetDir" 
                                            value="{{ clone_dir }}" readonly>
                                             <small class="text-muted">从配置文件获取 ({{ clone_dir.split('\\')[-1] }})</small>
                                         </div>
@@ -622,7 +619,7 @@
                                         </div>
                                         <div class="col-md-4">
                                             <label for="snapshotName" class="form-label">快照命名</label>
-                                            <select class="form-select form-select-sm" id="snapshotName" name="snapshotName" style="width: 50%;" required>
+                                            <select class="form-select form-select-sm" id="snapshotName" name="snapshotName" style="width: 60%;" required>
                                                 <option value="{vmname}_snapshot_{timestamp}" selected>{vmname}_snapshot_{timestamp}</option>
                                                 <option value="snapshot_{vmname}_{timestamp}">snapshot_{vmname}_{timestamp}</option>
                                                 <option value="{vmname}_backup_{timestamp}">{vmname}_backup_{timestamp}</option>
