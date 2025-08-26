@@ -22,11 +22,11 @@ try
 	end repeat
 	
 	if (count of validPhones) = 0 then
-		log "手机号文件为空或格式错误" buttons {"确定"} default button 1
+		display dialog "手机号文件为空或格式错误" buttons {"确定"} default button 1
 		return
 	end if
 on error
-	log "无法读取手机号文件：" & phoneFilePath buttons {"确定"} default button 1
+	display dialog "无法读取手机号文件：" & phoneFilePath buttons {"确定"} default button 1
 	return
 end try
 
@@ -38,7 +38,7 @@ try
 	set messageContent to removeTrailingNewlines(messageContent)
 	
 	if length of messageContent = 0 then
-		log "消息模板文件为空" buttons {"确定"} default button 1
+		display dialog "消息模板文件为空" buttons {"确定"} default button 1
 		return
 	end if
 	
@@ -46,7 +46,7 @@ try
 	log "成功读取模板文件，内容长度: " & (length of messageContent) & " 字符"
 	log "包含段落数: " & (count of paragraphs of messageContent)
 on error
-	log "无法读取消息模板文件：" & templateFilePath buttons {"确定"} default button 1
+	display dialog "无法读取消息模板文件：" & templateFilePath buttons {"确定"} default button 1
 	return
 end try
 
@@ -74,13 +74,13 @@ if includeImage then
 		-- 检查文件是否存在
 		tell application "Finder"
 			if not (exists imageAttachment) then
-				log "图片文件不存在：" & fixedImagePath buttons {"确定"} default button 1
+				display dialog "图片文件不存在：" & fixedImagePath buttons {"确定"} default button 1
 				return
 			end if
 		end tell
 		log "✓ 图片文件验证成功"
 	on error errMsg
-		log "✗ 图片文件验证失败：" & errMsg buttons {"确定"} default button 1
+		display dialog "✗ 图片文件验证失败：" & errMsg buttons {"确定"} default button 1
 		return
 	end try
 end if
@@ -98,13 +98,13 @@ else
 	set imageInfo to return & "包含图片附件：否"
 end if
 
- log "准备发送消息到以下号码：" phoneList &  "消息内容："  & messageContent & imageInfo 
+display dialog "准备发送消息到以下号码：" & return & phoneList & return & "消息内容：" & return & messageContent & imageInfo buttons {"确定"} default button 1 
  
 
 -- 验证手机号格式（简单验证）
 repeat with phoneNumber in validPhones
 	if length of phoneNumber < 10 then
-		log "手机号格式可能不正确：" & phoneNumber buttons {"确定"} default button 1
+		display dialog "手机号格式可能不正确：" & phoneNumber buttons {"确定"} default button 1
 		return
 	end if
 end repeat
@@ -153,7 +153,7 @@ set failureList to {}
 
 repeat with i from 1 to totalPhones
 	set currentPhone to item i of validPhones
-	log "正在发送到 " & currentPhone & " (" & i & "/" & totalPhones & ")" buttons {"确定"} default button 1 giving up after 2
+	display dialog "正在发送到 " & currentPhone & " (" & i & "/" & totalPhones & ")" buttons {"确定"} default button 1 giving up after 2
 	
 	-- 发送消息
 	set sendResult to sendMessage(currentPhone, messageContent, imageAttachment, includeImage)
@@ -183,6 +183,6 @@ if (count of failureList) > 0 then
 	set resultMessage to resultMessage & return & return & "失败的号码：" & return & failureNumbers
 end if
 
-logresultMessage buttons {"确定"} default button 1
+display dialog resultMessage buttons {"确定"} default button 1
 
 log "批量发送任务完成。成功: " & successCount & ", 失败: " & (totalPhones - successCount)
