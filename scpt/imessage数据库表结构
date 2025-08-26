@@ -1,5 +1,24 @@
 在较新的 macOS（例如 macOS Ventura、Sonoma）里，message 表常见字段如下（不同版本会略有差异）：
 
+查看表结构
+
+.schema message
+CREATE TABLE message (ROWID INTEGER PRIMARY KEY AUTOINCREMENT, guid TEXT UNIQUE NOT NULL, text TEXT, replace INTEGER DEFAULT 0, service_center TEXT, handle_id INTEGER DEFAULT 0, subject TEXT, country TEXT, attributedBody BLOB, version INTEGER DEFAULT 0, type INTEGER DEFAULT 0, service TEXT, account TEXT, account_guid TEXT, error INTEGER DEFAULT 0, date INTEGER, date_read INTEGER, date_delivered INTEGER, is_delivered INTEGER DEFAULT 0, is_finished INTEGER DEFAULT 0, is_emote INTEGER DEFAULT 0, is_from_me INTEGER DEFAULT 0, is_empty INTEGER DEFAULT 0, is_delayed INTEGER DEFAULT 0, is_auto_reply INTEGER DEFAULT 0, is_prepared INTEGER DEFAULT 0, is_read INTEGER DEFAULT 0, is_system_message INTEGER DEFAULT 0, is_sent INTEGER DEFAULT 0, has_dd_results INTEGER DEFAULT 0, is_service_message INTEGER DEFAULT 0, is_forward INTEGER DEFAULT 0, was_downgraded INTEGER DEFAULT 0, is_archive INTEGER DEFAULT 0, cache_has_attachments INTEGER DEFAULT 0, cache_roomnames TEXT, was_data_detected INTEGER DEFAULT 0, was_deduplicated INTEGER DEFAULT 0, is_audio_message INTEGER DEFAULT 0, is_played INTEGER DEFAULT 0, date_played INTEGER, item_type INTEGER DEFAULT 0, other_handle INTEGER DEFAULT 0, group_title TEXT, group_action_type INTEGER DEFAULT 0, share_status INTEGER DEFAULT 0, share_direction INTEGER DEFAULT 0, is_expirable INTEGER DEFAULT 0, expire_state INTEGER DEFAULT 0, message_action_type INTEGER DEFAULT 0, message_source INTEGER DEFAULT 0, associated_message_guid TEXT, associated_message_type INTEGER DEFAULT 0, balloon_bundle_id TEXT, payload_data BLOB, expressive_send_style_id TEXT, associated_message_range_location INTEGER DEFAULT 0, associated_message_range_length INTEGER DEFAULT 0, time_expressive_send_played INTEGER, message_summary_info BLOB);
+CREATE INDEX message_idx_is_read ON message(is_read, is_from_me, is_finished);
+CREATE INDEX message_idx_handle_id ON message(handle_id);
+CREATE INDEX message_idx_failed ON message(is_finished, is_from_me, error);
+CREATE INDEX message_idx_associated_message ON message(associated_message_guid);
+CREATE INDEX message_idx_handle ON message(handle_id, date);
+CREATE INDEX message_idx_date ON message(date);
+CREATE INDEX message_idx_expire_state ON message(expire_state);
+CREATE INDEX message_idx_other_handle ON message(other_handle);
+CREATE INDEX message_idx_was_downgraded ON message(was_downgraded);
+CREATE TRIGGER add_to_deleted_messages AFTER DELETE ON message BEGIN     INSERT INTO deleted_messages (guid) VALUES (OLD.guid); END;
+CREATE TRIGGER delete_associated_messages_after_delete_on_message AFTER DELETE ON message BEGIN DELETE FROM message WHERE (OLD.associated_message_guid IS NULL AND associated_message_guid IS NOT NULL AND guid = OLD.associated_message_guid); END;
+CREATE TRIGGER after_delete_on_message AFTER DELETE ON message BEGIN     DELETE FROM handle         WHERE handle.ROWID = OLD.handle_id     AND         (SELECT 1 from chat_handle_join WHERE handle_id = OLD.handle_id LIMIT 1) IS NULL     AND         (SELECT 1 from message WHERE handle_id = OLD.handle_id LIMIT 1) IS NULL     AND         (SELECT 1 from message WHERE other_handle = OLD.handle_id LIMIT 1) IS NULL; END;
+
+字段说明:
+
 字段	类型	说明
 ROWID	INTEGER	消息唯一 ID
 guid	TEXT	消息的全局唯一标识符
@@ -20,7 +39,14 @@ cache_roomnames	TEXT	群聊标识
 destination_caller_id	TEXT	接收方 Caller ID
 group_title	TEXT	群聊标题（如果有）
 
-
+ .schema handle
+CREATE TABLE handle (ROWID INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE, id TEXT NOT NULL, country TEXT, service TEXT NOT NULL, uncanonicalized_id TEXT, UNIQUE (id, service) );
+列名	说明
+ROWID	唯一标识符
+id	手机号 / Apple ID（例如 +8613812345678 或 example@icloud.com）
+country	国家代码
+service	iMessage / SMS 等服务类型
+uncanonicalized_id	规范化前的号码（有时为空）
 测试sql
 
 export LANG=zh_CN.UTF-8
@@ -30,5 +56,9 @@ sqlite3 /Users/wx/Library/Messages/chat.db
 .mode column
 
 
-
+单表查询，
 select ROWID as "消息唯一ID",account as "发送账号",handle_id as "联系人ID",text as "消息正文 ", service as "服务类型",is_sent as "是否发送" ,is_delivered as "是否送达",is_read as  "是否已读" from message;
+
+关联handle表查询出关联的联系人信息
+
+ select m.ROWID as "消息唯一ID",m.account as "发送账号",h.id as "联系人ID",m.text as "消息正文 ", m.service as "服务类型",m.is_sent as "是否发送" ,m.is_delivered as "是否送达",m.is_read as  "是否已读" from  message m LEFT JOIN  handle h ON  m.handle_id = h.ROWID
