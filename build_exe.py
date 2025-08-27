@@ -56,25 +56,27 @@ def clean_build_dirs():
 def check_dependencies():
     """检查必要的依赖包"""
     print("📦 检查依赖包...")
-    required_packages = [
-        'pyinstaller',
-        'flask',
-        'PyQt5',
-        'PyQtWebEngine',
-        'paramiko',
-        'requests',
-        'psutil',
-        'watchdog'
-    ]
+    
+    # 包名映射：显示名称 -> 实际导入名称
+    package_mapping = {
+        'pyinstaller': 'PyInstaller',
+        'flask': 'flask',
+        'PyQt5': 'PyQt5',
+        'PyQtWebEngine': 'PyQt5.QtWebEngineWidgets',
+        'paramiko': 'paramiko',
+        'requests': 'requests',
+        'psutil': 'psutil',
+        'watchdog': 'watchdog'
+    }
     
     missing_packages = []
-    for package in required_packages:
+    for display_name, import_name in package_mapping.items():
         try:
-            __import__(package.lower().replace('-', '_'))
-            print(f"   ✅ {package}")
+            __import__(import_name)
+            print(f"   ✅ {display_name}")
         except ImportError:
-            missing_packages.append(package)
-            print(f"   ❌ {package} (缺失)")
+            missing_packages.append(display_name)
+            print(f"   ❌ {display_name} (缺失)")
     
     if missing_packages:
         print(f"\n⚠️  缺失依赖包: {', '.join(missing_packages)}")
