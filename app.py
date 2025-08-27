@@ -7533,7 +7533,7 @@ def api_scan_clients():
                         'id': f"client_{ip.replace('.', '_')}",
                         'version': client_info['version'],
                         'ip': ip,
-                        'details': f"{client_info['details']} (虚拟机: {vm_name})",
+                        'details': f"{client_info['details']}",
                         'status': client_info['status'],
                         'last_seen': datetime.now().isoformat(),
                         'vm_name': vm_name
