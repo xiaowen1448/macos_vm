@@ -2,30 +2,23 @@
 <img width="1841" height="972" alt="image" src="https://github.com/user-attachments/assets/4b99351c-f044-488d-91cb-23ab8eee3e67" />
 
 
-<img width="1839" height="970" alt="image" src="https://github.com/user-attachments/assets/04555bba-b5c0-4a99-8046-68643bdefc6d" />
-
-<img width="1839" height="970" alt="image" src="https://github.com/user-attachments/assets/da34dc0c-8b2d-46bb-8584-8afd5009bb02" />
-
-![Uploading image.png…]()
-
-
-
 虚拟机批量克隆，实时和历史日志信息
 
-<img width="1841" height="972" alt="image" src="https://github.com/user-attachments/assets/1c196730-be99-4f26-8d1c-d22b86619d58" />
+<img width="1839" height="970" alt="image" src="https://github.com/user-attachments/assets/c51e2924-7e10-4660-8391-218b86118770" />
 
 
 虚拟机管理界面，增加图标状态监控，开机关机，重启挂起，脚本发送和脚本执行按钮
 
-<img width="1841" height="972" alt="image" src="https://github.com/user-attachments/assets/efa1175c-8f4f-4b99-8b9c-75fda0580918" />
+<img width="1839" height="970" alt="image" src="https://github.com/user-attachments/assets/d1767d61-af04-4ab4-90c5-cf6878cdcfca" />
 
 虚拟机脚本管理
 
-<img width="1841" height="972" alt="image" src="https://github.com/user-attachments/assets/f3f3ab8a-2658-4fde-877f-1015fcbb6188" />
+<img width="1839" height="970" alt="image" src="https://github.com/user-attachments/assets/2f233b82-c51f-4fe7-9a15-51dd97120de1" />
+
 
 虚拟机五码管理
 
-<img width="1841" height="972" alt="image" src="https://github.com/user-attachments/assets/55ba27c1-7551-48ac-9a38-08dd8fdbfa4b" />
+<img width="1839" height="970" alt="image" src="https://github.com/user-attachments/assets/6c76869b-0939-4ce6-8ca7-317f20d2c82b" />
 
 
 # macos_vm
@@ -95,6 +88,7 @@ vm02
 
 技术支持咨询： Telegram：@xiaowen1448
 wechat：w8686512
+
 
 
 
