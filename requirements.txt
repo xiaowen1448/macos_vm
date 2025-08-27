@@ -1,5 +1,46 @@
-flask 
-PyQt5
-PyQtWebEngine
-requests
-paramiko
+# Web框架和API
+flask>=2.0.0
+flask-cors>=3.0.10
+werkzeug>=2.0.0
+
+# GUI桌面应用
+PyQt5>=5.15.0
+PyQtWebEngine>=5.15.0
+
+# 网络和SSH连接
+requests>=2.25.0
+paramiko>=2.7.0
+urllib3>=1.26.0
+
+# 系统监控和进程管理
+psutil>=5.8.0
+watchdog>=2.1.0
+
+# Windows服务支持
+pywin32>=227; sys_platform == "win32"
+pywin32-ctypes>=0.2.0; sys_platform == "win32"
+
+# 打包和部署
+pyinstaller>=4.5.0
+
+# 配置和日志
+pyyaml>=5.4.0
+coloredlogs>=15.0
+
+# 数据处理
+json5>=0.9.0
+markdown>=3.3.0
+
+# 安全和加密
+cryptography>=3.4.0
+bcrypt>=3.2.0
+
+# 时间和日期处理
+python-dateutil>=2.8.0
+
+# 文件操作
+send2trash>=1.8.0
+
+# 开发和调试工具
+flake8>=3.9.0
+pytest>=6.2.0
