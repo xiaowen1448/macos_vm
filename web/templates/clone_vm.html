@@ -7,7 +7,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <style>
-        body {
+         body {
             background-color: #f8f9fa;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0;
@@ -613,7 +613,6 @@
                                                 <label class="form-check-label" for="autoStart">
                                                     自动启动虚拟机
                                                 </label>
-                                                <small class="form-text text-muted d-block">克隆完成后自动启动虚拟机进行监控和配置</small>
                                             </div>
                                         </div>
                                     </div>
@@ -630,63 +629,7 @@
                             </div>
                         </div>
                     </div>
-                  <!-- 克隆统计 -->
-            <div class="col-12">
-                <div class="card log-card" id="cloneStats" style="display: none;">
-                    <div class="card-header">
-                        <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>克隆统计</h5>
-                    </div>
-                    <div class="card-body py-3">
-                        <!-- 统一进度条 -->
-                        <div class="mb-3">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <span class="fw-bold" id="unifiedProgressLabel">克隆进度</span>
-                                <span class="text-muted" id="unifiedProgressText">0 / 0</span>
-                            </div>
-                            <div class="progress" style="height: 12px;">
-                                <div class="progress-bar bg-primary" id="unifiedProgressBar" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
-                            </div>
-                        </div>
-                        
-                        <!-- 统计数字 -->
-                        <div class="row" style="display: none;">
-                            <div class="col-md-6">
-                                <div class="text-center">
-                                    <div class="h4 text-success" id="successCount">0</div>
-                                    <small>成功</small>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="text-center">
-                                    <div class="h4 text-info" id="totalCount">0</div>
-                                    <small>总计</small>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- 详细进度信息 -->
-                        <div class="mt-3" id="detailedProgress" style="display: none;">
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="d-flex justify-content-between align-items-center mb-1">
-                                        <small class="text-muted">当前克隆</small>
-                                        <small class="text-primary" id="currentCloneName">-</small>
-                                    </div>
-                                    <div class="progress" style="height: 8px;">
-                                        <div class="progress-bar bg-info" id="currentCloneProgress" role="progressbar" style="width: 0%"></div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="d-flex justify-content-between align-items-center mb-1">
-                                        <small class="text-muted">预计剩余时间</small>
-                                        <small class="text-secondary" id="estimatedTime">-</small>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        
                     <!-- 日志显示区域 -->
                     <div class="log-section">
                         <div class="card log-card">
@@ -707,28 +650,7 @@
                                         <div class="log-line log-info">系统就绪，等待开始克隆...</div>
                                     </div>
                                 </div>
-                                <!-- 进度条和统计 -->
-                                <div class="progress-container p-2" id="progressContainer">
-                                    <div class="progress mb-2">
-                                        <div class="progress-bar" id="progressBar" role="progressbar" style="width: 0%"></div>
-                                    </div>
-                                    <div class="text-center">
-                                        <span id="progressText">0 / 0 完成</span>
-                                    </div>
-                                </div>
-                                <div class="clone-stats p-2" id="cloneStats" style="display: none;">
-                                    <h6>克隆统计</h6>
-                                    <div class="row" style="display: none;">
-                                        <div class="col-6 text-center">
-                                            <div class="h4 text-success" id="successCount">0</div>
-                                            <small>成功</small>
-                                        </div>
-                                        <div class="col-6 text-center">
-                                            <div class="h4 text-info" id="totalCount">0</div>
-                                            <small>总计</small>
-                                        </div>
-                                    </div>
-                                </div>
+
                             </div>
                         </div>
                     </div>
@@ -796,8 +718,7 @@
             isCloning = true;
             updateStatus('running', '克隆进行中...');
             document.getElementById('cloneBtn').disabled = true;
-            document.getElementById('progressContainer').style.display = 'block';
-            document.getElementById('cloneStats').style.display = 'block';
+
             
             // 清空日志
             document.getElementById('logContent').innerHTML = '<div class="log-line log-info">开始克隆任务...</div>';
@@ -870,9 +791,7 @@
                         if (data.estimated_remaining !== undefined) {
                             updateEstimatedTime(data.estimated_remaining);
                         }
-                    } else if (data.type === 'stats') {
-                        console.log('处理统计数据:', data.stats);
-                        updateStats(data.stats);
+
                     } else if (data.type === 'monitoring_progress') {
                         console.log('处理监控进度数据:', data);
                         // 更新重启进度
@@ -945,8 +864,6 @@
         
         // 开始日志流
         function startLogStream(taskId) {
-            // 显示克隆统计区域
-            document.getElementById('cloneStats').style.display = 'block';
             connectToTask(taskId);
         }
         
@@ -1026,26 +943,7 @@
             }
         }
         
-        // 更新统计
-        function updateStats(stats) {
-            try {
-                console.log('更新统计数据:', stats);
-                const successElement = document.getElementById('successCount');
-                const runningElement = document.getElementById('runningCount');
-                const errorElement = document.getElementById('errorCount');
-                const totalElement = document.getElementById('totalCount');
-                
-                if (successElement) successElement.textContent = stats.success || 0;
-                if (runningElement) runningElement.textContent = stats.running || 0;
-                if (errorElement) errorElement.textContent = stats.error || 0;
-                if (totalElement) totalElement.textContent = stats.total || 0;
-                
-                console.log('统计更新完成');
-            } catch (error) {
-                console.error('更新统计数据失败:', error);
-                addLog('error', `统计更新失败: ${error.message}`);
-            }
-        }
+
         
         // 更新统一进度条
         function updateUnifiedProgress(label, current, total) {
@@ -1107,12 +1005,11 @@
                     eventSource.close();
                 }
                 
-                // 保存任务完成状态和统计信息到localStorage
+                // 保存任务完成状态到localStorage
                 const taskInfo = {
                     taskId: localStorage.getItem('currentCloneTaskId'),
                     completed: true,
                     success: data.success,
-                    stats: data.stats,
                     completedAt: new Date().toISOString()
                 };
                 localStorage.setItem('lastCompletedTask', JSON.stringify(taskInfo));
@@ -1125,7 +1022,7 @@
                 
                 if (data.success) {
                     updateStatus('success', '准备就绪');
-                    addLog('success', `克隆任务完成！成功: ${data.stats.success}, 失败: ${data.stats.error}`);
+                    addLog('success', '克隆任务完成！');
                 } else {
                     updateStatus('error', '克隆失败');
                     addLog('error', '克隆任务失败');
@@ -1143,11 +1040,6 @@
         function resetForm() {
             isCloning = false;
             document.getElementById('cloneBtn').disabled = false;
-            document.getElementById('progressContainer').style.display = 'none';
-            // 隐藏克隆统计区域
-            document.getElementById('cloneStats').style.display = 'none';
-            // 重置详细进度信息
-            document.getElementById('detailedProgress').style.display = 'none';
         }
         
         // 重置表单但保留日志
@@ -1159,45 +1051,16 @@
                 cloneBtn.textContent = '开始克隆';
             }
             
-            // 不隐藏进度容器，保留显示历史记录
-            // const progressContainer = document.getElementById('progressContainer');
-            // if (progressContainer) {
-            //     progressContainer.style.display = 'none';
-            // }
-            
-            // 不隐藏克隆统计区域，保留显示历史记录
-            // const cloneStats = document.getElementById('cloneStats');
-            // if (cloneStats) {
-            //     cloneStats.style.display = 'none';
-            // }
-            
-            // 重置详细进度信息
-            const detailedProgress = document.getElementById('detailedProgress');
-            if (detailedProgress) {
-                detailedProgress.style.display = 'none';
-            }
+
         }
         
         // 显示已完成的任务
         function displayCompletedTask(completedTask) {
             console.log('显示已完成的任务:', completedTask);
             
-            // 显示进度容器
-            const progressContainer = document.getElementById('progressContainer');
-            if (progressContainer) {
-                progressContainer.style.display = 'block';
-            }
+
             
-            // 显示克隆统计区域
-            const cloneStats = document.getElementById('cloneStats');
-            if (cloneStats) {
-                cloneStats.style.display = 'block';
-            }
-            
-            // 更新统计信息
-            if (completedTask.stats) {
-                updateStats(completedTask.stats);
-            }
+
             
             // 设置进度条为100%
             const progressBar = document.getElementById('progressBar');

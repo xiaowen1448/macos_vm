@@ -266,7 +266,7 @@ def monitor_vm_and_configure(task_id, vm_name, vm_path, wuma_config_file, max_wa
                         
                         try:
                             # 执行test.sh脚本更改JU值
-                            test_cmd = f'ssh -o StrictHostKeyChecking=no {vm_username}@{vm_ip} "~/test.sh"'
+                            test_cmd = f'ssh -o StrictHostKeyChecking=no {vm_username}@{vm_ip} "{script_remote_path}/test.sh"'
                             print(f"[DEBUG] 执行JU值更改命令: {test_cmd}")
                             add_task_log(task_id, 'info', f'执行JU值更改脚本: {vm_name}')
                             
@@ -567,16 +567,16 @@ def get_wuma_info_generic(vm_type_name):
                 'message': '缺少虚拟机名称参数'
             })
         
-        # 获取虚拟机IP
+        # 获取虚拟机IP（不执行强制重启）
         vm_ip = get_vm_ip(vm_name)
         if not vm_ip:
             return jsonify({
                 'success': False,
-                'message': f'无法获取虚拟机 {vm_name} 的IP地址'
+                'message': f'无法获取虚拟机 {vm_name} 的IP地址，请先启动虚拟机'
             })
         
         # 执行远程脚本获取五码信息
-        result = execute_remote_script(vm_ip, 'wx', 'run_debug_wuma.sh')
+        result = execute_remote_script(vm_ip, 'wx', f'{script_remote_path}/run_debug_wuma.sh')
         if len(result) == 3:
             success, output, ssh_log = result
         elif len(result) == 2:
@@ -615,16 +615,16 @@ def get_ju_info_generic(vm_type_name):
                 'message': '缺少虚拟机名称参数'
             })
         
-        # 获取虚拟机IP
+        # 获取虚拟机IP（不执行强制重启）
         vm_ip = get_vm_ip(vm_name)
         if not vm_ip:
             return jsonify({
                 'success': False,
-                'message': f'无法获取虚拟机 {vm_name} 的IP地址'
+                'message': f'无法获取虚拟机 {vm_name} 的IP地址，请先启动虚拟机'
             })
         
         # 执行远程脚本获取JU值信息
-        result = execute_remote_script(vm_ip, 'wx', 'run_debug_ju.sh')
+        result = execute_remote_script(vm_ip, 'wx', f'{script_remote_path}/run_debug_ju.sh')
         if len(result) == 3:
             success, output, ssh_log = result
         elif len(result) == 2:
@@ -860,12 +860,12 @@ def send_script_generic(vm_type_name):
                 'message': '缺少虚拟机名称或脚本名称参数'
             })
         
-        # 获取虚拟机IP
+        # 获取虚拟机IP（不执行强制重启）
         vm_ip = get_vm_ip(vm_name)
         if not vm_ip:
             return jsonify({
                 'success': False,
-                'message': f'无法获取虚拟机 {vm_name} 的IP地址'
+                'message': f'无法获取虚拟机 {vm_name} 的IP地址，请先启动虚拟机'
             })
         
         # 检查脚本文件是否存在（从配置的多个目录中查找）
@@ -966,12 +966,12 @@ def add_permissions_generic(vm_type_name):
                 'message': '缺少虚拟机名称或脚本名称列表参数'
             })
         
-        # 获取虚拟机IP
+        # 获取虚拟机IP（不执行强制重启）
         vm_ip = get_vm_ip(vm_name)
         if not vm_ip:
             return jsonify({
                 'success': False,
-                'message': f'无法获取虚拟机 {vm_name} 的IP地址'
+                'message': f'无法获取虚拟机 {vm_name} 的IP地址，请先启动虚拟机'
             })
         
         # 添加执行权限
@@ -2913,51 +2913,6 @@ def get_vm_status(vm_path):
         print(f"[DEBUG] 获取虚拟机状态失败: {str(e)}")
         return 'unknown'
 
-def force_restart_vm(vm_name):
-    """强制重启虚拟机"""
-    logger.warning(f"开始强制重启虚拟机: {vm_name}")
-    try:
-        vm_file = find_vm_file(vm_name)
-        if not vm_file:
-            logger.error(f"未找到虚拟机文件: {vm_name}")
-            return False
-        
-        vmrun_path = get_vmrun_path()
-        if not os.path.exists(vmrun_path):
-            logger.error(f"vmrun路径不存在: {vmrun_path}")
-            return False
-        
-        # 1. 先尝试强制停止虚拟机
-        logger.info(f"强制停止虚拟机: {vm_name}")
-        stop_cmd = [vmrun_path, 'stop', vm_file, 'hard']
-        try:
-            stop_result = subprocess.run(stop_cmd, capture_output=True, text=True, timeout=30)
-            logger.info(f"停止命令返回码: {stop_result.returncode}")
-        except Exception as e:
-            logger.warning(f"停止虚拟机时出现异常: {str(e)}")
-        
-        # 等待一段时间确保虚拟机完全停止
-        import time
-        time.sleep(3)
-        
-        # 2. 启动虚拟机
-        logger.info(f"启动虚拟机: {vm_name}")
-        start_cmd = [vmrun_path, 'start', vm_file, 'nogui']
-        try:
-            start_result = subprocess.run(start_cmd, capture_output=True, text=True, timeout=60)
-            if start_result.returncode == 0:
-                logger.info(f"虚拟机 {vm_name} 强制重启成功")
-                return True
-            else:
-                logger.error(f"启动虚拟机失败，返回码: {start_result.returncode}, 错误: {start_result.stderr}")
-                return False
-        except Exception as e:
-            logger.error(f"启动虚拟机时出现异常: {str(e)}")
-            return False
-            
-    except Exception as e:
-        logger.error(f"强制重启虚拟机失败: {str(e)}")
-        return False
 
 def get_vm_ip(vm_name):
     """获取虚拟机IP地址，优先用vmrun getGuestIPAddress"""
@@ -2992,27 +2947,11 @@ def get_vm_ip(vm_name):
                     if result.stderr:
                         print(f"[DEBUG] getGuestIPAddress命令错误: {result.stderr}")
                     
-                    # 检查特定的错误码4294967295，表示虚拟机卡死或异常
+                    # 检查特定的错误码4294967295，但不执行强制重启
                     if result.returncode == 4294967295:
-                        logger.warning(f"检测到虚拟机 {vm_name} 卡死（返回码: 4294967295），开始强制重启")
-                        print(f"[DEBUG] 检测到虚拟机卡死，返回码: 4294967295")
-                        
-                        # 强制重启虚拟机
-                        restart_success = force_restart_vm(vm_name)
-                        if restart_success:
-                            logger.info(f"虚拟机 {vm_name} 强制重启成功，等待系统启动")
-                            print(f"[DEBUG] 虚拟机强制重启成功，等待系统启动")
-                            
-                            # 等待虚拟机启动并重新尝试获取IP
-                            import time
-                            time.sleep(10)  # 等待10秒让虚拟机启动
-                            
-                            # 重新尝试获取IP（递归调用，但只尝试一次避免无限循环）
-                            logger.info(f"重新尝试获取虚拟机 {vm_name} 的IP地址")
-                            return get_vm_ip_after_restart(vm_name)
-                        else:
-                            logger.error(f"虚拟机 {vm_name} 强制重启失败")
-                            return None
+                        logger.warning(f"检测到虚拟机 {vm_name} 卡死（返回码: 4294967295），但不执行强制重启")
+                        print(f"[DEBUG] 检测到虚拟机卡死，返回码: 4294967295，但不执行强制重启")
+                        return None
                     
                     if result.returncode == 0:
                         ip = result.stdout.strip()
@@ -3061,37 +3000,6 @@ def get_vm_ip(vm_name):
         logger.error(f"获取虚拟机IP失败: {str(e)}")
         return None
 
-def get_vm_ip_after_restart(vm_name):
-    """重启后获取虚拟机IP地址（避免无限递归）"""
-    logger.debug(f"重启后获取虚拟机 {vm_name} 的IP地址")
-    try:
-        vm_file = find_vm_file(vm_name)
-        if vm_file:
-            vmrun_path = get_vmrun_path()
-            if os.path.exists(vmrun_path):
-                try:
-                    cmd = [vmrun_path, 'getGuestIPAddress', vm_file, '-wait']
-                    logger.debug(f"重启后执行vmrun命令: {cmd}")
-                    
-                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-                    
-                    if result.returncode == 0:
-                        ip = result.stdout.strip()
-                        if is_valid_ip(ip):
-                            logger.info(f"重启后成功获取IP: {ip}")
-                            return ip
-                        else:
-                            logger.warning(f"重启后获取的IP格式无效: {ip}")
-                    else:
-                        logger.warning(f"重启后vmrun命令执行失败，返回码: {result.returncode}")
-                except Exception as e:
-                    logger.error(f"重启后vmrun获取IP失败: {str(e)}")
-        
-        logger.warning(f"重启后无法获取虚拟机 {vm_name} 的IP地址")
-        return None
-    except Exception as e:
-        logger.error(f"重启后获取虚拟机IP失败: {str(e)}")
-        return None
 
 def is_valid_ip(ip):
     """验证IP地址格式"""
@@ -4029,7 +3937,7 @@ def api_vm_add_permissions():
         
         logger.info(f"开始为虚拟机 {vm_name} 的脚本添加执行权限")
         
-        # 获取虚拟机IP地址
+        # 获取虚拟机IP地址（不执行强制重启）
         vm_ip = get_vm_ip(vm_name)
         if not vm_ip:
             logger.error(f"无法获取虚拟机 {vm_name} 的IP地址")
@@ -4041,7 +3949,7 @@ def api_vm_add_permissions():
         ip_status = check_ip_connectivity(vm_ip)
         if not ip_status['success']:
             logger.warning(f"虚拟机IP {vm_ip} 无法连接: {ip_status.get('error', '未知错误')}")
-            return jsonify({'success': False, 'message': f'虚拟机IP {vm_ip} 无法连接，请检查网络状态'})
+            return jsonify({'success': False, 'message': f'虚拟机IP {vm_ip} 不存活，请先启动虚拟机'})
         
         logger.debug("IP连通性检查通过")
         
@@ -4086,11 +3994,11 @@ def api_ssh_trust():
         
         logger.info(f"开始为虚拟机 {vm_name} 设置SSH互信")
         
-        # 获取虚拟机IP地址
+        # 获取虚拟机IP地址（不执行强制重启）
         vm_ip = get_vm_ip(vm_name)
         if not vm_ip:
             logger.error(f"无法获取虚拟机 {vm_name} 的IP地址")
-            return jsonify({'success': False, 'message': '无法获取虚拟机IP地址，请确保虚拟机正在运行'})
+            return jsonify({'success': False, 'message': '无法获取虚拟机IP地址，请先启动虚拟机'})
         
         logger.debug(f"虚拟机IP: {vm_ip}")
         
@@ -4098,7 +4006,7 @@ def api_ssh_trust():
         ip_status = check_ip_connectivity(vm_ip)
         if not ip_status['success']:
             logger.warning(f"虚拟机IP {vm_ip} 无法连接: {ip_status.get('error', '未知错误')}")
-            return jsonify({'success': False, 'message': f'虚拟机IP {vm_ip} 无法连接，请检查网络状态'})
+            return jsonify({'success': False, 'message': f'虚拟机IP {vm_ip} 不存活，请先启动虚拟机或检查网络状态'})
         
         logger.debug("IP连通性检查通过")
         
@@ -4383,7 +4291,7 @@ def api_get_wuma_info():
         logger.debug(f"虚拟机 {vm_name} 的IP地址: {vm_ip}")
         
         # 通过SSH互信执行家目录脚本
-        result = execute_remote_script(vm_ip, 'wx', 'run_debug_wuma.sh')
+        result = execute_remote_script(vm_ip, 'wx', f'{script_remote_path}/run_debug_wuma.sh')
         if len(result) == 3:
             success, output, ssh_log = result
         elif len(result) == 2:
@@ -4423,7 +4331,7 @@ def api_get_ju_info():
         logger.debug(f"虚拟机 {vm_name} 的IP地址: {vm_ip}")
         
         # 通过SSH互信执行家目录脚本
-        result = execute_remote_script(vm_ip, 'wx', 'run_debug_ju.sh')
+        result = execute_remote_script(vm_ip, 'wx', f'{script_remote_path}/run_debug_ju.sh')
         if len(result) == 3:
             success, output, ssh_log = result
         elif len(result) == 2:
@@ -4443,7 +4351,7 @@ def api_get_ju_info():
         return jsonify({'success': False, 'error': f'获取JU值信息时发生异常: {str(e)}'})
 
 def execute_remote_script(ip, username, script_name):
-    """通过SSH互信执行家目录脚本并获取输出"""
+    """通过SSH互信执行目录脚本并获取输出"""
     try:
         import paramiko
         
@@ -4464,21 +4372,21 @@ def execute_remote_script(ip, username, script_name):
         ssh_log.append("[SSH] SSH连接建立成功")
         
         # 检查脚本是否存在
-        check_command = f"ls -la ~/{script_name}"
+        check_command = f"ls -la {script_name}"
         ssh_log.append(f"[SSH] 检查脚本是否存在: {check_command}")
         stdin, stdout, stderr = ssh.exec_command(check_command)
         check_output = stdout.read().decode().strip()
         check_error = stderr.read().decode().strip()
         
         if not check_output:
-            ssh_log.append(f"[SSH] 脚本不存在: ~/{script_name}")
+            ssh_log.append(f"[SSH] 脚本不存在: {script_name}")
             ssh.close()
-            return False, f"脚本 ~/{script_name} 不存在", "\n".join(ssh_log)
+            return False, f"脚本 {script_name} 不存在", "\n".join(ssh_log)
         
         ssh_log.append(f"[SSH] 脚本存在: {check_output}")
         
         # 检查脚本执行权限
-        chmod_command = f"chmod +x ~/{script_name}"
+        chmod_command = f"chmod +x {script_name}"
         ssh_log.append(f"[SSH] 添加执行权限: {chmod_command}")
         stdin, stdout, stderr = ssh.exec_command(chmod_command)
         chmod_error = stderr.read().decode().strip()
@@ -4488,7 +4396,7 @@ def execute_remote_script(ip, username, script_name):
             ssh_log.append("[SSH] 执行权限添加成功")
         
         # 执行家目录脚本命令
-        command = f"cd ~ && ./{script_name}"
+        command = f"{script_name}"
         ssh_log.append(f"[SSH] 执行脚本命令: {command}")
         
         stdin, stdout, stderr = ssh.exec_command(command)
@@ -4606,12 +4514,19 @@ def api_ssh_chengpin_trust():
                 'message': '缺少虚拟机名称参数'
             })
         
-        # 获取虚拟机IP
+        # 获取虚拟机IP（不执行强制重启）
         vm_ip = get_vm_ip(vm_name)
         if not vm_ip:
             return jsonify({
                 'success': False,
-                'message': f'无法获取虚拟机 {vm_name} 的IP地址'
+                'message': f'无法获取虚拟机 {vm_name} 的IP地址，请先启动虚拟机'
+            })
+        
+        # 检查IP连通性
+        if not check_ip_connectivity(vm_ip):
+            return jsonify({
+                'success': False,
+                'message': f'虚拟机IP {vm_ip} 不存活，请先启动虚拟机或检查网络状态'
             })
         
         # 设置SSH互信
@@ -4687,12 +4602,19 @@ def api_vm_chengpin_chmod_scripts():
                 'message': '缺少虚拟机名称或脚本名称列表参数'
             })
         
-        # 获取虚拟机IP
+        # 获取虚拟机IP（不执行强制重启）
         vm_ip = get_vm_ip(vm_name)
         if not vm_ip:
             return jsonify({
                 'success': False,
-                'message': f'无法获取虚拟机 {vm_name} 的IP地址'
+                'message': f'无法获取虚拟机 {vm_name} 的IP地址，请先启动虚拟机'
+            })
+        
+        # 检查IP连通性
+        if not check_ip_connectivity(vm_ip):
+            return jsonify({
+                'success': False,
+                'message': f'虚拟机IP {vm_ip} 不存活，请先启动虚拟机或检查网络状态'
             })
         
         # 添加执行权限
@@ -4909,12 +4831,19 @@ def api_ssh_10_12_trust():
                 'message': '缺少虚拟机名称参数'
             })
         
-        # 获取虚拟机IP
+        # 获取虚拟机IP（不执行强制重启）
         vm_ip = get_vm_ip(vm_name)
         if not vm_ip:
             return jsonify({
                 'success': False,
-                'message': f'无法获取虚拟机 {vm_name} 的IP地址'
+                'message': f'无法获取虚拟机 {vm_name} 的IP地址，请先启动虚拟机'
+            })
+        
+        # 检查IP连通性
+        if not check_ip_connectivity(vm_ip):
+            return jsonify({
+                'success': False,
+                'message': f'虚拟机IP {vm_ip} 不存活，请先启动虚拟机或检查网络状态'
             })
         
         # 设置SSH互信
@@ -5782,7 +5711,7 @@ def batch_change_wuma_core(selected_vms, config_file_path, task_id=None):
                         sys.stdout.flush()
                 
                 # 执行mount_efi.sh脚本
-                mount_cmd = f'ssh -o StrictHostKeyChecking=no {vm_username}@{vm_ip} "~/mount_efi.sh"'
+                mount_cmd = f'ssh -o StrictHostKeyChecking=no {vm_username}@{vm_ip} "{script_remote_path}/mount_efi.sh"'
                 logger.info(f"执行mount命令: {mount_cmd}")
                 mount_result = subprocess.run(mount_cmd, shell=True, capture_output=True, text=True, timeout=60)
                 
@@ -6127,7 +6056,7 @@ def batch_change_ju_worker(task_id, selected_vms):
                 add_task_log(task_id, 'INFO', f'虚拟机 {vm_name} IP: {vm_ip}')
                 
                 # 执行test.sh脚本
-                test_cmd = f'ssh -o StrictHostKeyChecking=no wx@{vm_ip} "~/test.sh"'
+                test_cmd = f'ssh -o StrictHostKeyChecking=no wx@{vm_ip} "{script_remote_path}/test.sh"'
                 logger.info(f"执行test.sh脚本: {test_cmd}")
                 add_task_log(task_id, 'INFO', f'执行test.sh脚本: {vm_name}')
                 test_result = subprocess.run(test_cmd, shell=True, capture_output=True, text=True, timeout=60)
@@ -7003,7 +6932,7 @@ def api_batch_im_login():
                     logger.warning(f"创建Documents目录失败，但继续尝试传输文件: {mkdir_result.stderr}")
                 
                 # 使用SCP传输文件到虚拟机的Documents目录，文件名固定为appleid.txt
-                remote_file_path = f"/Users/{vm_username}/Documents/appleid.txt"
+                remote_file_path = f"{appleidtxt_path}appleid.txt"
                 
                 scp_cmd = [
                     'scp',

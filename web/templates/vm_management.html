@@ -2142,16 +2142,25 @@
 
         // SSH互信设置功能
         function setupSSHTrust(vmName) {
-            // 显示确认对话框
-            if (!confirm(`确定要为虚拟机 "${vmName}" 设置SSH互信吗？\n\n用户名: wx\n密码: 123456`)) {
-                return;
-            }
+            // 设置模态框中的虚拟机名称
+            document.getElementById('sshTrustVMName').value = vmName;
+            document.getElementById('sshTrustVMNameDisplay').textContent = vmName;
             
-            // 显示加载状态
-            const button = event.target.closest('button');
-            const originalContent = button.innerHTML;
-            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-            button.disabled = true;
+            // 显示SSH互信设置模态框
+            const sshTrustModal = new bootstrap.Modal(document.getElementById('sshTrustModal'));
+            sshTrustModal.show();
+        }
+        
+        // 确认SSH互信设置
+        function confirmSSHTrust() {
+            const vmName = document.getElementById('sshTrustVMName').value;
+            const modal = bootstrap.Modal.getInstance(document.getElementById('sshTrustModal'));
+            
+            // 关闭模态框
+            modal.hide();
+            
+            // 显示执行中的静态文本框
+            showStaticMessage(`正在为虚拟机 "${vmName}" 设置SSH互信...\n\n用户名: wx\n密码: 123456\n\n请稍候...`, 'info', 10000);
             
             // 调用API
             fetch('/api/ssh_10_12_trust', {
@@ -2169,19 +2178,23 @@
             .then(data => {
                 if (data.success) {
                     showStaticMessage(`SSH互信设置成功！\n\n虚拟机: ${vmName}\n状态: ${data.message}`, 'success');
-                    // 刷新SSH状态
-                    loadVMDetails(vmName);
+                    
+                    // 直接更新SSH状态为成功，而不是立即检查
+                    const sshElement = document.getElementById(`ssh-${vmName}`);
+                    if (sshElement) {
+                        const statusBadge = sshElement.querySelector('.badge');
+                        if (statusBadge) {
+                            statusBadge.className = 'badge status-badge bg-success me-2';
+                            statusBadge.textContent = '已互信';
+                            statusBadge.title = 'SSH互信已建立';
+                        }
+                    }
                 } else {
                     showStaticMessage(`SSH互信设置失败！\n\n错误: ${data.message}`, 'error');
                 }
             })
             .catch(error => {
                 showStaticMessage(`网络错误: ${error.message}`, 'error');
-            })
-            .finally(() => {
-                // 恢复按钮状态
-                button.innerHTML = originalContent;
-                button.disabled = false;
             });
         }
 
@@ -5987,6 +6000,40 @@
         </div>
     </div>
 
+    <!-- SSH互信设置确认模态框 -->
+    <div class="modal fade" id="sshTrustModal" tabindex="-1" aria-labelledby="sshTrustModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="sshTrustModalLabel">
+                        <i class="fas fa-key me-2"></i>SSH互信设置
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info" role="alert">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>提示：</strong>SSH互信设置将允许无密码登录到虚拟机。
+                    </div>
+                    <p class="mb-2">确定要为虚拟机 "<span id="sshTrustVMNameDisplay"></span>" 设置SSH互信吗？</p>
+                    <div class="bg-light p-3 rounded">
+                        <p class="mb-1"><strong>用户名:</strong> wx</p>
+                        <p class="mb-0"><strong>密码:</strong> 123456</p>
+                    </div>
+                    <input type="hidden" id="sshTrustVMName" value="">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>取消
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="confirmSSHTrust()">
+                        <i class="fas fa-key me-2"></i>确认设置
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 添加模态框关闭事件监听器 -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -6091,6 +6138,77 @@
                     }
                 }, 300);
             }
+        }
+        
+        // 加载虚拟机详细信息（刷新SSH状态等）
+        function loadVMDetails(vmName) {
+            console.log('刷新虚拟机详细信息:', vmName);
+            
+            // 获取虚拟机在totalVMs中的信息
+            const vm = totalVMs.find(v => v.name === vmName);
+            if (!vm) {
+                console.error('未找到虚拟机:', vmName);
+                return;
+            }
+            
+            // 如果虚拟机正在运行，检查SSH状态
+            if (vm.status === 'running') {
+                checkSSHStatus(vmName);
+            }
+            
+            // 可以在这里添加其他需要刷新的信息
+            console.log('虚拟机详细信息刷新完成:', vmName);
+        }
+        
+        // 检查SSH状态
+        function checkSSHStatus(vmName) {
+            const sshElement = document.getElementById(`ssh-${vmName}`);
+            if (!sshElement) {
+                console.error('未找到SSH状态元素:', vmName);
+                return;
+            }
+            
+            // 更新SSH状态为检测中
+            const statusBadge = sshElement.querySelector('.badge');
+            if (statusBadge) {
+                statusBadge.className = 'badge status-badge bg-secondary me-2';
+                statusBadge.textContent = '检测中...';
+                statusBadge.title = '正在检测SSH互信状态...';
+            }
+            
+            // 发送请求检查SSH状态
+            fetch('/api/check_ssh_trust_status', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    vm_name: vmName,
+                    username: 'wx'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (statusBadge) {
+                    if (data.success && data.ssh_trust_status) {
+                        statusBadge.className = 'badge status-badge bg-success me-2';
+                        statusBadge.textContent = '已互信';
+                        statusBadge.title = 'SSH互信已建立';
+                    } else {
+                        statusBadge.className = 'badge status-badge bg-danger me-2';
+                        statusBadge.textContent = '未互信';
+                        statusBadge.title = data.message || 'SSH互信未建立';
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('检查SSH状态失败:', error);
+                if (statusBadge) {
+                    statusBadge.className = 'badge status-badge bg-warning me-2';
+                    statusBadge.textContent = '检测失败';
+                    statusBadge.title = '检测SSH状态时发生错误: ' + error.message;
+                }
+            });
         }
     </script>
 
