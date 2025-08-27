@@ -92,6 +92,286 @@ VM_DIRS = {
 clone_tasks = {}
 tasks = {}
 
+# IP监控和SSH连通性检测函数
+def ping_vm_ip(ip_address, timeout=3):
+    """检测虚拟机IP是否存活"""
+    try:
+        if os.name == 'nt':  # Windows
+            cmd = ['ping', '-n', '1', '-w', str(timeout * 1000), ip_address]
+        else:  # Linux/Mac
+            cmd = ['ping', '-c', '1', '-W', str(timeout), ip_address]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout + 2)
+        return result.returncode == 0
+    except Exception as e:
+        logger.debug(f"Ping {ip_address} 失败: {str(e)}")
+        return False
+
+def check_ssh_connectivity(ip_address, username, timeout=10):
+    """检测SSH连通性"""
+    try:
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        
+        # 尝试连接（使用密钥认证）
+        ssh.connect(
+            hostname=ip_address,
+            username=username,
+            timeout=timeout,
+            look_for_keys=True,
+            allow_agent=True
+        )
+        
+        # 执行简单命令测试连接
+        stdin, stdout, stderr = ssh.exec_command('echo "ssh_test"', timeout=5)
+        output = stdout.read().decode().strip()
+        
+        ssh.close()
+        return output == 'ssh_test'
+    except Exception as e:
+        logger.debug(f"SSH连接 {ip_address} 失败: {str(e)}")
+        return False
+
+def check_and_complete_task(task_id):
+    """检查所有监控任务是否完成，如果完成则标记主任务为完成状态"""
+    if task_id not in clone_tasks:
+        return
+        
+    task = clone_tasks[task_id]
+    if 'monitoring' not in task:
+        return
+        
+    monitoring = task['monitoring']
+    completed_vms = monitoring.get('completed_vms', 0)
+    total_vms = monitoring.get('total_vms', 0)
+    
+    # 检查是否所有虚拟机都已完成监控
+    if completed_vms >= total_vms:
+        success_vms = monitoring.get('success_vms', 0)
+        failed_vms = monitoring.get('failed_vms', 0)
+        
+        if failed_vms == 0:
+            task['status'] = 'completed'
+            add_task_log(task_id, 'success', f'所有虚拟机监控和配置完成！成功: {success_vms}, 失败: {failed_vms}')
+            print(f"[DEBUG] 所有虚拟机监控和配置完成！成功: {success_vms}, 失败: {failed_vms}")
+        else:
+            task['status'] = 'completed_with_errors'
+            add_task_log(task_id, 'warning', f'虚拟机监控和配置完成，但有错误。成功: {success_vms}, 失败: {failed_vms}')
+            print(f"[DEBUG] 虚拟机监控和配置完成，但有错误。成功: {success_vms}, 失败: {failed_vms}")
+        
+        # 强制刷新，确保前端能立即收到更新
+        import sys
+        sys.stdout.flush()
+
+def monitor_vm_and_configure(task_id, vm_name, vm_path, wuma_config_file, max_wait_time=300):
+    """监控虚拟机IP和SSH状态，连通后自动配置五码"""
+    start_time = time.time()
+    add_task_log(task_id, 'info', f'开始监控虚拟机 {vm_name} 的网络状态...')
+    
+    def update_monitoring_progress(success=False, failed=False, restart_progress=None, wuma_progress=None):
+        """更新监控进度"""
+        if task_id in clone_tasks:
+            task = clone_tasks[task_id]
+            if 'monitoring' in task:
+                if success:
+                    task['monitoring']['success_vms'] += 1
+                elif failed:
+                    task['monitoring']['failed_vms'] += 1
+                task['monitoring']['completed_vms'] += 1
+                
+                # 更新重启进度和五码进度
+                if restart_progress:
+                    task['monitoring']['restart_progress'] = restart_progress
+                if wuma_progress:
+                    task['monitoring']['wuma_progress'] = wuma_progress
+                
+                # 发送监控进度更新
+                progress_data = {
+                    'type': 'monitoring_progress',
+                    'vm_name': vm_name,
+                    'completed': task['monitoring']['completed_vms'],
+                    'total': task['monitoring']['total_vms'],
+                    'success': task['monitoring']['success_vms'],
+                    'failed': task['monitoring']['failed_vms']
+                }
+                
+                # 添加重启进度和更改五码进度
+                if 'restart_progress' in task['monitoring']:
+                    progress_data['restart_progress'] = task['monitoring']['restart_progress']
+                if 'wuma_progress' in task['monitoring']:
+                    progress_data['wuma_progress'] = task['monitoring']['wuma_progress']
+                    
+                task['logs'].append(progress_data)
+                print(f"[DEBUG] 发送监控进度更新: {progress_data}")
+                
+                # 强制刷新，确保前端能立即收到更新
+                import sys
+                sys.stdout.flush()
+    
+    try:
+        while time.time() - start_time < max_wait_time:
+            try:
+                # 获取虚拟机IP（已集成强制重启逻辑）
+                vm_ip = get_vm_ip(vm_name)
+                if not vm_ip:
+                    add_task_log(task_id, 'debug', f'虚拟机 {vm_name} IP获取失败，等待5秒后重试...')
+                    time.sleep(5)
+                    continue
+                
+                add_task_log(task_id, 'info', f'虚拟机 {vm_name} IP: {vm_ip}')
+                
+                # 检测IP存活
+                if not ping_vm_ip(vm_ip):
+                    add_task_log(task_id, 'debug', f'虚拟机 {vm_name} ({vm_ip}) ping不通，等待5秒后重试...')
+                    time.sleep(5)
+                    continue
+                
+                add_task_log(task_id, 'info', f'虚拟机 {vm_name} ({vm_ip}) ping通，检测SSH连通性...')
+                
+                # 检测SSH连通性
+                if not check_ssh_connectivity(vm_ip, vm_username):
+                    add_task_log(task_id, 'debug', f'虚拟机 {vm_name} ({vm_ip}) SSH未就绪，等待10秒后重试...')
+                    time.sleep(10)
+                    continue
+                
+                add_task_log(task_id, 'success', f'虚拟机 {vm_name} ({vm_ip}) SSH连通，开始配置五码...')
+                
+                # SSH连通后，执行五码配置和JU值更改流程
+                try:
+                    add_task_log(task_id, 'info', f'开始为虚拟机 {vm_name} 执行五码配置...')
+                    print(f"[DEBUG] 开始为虚拟机 {vm_name} 执行五码配置，配置文件: {wuma_config_file}")
+                    
+                    result = batch_change_wuma_core([vm_name], wuma_config_file, task_id)
+                    print(f"[DEBUG] 五码配置结果: {result}")
+                    
+                    if isinstance(result, dict) and result.get('status') == 'success':
+                        add_task_log(task_id, 'success', f'虚拟机 {vm_name} 五码配置成功')
+                        print(f"[DEBUG] 虚拟机 {vm_name} 五码配置成功")
+                        
+                        # 五码配置成功后，自动执行JU值更改
+                        add_task_log(task_id, 'info', f'开始为虚拟机 {vm_name} 执行JU值更改...')
+                        print(f"[DEBUG] 开始为虚拟机 {vm_name} 执行JU值更改")
+                        
+                        # 更新五码进度
+                        if task_id in clone_tasks and 'monitoring' in clone_tasks[task_id]:
+                            monitoring = clone_tasks[task_id]['monitoring']
+                            # 使用线程安全的方式更新进度
+                            monitoring['wuma_progress']['current'] = min(
+                                monitoring['wuma_progress']['current'] + 1,
+                                monitoring['wuma_progress']['total']
+                            )
+                            current_wuma = monitoring['wuma_progress']['current']
+                            total_wuma = monitoring['wuma_progress']['total']
+                            update_monitoring_progress(wuma_progress={'current': current_wuma, 'total': total_wuma})
+                        
+                        try:
+                            # 执行test.sh脚本更改JU值
+                            test_cmd = f'ssh -o StrictHostKeyChecking=no {vm_username}@{vm_ip} "~/test.sh"'
+                            print(f"[DEBUG] 执行JU值更改命令: {test_cmd}")
+                            add_task_log(task_id, 'info', f'执行JU值更改脚本: {vm_name}')
+                            
+                            test_result = subprocess.run(test_cmd, shell=True, capture_output=True, text=True, timeout=60)
+                            
+                            if test_result.returncode == 0:
+                                add_task_log(task_id, 'success', f'虚拟机 {vm_name} JU值更改成功')
+                                print(f"[DEBUG] 虚拟机 {vm_name} JU值更改成功")
+                                
+                                # JU值更改成功后，重启虚拟机
+                                add_task_log(task_id, 'info', f'开始重启虚拟机 {vm_name}...')
+                                print(f"[DEBUG] 开始重启虚拟机 {vm_name}")
+                                
+                                # 更新重启进度
+                                if task_id in clone_tasks and 'monitoring' in clone_tasks[task_id]:
+                                    monitoring = clone_tasks[task_id]['monitoring']
+                                    # 使用线程安全的方式更新进度
+                                    monitoring['restart_progress']['current'] = min(
+                                        monitoring['restart_progress']['current'] + 1,
+                                        monitoring['restart_progress']['total']
+                                    )
+                                    current_restart = monitoring['restart_progress']['current']
+                                    total_restart = monitoring['restart_progress']['total']
+                                    update_monitoring_progress(restart_progress={'current': current_restart, 'total': total_restart})
+                                
+                                vmrun_path = get_vmrun_path()
+                                
+                                # 停止虚拟机
+                                stop_cmd = [vmrun_path, 'stop', vm_path]
+                                print(f"[DEBUG] 停止虚拟机命令: {' '.join(stop_cmd)}")
+                                subprocess.run(stop_cmd, capture_output=True, timeout=30)
+                                
+                                time.sleep(5)  # 等待虚拟机完全停止
+                                
+                                # 启动虚拟机
+                                start_cmd = [vmrun_path, 'start', vm_path, 'nogui']
+                                print(f"[DEBUG] 启动虚拟机命令: {' '.join(start_cmd)}")
+                                subprocess.run(start_cmd, capture_output=True, timeout=30)
+                                
+                                add_task_log(task_id, 'success', f'虚拟机 {vm_name} 重启完成，五码和JU值配置全部完成')
+                                print(f"[DEBUG] 虚拟机 {vm_name} 重启完成，五码和JU值配置全部完成")
+                                
+                                update_monitoring_progress(success=True)
+                                
+                                # 检查是否所有虚拟机都已完成监控
+                                check_and_complete_task(task_id)
+                                return True
+                            else:
+                                add_task_log(task_id, 'error', f'虚拟机 {vm_name} JU值更改失败: {test_result.stderr}')
+                                print(f"[DEBUG] 虚拟机 {vm_name} JU值更改失败: {test_result.stderr}")
+                                update_monitoring_progress(failed=True)
+                                
+                                # 检查是否所有虚拟机都已完成监控
+                                check_and_complete_task(task_id)
+                                return False
+                                
+                        except Exception as ju_e:
+                            add_task_log(task_id, 'error', f'虚拟机 {vm_name} JU值更改异常: {str(ju_e)}')
+                            print(f"[DEBUG] 虚拟机 {vm_name} JU值更改异常: {str(ju_e)}")
+                            update_monitoring_progress(failed=True)
+                            
+                            # 检查是否所有虚拟机都已完成监控
+                            check_and_complete_task(task_id)
+                            return False
+                    else:
+                        error_msg = result.get('message', '未知错误') if isinstance(result, dict) else '配置失败'
+                        add_task_log(task_id, 'error', f'虚拟机 {vm_name} 五码配置失败: {error_msg}')
+                        print(f"[DEBUG] 虚拟机 {vm_name} 五码配置失败: {error_msg}")
+                        update_monitoring_progress(failed=True)
+                        
+                        # 检查是否所有虚拟机都已完成监控
+                        check_and_complete_task(task_id)
+                        return False
+                except Exception as e:
+                    error_detail = f'虚拟机 {vm_name} 五码配置异常: {str(e)}'
+                    add_task_log(task_id, 'error', error_detail)
+                    print(f"[DEBUG] {error_detail}")
+                    print(f"[DEBUG] 异常详情: {type(e).__name__}: {str(e)}")
+                    import traceback
+                    print(f"[DEBUG] 异常堆栈: {traceback.format_exc()}")
+                    update_monitoring_progress(failed=True)
+                    
+                    # 检查是否所有虚拟机都已完成监控
+                    check_and_complete_task(task_id)
+                    return False
+                    
+            except Exception as e:
+                add_task_log(task_id, 'error', f'监控虚拟机 {vm_name} 时发生异常: {str(e)}')
+                time.sleep(5)
+        
+        add_task_log(task_id, 'warning', f'虚拟机 {vm_name} 监控超时（{max_wait_time}秒），跳过五码配置')
+        update_monitoring_progress(failed=True)
+        
+        # 检查是否所有虚拟机都已完成监控
+        check_and_complete_task(task_id)
+        return False
+        
+    except Exception as e:
+        add_task_log(task_id, 'error', f'虚拟机 {vm_name} 监控线程异常: {str(e)}')
+        update_monitoring_progress(failed=True)
+        
+        # 检查是否所有虚拟机都已完成监控
+        check_and_complete_task(task_id)
+        return False
+
 def get_vmrun_path():
     """获取vmrun路径，优先使用配置文件中的路径，如果不存在则使用备用路径"""
     if os.path.exists(vmrun_path):
@@ -1538,7 +1818,25 @@ def clone_vm_worker(task_id):
         clone_count = int(params['cloneCount'])
         print(f"[DEBUG] 开始克隆，总数: {clone_count}")
         
-        add_task_log(task_id, 'info', f'找到 {len(wuma_codes)} 个有效五码，需要克隆 {clone_count} 个虚拟机')
+        # 验证克隆数量与五码数量是否匹配
+        if clone_count > len(wuma_codes):
+            error_msg = f'克隆数量({clone_count})超过可用五码数量({len(wuma_codes)})，请确保五码数量足够'
+            add_task_log(task_id, 'error', error_msg)
+            print(f"[DEBUG] 错误: {error_msg}")
+            task['status'] = 'failed'
+            return
+        elif clone_count < len(wuma_codes):
+            warning_msg = f'五码数量({len(wuma_codes)})多于克隆数量({clone_count})，将使用前{clone_count}个五码'
+            add_task_log(task_id, 'warning', warning_msg)
+            print(f"[DEBUG] 警告: {warning_msg}")
+            # 截取需要的五码数量
+            wuma_codes = wuma_codes[:clone_count]
+        
+        # 生成统一的时间戳，用于所有虚拟机
+        unified_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        print(f"[DEBUG] 使用统一时间戳: {unified_timestamp}")
+        
+        add_task_log(task_id, 'info', f'找到 {len(wuma_codes)} 个有效五码，需要克隆 {clone_count} 个虚拟机，数量匹配验证通过')
         
         # 发送初始进度信息
         initial_progress = {
@@ -1555,8 +1853,8 @@ def clone_vm_worker(task_id):
             try:
                 print(f"[DEBUG] 开始克隆第 {i+1}/{clone_count} 个虚拟机")
                 
-                # 生成虚拟机名称和文件夹名称
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                # 生成虚拟机名称和文件夹名称（使用统一时间戳）
+                timestamp = unified_timestamp
                 vm_name_pattern = params['namingPattern']
                 if vm_name_pattern == 'custom':
                     vm_name_pattern = params.get('customNamingPattern', 'VM_{timestamp}_{index}')
@@ -1678,11 +1976,14 @@ def clone_vm_worker(task_id):
                         add_task_log(task_id, 'warning', f'虚拟机 {vm_name} 的displayName更新失败')
                         print(f"[DEBUG] displayName更新失败")
                     
-                    # 如果配置了自动启动
-                    if params.get('autoStart') == 'true':
+                    # 如果配置了自动启动或者配置了五码文件（需要启动虚拟机进行后续配置）
+                    should_start = params.get('autoStart') == 'true' or params.get('configPlist')
+                    if should_start:
+                        start_reason = "用户勾选自动启动" if params.get('autoStart') == 'true' else "需要进行五码配置"
                         start_cmd = [vmrun_path, 'start', vm_file_path, 'nogui']
-                        print(f"[DEBUG] 自动启动命令: {' '.join(start_cmd)}")
-                        add_task_log(task_id, 'info', f'执行启动命令: vmrun start {vm_file_path}')
+                        print(f"[DEBUG] 启动虚拟机原因: {start_reason}")
+                        print(f"[DEBUG] 启动命令: {' '.join(start_cmd)}")
+                        add_task_log(task_id, 'info', f'启动虚拟机 ({start_reason}): vmrun start {vm_file_path}')
                         
                         # 记录启动命令开始时间
                         start_time = datetime.now()
@@ -1745,14 +2046,110 @@ def clone_vm_worker(task_id):
         # 任务完成
         print(f"[DEBUG] 任务完成统计 - 成功: {task['stats']['success']}, 失败: {task['stats']['error']}")
         
-        if task['stats']['error'] == 0:
-            task['status'] = 'completed'
-            add_task_log(task_id, 'success', f'所有虚拟机克隆完成！成功: {task["stats"]["success"]}')
-            print(f"[DEBUG] 所有虚拟机克隆完成！成功: {task['stats']['success']}")
-        else:
-            task['status'] = 'completed_with_errors'
-            add_task_log(task_id, 'warning', f'克隆任务完成，但有错误。成功: {task["stats"]["success"]}, 失败: {task["stats"]["error"]}')
-            print(f"[DEBUG] 克隆任务完成，但有错误。成功: {task['stats']['success']}, 失败: {task['stats']['error']}")
+        # 如果有成功克隆的虚拟机且配置了五码文件，启动动态监控和配置流程
+        if task['stats']['success'] > 0 and params.get('configPlist'):
+            add_task_log(task_id, 'info', '开始启动虚拟机监控和自动配置流程...')
+            print(f"[DEBUG] 开始启动虚拟机监控和自动配置流程...")
+            
+            try:
+                # 收集成功克隆的虚拟机信息（使用相同的统一时间戳）
+                cloned_vms_info = []
+                for i in range(clone_count):
+                    timestamp = unified_timestamp  # 使用克隆时的统一时间戳
+                    vm_name_pattern = params['namingPattern']
+                    if vm_name_pattern == 'custom':
+                        vm_name_pattern = params.get('customNamingPattern', 'VM_{timestamp}_{index}')
+                    
+                    vm_name_without_ext_generated = vm_name_pattern.replace('{timestamp}', timestamp).replace('{index}', str(i+1)).replace('{vmname}', vm_name_without_ext)
+                    vm_folder_name = vm_name_without_ext_generated
+                    vm_folder_path = os.path.join(target_dir, vm_folder_name)
+                    vm_name = vm_name_without_ext_generated + '.vmx'
+                    vm_file_path = os.path.join(vm_folder_path, vm_name)
+                    
+                    print(f"[DEBUG] 检查虚拟机文件: {vm_file_path}")
+                    if os.path.exists(vm_file_path):
+                        cloned_vms_info.append({
+                            'name': vm_name_without_ext_generated,
+                            'path': vm_file_path
+                        })
+                        print(f"[DEBUG] 找到成功克隆的虚拟机: {vm_name_without_ext_generated}")
+                    else:
+                        print(f"[DEBUG] 虚拟机文件不存在: {vm_file_path}")
+                
+                if cloned_vms_info:
+                    add_task_log(task_id, 'info', f'找到 {len(cloned_vms_info)} 个成功克隆的虚拟机，启动监控线程')
+                    print(f"[DEBUG] 找到 {len(cloned_vms_info)} 个成功克隆的虚拟机")
+                    
+                    # 更新任务状态，增加监控阶段
+                    task['monitoring'] = {
+                        'status': 'running',
+                        'total_vms': len(cloned_vms_info),
+                        'completed_vms': 0,
+                        'success_vms': 0,
+                        'failed_vms': 0,
+                        'restart_progress': {
+                            'current': 0,
+                            'total': len(cloned_vms_info)
+                        },
+                        'wuma_progress': {
+                            'current': 0,
+                            'total': len(cloned_vms_info)
+                        }
+                    }
+                    
+                    # 为每个虚拟机启动独立的监控线程
+                    for vm_info in cloned_vms_info:
+                        vm_name = vm_info['name']
+                        vm_path = vm_info['path']
+                        
+                        # 启动监控线程
+                        monitor_thread = threading.Thread(
+                            target=monitor_vm_and_configure,
+                            args=(task_id, vm_name, vm_path, params['configPlist']),
+                            daemon=True
+                        )
+                        monitor_thread.start()
+                        
+                        add_task_log(task_id, 'info', f'已启动虚拟机 {vm_name} 的监控线程')
+                        print(f"[DEBUG] 已启动虚拟机 {vm_name} 的监控线程")
+                        
+                        # 避免同时启动太多线程
+                        time.sleep(2)
+                    
+                    add_task_log(task_id, 'info', '所有虚拟机监控线程已启动，将在后台继续执行')
+                    print(f"[DEBUG] 所有虚拟机监控线程已启动")
+                    
+                    # 不要立即标记任务完成，让监控线程继续运行
+                    # 任务状态保持为'running'，直到所有监控完成
+                    add_task_log(task_id, 'info', '克隆阶段完成，正在进行虚拟机配置...')
+                    
+                else:
+                    add_task_log(task_id, 'warning', '未找到成功克隆的虚拟机，跳过监控配置')
+                    print(f"[DEBUG] 未找到成功克隆的虚拟机，跳过监控配置")
+                    
+                    # 没有监控任务时才标记完成
+                    if task['stats']['error'] == 0:
+                        task['status'] = 'completed'
+                        add_task_log(task_id, 'success', f'所有虚拟机克隆完成！成功: {task["stats"]["success"]}')
+                        print(f"[DEBUG] 所有虚拟机克隆完成！成功: {task['stats']['success']}")
+                    else:
+                        task['status'] = 'completed_with_errors'
+                        add_task_log(task_id, 'warning', f'克隆任务完成，但有错误。成功: {task["stats"]["success"]}, 失败: {task["stats"]["error"]}')
+                        print(f"[DEBUG] 克隆任务完成，但有错误。成功: {task['stats']['success']}, 失败: {task['stats']['error']}")
+                    
+            except Exception as e:
+                add_task_log(task_id, 'error', f'启动虚拟机监控时发生错误: {str(e)}')
+                print(f"[DEBUG] 启动虚拟机监控时发生错误: {str(e)}")
+                
+                # 发生错误时才标记完成
+                if task['stats']['error'] == 0:
+                    task['status'] = 'completed'
+                    add_task_log(task_id, 'success', f'所有虚拟机克隆完成！成功: {task["stats"]["success"]}')
+                    print(f"[DEBUG] 所有虚拟机克隆完成！成功: {task['stats']['success']}")
+                else:
+                    task['status'] = 'completed_with_errors'
+                    add_task_log(task_id, 'warning', f'克隆任务完成，但有错误。成功: {task["stats"]["success"]}, 失败: {task["stats"]["error"]}')
+                    print(f"[DEBUG] 克隆任务完成，但有错误。成功: {task['stats']['success']}, 失败: {task['stats']['error']}")
         
     except Exception as e:
         add_task_log(task_id, 'error', f'克隆任务发生严重错误: {str(e)}')
@@ -1826,6 +2223,10 @@ def add_task_log(task_id, level, message):
         }
         task['logs'].append(log_entry)
         
+        # 强制刷新，确保前端能立即收到日志更新
+        import sys
+        sys.stdout.flush()
+        
         # 同时写入日志文件
         current_date = datetime.now().strftime('%Y-%m-%d')
         log_file_path = os.path.join(log_dir, f'task_{task_id}_{current_date}.log')
@@ -1833,6 +2234,7 @@ def add_task_log(task_id, level, message):
             with open(log_file_path, 'a', encoding='utf-8') as f:
                 timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 f.write(f'[{timestamp}] [{level.upper()}] {message}\n')
+                f.flush()  # 强制刷新文件缓冲区
         except Exception as e:
             print(f"[DEBUG] 写入日志文件失败: {str(e)}")
 
@@ -1853,11 +2255,13 @@ def api_clone_logs(task_id):
             
             while task['status'] in ['running'] and timeout_counter < max_timeout:
                 # 发送新日志和进度数据
+                has_new_data = False
                 while last_log_index < len(task['logs']):
                     log_entry = task['logs'][last_log_index]
+                    has_new_data = True
                     
-                    # 检查是否是进度数据
-                    if isinstance(log_entry, dict) and log_entry.get('type') == 'progress':
+                    # 检查是否是进度数据或监控进度数据
+                    if isinstance(log_entry, dict) and log_entry.get('type') in ['progress', 'monitoring_progress']:
                         # 发送进度数据
                         try:
                             yield f"data: {json.dumps(log_entry, ensure_ascii=False)}\n\n"
@@ -1881,19 +2285,25 @@ def api_clone_logs(task_id):
                     
                     last_log_index += 1
                 
-                # 发送统计更新
-                try:
-                    stats_data = {
-                        'type': 'stats',
-                        'stats': task['stats']
-                    }
-                    yield f"data: {json.dumps(stats_data, ensure_ascii=False)}\n\n"
-                except Exception as e:
-                    print(f"[DEBUG] 统计数据序列化失败: {str(e)}")
-                    yield f"data: {json.dumps({'type': 'error', 'message': '统计数据序列化失败'})}\n\n"
+                # 发送统计更新（只在有新数据时发送）
+                if has_new_data:
+                    try:
+                        stats_data = {
+                            'type': 'stats',
+                            'stats': task['stats']
+                        }
+                        yield f"data: {json.dumps(stats_data, ensure_ascii=False)}\n\n"
+                    except Exception as e:
+                        print(f"[DEBUG] 统计数据序列化失败: {str(e)}")
+                        yield f"data: {json.dumps({'type': 'error', 'message': '统计数据序列化失败'})}\n\n"
+                
+                # 如果有新数据，减少等待时间以提高响应速度
+                if has_new_data:
+                    time.sleep(0.1)  # 有新数据时快速检查
+                else:
+                    time.sleep(0.5)  # 无新数据时稍微等待
                 
                 timeout_counter += 1
-                time.sleep(1)
             
             # 发送完成信号
             try:
@@ -2503,6 +2913,52 @@ def get_vm_status(vm_path):
         print(f"[DEBUG] 获取虚拟机状态失败: {str(e)}")
         return 'unknown'
 
+def force_restart_vm(vm_name):
+    """强制重启虚拟机"""
+    logger.warning(f"开始强制重启虚拟机: {vm_name}")
+    try:
+        vm_file = find_vm_file(vm_name)
+        if not vm_file:
+            logger.error(f"未找到虚拟机文件: {vm_name}")
+            return False
+        
+        vmrun_path = get_vmrun_path()
+        if not os.path.exists(vmrun_path):
+            logger.error(f"vmrun路径不存在: {vmrun_path}")
+            return False
+        
+        # 1. 先尝试强制停止虚拟机
+        logger.info(f"强制停止虚拟机: {vm_name}")
+        stop_cmd = [vmrun_path, 'stop', vm_file, 'hard']
+        try:
+            stop_result = subprocess.run(stop_cmd, capture_output=True, text=True, timeout=30)
+            logger.info(f"停止命令返回码: {stop_result.returncode}")
+        except Exception as e:
+            logger.warning(f"停止虚拟机时出现异常: {str(e)}")
+        
+        # 等待一段时间确保虚拟机完全停止
+        import time
+        time.sleep(3)
+        
+        # 2. 启动虚拟机
+        logger.info(f"启动虚拟机: {vm_name}")
+        start_cmd = [vmrun_path, 'start', vm_file, 'nogui']
+        try:
+            start_result = subprocess.run(start_cmd, capture_output=True, text=True, timeout=60)
+            if start_result.returncode == 0:
+                logger.info(f"虚拟机 {vm_name} 强制重启成功")
+                return True
+            else:
+                logger.error(f"启动虚拟机失败，返回码: {start_result.returncode}, 错误: {start_result.stderr}")
+                return False
+        except Exception as e:
+            logger.error(f"启动虚拟机时出现异常: {str(e)}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"强制重启虚拟机失败: {str(e)}")
+        return False
+
 def get_vm_ip(vm_name):
     """获取虚拟机IP地址，优先用vmrun getGuestIPAddress"""
     logger.debug(f"开始获取虚拟机 {vm_name} 的IP地址")
@@ -2535,6 +2991,28 @@ def get_vm_ip(vm_name):
                     print(f"[DEBUG] getGuestIPAddress命令输出: {result.stdout}")
                     if result.stderr:
                         print(f"[DEBUG] getGuestIPAddress命令错误: {result.stderr}")
+                    
+                    # 检查特定的错误码4294967295，表示虚拟机卡死或异常
+                    if result.returncode == 4294967295:
+                        logger.warning(f"检测到虚拟机 {vm_name} 卡死（返回码: 4294967295），开始强制重启")
+                        print(f"[DEBUG] 检测到虚拟机卡死，返回码: 4294967295")
+                        
+                        # 强制重启虚拟机
+                        restart_success = force_restart_vm(vm_name)
+                        if restart_success:
+                            logger.info(f"虚拟机 {vm_name} 强制重启成功，等待系统启动")
+                            print(f"[DEBUG] 虚拟机强制重启成功，等待系统启动")
+                            
+                            # 等待虚拟机启动并重新尝试获取IP
+                            import time
+                            time.sleep(10)  # 等待10秒让虚拟机启动
+                            
+                            # 重新尝试获取IP（递归调用，但只尝试一次避免无限循环）
+                            logger.info(f"重新尝试获取虚拟机 {vm_name} 的IP地址")
+                            return get_vm_ip_after_restart(vm_name)
+                        else:
+                            logger.error(f"虚拟机 {vm_name} 强制重启失败")
+                            return None
                     
                     if result.returncode == 0:
                         ip = result.stdout.strip()
@@ -2581,6 +3059,38 @@ def get_vm_ip(vm_name):
         return None
     except Exception as e:
         logger.error(f"获取虚拟机IP失败: {str(e)}")
+        return None
+
+def get_vm_ip_after_restart(vm_name):
+    """重启后获取虚拟机IP地址（避免无限递归）"""
+    logger.debug(f"重启后获取虚拟机 {vm_name} 的IP地址")
+    try:
+        vm_file = find_vm_file(vm_name)
+        if vm_file:
+            vmrun_path = get_vmrun_path()
+            if os.path.exists(vmrun_path):
+                try:
+                    cmd = [vmrun_path, 'getGuestIPAddress', vm_file, '-wait']
+                    logger.debug(f"重启后执行vmrun命令: {cmd}")
+                    
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                    
+                    if result.returncode == 0:
+                        ip = result.stdout.strip()
+                        if is_valid_ip(ip):
+                            logger.info(f"重启后成功获取IP: {ip}")
+                            return ip
+                        else:
+                            logger.warning(f"重启后获取的IP格式无效: {ip}")
+                    else:
+                        logger.warning(f"重启后vmrun命令执行失败，返回码: {result.returncode}")
+                except Exception as e:
+                    logger.error(f"重启后vmrun获取IP失败: {str(e)}")
+        
+        logger.warning(f"重启后无法获取虚拟机 {vm_name} 的IP地址")
+        return None
+    except Exception as e:
+        logger.error(f"重启后获取虚拟机IP失败: {str(e)}")
         return None
 
 def is_valid_ip(ip):
@@ -2968,13 +3478,29 @@ def get_vm_online_status(vm_name):
 
 def find_vm_file(vm_name):
     """查找虚拟机文件"""
-    vm_dir = r'D:\macos_vm\NewVM'
-    if os.path.exists(vm_dir):
-        for root, dirs, files in os.walk(vm_dir):
-            for file in files:
-                if file.endswith('.vmx') and vm_name in file:
-                    return os.path.join(root, file)
-    return None
+    try:
+        # 如果vm_name已经是完整路径，直接检查是否存在
+        if vm_name.endswith('.vmx') and os.path.exists(vm_name):
+            logger.debug(f"虚拟机文件路径有效: {vm_name}")
+            return vm_name
+        
+        # 如果是完整路径但文件不存在，记录警告
+        if vm_name.endswith('.vmx'):
+            logger.warning(f"虚拟机文件不存在: {vm_name}")
+            return None
+        
+        # 如果是简单名称，则在目录中搜索
+        vm_dir = r'D:\macos_vm\NewVM'
+        if os.path.exists(vm_dir):
+            for root, dirs, files in os.walk(vm_dir):
+                for file in files:
+                    if file.endswith('.vmx') and vm_name in file:
+                        return os.path.join(root, file)
+        return None
+        
+    except Exception as e:
+        logger.error(f"查找虚拟机文件失败: {str(e)}")
+        return None
 
 def get_vm_snapshots(vm_path):
     """获取虚拟机快照列表"""
@@ -5029,38 +5555,30 @@ def api_wuma_delete():
             'message': f'删除五码信息失败: {str(e)}'
         })
 
-@app.route('/api/batch_change_wuma', methods=['POST'])
-@login_required
-def api_batch_change_wuma():
-    """批量更改五码API"""
-    logger.info("收到批量更改五码API请求")
+#克隆后等待执行更改五码的操作
+def batch_change_wuma_core(selected_vms, config_file_path, task_id=None):
+    """批量更改五码核心函数"""
+    logger.info(f"开始批量更改五码核心处理，虚拟机数量: {len(selected_vms)}")
+    logger.info(f"使用配置文件: {config_file_path}")
+    
+    def log_message(level, message):
+        """统一日志记录函数"""
+        logger.info(message)
+        if task_id:
+            add_task_log(task_id, level, message)
+    
     try:
-        data = request.get_json()
-        logger.info(f"批量更改五码请求数据: {data}")
-        
-        default_config = data.get('default_config', 'config.txt')
-        selected_vms = data.get('selected_vms', [])
-        logger.info(f"使用配置文件: {default_config}")
-        logger.info(f"选中的虚拟机: {selected_vms}")
-        
         if not selected_vms:
-            return jsonify({
-                'success': False,
+            return {
+                'status': 'error',
                 'message': '没有选中任何虚拟机'
-            })
-        
-        # 构建配置文件路径
-        config_dir = wuma_config_dir
-        if not default_config.endswith('.txt'):
-            config_file_path = os.path.join(config_dir, f'{default_config}.txt')
-        else:
-            config_file_path = os.path.join(config_dir, default_config)
+            }
         
         if not os.path.exists(config_file_path):
-            return jsonify({
-                'success': False,
+            return {
+                'status': 'error',
                 'message': f'配置文件 {config_file_path} 不存在'
-            })
+            }
         
         # 读取五码配置文件
         with open(config_file_path, 'r', encoding='utf-8') as f:
@@ -5070,17 +5588,17 @@ def api_batch_change_wuma():
         valid_wuma_lines = [line.strip() for line in wuma_lines if line.strip() and is_valid_wuma_file_line(line.strip())]
         
         if not valid_wuma_lines:
-            return jsonify({
-                'success': False,
+            return {
+                'status': 'error',
                 'message': '配置文件中没有有效的五码数据'
-            })
+            }
         
         # 检查五码数据是否足够
         if len(valid_wuma_lines) < len(selected_vms):
-            return jsonify({
-                'success': False,
+            return {
+                'status': 'error',
                 'message': f'五码数据不足，需要 {len(selected_vms)} 个，但只有 {len(valid_wuma_lines)} 个'
-            })
+            }
         
         # 验证选中的虚拟机是否都在运行
         vmrun_path = get_vmrun_path()
@@ -5090,10 +5608,10 @@ def api_batch_change_wuma():
         result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30)
         
         if result.returncode != 0:
-            return jsonify({
-                'success': False,
+            return {
+                'status': 'error',
                 'message': f'获取运行中虚拟机列表失败: {result.stderr}'
-            })
+            }
         
         running_vms = result.stdout.strip().split('\n')[1:]  # 跳过标题行
         logger.info(f"获取到运行中虚拟机: {running_vms}")
@@ -5110,21 +5628,18 @@ def api_batch_change_wuma():
                     break
             
             if not vm_running:
-                logger.warning(f"虚拟机 {vm_name} 不在运行状态，运行中虚拟机列表: {running_vms}")
-                return jsonify({
-                    'success': False,
-                    'message': f'虚拟机 {vm_name} 不在运行状态'
-                })
+                log_message('warning', f'虚拟机 {vm_name} 不在运行状态，跳过处理')
+                continue
         
         # 读取temp.plist模板
         plist_template_path = os.path.join(plist_template_dir, 'temp.plist')
         logger.info(f"检查temp.plist模板文件: {plist_template_path}")
         if not os.path.exists(plist_template_path):
             logger.error(f"temp.plist模板文件不存在: {plist_template_path}")
-            return jsonify({
-                'success': False,
+            return {
+                'status': 'error',
                 'message': f'temp.plist模板文件不存在: {plist_template_path}'
-            })
+            }
         
         logger.info(f"temp.plist模板文件存在，开始读取...")
         with open(plist_template_path, 'r', encoding='utf-8') as f:
@@ -5142,7 +5657,7 @@ def api_batch_change_wuma():
         # 为每个选中的虚拟机生成plist文件
         for i, vm_name in enumerate(selected_vms):
             if i >= len(valid_wuma_lines):
-                logger.warning(f"五码数据不足，跳过虚拟机: {vm_name}")
+                log_message('warning', f'五码数据不足，跳过虚拟机: {vm_name}')
                 results.append({
                     'vm_name': vm_name,
                     'success': False,
@@ -5159,7 +5674,7 @@ def api_batch_change_wuma():
                     break
             
             if not vm_path:
-                logger.error(f"未找到虚拟机 {vm_name} 的运行路径，运行中虚拟机列表: {running_vms}")
+                log_message('error', f'未找到虚拟机 {vm_name} 的运行路径')
                 results.append({
                     'vm_name': vm_name,
                     'success': False,
@@ -5172,7 +5687,7 @@ def api_batch_change_wuma():
                 wuma_line = valid_wuma_lines[i]
                 wuma_parts = wuma_line.split(':')
                 if len(wuma_parts) != 7:
-                    logger.error(f"五码格式错误: {wuma_line}")
+                    log_message('error', f'五码格式错误: {wuma_line}')
                     results.append({
                         'vm_name': vm_name,
                         'success': False,
@@ -5236,13 +5751,35 @@ def api_batch_change_wuma():
                 vm_ip = get_vm_ip(vm_name)
                 logger.info(f"获取虚拟机 {vm_name} 的IP: {vm_ip}")
                 if not vm_ip:
-                    logger.error(f"无法获取虚拟机 {vm_name} 的IP")
+                    log_message('error', f'无法获取虚拟机 {vm_name} 的IP')
                     results.append({
                         'vm_name': vm_name,
                         'success': False,
                         'message': '无法获取虚拟机IP'
                     })
                     continue
+                
+                # 更新重启进度 - 开始重启虚拟机
+                if task_id and task_id in clone_tasks:
+                    task = clone_tasks[task_id]
+                    if 'monitoring' in task:
+                        task['monitoring']['restart_progress']['current'] += 1
+                        restart_progress = {
+                            'current': task['monitoring']['restart_progress']['current'],
+                            'total': task['monitoring']['restart_progress']['total']
+                        }
+                        # 发送重启进度更新
+                        progress_data = {
+                            'type': 'monitoring_progress',
+                            'vm_name': vm_name,
+                            'restart_progress': restart_progress
+                        }
+                        task['logs'].append(progress_data)
+                        log_message('info', f'虚拟机 {vm_name} 重启进度: {restart_progress["current"]}/{restart_progress["total"]}')
+                        
+                        # 强制刷新，确保前端能立即收到更新
+                        import sys
+                        sys.stdout.flush()
                 
                 # 执行mount_efi.sh脚本
                 mount_cmd = f'ssh -o StrictHostKeyChecking=no {vm_username}@{vm_ip} "~/mount_efi.sh"'
@@ -5261,7 +5798,7 @@ def api_batch_change_wuma():
                 scp_result = subprocess.run(scp_cmd, shell=True, capture_output=True, text=True, timeout=60)
                 
                 if scp_result.returncode != 0:
-                    logger.error(f"文件传输失败: {scp_result.stderr}")
+                    log_message('error', f'文件传输失败: {scp_result.stderr}')
                     results.append({
                         'vm_name': vm_name,
                         'success': False,
@@ -5271,10 +5808,9 @@ def api_batch_change_wuma():
                 else:
                     logger.info(f"文件传输成功")
                 
-                # 备份已使用的五码到同名配置文件加_install.bak后缀
-                backup_config_file = os.path.join(backup_dir, f'{default_config}_install.bak')
-                if not default_config.endswith('.txt'):
-                    backup_config_file = os.path.join(backup_dir, f'{default_config}_install.bak')
+                # 备份已使用的五码
+                config_filename = os.path.basename(config_file_path)
+                backup_config_file = os.path.join(backup_dir, f'{config_filename}_install.bak')
                 
                 # 追加到备份配置文件
                 with open(backup_config_file, 'a', encoding='utf-8') as f:
@@ -5282,16 +5818,37 @@ def api_batch_change_wuma():
                 
                 used_wuma_lines.append(wuma_line)
                 
+                # 更新更改五码进度 - 五码配置完成
+                if task_id and task_id in clone_tasks:
+                    task = clone_tasks[task_id]
+                    if 'monitoring' in task:
+                        task['monitoring']['wuma_progress']['current'] += 1
+                        wuma_progress = {
+                            'current': task['monitoring']['wuma_progress']['current'],
+                            'total': task['monitoring']['wuma_progress']['total']
+                        }
+                        # 发送更改五码进度更新
+                        progress_data = {
+                            'type': 'monitoring_progress',
+                            'vm_name': vm_name,
+                            'wuma_progress': wuma_progress
+                        }
+                        task['logs'].append(progress_data)
+                        log_message('info', f'虚拟机 {vm_name} 更改五码进度: {wuma_progress["current"]}/{wuma_progress["total"]}')
+                        
+                        # 强制刷新，确保前端能立即收到更新
+                        import sys
+                        sys.stdout.flush()                
                 results.append({
                     'vm_name': vm_name,
                     'success': True,
                     'message': '批量更改五码成功'
                 })
                 
-                logger.info(f"虚拟机 {vm_name} 批量更改五码完成")
+                log_message('success', f'虚拟机 {vm_name} 批量更改五码完成')
                 
             except Exception as e:
-                logger.error(f"处理虚拟机 {vm_name} 时出错: {str(e)}")
+                log_message('error', f'处理虚拟机 {vm_name} 时出错: {str(e)}')
                 results.append({
                     'vm_name': vm_name,
                     'success': False,
@@ -5305,6 +5862,102 @@ def api_batch_change_wuma():
             f.write('\n'.join(remaining_lines) + '\n')
         
         logger.info(f"已从原配置文件移除 {len(used_wuma_lines)} 个已使用的五码，剩余 {len(remaining_lines)} 个")
+        
+        success_count = sum(1 for r in results if r['success'])
+        total_count = len(results)
+        
+        log_message('info', f'批量更改五码完成 - 成功: {success_count}/{total_count}')
+        
+        return {
+            'status': 'success',
+            'message': f'批量更改五码完成！成功处理 {success_count}/{total_count} 个虚拟机',
+            'results': results,
+            'success_count': success_count,
+            'total_count': total_count
+        }
+        
+    except Exception as e:
+        error_msg = f'批量更改五码失败: {str(e)}'
+        logger.error(error_msg)
+        if task_id:
+            add_task_log(task_id, 'error', error_msg)
+        return {
+            'status': 'error',
+            'message': error_msg
+        }
+
+@app.route('/api/batch_change_wuma', methods=['POST'])
+@login_required
+def api_batch_change_wuma():
+    """批量更改五码API"""
+    logger.info("收到批量更改五码API请求")
+    try:
+        data = request.get_json()
+        logger.info(f"批量更改五码请求数据: {data}")
+        
+        default_config = data.get('default_config', 'config.txt')
+        selected_vms = data.get('selected_vms', [])
+        logger.info(f"使用配置文件: {default_config}")
+        logger.info(f"选中的虚拟机: {selected_vms}")
+        
+        # 构建配置文件路径
+        config_dir = wuma_config_dir
+        if not default_config.endswith('.txt'):
+            config_file_path = os.path.join(config_dir, f'{default_config}.txt')
+        else:
+            config_file_path = os.path.join(config_dir, default_config)
+        
+        # 调用核心函数
+        result = batch_change_wuma_core(selected_vms, config_file_path)
+        
+        # 如果五码更改成功，自动执行批量更改JU值任务
+        if result['status'] == 'success' and result['success_count'] > 0:
+            # 获取成功更改五码的虚拟机列表
+            successful_vms = [r['vm_name'] for r in result['results'] if r['success']]
+            logger.info(f"开始为成功更改五码的虚拟机执行批量更改JU值: {successful_vms}")
+            
+            # 创建JU值更改任务ID
+            ju_task_id = f"batch_change_ju_{int(time.time())}"
+            tasks[ju_task_id] = {
+                'status': 'running',
+                'progress': 0,
+                'total': len(successful_vms),
+                'current': 0,
+                'results': [],
+                'logs': []
+            }
+            
+            # 启动JU值更改后台任务
+            import threading
+            thread = threading.Thread(target=batch_change_ju_worker, args=(ju_task_id, successful_vms))
+            thread.daemon = True
+            thread.start()
+            
+            return jsonify({
+                'success': True,
+                'message': f'{result["message"]}，正在自动执行JU值更改',
+                'results': result['results'],
+                'ju_task_id': ju_task_id
+            })
+        else:
+            return jsonify({
+                'success': result['status'] == 'success',
+                'message': result['message'],
+                'results': result.get('results', [])
+            })
+        
+        if not selected_vms:
+            return jsonify({
+                'success': False,
+                'message': '没有选中任何虚拟机'
+            })
+        
+        # 调用批量更改五码核心函数
+        results = batch_change_wuma_core(selected_vms, default_config)
+        
+        # 检查是否有错误返回
+        if 'success' in results and not results['success']:
+            return jsonify(results)
         
         success_count = sum(1 for r in results if r['success'])
         total_count = len(results)

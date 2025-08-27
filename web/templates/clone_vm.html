@@ -576,7 +576,7 @@
                                             <label for="targetDir" class="form-label">虚拟克隆目录</label>
                                             <input type="text" class="form-control" style="width: 65%;" id="targetDir" name="targetDir" 
                                            value="{{ clone_dir }}" readonly>
-                                            <small class="text-muted">从配置文件获取 ({{ clone_dir.split('\\')[-1] }})</small>
+                                           <!-- <small class="form-text text-muted d-block">默认克隆目录: {{ clone_dir }}</small> -->
                                         </div>
                                         <div class="col-md-4">
                                             <label for="configPlist" class="form-label">五码配置文件</label>
@@ -607,6 +607,15 @@
                                                 <option value="custom">自定义...</option>
                                             </select>
                                         </div>
+                                        <div class="col-md-4">
+                                            <div class="form-check mt-4">
+                                                <input class="form-check-input" type="checkbox" id="autoStart" name="autoStart" value="true" checked>
+                                                <label class="form-check-label" for="autoStart">
+                                                    自动启动虚拟机
+                                                </label>
+                                                <small class="form-text text-muted d-block">克隆完成后自动启动虚拟机进行监控和配置</small>
+                                            </div>
+                                        </div>
                                     </div>
                                     <div class="d-flex justify-content-between align-items-center mt-2">
                                         <div>
@@ -628,14 +637,14 @@
                         <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>克隆统计</h5>
                     </div>
                     <div class="card-body py-3">
-                        <!-- 克隆进度条 -->
+                        <!-- 统一进度条 -->
                         <div class="mb-3">
                             <div class="d-flex justify-content-between align-items-center mb-2">
-                                <span class="fw-bold">克隆进度</span>
-                                <span class="text-muted" id="cloneProgressText">0 / 0</span>
+                                <span class="fw-bold" id="unifiedProgressLabel">克隆进度</span>
+                                <span class="text-muted" id="unifiedProgressText">0 / 0</span>
                             </div>
                             <div class="progress" style="height: 12px;">
-                                <div class="progress-bar bg-primary" id="cloneProgressBar" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                                <div class="progress-bar bg-primary" id="unifiedProgressBar" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
                             </div>
                         </div>
                         
@@ -776,6 +785,9 @@
             const formData = new FormData(this);
             const data = Object.fromEntries(formData.entries());
             
+            // 处理复选框值（未勾选时不会包含在FormData中）
+            data.autoStart = document.getElementById('autoStart').checked ? 'true' : 'false';            
+            console.log('表单数据:', data);
             startClone(data);
         });
         
@@ -861,6 +873,16 @@
                     } else if (data.type === 'stats') {
                         console.log('处理统计数据:', data.stats);
                         updateStats(data.stats);
+                    } else if (data.type === 'monitoring_progress') {
+                        console.log('处理监控进度数据:', data);
+                        // 更新重启进度
+                        if (data.restart_progress) {
+                            updateRestartProgress(data.restart_progress.current, data.restart_progress.total);
+                        }
+                        // 更新更改五码进度
+                        if (data.wuma_progress) {
+                            updateWumaProgress(data.wuma_progress.current, data.wuma_progress.total);
+                        }
                     } else if (data.type === 'complete') {
                         console.log('处理完成信号:', data);
                         handleComplete(data);
@@ -969,20 +991,13 @@
         
         // 更新克隆进度条
         function updateCloneProgress(current, total) {
-            const cloneProgressBar = document.getElementById('cloneProgressBar');
-            const cloneProgressText = document.getElementById('cloneProgressText');
-            const detailedProgress = document.getElementById('detailedProgress');
+            // 使用统一进度条显示克隆进度
+            updateUnifiedProgress('克隆进度', current, total);
             
-            if (cloneProgressBar && cloneProgressText) {
-                const percentage = total > 0 ? (current / total) * 100 : 0;
-                cloneProgressBar.style.width = percentage + '%';
-                cloneProgressBar.setAttribute('aria-valuenow', percentage);
-                cloneProgressText.textContent = `${current} / ${total}`;
-                
-                // 显示详细进度信息
-                if (detailedProgress && current > 0) {
-                    detailedProgress.style.display = 'block';
-                }
+            // 显示详细进度信息
+            const detailedProgress = document.getElementById('detailedProgress');
+            if (detailedProgress && current > 0) {
+                detailedProgress.style.display = 'block';
             }
         }
         
@@ -1030,6 +1045,56 @@
                 console.error('更新统计数据失败:', error);
                 addLog('error', `统计更新失败: ${error.message}`);
             }
+        }
+        
+        // 更新统一进度条
+        function updateUnifiedProgress(label, current, total) {
+            try {
+                console.log('更新统一进度条:', label, current, total);
+                const unifiedProgressSection = document.getElementById('unifiedProgressSection');
+                const unifiedProgressLabel = document.getElementById('unifiedProgressLabel');
+                const unifiedProgressBar = document.getElementById('unifiedProgressBar');
+                const unifiedProgressText = document.getElementById('unifiedProgressText');
+                
+                if (total > 0) {
+                    // 显示统一进度区域
+                    if (unifiedProgressSection) {
+                        unifiedProgressSection.style.display = 'block';
+                    }
+                    
+                    // 更新标签文字
+                    if (unifiedProgressLabel) {
+                        unifiedProgressLabel.textContent = label;
+                    }
+                    
+                    const percentage = (current / total) * 100;
+                    if (unifiedProgressBar) {
+                        unifiedProgressBar.style.width = percentage + '%';
+                        unifiedProgressBar.setAttribute('aria-valuenow', percentage);
+                    }
+                    if (unifiedProgressText) {
+                        unifiedProgressText.textContent = `${current} / ${total}`;
+                    }
+                } else {
+                    // 隐藏统一进度区域
+                    if (unifiedProgressSection) {
+                        unifiedProgressSection.style.display = 'none';
+                    }
+                }
+            } catch (error) {
+                console.error('更新统一进度条失败:', error);
+                addLog('error', `统一进度条更新失败: ${error.message}`);
+            }
+        }
+        
+        // 更新重启进度（兼容性函数）
+        function updateRestartProgress(current, total) {
+            updateUnifiedProgress('重启进度', current, total);
+        }
+        
+        // 更新更改五码进度（兼容性函数）
+        function updateWumaProgress(current, total) {
+            updateUnifiedProgress('更改五码进度', current, total);
         }
         
         // 处理完成
