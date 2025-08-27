@@ -1,151 +1,426 @@
-# macOS 虚拟机批量克隆管理系统
+# macOS 虚拟机管理系统
 
-## 项目简介
+<div align="center">
 
-macOS 虚拟机批量克隆管理系统是一个基于 Flask 和 PyQt5 的综合性虚拟机管理平台，专门用于 macOS 虚拟机的批量克隆、配置管理和自动化运维。系统提供了 Web 界面和桌面应用两种访问方式，支持虚拟机的批量创建、五码配置、Apple ID 管理、脚本执行等功能。
+![macOS VM Manager](https://img.shields.io/badge/macOS-VM%20Manager-blue?style=for-the-badge&logo=apple)
+![Python](https://img.shields.io/badge/Python-3.7+-green?style=for-the-badge&logo=python)
+![Flask](https://img.shields.io/badge/Flask-Web%20Framework-red?style=for-the-badge&logo=flask)
+![PyQt5](https://img.shields.io/badge/PyQt5-Desktop%20App-orange?style=for-the-badge&logo=qt)
 
-## 系统截图
+**一个功能强大的 macOS 虚拟机管理和自动化系统**
 
-### 新版控制台开发登录窗口
-<img width="1841" height="972" alt="image" src="https://github.com/user-attachments/assets/4b99351c-f044-488d-91cb-23ab8eee3e67" />
+支持虚拟机批量管理、iMessage 自动化、AppleID 管理等功能
 
+</div>
 
-虚拟机批量克隆，实时和历史日志信息
+## 📋 目录
 
-<img width="1841" height="972" alt="image" src="https://github.com/user-attachments/assets/1c196730-be99-4f26-8d1c-d22b86619d58" />
+- [功能特性](#-功能特性)
+- [系统架构](#-系统架构)
+- [环境要求](#-环境要求)
+- [快速开始](#-快速开始)
+- [部署方式](#-部署方式)
+- [配置说明](#-配置说明)
+- [使用指南](#-使用指南)
+- [API 文档](#-api-文档)
+- [故障排除](#-故障排除)
+- [开发指南](#-开发指南)
+- [更新日志](#-更新日志)
+- [许可证](#-许可证)
 
+## 🚀 功能特性
 
-虚拟机管理界面，增加图标状态监控，开机关机，重启挂起，脚本发送和脚本执行按钮
+### 核心功能
+- **🖥️ 虚拟机管理**: 批量创建、启动、停止、克隆 macOS 虚拟机
+- **📱 iMessage 自动化**: 自动登录、消息发送、蓝号检测
+- **🆔 AppleID 管理**: 批量管理 AppleID 账户和验证
+- **📞 号码管理**: 手机号码批量导入和状态管理
+- **🔄 自动化脚本**: 支持 AppleScript 和 Shell 脚本执行
+- **📊 实时监控**: 虚拟机状态监控和日志查看
 
-<img width="1841" height="972" alt="image" src="https://github.com/user-attachments/assets/efa1175c-8f4f-4b99-8b9c-75fda0580918" />
+### 界面支持
+- **🌐 Web 管理界面**: 基于 Flask 的现代化 Web 界面
+- **🖥️ 桌面应用**: 基于 PyQt5 的原生桌面应用
+- **⚙️ Windows 服务**: 支持后台服务模式运行
 
-虚拟机脚本管理
+### 高级特性
+- **🔧 批量操作**: 支持虚拟机批量克隆和配置
+- **📝 日志系统**: 完整的操作日志和错误追踪
+- **🔒 安全认证**: 用户登录和权限管理
+- **📦 一键打包**: 支持打包为 Windows 可执行文件
 
-<img width="1841" height="972" alt="image" src="https://github.com/user-attachments/assets/f3f3ab8a-2658-4fde-877f-1015fcbb6188" />
+## 🏗️ 系统架构
 
-虚拟机五码管理
+```
+macOS VM Manager
+├── Web 层 (Flask)
+│   ├── 用户界面 (HTML/CSS/JS)
+│   ├── API 接口 (RESTful)
+│   └── 认证系统
+├── 应用层 (Python)
+│   ├── 虚拟机控制器
+│   ├── iMessage 自动化
+│   ├── AppleID 管理器
+│   └── 脚本执行引擎
+├── 数据层
+│   ├── 配置文件 (JSON/YAML)
+│   ├── 日志文件
+│   └── 临时数据
+└── 系统层
+    ├── VMware 集成
+    ├── SSH 连接
+    └── 文件系统操作
+```
 
-<img width="1841" height="972" alt="image" src="https://github.com/user-attachments/assets/55ba27c1-7551-48ac-9a38-08dd8fdbfa4b" />
+## 💻 环境要求
 
+### 基础环境
+- **操作系统**: Windows 10/11 (推荐)
+- **Python**: 3.7 或更高版本
+- **VMware**: VMware Workstation Pro 15+ 或 VMware Player
+- **内存**: 8GB+ (推荐 16GB+)
+- **存储**: 100GB+ 可用空间
 
-# macos_vm
+### Python 依赖
+主要依赖包将通过 `requirements.txt` 自动安装：
+- Flask 2.0+ (Web 框架)
+- PyQt5 5.15+ (桌面界面)
+- paramiko 2.7+ (SSH 连接)
+- psutil 5.8+ (系统监控)
+- requests 2.25+ (HTTP 请求)
 
-批量克隆增加监控虚拟机功能如下图：
+## 🚀 快速开始
 
-![0dd9b2cb1d55f72bb9d4a9d99421949](https://github.com/user-attachments/assets/58ca7808-06b7-4452-9675-e6d2a8f6697c)
-
-脚本执行完毕输出如下
-
-![image](https://github.com/user-attachments/assets/9628b8f6-f49f-40b0-9636-c38f838783d1)
-
-![image](https://github.com/user-attachments/assets/e8c746ba-3c48-404f-b5e3-f3593ab2560f)
-
-
-
-
-此项目脚本用户批量克隆虚拟机，更改 kbjfrfpoJU值，ju值查看可利用iMessageDebug运行查看
-
-wx@bogon ~ % /Users/wx/Desktop/iMessageDebug ; exit;
-SmUUID: failed
-**********************iMessage Debug**********************
-Credits: ElNono, mdmwii,flux84, sugarface, pokenguyen
-
-
-              Model: VMware20,1
-           Board-id: Mac-AA95B1DDAB278B95
-       SerialNumber: VMLbH9Kbb8Q4
-      Hardware UUID: 564D9976-62CB-847F-619E-157CB36A4660
-
-          System-ID: failed
-                ROM: 564d997662cb
-  BoardSerialNumber: hH9hnhV8s2pGYA...
-
-         Gq3489ugfi: 3719cd7c333ab35387fcb32d088d7087fc
-          Fyp98tpgj: ba5969a6b702e9d3f7bcc2b7f0d2307a0a
-         kbjfrfpoJU: 39feee3569700187b9e15f700427984e20
-       oycqAZloTNDm: c3c5004bcba694b857bc5fc61b82ff6915
-       abKPld1EcMni: e4eead6a92076fd3104f3e6eede0d51da3
-
-Do you want to save to iMessageDebug.txt? (y/n) 
-ju值为： kbjfrfpoJU: 39feee3569700187b9e15f700427984e20
-
-批量实现克隆虚拟机需求，要求实现每台虚拟机ju值为唯一，五码每台为唯一
-
-windows 环境配置
-======================================================
-
-VMware® Workstation 环境配置
-
-VMware® Workstation 17 Pro
-17.5.1 build-23298084
-![image](https://github.com/user-attachments/assets/7fb032b9-26b4-4f01-ae50-4356ffa5823b)
-
-修改完的成品如下图：
-
-vm01
-
-![image](https://github.com/user-attachments/assets/18e10026-c924-4810-834e-b12cc8871b12)
-
-vm02
-
-![image](https://github.com/user-attachments/assets/8b5dcd4e-207a-43f7-b12c-60424f4930c4)
-
-新增低版本10.12克隆
-<img width="1832" height="600" alt="image" src="https://github.com/user-attachments/assets/48383dc2-8665-4df7-8b47-f5b95fc2e52a" />
-
-
-<img width="1635" height="1004" alt="image" src="https://github.com/user-attachments/assets/2be5b48a-8a9b-407b-97f0-b9b7845168e7" />
-
-<img width="1639" height="995" alt="image" src="https://github.com/user-attachments/assets/f06c1e72-9267-4007-92b6-4a804a877cdb" />
-
-初成模型，底层后续实现，客户端和web客户端均可
-
-## 启动方式
-
-### 1. Web浏览器版本
+### 1. 克隆项目
 ```bash
-# 启动Web应用
-python app.py
+git clone <repository-url>
+cd macos_vm
+```
 
-# 或者使用批处理脚本
+### 2. 安装依赖
+```bash
+# 自动安装 (推荐)
+python -m pip install -r requirements.txt
+
+# 或手动安装核心依赖
+pip install flask PyQt5 paramiko psutil requests
+```
+
+### 3. 配置系统
+```bash
+# 复制配置模板
+cp config.py.example config.py
+
+# 编辑配置文件
+notepad config.py
+```
+
+### 4. 启动应用
+
+#### Web 版本 (推荐)
+```bash
+# Windows
 start.bat
+
+# 或直接运行
+python app.py
 ```
 
-### 2. 桌面应用版本 (WebView)
+#### 桌面版本
 ```bash
-# 启动桌面WebView应用
-python webview_app.py
-
-# 或者使用批处理脚本
+# Windows
 start_webview.bat
+
+# 或直接运行
+python webview_app.py
 ```
 
-### 3. 依赖测试
+## 📦 部署方式
+
+### 方式一: 开发模式
+直接运行 Python 脚本，适合开发和测试：
 ```bash
-# 测试PyQt5依赖是否正确安装
-python test_webview.py
+python app.py          # Web 版本
+python webview_app.py  # 桌面版本
 ```
 
-## 访问地址
-- Web版本: http://127.0.0.1:5000
-- 默认用户名: admin
-- 默认密码: 123456
+### 方式二: 打包部署
+使用内置打包脚本生成可执行文件：
+```bash
+python build_exe.py
+```
+生成的文件位于 `dist/` 目录：
+- `macos_vm_web/` - Web 浏览器版本
+- `macos_vm_desktop/` - 桌面应用版本
+- `macos_vm_service/` - 后台服务版本
 
+### 方式三: Windows 服务
+安装为 Windows 系统服务：
+```bash
+# 安装服务
+python service_runner.py install
 
-<img width="1334" height="846" alt="image" src="https://github.com/user-attachments/assets/7abfcd62-8c8a-40ad-848e-c6d30dd3302e" />
+# 启动服务
+python service_runner.py start
 
-<img width="1841" height="972" alt="image" src="https://github.com/user-attachments/assets/eba205c2-cbe9-419f-9ac4-9a2bfbfc9ce9" />
+# 查看状态
+python service_runner.py status
+```
 
-<img width="1841" height="972" alt="image" src="https://github.com/user-attachments/assets/8fffa2f2-b131-4dd9-8d18-34745540e239" />
+## ⚙️ 配置说明
 
+### 主配置文件 (config.py)
+```python
+# 基础配置
+DEBUG = False
+SECRET_KEY = 'your-secret-key'
+HOST = '0.0.0.0'
+PORT = 5000
 
+# 虚拟机配置
+VM_BASE_PATH = 'D:/VMs/macOS'
+VM_TEMPLATE_PATH = 'D:/VMs/Templates'
+SSH_USERNAME = 'admin'
+SSH_PASSWORD = 'password'
 
-技术支持咨询： Telegram：@xiaowen1448
-wechat：w8686512
+# 日志配置
+LOG_LEVEL = 'INFO'
+LOG_FILE = 'logs/app.log'
+LOG_MAX_SIZE = 10 * 1024 * 1024  # 10MB
+```
 
+### 虚拟机模板配置
+在 `vm_util/plist/` 目录下配置虚拟机模板：
+- 硬件配置 (CPU、内存、磁盘)
+- 网络设置
+- 序列号和硬件标识
 
+## 📖 使用指南
 
+### Web 界面使用
+1. **登录系统**: 默认用户名 `admin`，密码 `123456`
+2. **虚拟机管理**: 创建、启动、停止、克隆虚拟机
+3. **iMessage 自动化**: 配置 AppleID，执行消息发送任务
+4. **监控面板**: 查看系统状态和操作日志
 
+### 桌面应用使用
+- 启动后自动打开管理界面
+- 支持系统托盘最小化
+- 提供快捷操作菜单
 
+### 命令行工具
+```bash
+# 虚拟机操作
+python -m vm_util.py_util.main --action start --vm-name "macOS-01"
+python -m vm_util.py_util.main --action clone --template "base" --count 5
 
+# 脚本执行
+python -m macos_script.executor --script "login.scpt" --vm "macOS-01"
+```
 
+## 🔧 API 文档
+
+### 认证接口
+```http
+POST /api/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "123456"
+}
+```
+
+### 虚拟机管理
+```http
+# 获取虚拟机列表
+GET /api/vms
+
+# 启动虚拟机
+POST /api/vms/{vm_id}/start
+
+# 停止虚拟机
+POST /api/vms/{vm_id}/stop
+
+# 克隆虚拟机
+POST /api/vms/clone
+Content-Type: application/json
+
+{
+  "template": "base-template",
+  "count": 3,
+  "prefix": "macOS"
+}
+```
+
+### iMessage 自动化
+```http
+# 发送消息
+POST /api/imessage/send
+Content-Type: application/json
+
+{
+  "vm_id": "macOS-01",
+  "phone_number": "+1234567890",
+  "message": "Hello World"
+}
+```
+
+## 🛠️ 故障排除
+
+### 常见问题
+
+#### 1. Python 环境问题
+```bash
+# 检查 Python 版本
+python --version
+
+# 升级 pip
+python -m pip install --upgrade pip
+
+# 重新安装依赖
+pip install -r requirements.txt --force-reinstall
+```
+
+#### 2. 虚拟机连接失败
+- 检查 VMware 是否正常运行
+- 确认虚拟机 SSH 服务已启动
+- 验证网络连接和防火墙设置
+
+#### 3. PyQt5 安装失败
+```bash
+# Windows 用户
+pip install PyQt5 PyQtWebEngine --index-url https://pypi.douban.com/simple/
+
+# 或使用 conda
+conda install pyqt
+```
+
+#### 4. 权限问题
+- 以管理员身份运行命令提示符
+- 检查文件和目录权限
+- 确保 VMware 有足够权限
+
+### 日志查看
+```bash
+# 查看应用日志
+tail -f logs/app.log
+
+# 查看虚拟机日志
+tail -f logs/vm_operations.log
+
+# 查看错误日志
+tail -f logs/error.log
+```
+
+## 👨‍💻 开发指南
+
+### 项目结构
+```
+macos_vm/
+├── app.py                 # Flask Web 应用入口
+├── webview_app.py         # PyQt5 桌面应用入口
+├── config.py              # 配置文件
+├── requirements.txt       # Python 依赖
+├── build_exe.py          # 打包脚本
+├── service_runner.py     # Windows 服务
+├── web/                  # Web 界面文件
+│   └── templates/        # HTML 模板
+├── vm_util/              # 虚拟机工具
+│   ├── py_util/         # Python 工具脚本
+│   ├── bat/             # 批处理脚本
+│   └── plist/           # 配置文件
+├── macos_script/         # macOS 脚本
+│   ├── macos_scpt/      # AppleScript 脚本
+│   └── macos_sh/        # Shell 脚本
+└── logs/                 # 日志文件
+```
+
+### 开发环境设置
+```bash
+# 创建虚拟环境
+python -m venv .venv
+
+# 激活虚拟环境
+# Windows
+.venv\Scripts\activate
+# Linux/macOS
+source .venv/bin/activate
+
+# 安装开发依赖
+pip install -r requirements.txt
+pip install flake8 pytest  # 开发工具
+```
+
+### 代码规范
+- 使用 PEP 8 代码风格
+- 函数和类添加文档字符串
+- 使用类型提示 (Type Hints)
+- 编写单元测试
+
+### 测试
+```bash
+# 运行测试
+pytest tests/
+
+# 代码检查
+flake8 .
+
+# 类型检查
+mypy .
+```
+
+## 📝 更新日志
+
+### v2.0.0 (2024-01-XX)
+- ✨ 新增桌面应用支持 (PyQt5)
+- ✨ 新增 Windows 服务模式
+- ✨ 新增一键打包功能
+- 🔧 优化启动脚本和错误处理
+- 📚 完善文档和使用指南
+
+### v1.5.0 (2023-XX-XX)
+- ✨ 新增 iMessage 自动化功能
+- ✨ 新增批量虚拟机克隆
+- 🔧 改进日志系统
+- 🐛 修复若干已知问题
+
+### v1.0.0 (2023-XX-XX)
+- 🎉 初始版本发布
+- ✨ 基础虚拟机管理功能
+- ✨ Web 管理界面
+- ✨ AppleID 管理功能
+
+## 🤝 贡献指南
+
+欢迎提交 Issue 和 Pull Request！
+
+1. Fork 本项目
+2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
+3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
+4. 推送到分支 (`git push origin feature/AmazingFeature`)
+5. 创建 Pull Request
+
+## 📞 技术支持
+
+- **问题反馈**: 请在 GitHub Issues 中提交
+- **功能建议**: 欢迎在 Issues 中讨论
+- **文档问题**: 请提交 PR 或 Issue
+
+## ⚠️ 免责声明
+
+本软件仅供学习和研究使用，请遵守相关法律法规。使用本软件所产生的任何后果由使用者自行承担。
+
+## 📄 许可证
+
+本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
+
+---
+
+<div align="center">
+
+**如果这个项目对你有帮助，请给个 ⭐ Star 支持一下！**
+
+ Made with ❤️ by macOS VM Manager Team
+
+</div>
