@@ -90,58 +90,12 @@ vm02
 
 ![image](https://github.com/user-attachments/assets/8b5dcd4e-207a-43f7-b12c-60424f4930c4)
 
-新增低版本10.12克隆
-<img width="1832" height="600" alt="image" src="https://github.com/user-attachments/assets/48383dc2-8665-4df7-8b47-f5b95fc2e52a" />
-
-
-<img width="1635" height="1004" alt="image" src="https://github.com/user-attachments/assets/2be5b48a-8a9b-407b-97f0-b9b7845168e7" />
-
-<img width="1639" height="995" alt="image" src="https://github.com/user-attachments/assets/f06c1e72-9267-4007-92b6-4a804a877cdb" />
-
-初成模型，底层后续实现，客户端和web客户端均可
-
-## 启动方式
-
-### 1. Web浏览器版本
-```bash
-# 启动Web应用
-python app.py
-
-# 或者使用批处理脚本
-start.bat
-```
-
-### 2. 桌面应用版本 (WebView)
-```bash
-# 启动桌面WebView应用
-python webview_app.py
-
-# 或者使用批处理脚本
-start_webview.bat
-```
-
-### 3. 依赖测试
-```bash
-# 测试PyQt5依赖是否正确安装
-python test_webview.py
-```
-
-## 访问地址
-- Web版本: http://127.0.0.1:5000
-- 默认用户名: admin
-- 默认密码: 123456
-
-
-<img width="1334" height="846" alt="image" src="https://github.com/user-attachments/assets/7abfcd62-8c8a-40ad-848e-c6d30dd3302e" />
-
-<img width="1841" height="972" alt="image" src="https://github.com/user-attachments/assets/eba205c2-cbe9-419f-9ac4-9a2bfbfc9ce9" />
-
-<img width="1841" height="972" alt="image" src="https://github.com/user-attachments/assets/8fffa2f2-b131-4dd9-8d18-34745540e239" />
 
 
 
 技术支持咨询： Telegram：@xiaowen1448
 wechat：w8686512
+
 
 
 
