@@ -1,6 +1,7 @@
 # Web框架和API
 flask>=2.0.0
 flask-cors>=3.0.10
+flask-socketio>=5.0.0
 werkzeug>=2.0.0
 
 # GUI桌面应用

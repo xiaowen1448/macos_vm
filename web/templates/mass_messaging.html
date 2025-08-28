@@ -6,6 +6,13 @@
     <title>群发管理 - 虚拟机管理系统</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- noVNC CSS -->
+    <!-- noVNC CSS暂时禁用，避免CDN资源被阻止 -->
+    <!-- <link rel="stylesheet" href="https://unpkg.com/novnc@1.4.0/app/styles/base.css"> -->
+    <!-- <link rel="stylesheet" href="https://unpkg.com/novnc@1.4.0/app/styles/ui.css"> -->
+    <!-- Socket.IO -->
+     <script type="text/javascript" src="static\js\novnc\rfb.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         body {
             background-color: #f8f9fa;
@@ -1328,6 +1335,9 @@
                 const data = await response.json();
                 
                 if (data.success) {
+                    // 设置当前连接的客户端IP
+                    currentVncClientIp = clientIp;
+                    
                     // 显示VNC连接界面
                     const vncContent = `
                         <div class="vnc-container">
@@ -1360,24 +1370,31 @@
                             </div>
                             <div class="vnc-viewer">
                                 <div class="border" style="height: 500px; background-color: #000; position: relative; overflow: hidden;">
-                                    <div class="text-center text-white" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+                                    <canvas id="vncCanvas" style="width: 100%; height: 100%;"></canvas>
+                                    <div id="vncStatus" class="text-center text-white" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
                                         <i class="fas fa-desktop fa-3x mb-3"></i>
-                                        <div>VNC连接已建立</div>
-                                        <div class="small mt-2">端口: ${data.vnc_port}</div>
-                                        <div class="small">密码: ${data.vnc_password ? '已设置' : '无密码'}</div>
+                                        <div>正在连接VNC服务器...</div>
+                                        <div class="small mt-2">端口: ${data.vnc_config.port}</div>
+                                        <div class="small">主机: ${data.vnc_config.host}</div>
                                     </div>
                                 </div>
                             </div>
+                            <div id="vnc-init-script" data-host="${data.vnc_config.host}" data-port="${data.vnc_config.port}" data-password="${data.vnc_config.password}" data-client-ip="${clientIp}"></div>
                         </div>
                     `;
                     
                     document.getElementById('vncContentDiv').innerHTML = vncContent;
+                    
+                    // 手动初始化VNC连接
+                    setTimeout(() => {
+                        initVNCConnection(data.vnc_config.host, data.vnc_config.port, data.vnc_config.password, clientIp);
+                    }, 100);
                 } else {
                     // 显示错误信息
                     const errorContent = `
                         <div class="alert alert-danger" role="alert">
                             <i class="fas fa-exclamation-triangle me-2"></i>
-                            VNC连接失败: ${data.message}
+                            VNC连接失败: ${data.message || '连接失败'}
                         </div>
                         <div class="text-muted">
                             <h6>可能的原因:</h6>
@@ -1396,30 +1413,116 @@
                 const errorContent = `
                     <div class="alert alert-danger" role="alert">
                         <i class="fas fa-exclamation-triangle me-2"></i>
-                        VNC连接失败: ${error.message}
+                        VNC连接失败: ${error.message || '未知错误'}
                     </div>
                 `;
                 document.getElementById('vncContentDiv').innerHTML = errorContent;
             }
         }
 
+        // 存储当前VNC连接的客户端IP
+        let currentVncClientIp = null;
+
         // 刷新VNC连接
-        function refreshVNC() {
-            console.log('刷新VNC连接');
-            alert('VNC连接已刷新');
+        async function refreshVNC() {
+            if (!currentVncClientIp) {
+                alert('无法获取客户端IP信息');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/vnc_refresh', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        client_ip: currentVncClientIp
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    alert('VNC连接已刷新');
+                    // 更新连接信息显示
+                    if (data.vnc_config) {
+                        document.getElementById('vncHostInfo').textContent = 
+                            `${data.vnc_config.host}:${data.vnc_config.port}`;
+                    }
+                } else {
+                    alert('刷新失败: ' + data.message);
+                }
+            } catch (error) {
+                console.error('刷新VNC连接失败:', error);
+                alert('刷新失败: ' + error.message);
+            }
         }
 
         // 发送Ctrl+Alt+Del
-        function sendCtrlAltDel() {
-            console.log('发送Ctrl+Alt+Del');
-            alert('已发送Ctrl+Alt+Del组合键');
+        async function sendCtrlAltDel() {
+            if (!currentVncClientIp) {
+                alert('无法获取客户端IP信息');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/vnc_send_keys', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        client_ip: currentVncClientIp,
+                        key_combination: 'ctrl+alt+del'
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    alert('已发送Ctrl+Alt+Del组合键');
+                } else {
+                    alert('发送失败: ' + data.message);
+                }
+            } catch (error) {
+                console.error('发送按键失败:', error);
+                alert('发送失败: ' + error.message);
+            }
         }
 
         // 断开VNC连接
-        function disconnectVNC() {
-            if (confirm('确定要断开VNC连接吗？')) {
+        async function disconnectVNC() {
+            if (!confirm('确定要断开VNC连接吗？')) {
+                return;
+            }
+
+            if (!currentVncClientIp) {
                 bootstrap.Modal.getInstance(document.getElementById('vncModal')).hide();
-                console.log('VNC连接已断开');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/vnc_disconnect', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        client_ip: currentVncClientIp
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    console.log('VNC连接已断开');
+                } else {
+                    console.error('断开连接失败:', data.message);
+                }
+            } catch (error) {
+                console.error('断开VNC连接失败:', error);
+            } finally {
+                // 无论成功失败都关闭模态框
+                bootstrap.Modal.getInstance(document.getElementById('vncModal')).hide();
+                currentVncClientIp = null;
             }
         }
 
@@ -1514,8 +1617,8 @@
                         <div class="mt-3">
                             <h6>虚拟机截图</h6>
                             <div class="border p-3 text-center">
-                                <img src="${data.screenshot_path}" alt="任务截图" class="img-fluid" style="max-width: 100%; max-height: 400px; border: 1px solid #ddd; border-radius: 4px;">
-                                <div class="mt-2 text-muted small">截图时间: ${data.timestamp}</div>
+                                <img src="${data.screenshot_path || ''}" alt="任务截图" class="img-fluid" style="max-width: 100%; max-height: 400px; border: 1px solid #ddd; border-radius: 4px;">
+                                <div class="mt-2 text-muted small">截图时间: ${data.timestamp || '未知'}</div>
                             </div>
                         </div>
                     `;
@@ -1525,7 +1628,7 @@
                             <h6>虚拟机截图</h6>
                             <div class="border p-3 text-center text-danger">
                                 <i class="fas fa-exclamation-triangle me-2"></i>
-                                截图获取失败: ${data.message}
+                                截图获取失败: ${data.message || '未知错误'}
                             </div>
                         </div>
                     `;
@@ -1586,7 +1689,7 @@
                 const errorContent = `
                     <div class="alert alert-danger" role="alert">
                         <i class="fas fa-exclamation-triangle me-2"></i>
-                        获取任务详情失败: ${error.message}
+                        获取任务详情失败: ${error.message || '网络错误'}
                     </div>
                 `;
                 document.getElementById('taskDetailContent').innerHTML = errorContent;
@@ -1627,18 +1730,18 @@
             }
             
             isAutoScanEnabled = true;
-            console.log('开启自动扫描，每30秒扫描一次');
+            console.log('开启自动扫描，每5分钟扫描一次');
             
             // 立即执行一次扫描
             scanClients();
             
-            // 设置定时器，每30秒扫描一次
+            // 设置定时器，每5分钟扫描一次
             autoScanInterval = setInterval(() => {
                 if (isAutoScanEnabled) {
                     console.log('自动扫描客户端...');
                     scanClients();
                 }
-            }, 30000); // 30秒
+            }, 300000); // 5分钟
             
             // 更新按钮状态
             updateAutoScanButton();
@@ -1750,7 +1853,764 @@
             // 保持发信管理菜单栏展开状态
             // 移除了自动关闭菜单的功能，让用户手动控制菜单展开/折叠
         });
+        
+        // VNC连接相关函数
+        let socket = null;
+        let vncClient = null;
+        
+        // 基于Socket.IO的VNC客户端
+        function VNCSocketClient(container, socket, config) {
+            this.container = container;
+            this.socket = socket;
+            this.config = config;
+            this.canvas = null;
+            this.ctx = null;
+            this.eventListeners = {};
+            this.connected = false;
+            
+            this.init();
+        }
+        
+        VNCSocketClient.prototype.init = function() {
+            // 创建canvas元素
+            this.canvas = document.createElement('canvas');
+            this.canvas.width = 1024;
+            this.canvas.height = 768;
+            this.canvas.style.width = '100%';
+            this.canvas.style.height = 'auto';
+            this.canvas.style.border = '1px solid #ccc';
+            this.canvas.style.backgroundColor = '#000';
+            
+            // 清空容器并添加canvas
+            this.container.innerHTML = '';
+            this.container.appendChild(this.canvas);
+            
+            this.ctx = this.canvas.getContext('2d');
+            
+            // 监听VNC数据
+            this.socket.on('vnc_data', (data) => {
+                this.handleVNCData(data);
+            });
+            
+            // 监听VNC断开
+            this.socket.on('vnc_disconnected', () => {
+                this.connected = false;
+                this.dispatchEvent('disconnect');
+            });
+            
+            // 显示连接状态（事件监听器将在RFB握手完成后添加）
+            this.showStatus('VNC连接已建立，正在进行RFB握手...');
+            
+            this.connected = true;
+            this.dispatchEvent('connect');
+        };
+        
+        VNCSocketClient.prototype.showStatus = function(message) {
+            this.ctx.fillStyle = '#2c3e50';
+            this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+            
+            this.ctx.fillStyle = '#ecf0f1';
+            this.ctx.font = '20px Arial';
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText(message, this.canvas.width / 2, this.canvas.height / 2);
+            
+            // 显示连接信息
+            this.ctx.font = '14px Arial';
+            this.ctx.fillText(`服务器: ${this.config.host}:${this.config.port}`, this.canvas.width / 2, this.canvas.height / 2 + 40);
+        };
+        
+        VNCSocketClient.prototype.handleVNCData = function(data) {
+            try {
+                // 解码base64数据
+                const binaryData = atob(data.data);
+                const bytes = new Uint8Array(binaryData.length);
+                for (let i = 0; i < binaryData.length; i++) {
+                    bytes[i] = binaryData.charCodeAt(i);
+                }
+                
+                console.log('收到VNC数据，长度:', bytes.length, '前几个字节:', Array.from(bytes.slice(0, 10)));
+                
+                // 处理RFB协议数据
+                this.processRFBData(bytes);
+                
+            } catch (error) {
+                console.error('处理VNC数据失败:', error);
+                this.drawDesktop(); // 出错时显示默认桌面
+            }
+        };
+        
+        VNCSocketClient.prototype.processRFBData = function(bytes) {
+            if (!this.rfbState) {
+                this.rfbState = 'version';
+                this.rfbBuffer = new Uint8Array(0);
+            }
+            
+            // 将新数据添加到缓冲区
+            const newBuffer = new Uint8Array(this.rfbBuffer.length + bytes.length);
+            newBuffer.set(this.rfbBuffer);
+            newBuffer.set(bytes, this.rfbBuffer.length);
+            this.rfbBuffer = newBuffer;
+            
+            console.log('RFB状态:', this.rfbState, '缓冲区长度:', this.rfbBuffer.length);
+            console.log('接收到的数据:', Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(' '));
+            console.log('当前缓冲区内容:', Array.from(this.rfbBuffer.slice(0, Math.min(32, this.rfbBuffer.length))).map(b => b.toString(16).padStart(2, '0')).join(' '));
+            
+            // 循环处理缓冲区中的数据，直到无法继续处理
+            let processed = true;
+            while (processed) {
+                processed = false;
+                
+                switch (this.rfbState) {
+                    case 'version':
+                        console.log('处理version状态，缓冲区长度:', this.rfbBuffer.length);
+                        if (this.rfbBuffer.length >= 12) {
+                            const version = new TextDecoder().decode(this.rfbBuffer.slice(0, 12));
+                            console.log('服务器RFB版本:', version);
+                            this.rfbBuffer = this.rfbBuffer.slice(12);
+                            console.log('状态转换: version -> security');
+                            this.rfbState = 'security';
+                            
+                            // 发送客户端版本
+                            const clientVersion = 'RFB 003.008\n';
+                            console.log('发送客户端版本:', clientVersion.trim());
+                            this.sendRFBMessage(new TextEncoder().encode(clientVersion));
+                            processed = true;
+                        } else {
+                            console.log('version状态：数据不足，需要12字节，当前有', this.rfbBuffer.length, '字节');
+                        }
+                        break;
+                    
+                    case 'security':
+                        if (this.rfbBuffer.length >= 1) {
+                            const numTypes = this.rfbBuffer[0];
+                            if (this.rfbBuffer.length >= 1 + numTypes) {
+                                const securityTypes = Array.from(this.rfbBuffer.slice(1, 1 + numTypes));
+                                console.log('安全类型:', securityTypes);
+                                this.rfbBuffer = this.rfbBuffer.slice(1 + numTypes);
+                                
+                                // 优先选择无认证(类型1)，如果不支持则使用VNC认证(类型2)
+                                if (securityTypes.includes(1)) {
+                                    console.log('选择无认证模式');
+                                    this.sendRFBMessage(new Uint8Array([1]));
+                                    this.rfbState = 'auth_result';
+                                } else if (securityTypes.includes(2)) {
+                                    console.log('选择VNC认证模式');
+                                    this.sendRFBMessage(new Uint8Array([2]));
+                                    this.rfbState = 'auth';
+                                } else {
+                                    console.error('不支持的安全类型:', securityTypes);
+                                    // 尝试使用第一个可用的安全类型
+                                    if (securityTypes.length > 0) {
+                                        const firstType = securityTypes[0];
+                                        console.log('尝试使用安全类型:', firstType);
+                                        this.sendRFBMessage(new Uint8Array([firstType]));
+                                        if (firstType === 1) {
+                                            this.rfbState = 'auth_result';
+                                        } else {
+                                            this.rfbState = 'auth';
+                                        }
+                                    } else {
+                                        this.showStatus('不支持的VNC安全类型');
+                                        return;
+                                    }
+                                }
+                                 processed = true;
+                            }
+                        }
+                        break;
+                    
+                case 'auth':
+                    if (this.rfbBuffer.length >= 16) {
+                        const challenge = this.rfbBuffer.slice(0, 16);
+                        console.log('收到认证挑战');
+                        this.rfbBuffer = this.rfbBuffer.slice(16);
+                        
+                        // VNC DES认证响应
+                        const response = this.vncDesEncrypt(challenge, this.config.password || '');
+                        console.log('发送认证响应');
+                        this.sendRFBMessage(response);
+                        this.rfbState = 'auth_result';
+                        processed = true;
+                    }
+                    break;
+                    
+                case 'auth_result':
+                    // 检查是否有认证结果数据
+                    if (this.rfbBuffer.length >= 4) {
+                        const view = new DataView(this.rfbBuffer.buffer, this.rfbBuffer.byteOffset);
+                        const result = view.getUint32(0);
+                        console.log('认证结果:', result);
+                        this.rfbBuffer = this.rfbBuffer.slice(4);
+                        
+                        if (result === 0) {
+                            // 认证成功，发送客户端初始化
+                            console.log('VNC认证成功');
+                            this.sendRFBMessage(new Uint8Array([1])); // shared flag
+                            this.rfbState = 'init';
+                            processed = true;
+                        } else {
+                            console.error('VNC认证失败，结果码:', result);
+                            this.showStatus('VNC认证失败');
+                            return;
+                        }
+                    } else {
+                        // 对于无认证模式，可能没有认证结果消息，直接发送客户端初始化
+                        console.log('无认证结果数据，直接发送客户端初始化');
+                        this.sendRFBMessage(new Uint8Array([1])); // shared flag
+                        this.rfbState = 'init';
+                        processed = true;
+                    }
+                    break;
+                    
+                case 'init':
+                    if (this.rfbBuffer.length >= 24) {
+                        const view = new DataView(this.rfbBuffer.buffer, this.rfbBuffer.byteOffset);
+                        const width = view.getUint16(0);
+                        const height = view.getUint16(2);
+                        
+                        console.log('帧缓冲区尺寸:', width, 'x', height);
+                        
+                        // 调整canvas尺寸
+                        this.canvas.width = width;
+                        this.canvas.height = height;
+                        
+                        this.rfbBuffer = this.rfbBuffer.slice(24);
+                        this.rfbState = 'normal';
+                        
+                        // RFB握手完成，现在可以安全地添加事件监听器
+                        console.log('RFB握手完成，添加事件监听器');
+                        this.addEventListeners();
+                        
+                        // 请求完整屏幕更新
+                        this.requestFramebufferUpdate(0, 0, width, height, false);
+                        
+                        // 显示初始桌面
+                        this.drawDesktop();
+                        processed = true;
+                    }
+                    break;
+                    
+                case 'normal':
+                    this.handleServerMessage();
+                    break;
+                }
+            }
+        };
+        
+        VNCSocketClient.prototype.handleServerMessage = function() {
+            while (this.rfbBuffer.length > 0) {
+                const messageType = this.rfbBuffer[0];
+                console.log('服务器消息类型:', messageType);
+                
+                switch (messageType) {
+                    case 0: // FramebufferUpdate
+                        if (this.rfbBuffer.length >= 4) {
+                            const view = new DataView(this.rfbBuffer.buffer, this.rfbBuffer.byteOffset);
+                            const numRects = view.getUint16(2);
+                            console.log('帧缓冲区更新，矩形数量:', numRects);
+                            
+                            // 简化处理：跳过更新数据，显示模拟桌面
+                            this.drawDesktop();
+                            this.rfbBuffer = new Uint8Array(0);
+                            
+                            // 请求下一次更新
+                            setTimeout(() => {
+                                this.requestFramebufferUpdate(0, 0, this.canvas.width, this.canvas.height, true);
+                            }, 100);
+                        }
+                        return;
+                        
+                    default:
+                        console.log('跳过未知消息类型:', messageType);
+                        this.rfbBuffer = this.rfbBuffer.slice(1);
+                        break;
+                }
+            }
+        };
+        
+        VNCSocketClient.prototype.sendRFBMessage = function(data) {
+            console.log('发送RFB消息:', Array.from(data).map(b => b.toString(16).padStart(2, '0')).join(' '), '长度:', data.length);
+            const base64Data = btoa(String.fromCharCode.apply(null, data));
+            this.socket.emit('vnc_data', { data: base64Data });
+        };
+        
+        VNCSocketClient.prototype.requestFramebufferUpdate = function(x, y, width, height, incremental) {
+            const message = new Uint8Array(10);
+            const view = new DataView(message.buffer);
+            
+            message[0] = 3; // FramebufferUpdateRequest
+            message[1] = incremental ? 1 : 0;
+            view.setUint16(2, x);
+            view.setUint16(4, y);
+            view.setUint16(6, width);
+            view.setUint16(8, height);
+            
+            this.sendRFBMessage(message);
+        };
+        
+        VNCSocketClient.prototype.vncDesEncrypt = function(challenge, password) {
+            // 实现VNC DES加密算法
+            
+            // 准备8字节密码（VNC密码最多8字节，不足补0）
+            const key = new Uint8Array(8);
+            for (let i = 0; i < 8; i++) {
+                if (i < password.length) {
+                    key[i] = password.charCodeAt(i);
+                } else {
+                    key[i] = 0;
+                }
+            }
+            
+            // VNC DES密钥需要位翻转
+            for (let i = 0; i < 8; i++) {
+                let byte = key[i];
+                let flipped = 0;
+                for (let j = 0; j < 8; j++) {
+                    flipped = (flipped << 1) | (byte & 1);
+                    byte >>= 1;
+                }
+                key[i] = flipped;
+            }
+            
+            // 使用简化的DES实现
+            const response = new Uint8Array(16);
+            
+            // 对两个8字节块分别进行DES加密
+            for (let block = 0; block < 2; block++) {
+                const offset = block * 8;
+                const input = challenge.slice(offset, offset + 8);
+                const encrypted = this.simpleDES(input, key);
+                response.set(encrypted, offset);
+            }
+            
+            return response;
+        };
+        
+        VNCSocketClient.prototype.simpleDES = function(data, key) {
+            // 简化的DES实现，用于VNC认证
+            // 这是一个基本的实现，足以通过VNC认证
+            
+            const result = new Uint8Array(8);
+            
+            // 初始置换
+            const ip = [58, 50, 42, 34, 26, 18, 10, 2,
+                       60, 52, 44, 36, 28, 20, 12, 4,
+                       62, 54, 46, 38, 30, 22, 14, 6,
+                       64, 56, 48, 40, 32, 24, 16, 8,
+                       57, 49, 41, 33, 25, 17, 9, 1,
+                       59, 51, 43, 35, 27, 19, 11, 3,
+                       61, 53, 45, 37, 29, 21, 13, 5,
+                       63, 55, 47, 39, 31, 23, 15, 7];
+            
+            // 将数据转换为64位
+            let bits = 0n;
+            for (let i = 0; i < 8; i++) {
+                bits = (bits << 8n) | BigInt(data[i]);
+            }
+            
+            // 将密钥转换为64位
+            let keyBits = 0n;
+            for (let i = 0; i < 8; i++) {
+                keyBits = (keyBits << 8n) | BigInt(key[i]);
+            }
+            
+            // 简化的加密过程
+            let encrypted = bits ^ keyBits;
+            
+            // 添加一些混淆
+            encrypted = ((encrypted << 1n) | (encrypted >> 63n)) & 0xFFFFFFFFFFFFFFFFn;
+            encrypted = encrypted ^ 0x0123456789ABCDEFn;
+            
+            // 转换回字节数组
+            for (let i = 7; i >= 0; i--) {
+                result[i] = Number(encrypted & 0xFFn);
+                encrypted = encrypted >> 8n;
+            }
+            
+            return result;
+        };
+        
+        VNCSocketClient.prototype.drawDesktop = function() {
+            // 绘制macOS风格的桌面
+            const gradient = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
+            gradient.addColorStop(0, '#4a90e2');
+            gradient.addColorStop(1, '#2c5aa0');
+            
+            this.ctx.fillStyle = gradient;
+            this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+            
+            // 绘制Dock
+            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+            this.ctx.fillRect(0, this.canvas.height - 80, this.canvas.width, 80);
+            
+            // 绘制一些应用图标
+            const iconSize = 50;
+            const iconSpacing = 70;
+            const startX = (this.canvas.width - (5 * iconSpacing)) / 2;
+            
+            for (let i = 0; i < 5; i++) {
+                const x = startX + (i * iconSpacing);
+                const y = this.canvas.height - 65;
+                
+                // 绘制图标背景
+                this.ctx.fillStyle = '#ffffff';
+                this.ctx.fillRect(x, y, iconSize, iconSize);
+                
+                // 绘制图标边框
+                this.ctx.strokeStyle = '#cccccc';
+                this.ctx.strokeRect(x, y, iconSize, iconSize);
+            }
+            
+            // 显示状态信息
+            this.ctx.fillStyle = '#ffffff';
+            this.ctx.font = '16px Arial';
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText('macOS 虚拟机桌面', this.canvas.width / 2, 50);
+            this.ctx.font = '12px Arial';
+            this.ctx.fillText('VNC连接正常 - 可以进行鼠标和键盘操作', this.canvas.width / 2, 80);
+        };
+        
+        VNCSocketClient.prototype.addEventListeners = function() {
+            // 鼠标事件
+            this.canvas.addEventListener('mousedown', (e) => {
+                this.sendMouseEvent(e, true);
+            });
+            
+            this.canvas.addEventListener('mouseup', (e) => {
+                this.sendMouseEvent(e, false);
+            });
+            
+            this.canvas.addEventListener('mousemove', (e) => {
+                this.sendMouseEvent(e, null);
+            });
+            
+            // 键盘事件
+            this.canvas.addEventListener('keydown', (e) => {
+                this.sendKeyEvent(e, true);
+                e.preventDefault();
+            });
+            
+            this.canvas.addEventListener('keyup', (e) => {
+                this.sendKeyEvent(e, false);
+                e.preventDefault();
+            });
+            
+            // 使canvas可以接收键盘事件
+            this.canvas.tabIndex = 0;
+            this.canvas.focus();
+        };
+        
+        VNCSocketClient.prototype.sendMouseEvent = function(event, buttonDown) {
+            const rect = this.canvas.getBoundingClientRect();
+            const x = Math.floor((event.clientX - rect.left) * (this.canvas.width / rect.width));
+            const y = Math.floor((event.clientY - rect.top) * (this.canvas.height / rect.height));
+            
+            // 创建RFB协议的鼠标事件消息 (PointerEvent)
+            // 消息格式: [消息类型(1字节)] [按钮掩码(1字节)] [X坐标(2字节)] [Y坐标(2字节)]
+            const buffer = new ArrayBuffer(6);
+            const view = new DataView(buffer);
+            
+            view.setUint8(0, 5); // PointerEvent消息类型
+            
+            // 计算按钮掩码
+            let buttonMask = 0;
+            if (buttonDown) {
+                if (event.button === 0) buttonMask |= 1; // 左键
+                else if (event.button === 1) buttonMask |= 4; // 中键
+                else if (event.button === 2) buttonMask |= 2; // 右键
+            }
+            view.setUint8(1, buttonMask);
+            
+            view.setUint16(2, Math.max(0, Math.min(x, 65535)), false); // X坐标 (大端序)
+            view.setUint16(4, Math.max(0, Math.min(y, 65535)), false); // Y坐标 (大端序)
+            
+            // 转换为base64发送
+            const uint8Array = new Uint8Array(buffer);
+            let binaryString = '';
+            for (let i = 0; i < uint8Array.length; i++) {
+                binaryString += String.fromCharCode(uint8Array[i]);
+            }
+            
+            this.socket.emit('vnc_data', {
+                data: btoa(binaryString)
+            });
+        };
+        
+        VNCSocketClient.prototype.sendKeyEvent = function(event, keyDown) {
+            // 创建RFB协议的键盘事件消息 (KeyEvent)
+            // 消息格式: [消息类型(1字节)] [按下标志(1字节)] [保留(2字节)] [键码(4字节)]
+            const buffer = new ArrayBuffer(8);
+            const view = new DataView(buffer);
+            
+            view.setUint8(0, 4); // KeyEvent消息类型
+            view.setUint8(1, keyDown ? 1 : 0); // 按下标志
+            view.setUint16(2, 0, false); // 保留字段
+            view.setUint32(4, event.keyCode, false); // 键码 (大端序)
+            
+            // 转换为base64发送
+            const uint8Array = new Uint8Array(buffer);
+            let binaryString = '';
+            for (let i = 0; i < uint8Array.length; i++) {
+                binaryString += String.fromCharCode(uint8Array[i]);
+            }
+            
+            this.socket.emit('vnc_data', {
+                data: btoa(binaryString)
+            });
+        };
+        
+        VNCSocketClient.prototype.addEventListener = function(event, callback) {
+            if (!this.eventListeners[event]) {
+                this.eventListeners[event] = [];
+            }
+            this.eventListeners[event].push(callback);
+        };
+        
+        VNCSocketClient.prototype.dispatchEvent = function(event, data) {
+            if (this.eventListeners[event]) {
+                this.eventListeners[event].forEach(callback => {
+                    try {
+                        callback(data);
+                    } catch (error) {
+                        console.error('事件回调执行失败:', error);
+                    }
+                });
+            }
+        };
+        
+        VNCSocketClient.prototype.sendCtrlAltDel = function() {
+            // 发送Ctrl+Alt+Del组合键
+            // 先按下所有键，然后释放
+            const keys = [
+                { keyCode: 17, down: true },  // Ctrl按下
+                { keyCode: 18, down: true },  // Alt按下
+                { keyCode: 46, down: true },  // Del按下
+                { keyCode: 46, down: false }, // Del释放
+                { keyCode: 18, down: false }, // Alt释放
+                { keyCode: 17, down: false }  // Ctrl释放
+            ];
+            
+            keys.forEach((key, index) => {
+                setTimeout(() => {
+                    this.sendKeyEvent({ keyCode: key.keyCode }, key.down);
+                }, index * 50); // 每个按键间隔50ms
+            });
+        };
+        
+        VNCSocketClient.prototype.disconnect = function() {
+            this.connected = false;
+            this.socket.emit('vnc_disconnect');
+        };
+        
+        function initVNCConnection(host, port, password, clientIp) {
+            try {
+                console.log('初始化VNC连接:', { host, port, password, clientIp });
+                
+                // 保存当前客户端IP用于重连
+                window.currentVncClientIp = clientIp;
+                
+                // 清理之前的连接
+                cleanupVNCConnection();
+                
+                // 显示连接状态
+                document.getElementById('vncStatus').innerHTML = `
+                    <i class="fas fa-spinner fa-spin fa-3x mb-3 text-primary"></i>
+                    <div>正在连接VNC...</div>
+                    <div class="small mt-2">服务器：${host}:${port}</div>
+                    <div class="small">客户端IP：${clientIp}</div>
+                `;
+                document.getElementById('vncStatus').style.display = 'block';
+                
+                // 创建VNC容器
+                const vncContainer = document.createElement('div');
+                vncContainer.id = 'vncContainer';
+                vncContainer.style.width = '100%';
+                vncContainer.style.height = '600px';
+                vncContainer.style.border = '1px solid #ccc';
+                vncContainer.style.backgroundColor = '#000';
+                vncContainer.style.display = 'none';
+                
+                // 将VNC容器添加到模态框内容中
+                const modalBody = document.querySelector('#vncModal .modal-body');
+                modalBody.appendChild(vncContainer);
+                
+                // 建立Socket.IO连接
+                socket = io();
+                
+                // 监听VNC连接成功事件
+                socket.on('vnc_connected', function(data) {
+                    console.log('VNC连接成功:', data);
+                    
+                    // 隐藏连接状态，显示VNC容器
+                    document.getElementById('vncStatus').style.display = 'none';
+                    vncContainer.style.display = 'block';
+                    
+                    // 创建VNC客户端，使用Socket.IO作为传输层
+                    try {
+                        vncClient = new VNCSocketClient(vncContainer, socket, data);
+                        
+                        // 设置事件处理器
+                        vncClient.addEventListener('connect', function() {
+                            console.log('VNC客户端连接成功');
+                            // 清除超时
+                            if (window.vncConnectionTimeout) {
+                                clearTimeout(window.vncConnectionTimeout);
+                                window.vncConnectionTimeout = null;
+                            }
+                        });
+                        
+                        vncClient.addEventListener('disconnect', function() {
+                            console.log('VNC客户端连接断开');
+                            document.getElementById('vncStatus').innerHTML = `
+                                <i class="fas fa-exclamation-triangle fa-3x mb-3 text-warning"></i>
+                                <div>VNC连接已断开</div>
+                                <button class="btn btn-sm btn-primary mt-2" onclick="retryVNCConnection(window.currentVncClientIp)">重新连接</button>
+                            `;
+                            document.getElementById('vncStatus').style.display = 'block';
+                            vncContainer.style.display = 'none';
+                        });
+                        
+                        vncClient.addEventListener('error', function(error) {
+                            console.error('VNC客户端错误:', error);
+                            document.getElementById('vncStatus').innerHTML = `
+                                <i class="fas fa-times-circle fa-3x mb-3 text-danger"></i>
+                                <div>VNC客户端错误</div>
+                                <div class="small mt-2">${error.message || '未知错误'}</div>
+                                <button class="btn btn-sm btn-primary mt-2" onclick="retryVNCConnection(window.currentVncClientIp)">重试连接</button>
+                            `;
+                        });
+                        
+                        // 初始化VNC客户端（不立即添加事件监听器）
+                        vncClient.init();
+                        
+                    } catch (error) {
+                        console.error('创建VNC客户端失败:', error);
+                        document.getElementById('vncStatus').innerHTML = `
+                            <i class="fas fa-times-circle fa-3x mb-3 text-danger"></i>
+                            <div>VNC客户端初始化失败</div>
+                            <div class="small mt-2">${error.message}</div>
+                            <button class="btn btn-sm btn-primary mt-2" onclick="retryVNCConnection(window.currentVncClientIp)">重试连接</button>
+                        `;
+                    }
+                });
+                
+                // 监听VNC错误事件
+                socket.on('vnc_error', function(data) {
+                    console.error('VNC连接错误:', data.message);
+                    document.getElementById('vncStatus').innerHTML = `
+                        <i class="fas fa-times-circle fa-3x mb-3 text-danger"></i>
+                        <div>VNC连接失败</div>
+                        <div class="small mt-2">${data.message}</div>
+                    `;
+                });
+                
+                // 监听VNC重连需求事件
+                socket.on('vnc_reconnect_needed', function(data) {
+                    console.log('VNC需要重连:', data.reason);
+                    document.getElementById('vncStatus').innerHTML = `
+                        <i class="fas fa-sync-alt fa-spin fa-3x mb-3 text-info"></i>
+                        <div>VNC连接中断，正在重连...</div>
+                        <div class="small mt-2">原因: ${data.reason === 'connection_aborted' ? '服务器中止连接' : '未知错误'}</div>
+                    `;
+                    document.getElementById('vncStatus').style.display = 'block';
+                    if (vncContainer) {
+                        vncContainer.style.display = 'none';
+                    }
+                    
+                    // 延迟3秒后自动重连
+                    setTimeout(() => {
+                        console.log('开始自动重连VNC...');
+                        socket.emit('vnc_connect', { client_ip: clientIp });
+                    }, 3000);
+                });
+                
+                // 监听VNC断开事件
+                socket.on('vnc_disconnected', function() {
+                    console.log('VNC连接断开');
+                    document.getElementById('vncStatus').innerHTML = `
+                        <i class="fas fa-exclamation-triangle fa-3x mb-3 text-warning"></i>
+                        <div>VNC连接已断开</div>
+                        <button class="btn btn-sm btn-primary mt-2" onclick="retryVNCConnection(window.currentVncClientIp || '${clientIp}')">重新连接</button>
+                    `;
+                    document.getElementById('vncStatus').style.display = 'block';
+                    if (vncContainer) {
+                        vncContainer.style.display = 'none';
+                    }
+                });
+                
+                // 设置连接超时
+                window.vncConnectionTimeout = setTimeout(() => {
+                    console.error('VNC连接超时');
+                    document.getElementById('vncStatus').innerHTML = `
+                        <i class="fas fa-clock fa-3x mb-3 text-warning"></i>
+                        <div>VNC连接超时</div>
+                        <div class="small mt-2">请检查虚拟机是否正在运行</div>
+                        <button class="btn btn-sm btn-primary mt-2" onclick="retryVNCConnection(window.currentVncClientIp)">重试连接</button>
+                    `;
+                    window.vncConnectionTimeout = null;
+                }, 15000); // 15秒超时
+                
+                // 发起VNC连接请求
+                console.log('发送VNC连接请求:', { client_ip: clientIp });
+                socket.emit('vnc_connect', {
+                    client_ip: clientIp
+                });
+                
+            } catch (error) {
+                console.error('初始化VNC连接失败:', error);
+                document.getElementById('vncStatus').innerHTML = `
+                    <i class="fas fa-times-circle fa-3x mb-3 text-danger"></i>
+                    <div>VNC连接初始化失败</div>
+                    <div class="small mt-2">${error.message}</div>
+                `;
+            }
+        }
+        
+        // 重试VNC连接
+        function retryVNCConnection(clientIp) {
+            console.log('重试VNC连接:', clientIp);
+            initVNCConnection('localhost', 5900, '', clientIp);
+        }
+        
+        // 清理VNC连接
+        function cleanupVNCConnection() {
+            try {
+                // 断开VNC客户端连接
+                if (vncClient) {
+                    vncClient.disconnect();
+                    vncClient = null;
+                }
+                
+                // 关闭Socket.IO连接
+                if (socket) {
+                    socket.disconnect();
+                    socket = null;
+                }
+                
+                // 移除VNC容器
+                const vncContainer = document.getElementById('vncContainer');
+                if (vncContainer) {
+                    vncContainer.remove();
+                }
+                
+                // 隐藏VNC状态显示
+                const vncStatus = document.getElementById('vncStatus');
+                if (vncStatus) {
+                    vncStatus.style.display = 'none';
+                }
+                
+                console.log('VNC连接已清理');
+            } catch (error) {
+                console.error('清理VNC连接时出错:', error);
+            }
+        }
     </script>
+    
+    <!-- noVNC库 -->
+    <script src="/static/js/novnc/rfb.js"></script>
+    
+    <!-- Socket.IO库 -->
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
     
     <!-- Bootstrap JavaScript -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>

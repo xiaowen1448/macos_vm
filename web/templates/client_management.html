@@ -2531,18 +2531,18 @@ ${'='.repeat(50)}`;
             }
 
             isAutoScanEnabled = true;
-            console.log('开启自动扫描，每30秒扫描一次');
+            console.log('开启自动扫描，每5分钟扫描一次');
 
             // 立即执行一次扫描
             scanClients();
 
-            // 设置定时器，每30秒扫描一次
+            // 设置定时器，每5分钟扫描一次
             autoScanInterval = setInterval(() => {
                 if (isAutoScanEnabled) {
                     console.log('自动扫描客户端...');
                     scanClients();
                 }
-            }, 30000);
+            }, 300000); // 5分钟
 
             updateAutoScanButton();
         }
