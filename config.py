@@ -76,9 +76,16 @@ logs_dir = r'logs'
 ScptRunner_path=f'/Users/wx/Documents/ScptRunner/'
 
 #ScptRunner客户日志路径
-
 ScptRunner_path=f'/Users/wx/Documents/ScptRunner/logs/'
 
 
 #appleid临时文本路径
 appleidtxt_path=f'/Users/wx/Documents/'
+
+
+# VNC端口起始值（用于端口递增分配）
+vnc_start_port = 5918
+# 当前分配的最大VNC端口（用于端口递增分配）
+
+# VNC默认密码
+vnc_default_password = '123456'

@@ -521,15 +521,21 @@
                                 <i class="fas fa-broadcast-tower me-2"></i>群发任务管理
                             </h4>
                             <div class="d-flex align-items-center flex-wrap gap-2">
-                                <button type="button" class="btn btn-primary" onclick="createNewTask()">
-                                    <i class="fas fa-plus me-2"></i>新建群发任务
+                                <button type="button" class="btn btn-primary" onclick="scanClients()">
+                                    <i class="fas fa-search me-2"></i>扫描客户端
+                                </button>
+                                <button type="button" class="btn btn-success btn-sm" id="autoScanBtn" onclick="toggleAutoScan()">
+                                    <i class="fas fa-play"></i> 开启自动扫描
+                                </button>
+                                <button type="button" class="btn btn-warning" onclick="batchSendMessage()" id="batchSendBtn" disabled>
+                                    <i class="fas fa-paper-plane me-2"></i>批量发信
                                 </button>
                                 <button type="button" class="btn btn-success" onclick="createNewTemplate()">
                                     <i class="fas fa-file-alt me-2"></i>新建模版
                                 </button>
                                 <div class="input-group" style="width: 300px; min-width: 250px;">
-                                    <input type="text" class="form-control" id="taskSearch" placeholder="搜索任务...">
-                                    <button class="btn btn-outline-secondary" type="button" onclick="searchTasks()">
+                                    <input type="text" class="form-control" id="clientSearch" placeholder="搜索客户端...">
+                                    <button class="btn btn-outline-secondary" type="button" onclick="searchClients()">
                                         <i class="fas fa-search"></i>
                                     </button>
                                 </div>
@@ -537,107 +543,42 @@
                         </div>
                     </div>
                     <div class="card-body">
-                        <!-- 任务统计信息 -->
-                        <div class="phone-stats" id="taskStats">
+                        <!-- 客户端统计信息 -->
+                        <div class="phone-stats" id="clientStats">
                             <div class="stat-card">
-                                <div class="stat-number" id="totalTasks">3</div>
-                                <div class="stat-label">总任务数</div>
+                                <div class="stat-number" id="totalClients">0</div>
+                                <div class="stat-label">总客户端数量</div>
                             </div>
                             <div class="stat-card">
-                                <div class="stat-number" id="runningTasks">1</div>
-                                <div class="stat-label">运行中</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-number" id="completedTasks">1</div>
-                                <div class="stat-label">已完成</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-number" id="waitingTasks">1</div>
-                                <div class="stat-label">等待中</div>
+                                <div class="stat-number" id="onlineClients">0</div>
+                                <div class="stat-label">在线数量</div>
                             </div>
                         </div>
                         
-                        <!-- 任务数据展示区域 -->
-                        <div class="phone-data-container" id="taskDataContainer">
+                        <!-- 客户端数据展示区域 -->
+                        <div class="phone-data-container" id="clientDataContainer">
                             <!-- 表格容器 -->
                             <div class="table-responsive" id="table-container">
                                 <table class="table table-hover phone-table">
                                     <thead>
                                         <tr>
+                                            <th width="50">
+                                                <input type="checkbox" id="selectAllCheckbox" class="form-check-input">
+                                            </th>
                                             <th><i class="fas fa-hashtag me-1"></i>序号</th>
-                                            <th><i class="fas fa-tasks me-1"></i>群发任务名称</th>
-                                            <th><i class="fas fa-desktop me-1"></i>客户端ID</th>
-                                            <th><i class="fas fa-clock me-1"></i>创建时间</th>
-                                            <th><i class="fas fa-info-circle me-1"></i>状态</th>
+                                            <th><i class="fas fa-tag me-1"></i>客户端版本</th>
+                                            <th><i class="fas fa-network-wired me-1"></i>客户端IP地址</th>
+                                            <th><i class="fas fa-signal me-1"></i>状态</th>
                                             <th><i class="fas fa-cogs me-1"></i>操作列</th>
-                                            <th><i class="fas fa-eye me-1"></i>任务详细信息</th>
                                         </tr>
                                     </thead>
-                                    <tbody id="taskList">
-                                    <tr>
-                                        <td>1</td>
-                                        <td>新年祝福群发</td>
-                                        <td>CLIENT_001</td>
-                                        <td>2025-01-15 10:30:00</td>
-                                        <td><span class="badge bg-success">运行中</span></td>
-                                        <td>
-                                            <button class="btn btn-sm btn-outline-warning me-1" onclick="pauseTask(1)" title="暂停">
-                                                <i class="fas fa-pause"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-outline-danger" onclick="stopTask(1)" title="停止">
-                                                <i class="fas fa-stop"></i>
-                                            </button>
-                                        </td>
-                                        <td>
-                                            <button class="btn btn-sm btn-outline-info" onclick="viewTaskDetail(1)" title="查看详情">
-                                                <i class="fas fa-eye"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>2</td>
-                                        <td>产品推广消息</td>
-                                        <td>CLIENT_002</td>
-                                        <td>2025-01-15 09:15:00</td>
-                                        <td><span class="badge bg-secondary">已停止</span></td>
-                                        <td>
-                                            <button class="btn btn-sm btn-outline-success me-1" onclick="startTask(2)" title="启动">
-                                                <i class="fas fa-play"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-outline-danger" onclick="deleteTask(2)" title="删除">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
-                                        </td>
-                                        <td>
-                                            <button class="btn btn-sm btn-outline-info" onclick="viewTaskDetail(2)" title="查看详情">
-                                                <i class="fas fa-eye"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>3</td>
-                                        <td>客户回访提醒</td>
-                                        <td>CLIENT_003</td>
-                                        <td>2025-01-14 16:45:00</td>
-                                        <td><span class="badge bg-warning">等待中</span></td>
-                                        <td>
-                                            <button class="btn btn-sm btn-outline-success me-1" onclick="startTask(3)" title="启动">
-                                                <i class="fas fa-play"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-outline-primary me-1" onclick="editTask(3)" title="编辑">
-                                                <i class="fas fa-edit"></i>
-                                            </button>
-                                            <button class="btn btn-sm btn-outline-danger" onclick="deleteTask(3)" title="删除">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
-                                        </td>
-                                        <td>
-                                            <button class="btn btn-sm btn-outline-info" onclick="viewTaskDetail(3)" title="查看详情">
-                                                <i class="fas fa-eye"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                </tbody>
+                                    <tbody id="clientList">
+                                        <tr>
+                                            <td colspan="7" class="text-center text-muted py-4">
+                                                <i class="fas fa-search me-2"></i>点击"扫描客户端"开始扫描网络中的ScptRunner客户端
+                                            </td>
+                                        </tr>
+                                    </tbody>
                             </table>
                         </div>
                             
@@ -715,8 +656,6 @@
                             <label for="taskTemplate" class="form-label">选择模版</label>
                             <select class="form-control" id="taskTemplate">
                                 <option value="">请选择模版</option>
-                                <option value="1">新年祝福模版</option>
-                                <option value="2">产品推广模版</option>
                             </select>
                         </div>
                         <div class="mb-3">
@@ -756,11 +695,10 @@
                             <textarea class="form-control" id="templateContent" rows="6" placeholder="请输入模版内容"></textarea>
                         </div>
 
-                         <div class="mb-3">
-                            <label for="templateContent" class="form-label">模版附件</label>
-                              <button class="btn btn-success me-2" >
-                                    <i class="fas fa-upload me-2"></i>上传附件
-                              </button>
+                        <div class="mb-3">
+                            <label for="templateAttachment" class="form-label">模版附件</label>
+                            <input type="file" class="form-control" id="templateAttachment" name="templateAttachment" accept="*/*">
+                            <small class="form-text text-muted">支持上传单个附件文件</small>
                         </div>
                         
                     </form>
@@ -790,13 +728,165 @@
         </div>
     </div>
 
+    <!-- 批量发信模态框 -->
+    <div class="modal fade" id="batchSendModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">批量发信</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <!-- 左侧：模板选择和预览 -->
+                        <div class="col-md-6">
+                            <div class="card" style="height: 350px;">
+                                <div class="card-header py-2">
+                                    <h6 class="mb-0 small">发信模板</h6>
+                                </div>
+                                <div class="card-body p-2">
+                                    <div class="mb-2">
+                                        <label for="batchTemplate" class="form-label small">选择模板</label>
+                                        <select class="form-control form-control-sm" id="batchTemplate" onchange="previewTemplate()">
+                                            <option value="">请选择模板</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <!-- 文本预览 -->
+                                    <div class="mb-2">
+                                        <label class="form-label small">文本内容预览</label>
+                                        <div class="border rounded p-2 small" id="textPreview" style="height: 120px; overflow-y: auto; background-color: #f8f9fa;">
+                                            <span class="text-muted">请选择模板查看预览</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- 附件预览 -->
+                                    <div class="mb-2">
+                                        <label class="form-label small">附件预览</label>
+                                        <div class="border rounded p-2 small" id="attachmentPreview" style="height: 80px; overflow-y: auto; background-color: #f8f9fa;">
+                                            <span class="text-muted">暂无附件</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 右侧：选中的客户端信息 -->
+                        <div class="col-md-6">
+                            <div class="card" style="height: 350px;">
+                                <div class="card-header py-2">
+                                    <h6 class="mb-0 small">选中的客户端 (<span id="selectedClientCount">0</span>)</h6>
+                                </div>
+                                <div class="card-body p-2">
+                                    <div id="selectedClientsInfo" style="height: 300px; overflow-y: auto;">
+                                        <div class="text-muted text-center py-3 small">
+                                            暂无选中的客户端
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="executeBatchSend()" id="executeSendBtn">执行</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- VNC连接模态框 -->
+    <div class="modal fade" id="vncModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-desktop me-2"></i>VNC远程连接
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-0">
+                    <!-- 加载状态 -->
+                    <div id="vncLoadingDiv" class="text-center py-5" style="display: none;">
+                        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                            <span class="visually-hidden">连接中...</span>
+                        </div>
+                        <p class="mt-3 text-muted">正在建立VNC连接，请稍候...</p>
+                    </div>
+                    
+                    <!-- VNC连接内容 -->
+                    <div id="vncContentDiv" style="display: none;">
+                        <!-- 工具栏 -->
+                        <div class="vnc-toolbar bg-light border-bottom px-3 py-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="vnc-info">
+                                    <small class="text-muted">
+                                        <i class="fas fa-server me-1"></i>
+                                        <span id="vncHostInfo">连接信息</span>
+                                    </small>
+                                </div>
+                                <div class="vnc-controls">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary me-2" onclick="refreshVNC()" title="刷新连接">
+                                        <i class="fas fa-sync-alt"></i> 刷新
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-warning me-2" onclick="sendCtrlAltDel()" title="发送Ctrl+Alt+Del">
+                                        <i class="fas fa-keyboard"></i> Ctrl+Alt+Del
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="disconnectVNC()" title="断开连接">
+                                        <i class="fas fa-times"></i> 断开
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- VNC显示区域 -->
+                        <div id="vncViewerDiv" class="vnc-viewer position-relative">
+                            <div class="vnc-screen bg-dark d-flex align-items-center justify-content-center" style="height: 600px;">
+                                <div class="text-center text-light">
+                                    <i class="fas fa-desktop fa-3x mb-3" style="opacity: 0.5;"></i>
+                                    <p class="mb-0">VNC连接界面</p>
+                                    <small class="text-muted">远程桌面将在此处显示</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 错误信息 -->
+                    <div id="vncErrorDiv" class="alert alert-danger m-3" style="display: none;">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <div>
+                                <strong>连接失败</strong>
+                                <div id="vncErrorMessage" class="mt-1"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light">
+                    <small class="text-muted me-auto">
+                        <i class="fas fa-info-circle me-1"></i>
+                        提示：可使用工具栏按钮进行远程操作
+                    </small>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // 新建群发任务
-        function createNewTask() {
+        async function createNewTask() {
             // 加载客户端和手机号列表
             loadClientList();
             loadPhoneList();
+            
+            // 确保模板列表已加载
+            if (!globalTemplates || globalTemplates.length === 0) {
+                await loadTemplates();
+            }
+            
             new bootstrap.Modal(document.getElementById('newTaskModal')).show();
         }
 
@@ -915,24 +1005,428 @@
 
 
         // 保存新模版
-        function saveNewTemplate() {
-            const name = document.getElementById('templateName').value;
+        async function saveNewTemplate() {
+            const name = document.getElementById('templateName').value.trim();
             const content = document.getElementById('templateContent').value;
+            const attachmentInput = document.getElementById('templateAttachment');
             
             if (!name || !content) {
                 alert('请填写模版名称和内容');
                 return;
             }
             
-            alert('模版保存成功！');
-            bootstrap.Modal.getInstance(document.getElementById('newTemplateModal')).hide();
-            // 这里可以添加实际的保存逻辑
+            try {
+                // 首先保存模板文本内容
+                const templateData = {
+                    name: name,
+                    content: content
+                };
+                
+                const templateResponse = await fetch('/api/mass_messaging/templates', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(templateData)
+                });
+                
+                const templateResult = await templateResponse.json();
+                
+                if (!templateResult.success) {
+                    alert('保存模板失败: ' + templateResult.message);
+                    return;
+                }
+                
+                // 如果有附件，上传附件
+                if (attachmentInput.files.length > 0) {
+                    const formData = new FormData();
+                    formData.append('template_name', name);
+                    formData.append('file', attachmentInput.files[0]);
+                    
+                    const attachmentResponse = await fetch('/api/mass_messaging/templates/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const attachmentResult = await attachmentResponse.json();
+                    
+                    if (!attachmentResult.success) {
+                        alert('模板保存成功，但附件上传失败: ' + attachmentResult.message);
+                    } else {
+                        alert('模板和附件保存成功！');
+                    }
+                } else {
+                    alert('模板保存成功！');
+                }
+                
+                bootstrap.Modal.getInstance(document.getElementById('newTemplateModal')).hide();
+                // 清空表单
+                document.getElementById('newTemplateForm').reset();
+                // 重新加载模板列表
+                loadTemplates();
+                
+            } catch (error) {
+                console.error('保存模版失败:', error);
+                alert('保存失败: 网络错误');
+            }
         }
 
-        // 搜索任务
-        function searchTasks() {
-            const keyword = document.getElementById('taskSearch').value;
-            console.log('搜索任务:', keyword);
+        // 扫描客户端
+        async function scanClients() {
+            const tbody = document.querySelector('#clientList');
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center"><i class="fas fa-spinner fa-spin me-2"></i>正在扫描客户端...</td></tr>';
+            
+            try {
+                const data = await getClientStatus();
+                
+                if (data && data.clients) {
+                    displayClients(data.clients);
+                    updateClientStats(data.clients);
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">扫描失败: ' + (data?.message || '未知错误') + '</td></tr>';
+                }
+            } catch (error) {
+                console.error('扫描客户端失败:', error);
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">扫描失败: 网络错误</td></tr>';
+            }
+        }
+
+        // 显示客户端列表
+        function displayClients(clients) {
+            const tbody = document.querySelector('#clientList');
+            
+            if (clients.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">未发现任何客户端</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = clients.map((client, index) => `
+                <tr>
+                    <td>
+                        <input type="checkbox" class="form-check-input client-checkbox" 
+                               value="${client.ip}" data-client='${JSON.stringify(client)}' 
+                               onchange="updateBatchSendButton()">
+                    </td>
+                    <td>${index + 1}</td>
+                    <td>${client.version || '未知版本'}</td>
+                    <td>${client.ip}</td>
+                    <td>
+                        <span class="badge ${client.status === 'online' ? 'bg-success' : 'bg-secondary'}">
+                            ${client.status === 'online' ? '在线' : '离线'}
+                        </span>
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary me-1" onclick="viewClientDetail('${client.ip}')">
+                            <i class="fas fa-eye"></i> 详情
+                        </button>
+                        <button class="btn btn-sm btn-outline-success" onclick="connectVNC('${client.ip}')" title="VNC登录">
+                            <i class="fas fa-desktop"></i> VNC
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // 更新客户端统计信息
+        function updateClientStats(clients) {
+            const totalClients = clients.length;
+            const onlineClients = clients.filter(c => c.status === 'online').length;
+            
+            document.getElementById('totalClients').textContent = totalClients;
+            document.getElementById('onlineClients').textContent = onlineClients;
+        }
+
+        // 更新批量发信按钮状态
+        function updateBatchSendButton() {
+            const checkboxes = document.querySelectorAll('.client-checkbox:checked');
+            const onlineCheckboxes = Array.from(checkboxes).filter(cb => {
+                const clientData = JSON.parse(cb.dataset.client);
+                return clientData.status === 'online';
+            });
+            
+            const batchSendBtn = document.getElementById('batchSendBtn');
+            batchSendBtn.disabled = onlineCheckboxes.length === 0;
+        }
+
+        // 批量发信
+        async function batchSendMessage() {
+            const checkboxes = document.querySelectorAll('.client-checkbox:checked');
+            const selectedClients = Array.from(checkboxes)
+                .map(cb => JSON.parse(cb.dataset.client))
+                .filter(client => client.status === 'online');
+            
+            if (selectedClients.length === 0) {
+                alert('请选择至少一个在线的客户端');
+                return;
+            }
+            
+            // 显示选中的客户端信息
+            displaySelectedClients(selectedClients);
+            
+            // 确保模板列表已加载
+            if (globalTemplates.length === 0) {
+                await loadTemplates();
+            }
+            
+            // 显示批量发信模态框
+            new bootstrap.Modal(document.getElementById('batchSendModal')).show();
+        }
+
+        // 显示选中的客户端信息
+        function displaySelectedClients(clients) {
+            const container = document.getElementById('selectedClientsInfo');
+            const countSpan = document.getElementById('selectedClientCount');
+            
+            countSpan.textContent = clients.length;
+            
+            container.innerHTML = clients.map(client => `
+                <div class="border rounded p-2 mb-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>${client.ip}</strong>
+                            <small class="text-muted d-block">版本: ${client.version || '未知'}</small>
+                        </div>
+                        <span class="badge bg-success">在线</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // 全局模板数据
+        let globalTemplates = [];
+        
+        // 加载模板列表
+        async function loadTemplates() {
+            try {
+                const data = await getTemplateList();
+                
+                if (data && data.data) {
+                    globalTemplates = data.data;
+                    updateTemplateSelect();
+                } else {
+                    console.error('加载模板失败:', data?.message);
+                    alert('加载模板失败: ' + (data?.message || '未知错误'));
+                }
+            } catch (error) {
+                console.error('加载模板失败:', error);
+                alert('加载模板失败: ' + error.message);
+            }
+        }
+        
+        // 更新模板下拉选择
+        function updateTemplateSelect() {
+            // 更新批量发信模态框中的模板选择
+            const batchSelect = document.getElementById('batchTemplate');
+            if (batchSelect) {
+                batchSelect.innerHTML = '<option value="">请选择模板</option>';
+                
+                globalTemplates.forEach(template => {
+                    const option = document.createElement('option');
+                    option.value = template.id;
+                    option.textContent = template.name;
+                    batchSelect.appendChild(option);
+                });
+            }
+            
+            // 更新新建任务模态框中的模板选择
+            const taskSelect = document.getElementById('taskTemplate');
+            if (taskSelect) {
+                taskSelect.innerHTML = '<option value="">请选择模版</option>';
+                
+                globalTemplates.forEach(template => {
+                    const option = document.createElement('option');
+                    option.value = template.id;
+                    option.textContent = template.name;
+                    taskSelect.appendChild(option);
+                });
+            }
+        }
+        
+        // 模板预览
+        function previewTemplate() {
+            const templateId = document.getElementById('batchTemplate').value;
+            const textPreview = document.getElementById('textPreview');
+            const attachmentPreview = document.getElementById('attachmentPreview');
+            
+            if (!templateId) {
+                textPreview.innerHTML = '<span class="text-muted">请选择模板查看预览</span>';
+                attachmentPreview.innerHTML = '<span class="text-muted">暂无附件</span>';
+                return;
+            }
+            
+            // 从全局模板数据中查找
+            const template = globalTemplates.find(t => t.id == templateId);
+            if (template) {
+                textPreview.innerHTML = template.content || '<span class="text-muted">无文本内容</span>';
+                
+                if (template.has_attachment && template.attachment_name) {
+                    attachmentPreview.innerHTML = `
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="fas fa-file me-2"></i>
+                            <span>${template.attachment_name}</span>
+                        </div>
+                    `;
+                } else {
+                    attachmentPreview.innerHTML = '<span class="text-muted">暂无附件</span>';
+                }
+            } else {
+                textPreview.innerHTML = '<span class="text-danger">模板不存在</span>';
+                attachmentPreview.innerHTML = '<span class="text-muted">暂无附件</span>';
+            }
+        }
+
+        // 执行批量发信
+        function executeBatchSend() {
+            const templateId = document.getElementById('batchTemplate').value;
+            
+            if (!templateId) {
+                alert('请选择发信模板');
+                return;
+            }
+            
+            if (confirm('确定要执行批量发信吗？')) {
+                alert('批量发信任务已提交，请在任务列表中查看执行状态');
+                bootstrap.Modal.getInstance(document.getElementById('batchSendModal')).hide();
+            }
+        }
+
+        // 查看客户端详情
+        function viewClientDetail(clientIp) {
+            alert(`查看客户端详情: ${clientIp}\n功能开发中...`);
+        }
+
+        // VNC连接
+        async function connectVNC(clientIp) {
+            console.log('连接VNC:', clientIp);
+            
+            // 显示加载状态
+            const loadingContent = `
+                <div class="text-center py-4">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">连接中...</span>
+                    </div>
+                    <div class="mt-2">正在读取VMX文件并建立VNC连接...</div>
+                </div>
+            `;
+            
+            document.getElementById('vncContentDiv').innerHTML = loadingContent;
+            const modal = new bootstrap.Modal(document.getElementById('vncModal'));
+            modal.show();
+            
+            try {
+                // 调用后端API获取VNC连接信息
+                const response = await fetch('/api/vnc/connect', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        client_ip: clientIp
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // 显示VNC连接界面
+                    const vncContent = `
+                        <div class="vnc-container">
+                            <div class="vnc-info mb-3">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6>连接信息</h6>
+                                        <table class="table table-sm">
+                                            <tr><td>客户端IP:</td><td>${clientIp}</td></tr>
+                                            <tr><td>VNC端口:</td><td>${data.vnc_port}</td></tr>
+                                            <tr><td>VMX文件:</td><td>${data.vmx_file}</td></tr>
+                                            <tr><td>连接状态:</td><td><span class="badge bg-success">已连接</span></td></tr>
+                                        </table>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6>操作控制</h6>
+                                        <div class="btn-group-vertical d-grid gap-2">
+                                            <button class="btn btn-sm btn-outline-primary" onclick="refreshVNC()">
+                                                <i class="fas fa-sync-alt"></i> 刷新连接
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-warning" onclick="sendCtrlAltDel()">
+                                                <i class="fas fa-keyboard"></i> Ctrl+Alt+Del
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-danger" onclick="disconnectVNC()">
+                                                <i class="fas fa-times"></i> 断开连接
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="vnc-viewer">
+                                <div class="border" style="height: 500px; background-color: #000; position: relative; overflow: hidden;">
+                                    <div class="text-center text-white" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+                                        <i class="fas fa-desktop fa-3x mb-3"></i>
+                                        <div>VNC连接已建立</div>
+                                        <div class="small mt-2">端口: ${data.vnc_port}</div>
+                                        <div class="small">密码: ${data.vnc_password ? '已设置' : '无密码'}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    document.getElementById('vncContentDiv').innerHTML = vncContent;
+                } else {
+                    // 显示错误信息
+                    const errorContent = `
+                        <div class="alert alert-danger" role="alert">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            VNC连接失败: ${data.message}
+                        </div>
+                        <div class="text-muted">
+                            <h6>可能的原因:</h6>
+                            <ul>
+                                <li>VMX文件不存在或无法读取</li>
+                                <li>VNC配置未启用</li>
+                                <li>虚拟机未运行</li>
+                                <li>网络连接问题</li>
+                            </ul>
+                        </div>
+                    `;
+                    document.getElementById('vncContentDiv').innerHTML = errorContent;
+                }
+            } catch (error) {
+                console.error('VNC连接失败:', error);
+                const errorContent = `
+                    <div class="alert alert-danger" role="alert">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        VNC连接失败: ${error.message}
+                    </div>
+                `;
+                document.getElementById('vncContentDiv').innerHTML = errorContent;
+            }
+        }
+
+        // 刷新VNC连接
+        function refreshVNC() {
+            console.log('刷新VNC连接');
+            alert('VNC连接已刷新');
+        }
+
+        // 发送Ctrl+Alt+Del
+        function sendCtrlAltDel() {
+            console.log('发送Ctrl+Alt+Del');
+            alert('已发送Ctrl+Alt+Del组合键');
+        }
+
+        // 断开VNC连接
+        function disconnectVNC() {
+            if (confirm('确定要断开VNC连接吗？')) {
+                bootstrap.Modal.getInstance(document.getElementById('vncModal')).hide();
+                console.log('VNC连接已断开');
+            }
+        }
+
+        // 搜索客户端
+        function searchClients() {
+            const keyword = document.getElementById('clientSearch').value;
+            console.log('搜索客户端:', keyword);
             // 这里添加搜索逻辑
         }
 
@@ -983,55 +1477,120 @@
         function viewTaskDetail(taskId) {
             console.log('查看任务详情:', taskId);
             
-            // 模拟任务详情数据
-            const taskDetail = `
-                <div class="row">
-                    <div class="col-md-6">
-                        <h6>基本信息</h6>
-                        <table class="table table-sm">
-                            <tr><td>任务ID:</td><td>${taskId}</td></tr>
-                            <tr><td>任务名称:</td><td>新年祝福群发</td></tr>
-                            <tr><td>客户端ID:</td><td>CLIENT_001</td></tr>
-                            <tr><td>创建时间:</td><td>2025-01-15 10:30:00</td></tr>
-                            <tr><td>状态:</td><td><span class="badge bg-success">运行中</span></td></tr>
-                        </table>
+            // 显示加载状态
+            const loadingContent = `
+                <div class="text-center py-4">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">加载中...</span>
                     </div>
-                    <div class="col-md-6">
-                        <h6>执行统计</h6>
-                        <table class="table table-sm">
-                            <tr><td>总数:</td><td>1000</td></tr>
-                            <tr><td>已发送:</td><td>856</td></tr>
-                            <tr><td>成功:</td><td>823</td></tr>
-                            <tr><td>失败:</td><td>33</td></tr>
-                            <tr><td>成功率:</td><td>96.1%</td></tr>
-                        </table>
-                    </div>
-                </div>
-                <div class="mt-3">
-                    <h6>消息内容</h6>
-                    <div class="border p-3 bg-light">
-                        亲爱的{姓名}，新年快乐！祝您在新的一年里身体健康，工作顺利，阖家幸福！
-                    </div>
-                </div>
-                <div class="mt-3">
-                    <h6>执行日志</h6>
-                    <div class="border p-3" style="height: 200px; overflow-y: auto; background-color: #f8f9fa;">
-                        <small>
-                            2025-01-15 10:30:01 - 任务开始执行<br>
-                            2025-01-15 10:30:05 - 开始发送消息到手机号 138****1234<br>
-                            2025-01-15 10:30:06 - 消息发送成功 138****1234<br>
-                            2025-01-15 10:30:07 - 开始发送消息到手机号 139****5678<br>
-                            2025-01-15 10:30:08 - 消息发送成功 139****5678<br>
-                            2025-01-15 10:30:09 - 开始发送消息到手机号 136****9012<br>
-                            2025-01-15 10:30:10 - 消息发送失败 136****9012 - 号码异常<br>
-                            ...
-                        </small>
-                    </div>
+                    <div class="mt-2">正在获取任务详情和截图...</div>
                 </div>
             `;
             
-            document.getElementById('taskDetailContent').innerHTML = taskDetail;
-            new bootstrap.Modal(document.getElementById('taskDetailModal')).show();
+            document.getElementById('taskDetailContent').innerHTML = loadingContent;
+            const modal = new bootstrap.Modal(document.getElementById('taskDetailModal'));
+            modal.show();
+            
+            // 获取虚拟机IP（这里需要根据实际情况获取，暂时使用示例IP）
+            const vmIp = '192.168.119.137'; // 可以从客户端列表或其他地方获取
+            
+            // 调用截图API
+            fetch('/api/task_screenshot', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    task_id: taskId,
+                    vm_ip: vmIp
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                let screenshotSection = '';
+                
+                if (data.success) {
+                    screenshotSection = `
+                        <div class="mt-3">
+                            <h6>虚拟机截图</h6>
+                            <div class="border p-3 text-center">
+                                <img src="${data.screenshot_path}" alt="任务截图" class="img-fluid" style="max-width: 100%; max-height: 400px; border: 1px solid #ddd; border-radius: 4px;">
+                                <div class="mt-2 text-muted small">截图时间: ${data.timestamp}</div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    screenshotSection = `
+                        <div class="mt-3">
+                            <h6>虚拟机截图</h6>
+                            <div class="border p-3 text-center text-danger">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                截图获取失败: ${data.message}
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                // 构建完整的任务详情内容
+                const taskDetail = `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>基本信息</h6>
+                            <table class="table table-sm">
+                                <tr><td>任务ID:</td><td>${taskId}</td></tr>
+                                <tr><td>任务名称:</td><td>新年祝福群发</td></tr>
+                                <tr><td>虚拟机IP:</td><td>${vmIp}</td></tr>
+                                <tr><td>创建时间:</td><td>2025-01-15 10:30:00</td></tr>
+                                <tr><td>状态:</td><td><span class="badge bg-success">运行中</span></td></tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>执行统计</h6>
+                            <table class="table table-sm">
+                                <tr><td>总数:</td><td>1000</td></tr>
+                                <tr><td>已发送:</td><td>856</td></tr>
+                                <tr><td>成功:</td><td>823</td></tr>
+                                <tr><td>失败:</td><td>33</td></tr>
+                                <tr><td>成功率:</td><td>96.1%</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                    ${screenshotSection}
+                    <div class="mt-3">
+                        <h6>消息内容</h6>
+                        <div class="border p-3 bg-light">
+                            亲爱的{姓名}，新年快乐！祝您在新的一年里身体健康，工作顺利，阖家幸福！
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <h6>执行日志</h6>
+                        <div class="border p-3" style="height: 200px; overflow-y: auto; background-color: #f8f9fa;">
+                            <small>
+                                2025-01-15 10:30:01 - 任务开始执行<br>
+                                2025-01-15 10:30:05 - 开始发送消息到手机号 138****1234<br>
+                                2025-01-15 10:30:06 - 消息发送成功 138****1234<br>
+                                2025-01-15 10:30:07 - 开始发送消息到手机号 139****5678<br>
+                                2025-01-15 10:30:08 - 消息发送成功 139****5678<br>
+                                2025-01-15 10:30:09 - 开始发送消息到手机号 136****9012<br>
+                                2025-01-15 10:30:10 - 消息发送失败 136****9012 - 号码异常<br>
+                                ...
+                            </small>
+                        </div>
+                    </div>
+                `;
+                
+                document.getElementById('taskDetailContent').innerHTML = taskDetail;
+            })
+            .catch(error => {
+                console.error('获取任务详情失败:', error);
+                const errorContent = `
+                    <div class="alert alert-danger" role="alert">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        获取任务详情失败: ${error.message}
+                    </div>
+                `;
+                document.getElementById('taskDetailContent').innerHTML = errorContent;
+            });
         }
 
         // 分页功能
@@ -1057,9 +1616,136 @@
             // 这里添加改变页面大小的逻辑
         }
 
+        // 自动扫描定时器
+        let autoScanInterval = null;
+        let isAutoScanEnabled = false;
+        
+        // 开启自动扫描
+        function startAutoScan() {
+            if (autoScanInterval) {
+                clearInterval(autoScanInterval);
+            }
+            
+            isAutoScanEnabled = true;
+            console.log('开启自动扫描，每30秒扫描一次');
+            
+            // 立即执行一次扫描
+            scanClients();
+            
+            // 设置定时器，每30秒扫描一次
+            autoScanInterval = setInterval(() => {
+                if (isAutoScanEnabled) {
+                    console.log('自动扫描客户端...');
+                    scanClients();
+                }
+            }, 30000); // 30秒
+            
+            // 更新按钮状态
+            updateAutoScanButton();
+        }
+        
+        // 停止自动扫描
+        function stopAutoScan() {
+            if (autoScanInterval) {
+                clearInterval(autoScanInterval);
+                autoScanInterval = null;
+            }
+            
+            isAutoScanEnabled = false;
+            console.log('停止自动扫描');
+            
+            // 更新按钮状态
+            updateAutoScanButton();
+        }
+        
+        // 切换自动扫描状态
+        function toggleAutoScan() {
+            if (isAutoScanEnabled) {
+                stopAutoScan();
+            } else {
+                startAutoScan();
+            }
+        }
+        
+        // 更新自动扫描按钮状态
+        function updateAutoScanButton() {
+            const autoScanBtn = document.getElementById('autoScanBtn');
+            if (autoScanBtn) {
+                if (isAutoScanEnabled) {
+                    autoScanBtn.innerHTML = '<i class="fas fa-stop"></i> 停止自动扫描';
+                    autoScanBtn.className = 'btn btn-warning btn-sm';
+                } else {
+                    autoScanBtn.innerHTML = '<i class="fas fa-play"></i> 开启自动扫描';
+                    autoScanBtn.className = 'btn btn-success btn-sm';
+                }
+            }
+        }
+        
+        // 异步获取JSON数据的通用函数
+        async function fetchJsonData(url, options = {}) {
+            try {
+                const defaultOptions = {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                };
+                
+                const finalOptions = { ...defaultOptions, ...options };
+                
+                const response = await fetch(url, finalOptions);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP错误: ${response.status} ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                return { success: true, data };
+                
+            } catch (error) {
+                console.error(`获取数据失败 (${url}):`, error);
+                return { success: false, error: error.message };
+            }
+        }
+        
+        // 异步获取客户端状态
+        async function getClientStatus() {
+            const result = await fetchJsonData('/api/scan_clients', {
+                method: 'POST'
+            });
+            
+            if (result.success) {
+                return result.data;
+            } else {
+                console.error('获取客户端状态失败:', result.error);
+                return null;
+            }
+        }
+        
+        // 异步获取模板列表
+        async function getTemplateList() {
+            const result = await fetchJsonData('/api/mass_messaging/templates');
+            
+            if (result.success) {
+                return result.data;
+            } else {
+                console.error('获取模板列表失败:', result.error);
+                return null;
+            }
+        }
+        
         // 页面加载完成后初始化
         document.addEventListener('DOMContentLoaded', function() {
             console.log('群发管理界面已加载');
+            
+            // 自动开始扫描客户端
+            scanClients();
+            
+            // 加载模板列表
+            loadTemplates();
+            
+            // 开启自动扫描
+            startAutoScan();
             
             // 保持发信管理菜单栏展开状态
             // 移除了自动关闭菜单的功能，让用户手动控制菜单展开/折叠

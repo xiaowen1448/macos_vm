@@ -952,6 +952,9 @@
                         <button id="scanBtn" class="btn btn-scan me-3">
                             <i class="fas fa-search me-2"></i>手动扫描客户端
                         </button>
+                        <button type="button" class="btn btn-success btn-sm" id="autoScanBtn" onclick="toggleAutoScan()">
+                            <i class="fas fa-play"></i> 开启自动扫描
+                        </button>
                         <div class="loading" id="scanLoading">
                             <div class="spinner-border spinner-border-sm text-primary me-2" role="status">
                                 <span class="visually-hidden">扫描中...</span>
@@ -1240,6 +1243,10 @@
         let orderedResults = {}; // 存储按顺序的结果
         let nextDisplayOrder = 1; // 下一个要显示的顺序号
 
+        // 自动扫描定时器
+        let autoScanInterval = null;
+        let isAutoScanEnabled = false;
+
         // 页面加载完成后初始化
         document.addEventListener('DOMContentLoaded', function() {
             initializeEventListeners();
@@ -1247,6 +1254,10 @@
             highlightCurrentPage();
             // 初始化IM测试按钮状态
             updateImTestButtonState();
+            // 自动扫描客户端
+            scanClients();
+            // 开启自动扫描
+            startAutoScan();
         });
 
         function initializeEventListeners() {
@@ -2510,6 +2521,65 @@ ${'='.repeat(50)}`;
             const selectedCountElement = document.getElementById('selectedCount');
             if (selectedCountElement) {
                 selectedCountElement.textContent = selectedClients.size;
+            }
+        }
+
+        // 开启自动扫描
+        function startAutoScan() {
+            if (autoScanInterval) {
+                clearInterval(autoScanInterval);
+            }
+
+            isAutoScanEnabled = true;
+            console.log('开启自动扫描，每30秒扫描一次');
+
+            // 立即执行一次扫描
+            scanClients();
+
+            // 设置定时器，每30秒扫描一次
+            autoScanInterval = setInterval(() => {
+                if (isAutoScanEnabled) {
+                    console.log('自动扫描客户端...');
+                    scanClients();
+                }
+            }, 30000);
+
+            updateAutoScanButton();
+        }
+
+        // 停止自动扫描
+        function stopAutoScan() {
+            if (autoScanInterval) {
+                clearInterval(autoScanInterval);
+                autoScanInterval = null;
+            }
+
+            isAutoScanEnabled = false;
+            console.log('停止自动扫描');
+
+            updateAutoScanButton();
+        }
+
+        // 切换自动扫描状态
+        function toggleAutoScan() {
+            if (isAutoScanEnabled) {
+                stopAutoScan();
+            } else {
+                startAutoScan();
+            }
+        }
+
+        // 更新自动扫描按钮状态
+        function updateAutoScanButton() {
+            const autoScanBtn = document.getElementById('autoScanBtn');
+            if (autoScanBtn) {
+                if (isAutoScanEnabled) {
+                    autoScanBtn.innerHTML = '<i class="fas fa-stop"></i> 停止自动扫描';
+                    autoScanBtn.className = 'btn btn-warning btn-sm';
+                } else {
+                    autoScanBtn.innerHTML = '<i class="fas fa-play"></i> 开启自动扫描';
+                    autoScanBtn.className = 'btn btn-success btn-sm';
+                }
             }
         }
 

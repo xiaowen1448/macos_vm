@@ -1472,14 +1472,67 @@ def mass_messaging_page():
 @app.route('/api/mass_messaging/templates', methods=['GET'])
 @login_required
 def api_get_templates():
-    """获取发送模板列表"""
+    """获取发送模板列表 - 扫描txt和file目录，同名文件作为同一模板"""
     try:
-        # 这里应该从数据库或文件中获取模板数据
-        templates = [
-            {'id': 1, 'name': '营销模板1', 'content': '您好，我们有新产品推荐...', 'type': 'marketing'},
-            {'id': 2, 'name': '通知模板1', 'content': '重要通知：...', 'type': 'notification'}
-        ]
+        templates = []
+        template_dir = os.path.join(os.path.dirname(__file__), 'web', 'config', 'im_default', 'txt')
+        attachment_dir = os.path.join(os.path.dirname(__file__), 'web', 'config', 'im_default', 'file')
+        
+        # 获取所有模板名称（从txt目录扫描）
+        template_names = set()
+        if os.path.exists(template_dir):
+            for filename in os.listdir(template_dir):
+                if filename.endswith('_imessage.txt') and filename != '.gitkeep':
+                    template_name = filename.replace('_imessage.txt', '')
+                    template_names.add(template_name)
+        
+        # 从file目录扫描，添加只有附件没有文本的模板
+        if os.path.exists(attachment_dir):
+            for filename in os.listdir(attachment_dir):
+                if filename.endswith(('_imessage.png', '_imessage.jpg', '_imessage.jpeg', '_imessage.gif', '_imessage.mp4', '_imessage.mov')) and filename != '.gitkeep':
+                    # 提取模板名称
+                    for ext in ['_imessage.png', '_imessage.jpg', '_imessage.jpeg', '_imessage.gif', '_imessage.mp4', '_imessage.mov']:
+                        if filename.endswith(ext):
+                            template_name = filename.replace(ext, '')
+                            template_names.add(template_name)
+                            break
+        
+        # 为每个模板名称构建完整的模板信息
+        for i, template_name in enumerate(sorted(template_names), 1):
+            template_info = {
+                'id': i,
+                'name': template_name,
+                'content': '',
+                'attachment': None,
+                'attachment_name': None,
+                'has_attachment': False,
+                'type': 'custom'
+            }
+            
+            # 读取文本内容
+            txt_path = os.path.join(template_dir, f"{template_name}_imessage.txt")
+            if os.path.exists(txt_path):
+                try:
+                    with open(txt_path, 'r', encoding='utf-8') as f:
+                        template_info['content'] = f.read().strip()
+                except Exception as e:
+                    logger.error(f"读取模板文件失败 {txt_path}: {str(e)}")
+                    template_info['content'] = '读取失败'
+            
+            # 查找对应的附件文件
+            if os.path.exists(attachment_dir):
+                for att_file in os.listdir(attachment_dir):
+                    if att_file.startswith(f"{template_name}_imessage.") and att_file != '.gitkeep':
+                        template_info['attachment'] = att_file
+                        template_info['attachment_name'] = att_file
+                        template_info['has_attachment'] = True
+                        break
+            
+            templates.append(template_info)
+        
+        logger.info(f"成功加载 {len(templates)} 个模板")
         return jsonify({'success': True, 'data': templates})
+        
     except Exception as e:
         logger.error(f"获取模板列表失败: {str(e)}")
         return jsonify({'success': False, 'message': str(e)})
@@ -1490,25 +1543,113 @@ def api_save_template():
     """保存发送模板"""
     try:
         data = request.get_json()
-        # 这里应该保存到数据库或文件
-        logger.info(f"保存模板: {data}")
+        template_name = data.get('name', '').strip()
+        template_content = data.get('content', '')
+        
+        if not template_name:
+            return jsonify({'success': False, 'message': '模板名称不能为空'})
+        
+        # 检查模板名称是否重复
+        template_dir = os.path.join(os.path.dirname(__file__), 'web', 'config', 'im_default', 'txt')
+        template_filename = f"{template_name}_imessage.txt"
+        template_path = os.path.join(template_dir, template_filename)
+        
+        if os.path.exists(template_path):
+            return jsonify({'success': False, 'message': '模板名称已存在，请修改模板名称'})
+        
+        # 确保目录存在
+        os.makedirs(template_dir, exist_ok=True)
+        
+        # 保存模板内容
+        with open(template_path, 'w', encoding='utf-8') as f:
+            f.write(template_content)
+        
+        logger.info(f"模板保存成功: {template_name}")
         return jsonify({'success': True, 'message': '模板保存成功'})
+        
     except Exception as e:
         logger.error(f"保存模板失败: {str(e)}")
         return jsonify({'success': False, 'message': str(e)})
 
-@app.route('/api/mass_messaging/templates/<int:template_id>', methods=['DELETE'])
+@app.route('/api/mass_messaging/templates/<template_name>', methods=['DELETE'])
 @login_required
-def api_delete_template(template_id):
+def api_delete_template(template_name):
     """删除发送模板"""
     try:
-        # 这里应该从数据库或文件中删除模板
-        logger.info(f"删除模板ID: {template_id}")
+        template_dir = os.path.join(os.path.dirname(__file__), 'web', 'config', 'im_default', 'txt')
+        template_filename = f"{template_name}_imessage.txt"
+        template_path = os.path.join(template_dir, template_filename)
+        
+        if not os.path.exists(template_path):
+            return jsonify({'success': False, 'message': '模板不存在'})
+        
+        # 删除模板文件
+        os.remove(template_path)
+        
+        # 删除对应的附件文件（如果存在）
+        attachment_dir = os.path.join(os.path.dirname(__file__), 'web', 'config', 'im_default', 'file')
+        if os.path.exists(attachment_dir):
+            for filename in os.listdir(attachment_dir):
+                if filename.startswith(f"{template_name}_imessage."):
+                    attachment_path = os.path.join(attachment_dir, filename)
+                    os.remove(attachment_path)
+                    logger.info(f"删除附件文件: {filename}")
+        
+        logger.info(f"删除模板成功: {template_name}")
         return jsonify({'success': True, 'message': '模板删除成功'})
+        
     except Exception as e:
         logger.error(f"删除模板失败: {str(e)}")
         return jsonify({'success': False, 'message': str(e)})
 
+@app.route('/api/mass_messaging/templates/upload', methods=['POST'])
+@login_required
+def api_upload_template_attachment():
+    """上传模板附件"""
+    try:
+        template_name = request.form.get('template_name', '').strip()
+        
+        if not template_name:
+            return jsonify({'success': False, 'message': '模板名称不能为空'})
+        
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'message': '没有选择文件'})
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'success': False, 'message': '没有选择文件'})
+        
+        # 获取文件扩展名
+        file_ext = os.path.splitext(file.filename)[1]
+        if not file_ext:
+            return jsonify({'success': False, 'message': '文件必须有扩展名'})
+        
+        # 生成附件文件名
+        attachment_filename = f"{template_name}_imessage{file_ext}"
+        attachment_dir = os.path.join(os.path.dirname(__file__), 'web', 'config', 'im_default', 'file')
+        attachment_path = os.path.join(attachment_dir, attachment_filename)
+        
+        # 检查文件是否已存在
+        if os.path.exists(attachment_path):
+            return jsonify({'success': False, 'message': '附件文件名已存在，请修改模板名称'})
+        
+        # 确保目录存在
+        os.makedirs(attachment_dir, exist_ok=True)
+        
+        # 保存文件
+        file.save(attachment_path)
+        
+        logger.info(f"附件上传成功: {attachment_filename}")
+        return jsonify({
+            'success': True, 
+            'message': '附件上传成功',
+            'filename': attachment_filename
+        })
+        
+    except Exception as e:
+        logger.error(f"上传附件失败: {str(e)}")
+        return jsonify({'success': False, 'message': str(e)})
+    
 @app.route('/api/mass_messaging/send', methods=['POST'])
 @login_required
 def api_send_mass_message():
@@ -1552,6 +1693,114 @@ def api_get_phone_numbers():
     except Exception as e:
         logger.error(f"获取手机号码列表失败: {str(e)}")
         return jsonify({'success': False, 'message': str(e)})
+
+@app.route('/api/vnc/connect', methods=['POST'])
+@login_required
+def api_vnc_connect():
+    """VNC连接API"""
+    try:
+        data = request.get_json()
+        client_ip = data.get('client_ip')
+        
+        if not client_ip:
+            return jsonify({'success': False, 'message': '客户端IP不能为空'})
+        
+        logger.info(f"尝试为客户端IP {client_ip} 建立VNC连接")
+        
+        # 查找对应的VMX文件
+        vmx_file = find_vmx_file_by_ip(client_ip)
+        if not vmx_file:
+            logger.warning(f"未找到客户端IP {client_ip} 对应的VMX文件")
+            return jsonify({'success': False, 'message': f'未找到客户端IP {client_ip} 对应的虚拟机配置文件'})
+        
+        # 读取VNC配置
+        vnc_config = read_vnc_config_from_vmx(vmx_file)
+        if not vnc_config:
+            logger.warning(f"VMX文件 {vmx_file} 中未找到VNC配置")
+            return jsonify({'success': False, 'message': '虚拟机未启用VNC或配置不完整'})
+        
+        logger.info(f"成功获取VNC配置: 端口={vnc_config['port']}, VMX文件={vmx_file}")
+        
+        return jsonify({
+            'success': True,
+            'vnc_config': {
+                'host': 'localhost',  # VNC通常在本地主机上
+                'port': vnc_config['port'],
+                'password': vnc_config['password'],
+                'vmx_file': vmx_file
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"VNC连接失败: {str(e)}")
+        return jsonify({'success': False, 'message': str(e)})
+
+def find_vmx_file_by_ip(target_ip):
+    """根据IP地址查找对应的VMX文件"""
+    try:
+        # 搜索克隆目录中的所有VMX文件
+        for root, dirs, files in os.walk(clone_dir):
+            for file in files:
+                if file.endswith('.vmx'):
+                    vmx_path = os.path.join(root, file)
+                    if check_ip_in_vmx(vmx_path, target_ip):
+                        return vmx_path
+        
+        # 如果在克隆目录中没找到，搜索虚拟机模板目录
+        vm_template_dir = config.template_dir  # 使用config中的虚拟机模板目录
+        for root, dirs, files in os.walk(vm_template_dir):
+            for file in files:
+                if file.endswith('.vmx'):
+                    vmx_path = os.path.join(root, file)
+                    if check_ip_in_vmx(vmx_path, target_ip):
+                        return vmx_path
+        
+        return None
+    except Exception as e:
+        logger.error(f"查找VMX文件时出错: {str(e)}")
+        return None
+
+def check_ip_in_vmx(vmx_path, target_ip):
+    """检查VMX文件中是否包含指定的IP地址"""
+    try:
+        with open(vmx_path, 'r', encoding='utf-8', errors='ignore') as f:
+            content = f.read()
+            # 检查是否包含目标IP
+            return target_ip in content
+    except Exception as e:
+        logger.error(f"读取VMX文件 {vmx_path} 时出错: {str(e)}")
+        return False
+
+def read_vnc_config_from_vmx(vmx_path):
+    """从VMX文件中读取VNC配置"""
+    try:
+        vnc_config = {'port': None, 'password': None}
+        
+        with open(vmx_path, 'r', encoding='utf-8', errors='ignore') as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith('RemoteDisplay.vnc.port'):
+                    # 提取端口号
+                    parts = line.split('=')
+                    if len(parts) == 2:
+                        port_value = parts[1].strip().strip('"')
+                        vnc_config['port'] = port_value
+                elif line.startswith('RemoteDisplay.vnc.password'):
+                    # 提取密码
+                    parts = line.split('=')
+                    if len(parts) == 2:
+                        password_value = parts[1].strip().strip('"')
+                        vnc_config['password'] = password_value
+        
+        # 检查是否获取到了必要的配置
+        if vnc_config['port'] and vnc_config['password']:
+            return vnc_config
+        else:
+            return None
+            
+    except Exception as e:
+        logger.error(f"读取VMX文件 {vmx_path} 的VNC配置时出错: {str(e)}")
+        return None
     
 @app.route('/api/clone_vm', methods=['POST'])
 @login_required
@@ -1976,6 +2225,15 @@ def clone_vm_worker(task_id):
                         add_task_log(task_id, 'warning', f'虚拟机 {vm_name} 的displayName更新失败')
                         print(f"[DEBUG] displayName更新失败")
                     
+                    # 添加VNC配置
+                    vnc_port = get_next_vnc_port()
+                    if add_vnc_config_to_vmx(vm_file_path, vnc_port):
+                        add_task_log(task_id, 'info', f'虚拟机 {vm_name} 的VNC配置已添加，端口: {vnc_port}')
+                        print(f"[DEBUG] VNC配置添加成功，端口: {vnc_port}")
+                    else:
+                        add_task_log(task_id, 'warning', f'虚拟机 {vm_name} 的VNC配置添加失败')
+                        print(f"[DEBUG] VNC配置添加失败")
+                    
                     # 如果配置了自动启动或者配置了五码文件（需要启动虚拟机进行后续配置）
                     should_start = params.get('autoStart') == 'true' or params.get('configPlist')
                     if should_start:
@@ -2155,6 +2413,93 @@ def clone_vm_worker(task_id):
         add_task_log(task_id, 'error', f'克隆任务发生严重错误: {str(e)}')
         print(f"[DEBUG] 克隆任务发生严重错误: {str(e)}")
         task['status'] = 'failed'
+
+def get_next_vnc_port():
+    """获取下一个可用的VNC端口"""
+    try:
+        config_ini_path = os.path.join('web', 'config', 'config.ini')
+        
+        # 读取当前的vnc_end_port
+        current_port = vnc_start_port  # 默认从config.py中的起始端口开始
+        
+        if os.path.exists(config_ini_path):
+            with open(config_ini_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+                for line in content.split('\n'):
+                    if line.strip().startswith('vnc_end_port='):
+                        current_port = int(line.split('=')[1].strip())
+                        break
+        
+        # 分配下一个端口
+        next_port = current_port + 1
+        
+        # 更新config.ini中的vnc_end_port
+        with open(config_ini_path, 'w', encoding='utf-8') as f:
+            f.write(f'vnc_end_port={next_port}\n')
+        
+        print(f"[DEBUG] 分配VNC端口: {next_port}，已更新config.ini")
+        return next_port
+        
+    except Exception as e:
+        print(f"[DEBUG] 获取VNC端口失败: {str(e)}")
+        # 如果出错，返回默认端口
+        return vnc_start_port
+
+def add_vnc_config_to_vmx(vmx_file_path, vnc_port):
+    """在VMX文件中添加VNC配置参数"""
+    try:
+        print(f"[DEBUG] 开始添加VNC配置到vmx文件: {vmx_file_path}")
+        print(f"[DEBUG] VNC端口: {vnc_port}")
+        
+        # 检查文件是否存在
+        if not os.path.exists(vmx_file_path):
+            print(f"[DEBUG] vmx文件不存在: {vmx_file_path}")
+            return False
+        
+        # 读取vmx文件
+        with open(vmx_file_path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        
+        print(f"[DEBUG] 读取到 {len(lines)} 行内容")
+        
+        # 检查是否已存在VNC配置，如果存在则更新，否则添加
+        vnc_configs = {
+            'RemoteDisplay.vnc.enabled': 'TRUE',
+            'RemoteDisplay.vnc.port': str(vnc_port),
+            'RemoteDisplay.vnc.password': vnc_default_password
+        }
+        
+        updated_configs = set()
+        
+        # 查找并更新已存在的VNC配置
+        for i, line in enumerate(lines):
+            line_stripped = line.strip()
+            for config_key, config_value in vnc_configs.items():
+                if line_stripped.startswith(config_key):
+                    old_line = line_stripped
+                    new_line = f'{config_key} = "{config_value}"\n'
+                    lines[i] = new_line
+                    updated_configs.add(config_key)
+                    print(f"[DEBUG] 更新VNC配置: {old_line} -> {new_line.strip()}")
+                    break
+        
+        # 添加未找到的VNC配置
+        for config_key, config_value in vnc_configs.items():
+            if config_key not in updated_configs:
+                new_line = f'{config_key} = "{config_value}"\n'
+                lines.append(new_line)
+                print(f"[DEBUG] 添加VNC配置: {new_line.strip()}")
+        
+        # 写回文件
+        with open(vmx_file_path, 'w', encoding='utf-8') as f:
+            f.writelines(lines)
+        
+        print(f"[DEBUG] VNC配置添加成功")
+        return True
+        
+    except Exception as e:
+        print(f"[DEBUG] 添加VNC配置失败: {str(e)}")
+        return False
 
 def update_vmx_display_name(vmx_file_path, new_display_name):
     """更新vmx文件中的displayName参数"""
@@ -7441,38 +7786,63 @@ def api_scan_clients():
     try:
         logger.info("开始扫描ScptRunner客户端")
         
-        # 获取所有虚拟机IP地址
-        def get_all_vm_ips():
-            """获取所有虚拟机的IP地址"""
+        # 获取运行中虚拟机的IP地址
+        def get_running_vm_ips():
+            """只获取运行中虚拟机的IP地址，提高扫描效率"""
             vm_ips = []
             vmrun_path = get_vmrun_path()
             
-            # 扫描所有虚拟机目录
-            all_vm_dirs = [clone_dir, vm_chengpin_dir]
-            
-            for vm_dir in all_vm_dirs:
-                if os.path.exists(vm_dir):
-                    for root, dirs, files in os.walk(vm_dir):
-                        for file in files:
-                            if file.endswith('.vmx'):
-                                vm_path = os.path.join(root, file)
-                                try:
-                                    # 使用vmrun获取虚拟机IP
-                                    command = f'"{vmrun_path}" getGuestIPAddress "{vm_path}"'
-                                    result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=10)
-                                    if result.returncode == 0:
-                                        ip = result.stdout.strip()
-                                        # 验证IP地址格式
-                                        ipaddress.ip_address(ip)
-                                        vm_ips.append({
-                                            'ip': ip,
-                                            'vm_name': os.path.splitext(file)[0],
-                                            'vm_path': vm_path
-                                        })
-                                        logger.debug(f"获取到虚拟机IP: {ip} ({file})")
-                                except Exception as e:
-                                    logger.debug(f"获取虚拟机IP失败 {file}: {str(e)}")
-                                    continue
+            try:
+                # 首先获取运行中的虚拟机列表
+                list_cmd = [vmrun_path, 'list']
+                result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30)
+                
+                if result.returncode != 0:
+                    logger.error(f"获取运行中虚拟机列表失败: {result.stderr}")
+                    return vm_ips
+                
+                running_vms = []
+                lines = result.stdout.strip().split('\n')
+                
+                # 解析vmrun list输出
+                for line in lines[1:]:  # 跳过第一行（Total running VMs: X）
+                    line = line.strip()
+                    if line and os.path.exists(line) and line.endswith('.vmx'):
+                        running_vms.append(line)
+                
+                logger.info(f"发现 {len(running_vms)} 个运行中的虚拟机")
+                
+                # 只对运行中的虚拟机获取IP地址
+                for vm_path in running_vms:
+                    try:
+                        vm_name = os.path.splitext(os.path.basename(vm_path))[0]
+                        
+                        # 使用vmrun获取虚拟机IP
+                        command = f'"{vmrun_path}" getGuestIPAddress "{vm_path}"'
+                        ip_result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=10)
+                        
+                        if ip_result.returncode == 0:
+                            ip = ip_result.stdout.strip()
+                            # 验证IP地址格式
+                            try:
+                                ipaddress.ip_address(ip)
+                                vm_ips.append({
+                                    'ip': ip,
+                                    'vm_name': vm_name,
+                                    'vm_path': vm_path
+                                })
+                                logger.debug(f"获取到运行中虚拟机IP: {ip} ({vm_name})")
+                            except ValueError:
+                                logger.debug(f"虚拟机 {vm_name} 返回无效IP地址: {ip}")
+                        else:
+                            logger.debug(f"获取虚拟机 {vm_name} IP失败: {ip_result.stderr}")
+                            
+                    except Exception as e:
+                        logger.debug(f"处理虚拟机 {vm_path} 失败: {str(e)}")
+                        continue
+                        
+            except Exception as e:
+                logger.error(f"获取运行中虚拟机列表失败: {str(e)}")
             
             return vm_ips
         
@@ -7544,10 +7914,10 @@ def api_scan_clients():
                 logger.debug(f"扫描IP {ip} 失败: {str(e)}")
                 return None
         
-        # 获取所有虚拟机IP
-        logger.info("正在获取虚拟机IP地址...")
-        vm_ips = get_all_vm_ips()
-        logger.info(f"找到 {len(vm_ips)} 个虚拟机IP地址")
+        # 获取运行中虚拟机的IP
+        logger.info("正在获取运行中虚拟机的IP地址...")
+        vm_ips = get_running_vm_ips()
+        logger.info(f"找到 {len(vm_ips)} 个运行中虚拟机的IP地址")
         
         if not vm_ips:
             return jsonify({
