@@ -1936,6 +1936,100 @@ def stop_websockify(client_ip):
     except Exception as e:
         logger.error(f"停止websockify进程失败: {str(e)}")
 
+def cleanup_all_websockify():
+    """清理所有websockify进程和资源"""
+    try:
+        logger.info("开始清理所有websockify进程...")
+        
+        # 停止所有已知的websockify进程
+        client_ips = list(websockify_processes.keys())
+        for client_ip in client_ips:
+            stop_websockify(client_ip)
+        
+        # 清空进程字典
+        websockify_processes.clear()
+        
+        # 使用psutil查找并终止所有websockify进程
+        import psutil
+        killed_processes = []
+        
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                # 检查是否是websockify进程
+                if proc.info['cmdline'] and any('websockify' in str(arg) for arg in proc.info['cmdline']):
+                    pid = proc.info['pid']
+                    logger.info(f"发现websockify进程: PID={pid}, 命令行={proc.info['cmdline']}")
+                    
+                    # 终止进程
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=5)
+                        killed_processes.append(pid)
+                        logger.info(f"成功终止websockify进程: PID={pid}")
+                    except psutil.TimeoutExpired:
+                        proc.kill()
+                        killed_processes.append(pid)
+                        logger.warning(f"强制终止websockify进程: PID={pid}")
+                        
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                continue
+        
+        # 释放端口（通过终止占用6080+端口的进程）
+        for port in range(6080, 6180):  # 检查常用的WebSocket端口范围
+            try:
+                for conn in psutil.net_connections():
+                    if conn.laddr.port == port and conn.status == 'LISTEN':
+                        try:
+                            proc = psutil.Process(conn.pid)
+                            if 'python' in proc.name().lower() or 'websockify' in ' '.join(proc.cmdline()):
+                                logger.info(f"释放端口 {port}，终止进程 PID={conn.pid}")
+                                proc.terminate()
+                                try:
+                                    proc.wait(timeout=3)
+                                except psutil.TimeoutExpired:
+                                    proc.kill()
+                        except (psutil.NoSuchProcess, psutil.AccessDenied):
+                            continue
+            except Exception:
+                continue
+        
+        logger.info(f"websockify进程清理完成，共终止 {len(killed_processes)} 个进程")
+        return True
+        
+    except Exception as e:
+        logger.error(f"清理websockify进程失败: {str(e)}")
+        return False
+
+def cleanup_all_vnc_connections():
+    """清理所有VNC连接和资源"""
+    try:
+        logger.info("开始清理所有VNC连接...")
+        
+        # 清理WebSocket VNC连接
+        session_ids = list(vnc_connections.keys())
+        for session_id in session_ids:
+            try:
+                connection = vnc_connections[session_id]
+                if 'socket' in connection:
+                    connection['socket'].close()
+                del vnc_connections[session_id]
+                logger.info(f"清理VNC连接: {session_id}")
+            except Exception as e:
+                logger.error(f"清理VNC连接 {session_id} 失败: {str(e)}")
+        
+        # 清空连接字典
+        vnc_connections.clear()
+        
+        # 清理websockify进程
+        cleanup_all_websockify()
+        
+        logger.info("所有VNC连接和资源清理完成")
+        return True
+        
+    except Exception as e:
+        logger.error(f"清理VNC连接失败: {str(e)}")
+        return False
+
 def get_available_websocket_port():
     """获取可用的WebSocket端口"""
     import socket
@@ -1976,6 +2070,23 @@ def api_vnc_disconnect():
         
     except Exception as e:
         logger.error(f"断开VNC连接失败: {str(e)}")
+        return jsonify({'success': False, 'message': str(e)})
+
+# 清理所有VNC连接API
+@app.route('/api/vnc/cleanup_all', methods=['POST'])
+@login_required
+def api_vnc_cleanup_all():
+    """清理所有VNC连接和websockify进程"""
+    try:
+        success = cleanup_all_vnc_connections()
+        
+        if success:
+            return jsonify({'success': True, 'message': '所有VNC连接和进程已清理完成'})
+        else:
+            return jsonify({'success': False, 'message': '清理过程中出现部分错误，请检查日志'})
+        
+    except Exception as e:
+        logger.error(f"清理所有VNC连接失败: {str(e)}")
         return jsonify({'success': False, 'message': str(e)})
 
 # 旧的VNC WebSocket代理代码（保留以防需要）
@@ -9063,5 +9174,38 @@ def vite_client():
     """处理vite客户端请求，返回204状态码"""
     return '', 204
 
+# 应用退出时的清理函数
+def cleanup_on_exit():
+    """应用退出时清理资源"""
+    logger.info("应用正在退出，开始清理资源...")
+    cleanup_all_vnc_connections()
+    logger.info("资源清理完成")
+
+# 注册退出处理函数
+import atexit
+atexit.register(cleanup_on_exit)
+
+# 信号处理
+import signal
+
+def signal_handler(signum, frame):
+    """处理系统信号"""
+    logger.info(f"收到信号 {signum}，开始清理资源...")
+    cleanup_all_vnc_connections()
+    logger.info("资源清理完成，退出应用")
+    sys.exit(0)
+
+# 注册信号处理器
+signal.signal(signal.SIGINT, signal_handler)  # Ctrl+C
+signal.signal(signal.SIGTERM, signal_handler)  # 终止信号
+
 if __name__ == '__main__':
-    socketio.run(app, debug=True, host='0.0.0.0', port=5000)
+    try:
+        logger.info("启动Flask应用...")
+        socketio.run(app, debug=True, host='0.0.0.0', port=5000)
+    except KeyboardInterrupt:
+        logger.info("收到键盘中断信号")
+    except Exception as e:
+        logger.error(f"应用运行异常: {str(e)}")
+    finally:
+        cleanup_on_exit()

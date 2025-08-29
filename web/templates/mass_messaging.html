@@ -822,6 +822,9 @@
                                     <button type="button" class="btn btn-sm btn-outline-warning me-2" onclick="sendCtrlAltDel()" title="发送Ctrl+Alt+Del">
                                         <i class="fas fa-keyboard"></i> Ctrl+Alt+Del
                                     </button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary me-2" onclick="cleanupAllVNCConnections()" title="清理所有VNC连接和进程">
+                                        <i class="fas fa-broom"></i> 清理全部
+                                    </button>
                                     <button type="button" class="btn btn-sm btn-outline-danger" onclick="disconnectVNC()" title="断开连接">
                                         <i class="fas fa-times"></i> 断开
                                     </button>
@@ -1402,6 +1405,73 @@
                 
             } catch (error) {
                 console.error('断开VNC连接失败:', error);
+            }
+        }
+
+        // 清理所有VNC连接和进程
+        async function cleanupAllVNCConnections() {
+            console.log('开始清理所有VNC连接和进程');
+            
+            // 显示确认对话框
+            if (!confirm('确定要清理所有VNC连接和websockify进程吗？\n\n这将断开所有正在进行的VNC连接，并释放所有相关的端口和进程资源。')) {
+                return;
+            }
+            
+            try {
+                // 先断开当前的VNC连接
+                if (window.currentRfb) {
+                    window.currentRfb.disconnect();
+                    window.currentRfb = null;
+                }
+                
+                // 重置当前状态
+                document.getElementById('vncStatus').textContent = '清理中...';
+                document.getElementById('vncStatus').className = 'badge bg-warning';
+                
+                // 调用后端API清理所有连接
+                const response = await fetch('/api/vnc/cleanup_all', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                console.log('清理所有VNC连接响应:', data);
+                
+                if (data.success) {
+                    // 显示成功消息
+                    showToast('成功', '所有VNC连接和进程已清理完成', 'success');
+                    
+                    // 重置状态
+                    document.getElementById('vncStatus').textContent = '未连接';
+                    document.getElementById('vncStatus').className = 'badge bg-secondary';
+                    
+                    // 重置当前客户端IP
+                    currentVncClientIp = null;
+                    
+                    // 关闭VNC模态框
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('vncModal'));
+                    if (modal) {
+                        modal.hide();
+                    }
+                    
+                    // 清理前端VNC连接状态
+                    cleanupVncConnection();
+                    
+                } else {
+                    showToast('警告', data.message || '清理过程中出现部分错误，请检查日志', 'warning');
+                    document.getElementById('vncStatus').textContent = '清理异常';
+                    document.getElementById('vncStatus').className = 'badge bg-warning';
+                }
+                
+            } catch (error) {
+                console.error('清理所有VNC连接失败:', error);
+                showToast('错误', '清理VNC连接失败: ' + error.message, 'error');
+                
+                // 重置状态
+                document.getElementById('vncStatus').textContent = '清理失败';
+                document.getElementById('vncStatus').className = 'badge bg-danger';
             }
         }
 
