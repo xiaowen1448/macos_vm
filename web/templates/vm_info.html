@@ -778,6 +778,7 @@
                                             </th>
                                             <th>虚拟机名称</th>
                                             <th>状态</th>
+                                            <th>挂起时间</th>
                                             <th>IP地址</th>
                                             <th>五码信息</th>
                                             <th>JU值信息</th>
@@ -1543,7 +1544,7 @@
                 case 'running': return '运行中';
                 case 'starting': return '<i class="fas fa-spinner fa-spin"></i> 重启中';
                 case 'stopped': return '已停止';
-                case 'suspended': return '已暂停';
+                case 'suspended': return '已挂起';
                 default: return '未知';
             }
         }

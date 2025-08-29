@@ -693,6 +693,8 @@ def vm_operation_generic(operation, vm_type_name, vm_dir):
             cmd = [vmrun_path, 'stop', vm_file, 'hard']
         elif operation == 'restart':
             cmd = [vmrun_path, 'reset', vm_file, 'hard']
+        elif operation == 'suspend':
+            cmd = [vmrun_path, 'suspend', vm_file]
         else:
             return jsonify({
                 'success': False,
@@ -3791,7 +3793,16 @@ def get_vm_status(vm_path):
                     print(f"[DEBUG] 获取虚拟机IP异常，可能正在启动: {str(e)}")
                     return 'starting'
             else:
-                print(f"[DEBUG] 未找到运行中的虚拟机: {vm_name}")
+                # 虚拟机不在运行列表中，检查是否处于挂起状态
+                print(f"[DEBUG] 未找到运行中的虚拟机: {vm_name}，检查是否挂起")
+                
+                # 检查.vmss文件是否存在（挂起状态文件）
+                vm_dir = os.path.dirname(vm_path)
+                vmss_files = [f for f in os.listdir(vm_dir) if f.endswith('.vmss')]
+                if vmss_files:
+                    print(f"[DEBUG] 发现挂起状态文件: {vmss_files}")
+                    return 'suspended'
+                
                 return 'stopped'
         
         return 'stopped'
@@ -5770,6 +5781,12 @@ def api_vm_10_12_stop():
 def api_vm_10_12_restart():
     """重启10.12目录虚拟机"""
     return vm_operation_generic('restart', '10.12目录', VM_DIRS['10_12'])
+
+@app.route('/api/vm_10_12_suspend', methods=['POST'])
+@login_required
+def api_vm_10_12_suspend():
+    """挂起10.12目录虚拟机"""
+    return vm_operation_generic('suspend', '10.12目录', VM_DIRS['10_12'])
 
 @app.route('/api/vm_10_12_info/<vm_name>')
 @login_required

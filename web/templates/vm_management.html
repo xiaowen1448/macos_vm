@@ -214,6 +214,31 @@
         margin-right: 0;
     }
     
+    /* 紫色挂起按钮样式 */
+    .btn-outline-purple {
+        color: #6f42c1;
+        border-color: #6f42c1;
+    }
+    
+    .btn-outline-purple:hover {
+        color: #fff;
+        background-color: #6f42c1;
+        border-color: #6f42c1;
+    }
+    
+    .btn-outline-purple:disabled {
+        color: #6f42c1;
+        background-color: transparent;
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    
+    .btn-outline-purple:disabled:hover {
+        color: #6f42c1;
+        background-color: transparent;
+        border-color: #6f42c1;
+    }
+    
     /* 脚本选择对话框滚动条样式 */
     .list-group::-webkit-scrollbar {
         width: 8px;
@@ -1385,19 +1410,22 @@
                     </td>
                     <td>
                         <div class="btn-group btn-group-sm">
-                            <button class="btn btn-outline-primary btn-sm" onclick="startVM('${vm.name}')" ${vm.status === 'running' || vm.status === 'starting' ? 'disabled' : ''} title="启动虚拟机" style="cursor: pointer;">
+                            <button class="btn btn-outline-primary btn-sm" onclick="startVM('${vm.name}')" ${vm.status === 'running' || vm.status === 'starting' ? 'disabled' : ''} title="${vm.status === 'suspended' ? '恢复虚拟机' : '启动虚拟机'}" style="cursor: pointer;">
                                 <i class="fas fa-play"></i>
                             </button>
-                            <button class="btn btn-outline-warning btn-sm" onclick="stopVM('${vm.name}')" ${vm.status === 'stopped' ? 'disabled' : ''} title="停止虚拟机" style="cursor: pointer;">
+                            <button class="btn btn-outline-warning btn-sm" onclick="stopVM('${vm.name}')" ${vm.status === 'stopped' || vm.status === 'suspended' ? 'disabled' : ''} title="停止虚拟机" style="cursor: pointer;">
                                 <i class="fas fa-stop"></i>
                             </button>
                             <button class="btn btn-outline-secondary btn-sm" onclick="restartVM('${vm.name}')" ${vm.status === 'running' ? '' : 'disabled'} title="重启虚拟机" style="cursor: pointer;">
                                 <i class="fas fa-redo"></i>
                             </button>
+                            <button class="btn btn-outline-purple btn-sm" onclick="suspendVM('${vm.name}')" ${vm.status === 'running' ? '' : 'disabled'} title="${vm.status === 'running' ? '挂起虚拟机' : '只能挂起运行中的虚拟机'}" style="cursor: pointer;">
+                                <i class="fas fa-pause"></i>
+                            </button>
                             <button class="btn btn-outline-info btn-sm" onclick="getVMInfo('${vm.name}')" title="详细信息" style="cursor: pointer;">
                                 <i class="fas fa-info-circle"></i>
                             </button>
-                            <button class="btn btn-outline-danger btn-sm" onclick="deleteVM('${vm.name}')" ${vm.status === 'running' || vm.status === 'starting' ? 'disabled' : ''} title="${vm.status === 'running' || vm.status === 'starting' ? '无法删除运行中或重启中的虚拟机' : '删除虚拟机'}" style="cursor: pointer;">
+                            <button class="btn btn-outline-danger btn-sm" onclick="deleteVM('${vm.name}')" ${vm.status === 'running' || vm.status === 'starting' || vm.status === 'suspended' ? 'disabled' : ''} title="${vm.status === 'running' || vm.status === 'starting' || vm.status === 'suspended' ? '无法删除运行中、重启中或挂起的虚拟机' : '删除虚拟机'}" style="cursor: pointer;">
                                 <i class="fas fa-trash"></i>
                             </button>
                             <button class="btn btn-outline-success btn-sm" onclick="sendScriptToVM('${vm.name}')" ${vm.status !== 'running' ? 'disabled' : ''} title="${vm.status !== 'running' ? '虚拟机未运行，无法发送脚本' : '发送脚本'}" style="cursor: pointer;">
@@ -1543,7 +1571,7 @@
                 case 'running': return '运行中';
                 case 'starting': return '<i class="fas fa-spinner fa-spin"></i> 重启中';
                 case 'stopped': return '已停止';
-                case 'suspended': return '已暂停';
+                case 'suspended': return '已挂起';
                 default: return '未知';
             }
         }
@@ -2553,6 +2581,40 @@
             .catch(error => {
                 console.error('重启虚拟机失败:', error);
                 showToast('重启失败: ' + error.message, 'error');
+            });
+        }
+
+        // 挂起虚拟机
+        function suspendVM(vmName) {
+            document.getElementById('suspendVMName').value = vmName;
+            const modal = new bootstrap.Modal(document.getElementById('suspendConfirmModal'));
+            modal.show();
+        }
+        
+        // 确认挂起虚拟机
+        function confirmSuspend() {
+            const vmName = document.getElementById('suspendVMName').value;
+            const modal = bootstrap.Modal.getInstance(document.getElementById('suspendConfirmModal'));
+            modal.hide();
+            
+            fetch('/api/vm_10_12_suspend', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ vm_name: vmName })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('虚拟机挂起成功', 'success');
+                    refreshData();
+                } else {
+                    showToast('挂起失败: ' + data.message, 'error');
+                }
+            })
+            .catch(error => {
+                showToast('操作失败: ' + error.message, 'error');
             });
         }
 
@@ -5994,6 +6056,36 @@
                     </button>
                     <button type="button" class="btn btn-info" id="confirmRestartBtn" onclick="confirmRestart()">
                         <i class="fas fa-redo me-2"></i>确认重启
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 挂起虚拟机确认模态框 -->
+    <div class="modal fade" id="suspendConfirmModal" tabindex="-1" aria-labelledby="suspendConfirmModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-warning text-white">
+                    <h5 class="modal-title" id="suspendConfirmModalLabel">
+                        <i class="fas fa-pause me-2"></i>确认挂起
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning" role="alert">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>提示：</strong>挂起虚拟机将保存当前状态并暂停运行，可以稍后恢复。
+                    </div>
+                    <p class="mb-0">您确定要挂起这个虚拟机吗？</p>
+                    <input type="hidden" id="suspendVMName" value="">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>取消
+                    </button>
+                    <button type="button" class="btn btn-warning" id="confirmSuspendBtn" onclick="confirmSuspend()">
+                        <i class="fas fa-pause me-2"></i>确认挂起
                     </button>
                 </div>
             </div>
