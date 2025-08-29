@@ -663,6 +663,8 @@
     <script>
         let eventSource = null;
         let isCloning = false;
+        let reconnectCount = 0;
+        let maxReconnectAttempts = 3;
         
         // 静态文本框函数
         function showStaticMessage(message, type = 'info', duration = 5000) {
@@ -764,6 +766,13 @@
             
             eventSource = new EventSource(`/api/clone_logs/${taskId}`);
             
+            // 连接成功时重置重连计数器
+            eventSource.onopen = function(event) {
+                console.log('日志流连接成功');
+                // 只有在真正连接成功并收到数据时才重置计数器
+                // reconnectCount = 0; // 移除这里的重置，改为在收到第一条消息时重置
+            };
+            
             eventSource.onmessage = function(event) {
                 try {
                     // 检查消息是否为空或无效
@@ -771,6 +780,9 @@
                         console.warn('收到空消息，跳过处理');
                         return;
                     }
+                    
+                    // 收到有效消息时重置重连计数器
+                    reconnectCount = 0;
                     
                     console.log('收到EventSource消息:', event.data);
                     console.log('消息类型:', typeof event.data);
@@ -842,28 +854,53 @@
             
             eventSource.onerror = function(event) {
                 console.error('EventSource连接错误:', event);
-                addLog('error', '日志流连接错误，尝试重连...');
                 
                 // 关闭当前连接
                 if (eventSource) {
                     eventSource.close();
                 }
                 
+                // 检查是否是任务不存在的错误（通过检查最近的日志）
+                const logContent = document.getElementById('logContent');
+                const lastLogEntry = logContent ? logContent.lastElementChild : null;
+                const isTaskNotExistError = lastLogEntry && lastLogEntry.textContent.includes('任务不存在');
+                
+                if (isTaskNotExistError) {
+                    // 任务不存在，直接停止重连并清理状态
+                    addLog('info', '任务已完成或不存在，停止重连');
+                    isCloning = false;
+                    localStorage.removeItem('currentCloneTaskId');
+                    reconnectCount = 0;
+                    return;
+                }
+                
+                addLog('error', '日志流连接错误，尝试重连...');
+                
                 // 如果任务仍在运行，尝试重连
-                if (isCloning) {
+                if (isCloning && reconnectCount < maxReconnectAttempts) {
+                    reconnectCount++;
+                    addLog('warning', `第 ${reconnectCount}/${maxReconnectAttempts} 次重连尝试...`);
                     setTimeout(() => {
-                        console.log('尝试重新连接日志流...');
+                        console.log(`尝试重新连接日志流... (${reconnectCount}/${maxReconnectAttempts})`);
                         connectToTask(taskId);
                     }, 2000); // 2秒后重连
-                } else {
-                    // 清除localStorage中的任务ID
+                } else if (reconnectCount >= maxReconnectAttempts) {
+                    addLog('error', `已达到最大重连次数 (${maxReconnectAttempts})，停止重连`);
+                    isCloning = false;
                     localStorage.removeItem('currentCloneTaskId');
+                    reconnectCount = 0;
+                } else {
+                    isCloning = false;
+                    localStorage.removeItem('currentCloneTaskId');
+                    reconnectCount = 0;
                 }
             };
         }
         
         // 开始日志流
         function startLogStream(taskId) {
+            // 开始新任务时重置重连计数器
+            reconnectCount = 0;
             connectToTask(taskId);
         }
         
@@ -1017,8 +1054,9 @@
                 // 添加完成日志到文件
                 addLog('info', '任务已完成，日志已保存到文件');
                 
-                // 不清除localStorage中的任务ID，保留用于显示历史记录
-                console.log('保存任务完成信息到localStorage');
+                // 清除localStorage中的任务ID，避免页面刷新后重连
+                localStorage.removeItem('currentCloneTaskId');
+                console.log('保存任务完成信息到localStorage，并清除任务ID');
                 
                 if (data.success) {
                     updateStatus('success', '准备就绪');
@@ -1287,6 +1325,8 @@
                             displayCompletedTask(completedTask);
                             // 从文件加载日志
                             loadTaskLogsFromFile(taskId);
+                            // 清除localStorage中的任务ID，避免重连
+                            localStorage.removeItem('currentCloneTaskId');
                             return;
                         }
                     } catch (error) {
@@ -1294,9 +1334,11 @@
                     }
                 }
                 
-                console.log('发现正在运行的任务:', taskId);
+                console.log('检查任务是否仍在运行:', taskId);
                 
-                // 设置克隆状态为true
+                // 先尝试连接一次来验证任务是否真的还在运行
+                // 如果任务已完成，后端会发送complete信号
+                // 如果任务不存在，会触发error并停止重连
                 isCloning = true;
                 
                 // 显示进度容器

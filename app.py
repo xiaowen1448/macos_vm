@@ -3015,6 +3015,20 @@ def api_clone_logs(task_id):
             timeout_counter = 0
             max_timeout = 300  # 5分钟超时
             
+            # 如果任务已完成，直接发送完成信号
+            if task['status'] not in ['running']:
+                try:
+                    complete_data = {
+                        'type': 'complete',
+                        'success': task['status'] == 'completed',
+                        'stats': task.get('stats', {})
+                    }
+                    yield f"data: {json.dumps(complete_data, ensure_ascii=False)}\n\n"
+                except Exception as e:
+                    print(f"[DEBUG] 完成信号序列化失败: {str(e)}")
+                    yield f"data: {json.dumps({'type': 'error', 'message': '完成信号序列化失败'})}\n\n"
+                return
+            
             while task['status'] in ['running'] and timeout_counter < max_timeout:
                 # 发送新日志和进度数据
                 has_new_data = False
