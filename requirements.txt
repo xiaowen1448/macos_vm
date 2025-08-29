@@ -12,6 +12,7 @@ PyQtWebEngine>=5.15.0
 requests>=2.25.0
 paramiko>=2.7.0
 urllib3>=1.26.0
+websockify>=0.10.0
 
 # 系统监控和进程管理
 psutil>=5.8.0

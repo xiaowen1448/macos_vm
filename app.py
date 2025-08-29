@@ -96,6 +96,7 @@ VM_DIRS = {
 # 全局任务存储
 clone_tasks = {}
 tasks = {}
+websockify_processes = {}  # 存储websockify进程信息
 
 # IP监控和SSH连通性检测函数
 def ping_vm_ip(ip_address, timeout=3):
@@ -1699,10 +1700,13 @@ def api_get_phone_numbers():
         logger.error(f"获取手机号码列表失败: {str(e)}")
         return jsonify({'success': False, 'message': str(e)})
 
+# websockify进程管理
+websockify_processes = {}
+
 @app.route('/api/vnc/connect', methods=['POST'])
 @login_required
 def api_vnc_connect():
-    """VNC连接API"""
+    """VNC连接API - 使用websockify + noVNC方案"""
     try:
         data = request.get_json()
         client_ip = data.get('client_ip')
@@ -1724,13 +1728,19 @@ def api_vnc_connect():
             logger.warning(f"VMX文件 {vmx_file} 中未找到VNC配置")
             return jsonify({'success': False, 'message': '虚拟机未启用VNC或配置不完整'})
         
-        logger.info(f"成功获取VNC配置: 端口={vnc_config['port']}, VMX文件={vmx_file}")
+        # 启动websockify进程
+        websocket_port = start_websockify(client_ip, vnc_config['port'])
+        if not websocket_port:
+            return jsonify({'success': False, 'message': 'websockify启动失败'})
+        
+        logger.info(f"成功启动websockify: VNC端口={vnc_config['port']}, WebSocket端口={websocket_port}")
         
         return jsonify({
             'success': True,
             'vnc_config': {
-                'host': 'localhost',  # VNC通常在本地主机上
-                'port': vnc_config['port'],
+                'host': 'localhost',
+                'vnc_port': vnc_config['port'],
+                'websocket_port': websocket_port,
                 'password': vnc_config['password'],
                 'vmx_file': vmx_file
             }
@@ -1844,12 +1854,131 @@ def read_vnc_config_from_vmx(vmx_path):
             return vnc_config
         else:
             return None
-            
     except Exception as e:
         logger.error(f"读取VMX文件 {vmx_path} 的VNC配置时出错: {str(e)}")
         return None
 
-# VNC WebSocket代理
+def start_websockify(client_ip, vnc_port):
+    """启动websockify进程"""
+    try:
+        # 为每个客户端分配一个唯一的WebSocket端口
+        websocket_port = get_available_websocket_port()
+        if not websocket_port:
+            logger.error("无法分配WebSocket端口")
+            return None
+        
+        # 停止之前的websockify进程（如果存在）
+        stop_websockify(client_ip)
+        
+        # 启动websockify进程
+        cmd = [
+            sys.executable, '-m', 'websockify',
+            '--web', os.path.join(os.path.dirname(__file__), 'web', 'static'),
+            f'{websocket_port}',
+            f'localhost:{vnc_port}'
+        ]
+        
+        logger.info(f"启动websockify命令: {' '.join(cmd)}")
+        
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+        )
+        
+        # 存储进程信息
+        websockify_processes[client_ip] = {
+            'process': process,
+            'websocket_port': websocket_port,
+            'vnc_port': vnc_port,
+            'start_time': time.time()
+        }
+        
+        # 等待一小段时间确保进程启动
+        time.sleep(1)
+        
+        # 检查进程是否正常运行
+        if process.poll() is None:
+            logger.info(f"websockify进程启动成功: PID={process.pid}, WebSocket端口={websocket_port}")
+            return websocket_port
+        else:
+            logger.error(f"websockify进程启动失败: 返回码={process.returncode}")
+            if client_ip in websockify_processes:
+                del websockify_processes[client_ip]
+            return None
+            
+    except Exception as e:
+        logger.error(f"启动websockify失败: {str(e)}")
+        return None
+
+def stop_websockify(client_ip):
+    """停止指定客户端的websockify进程"""
+    try:
+        if client_ip in websockify_processes:
+            process_info = websockify_processes[client_ip]
+            process = process_info['process']
+            
+            if process.poll() is None:  # 进程仍在运行
+                logger.info(f"停止websockify进程: PID={process.pid}")
+                process.terminate()
+                
+                # 等待进程结束
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    logger.warning(f"websockify进程未能正常结束，强制终止: PID={process.pid}")
+                    process.kill()
+            
+            del websockify_processes[client_ip]
+            logger.info(f"websockify进程已停止: {client_ip}")
+            
+    except Exception as e:
+        logger.error(f"停止websockify进程失败: {str(e)}")
+
+def get_available_websocket_port():
+    """获取可用的WebSocket端口"""
+    import socket
+    
+    # 从6080开始尝试端口
+    start_port = 6080
+    max_attempts = 100
+    
+    for i in range(max_attempts):
+        port = start_port + i
+        try:
+            # 检查端口是否被占用
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind(('localhost', port))
+                return port
+        except OSError:
+            continue
+    
+    logger.error(f"无法找到可用的WebSocket端口（尝试了{max_attempts}个端口）")
+    return None
+
+# VNC断开连接API
+@app.route('/api/vnc/disconnect', methods=['POST'])
+@login_required
+def api_vnc_disconnect():
+    """断开VNC连接"""
+    try:
+        data = request.get_json()
+        client_ip = data.get('client_ip')
+        
+        if not client_ip:
+            return jsonify({'success': False, 'message': '客户端IP不能为空'})
+        
+        # 停止websockify进程
+        stop_websockify(client_ip)
+        
+        return jsonify({'success': True, 'message': 'VNC连接已断开'})
+        
+    except Exception as e:
+        logger.error(f"断开VNC连接失败: {str(e)}")
+        return jsonify({'success': False, 'message': str(e)})
+
+# 旧的VNC WebSocket代理代码（保留以防需要）
 vnc_connections = {}
 
 @socketio.on('vnc_connect')
@@ -2080,38 +2209,6 @@ def api_vnc_send_keys():
         
     except Exception as e:
         logger.error(f"发送VNC按键失败: {str(e)}")
-        return jsonify({'success': False, 'message': str(e)})
-
-@app.route('/api/vnc_disconnect', methods=['POST'])
-@login_required
-def api_vnc_disconnect():
-    """断开VNC连接"""
-    try:
-        data = request.get_json()
-        client_ip = data.get('client_ip')
-        
-        if not client_ip:
-            return jsonify({'success': False, 'message': '缺少客户端IP参数'})
-        
-        # 查找并断开对应的VNC会话
-        session_found = False
-        for session_id, connection in list(vnc_connections.items()):
-            if connection.get('client_ip') == client_ip:
-                try:
-                    connection['socket'].close()
-                    del vnc_connections[session_id]
-                    socketio.emit('vnc_disconnected', room=session_id)
-                    session_found = True
-                except Exception as e:
-                    logger.error(f"断开VNC连接时出错: {str(e)}")
-        
-        if session_found:
-            return jsonify({'success': True, 'message': 'VNC连接已断开'})
-        else:
-            return jsonify({'success': False, 'message': f'未找到IP {client_ip} 对应的VNC会话'})
-        
-    except Exception as e:
-        logger.error(f"断开VNC连接失败: {str(e)}")
         return jsonify({'success': False, 'message': str(e)})
 
 def find_vnc_session_by_ip(client_ip):

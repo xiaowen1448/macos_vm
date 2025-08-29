@@ -11,7 +11,7 @@
     <!-- <link rel="stylesheet" href="https://unpkg.com/novnc@1.4.0/app/styles/base.css"> -->
     <!-- <link rel="stylesheet" href="https://unpkg.com/novnc@1.4.0/app/styles/ui.css"> -->
     <!-- Socket.IO -->
-     <script type="text/javascript" src="static\js\novnc\rfb.js"></script>
+     <script type="module" src="static/js/novnc/rfb.js"></script>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <style>
         body {
@@ -849,12 +849,17 @@
                         
                         <!-- VNC显示区域 -->
                         <div id="vncViewerDiv" class="vnc-viewer position-relative">
-                            <div class="vnc-screen bg-dark d-flex align-items-center justify-content-center" style="height: 600px;">
-                                <div class="text-center text-light">
-                                    <i class="fas fa-desktop fa-3x mb-3" style="opacity: 0.5;"></i>
-                                    <p class="mb-0">VNC连接界面</p>
-                                    <small class="text-muted">远程桌面将在此处显示</small>
-                                </div>
+                            <div class="vnc-status-bar bg-secondary text-white px-3 py-1 d-flex justify-content-between align-items-center">
+                                <span class="small">
+                                    <i class="fas fa-circle me-1"></i>
+                                    状态: <span id="vncStatus" class="badge bg-warning">未连接</span>
+                                </span>
+                                <button id="vncReconnectBtn" class="btn btn-sm btn-outline-light" onclick="reconnectVNC()" style="display: none;">
+                                    <i class="fas fa-sync-alt"></i> 重连
+                                </button>
+                            </div>
+                            <div id="vncScreen" class="vnc-screen bg-dark" style="height: 600px; overflow: hidden;">
+                                <!-- noVNC将在此处渲染 -->
                             </div>
                         </div>
                     </div>
@@ -1306,22 +1311,16 @@
         async function connectVNC(clientIp) {
             console.log('连接VNC:', clientIp);
             
-            // 显示加载状态
-            const loadingContent = `
-                <div class="text-center py-4">
-                    <div class="spinner-border" role="status">
-                        <span class="visually-hidden">连接中...</span>
-                    </div>
-                    <div class="mt-2">正在读取VMX文件并建立VNC连接...</div>
-                </div>
-            `;
+            // 显示模态框和加载状态
+            document.getElementById('vncLoadingDiv').style.display = 'block';
+            document.getElementById('vncContentDiv').style.display = 'none';
+            document.getElementById('vncErrorDiv').style.display = 'none';
             
-            document.getElementById('vncContentDiv').innerHTML = loadingContent;
             const modal = new bootstrap.Modal(document.getElementById('vncModal'));
             modal.show();
             
             try {
-                // 调用后端API获取VNC连接信息
+                // 调用后端API启动websockify并获取连接信息
                 const response = await fetch('/api/vnc/connect', {
                     method: 'POST',
                     headers: {
@@ -1338,85 +1337,40 @@
                     // 设置当前连接的客户端IP
                     currentVncClientIp = clientIp;
                     
-                    // 显示VNC连接界面
-                    const vncContent = `
-                        <div class="vnc-container">
-                            <div class="vnc-info mb-3">
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <h6>连接信息</h6>
-                                        <table class="table table-sm">
-                                            <tr><td>客户端IP:</td><td>${clientIp}</td></tr>
-                                            <tr><td>VNC端口:</td><td>${data.vnc_port}</td></tr>
-                                            <tr><td>VMX文件:</td><td>${data.vmx_file}</td></tr>
-                                            <tr><td>连接状态:</td><td><span class="badge bg-success">已连接</span></td></tr>
-                                        </table>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <h6>操作控制</h6>
-                                        <div class="btn-group-vertical d-grid gap-2">
-                                            <button class="btn btn-sm btn-outline-primary" onclick="refreshVNC()">
-                                                <i class="fas fa-sync-alt"></i> 刷新连接
-                                            </button>
-                                            <button class="btn btn-sm btn-outline-warning" onclick="sendCtrlAltDel()">
-                                                <i class="fas fa-keyboard"></i> Ctrl+Alt+Del
-                                            </button>
-                                            <button class="btn btn-sm btn-outline-danger" onclick="disconnectVNC()">
-                                                <i class="fas fa-times"></i> 断开连接
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="vnc-viewer">
-                                <div class="border" style="height: 500px; background-color: #000; position: relative; overflow: hidden;">
-                                    <canvas id="vncCanvas" style="width: 100%; height: 100%;"></canvas>
-                                    <div id="vncStatus" class="text-center text-white" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
-                                        <i class="fas fa-desktop fa-3x mb-3"></i>
-                                        <div>正在连接VNC服务器...</div>
-                                        <div class="small mt-2">端口: ${data.vnc_config.port}</div>
-                                        <div class="small">主机: ${data.vnc_config.host}</div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div id="vnc-init-script" data-host="${data.vnc_config.host}" data-port="${data.vnc_config.port}" data-password="${data.vnc_config.password}" data-client-ip="${clientIp}"></div>
-                        </div>
-                    `;
+                    // 更新连接信息
+                    document.getElementById('vncHostInfo').textContent = 
+                        `${clientIp} -> 127.0.0.1:${data.vnc_config.websocket_port} (VNC: ${data.vnc_config.vnc_port})`;
                     
-                    document.getElementById('vncContentDiv').innerHTML = vncContent;
+                    // 隐藏加载状态，显示VNC内容
+                    document.getElementById('vncLoadingDiv').style.display = 'none';
+                    document.getElementById('vncContentDiv').style.display = 'block';
                     
-                    // 手动初始化VNC连接
+                    // 初始化noVNC连接
                     setTimeout(() => {
-                        initVNCConnection(data.vnc_config.host, data.vnc_config.port, data.vnc_config.password, clientIp);
-                    }, 100);
+                        initNoVNCConnection(data.vnc_config.websocket_port, data.vnc_config.password || '', '127.0.0.1');
+                    }, 500);
                 } else {
                     // 显示错误信息
-                    const errorContent = `
-                        <div class="alert alert-danger" role="alert">
-                            <i class="fas fa-exclamation-triangle me-2"></i>
-                            VNC连接失败: ${data.message || '连接失败'}
-                        </div>
-                        <div class="text-muted">
-                            <h6>可能的原因:</h6>
-                            <ul>
+                    document.getElementById('vncLoadingDiv').style.display = 'none';
+                    document.getElementById('vncErrorDiv').style.display = 'block';
+                    document.getElementById('vncErrorMessage').innerHTML = `
+                        <div>${data.message || '连接失败'}</div>
+                        <div class="mt-2">
+                            <small class="text-muted">可能的原因:</small>
+                            <ul class="small text-muted mt-1">
                                 <li>VMX文件不存在或无法读取</li>
                                 <li>VNC配置未启用</li>
                                 <li>虚拟机未运行</li>
-                                <li>网络连接问题</li>
+                                <li>websockify启动失败</li>
                             </ul>
                         </div>
                     `;
-                    document.getElementById('vncContentDiv').innerHTML = errorContent;
                 }
             } catch (error) {
                 console.error('VNC连接失败:', error);
-                const errorContent = `
-                    <div class="alert alert-danger" role="alert">
-                        <i class="fas fa-exclamation-triangle me-2"></i>
-                        VNC连接失败: ${error.message || '未知错误'}
-                    </div>
-                `;
-                document.getElementById('vncContentDiv').innerHTML = errorContent;
+                document.getElementById('vncLoadingDiv').style.display = 'none';
+                document.getElementById('vncErrorDiv').style.display = 'block';
+                document.getElementById('vncErrorMessage').textContent = error.message || '未知错误';
             }
         }
 
@@ -1429,100 +1383,172 @@
                 alert('无法获取客户端IP信息');
                 return;
             }
-
-            try {
-                const response = await fetch('/api/vnc_refresh', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        client_ip: currentVncClientIp
-                    })
-                });
-
-                const data = await response.json();
-                if (data.success) {
-                    alert('VNC连接已刷新');
-                    // 更新连接信息显示
-                    if (data.vnc_config) {
-                        document.getElementById('vncHostInfo').textContent = 
-                            `${data.vnc_config.host}:${data.vnc_config.port}`;
-                    }
-                } else {
-                    alert('刷新失败: ' + data.message);
-                }
-            } catch (error) {
-                console.error('刷新VNC连接失败:', error);
-                alert('刷新失败: ' + error.message);
-            }
+            
+            console.log('刷新VNC连接:', currentVncClientIp);
+            
+            // 断开当前连接
+            await disconnectVNC();
+            
+            // 重新连接
+            setTimeout(() => {
+                connectVNC(currentVncClientIp);
+            }, 1000);
         }
 
         // 发送Ctrl+Alt+Del
-        async function sendCtrlAltDel() {
-            if (!currentVncClientIp) {
-                alert('无法获取客户端IP信息');
+        function sendCtrlAltDel() {
+            if (!window.currentRfb) {
+                alert('noVNC客户端未连接');
                 return;
             }
-
+            
+            console.log('发送Ctrl+Alt+Del');
+            
             try {
-                const response = await fetch('/api/vnc_send_keys', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        client_ip: currentVncClientIp,
-                        key_combination: 'ctrl+alt+del'
-                    })
-                });
-
-                const data = await response.json();
-                if (data.success) {
-                    alert('已发送Ctrl+Alt+Del组合键');
-                } else {
-                    alert('发送失败: ' + data.message);
-                }
+                // 发送Ctrl+Alt+Del组合键
+                window.currentRfb.sendCtrlAltDel();
+                console.log('Ctrl+Alt+Del已发送');
             } catch (error) {
-                console.error('发送按键失败:', error);
+                console.error('发送Ctrl+Alt+Del失败:', error);
                 alert('发送失败: ' + error.message);
             }
         }
 
         // 断开VNC连接
         async function disconnectVNC() {
-            if (!confirm('确定要断开VNC连接吗？')) {
-                return;
-            }
-
-            if (!currentVncClientIp) {
-                bootstrap.Modal.getInstance(document.getElementById('vncModal')).hide();
-                return;
-            }
-
+            console.log('断开VNC连接');
+            
             try {
-                const response = await fetch('/api/vnc_disconnect', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        client_ip: currentVncClientIp
-                    })
-                });
-
-                const data = await response.json();
-                if (data.success) {
-                    console.log('VNC连接已断开');
-                } else {
-                    console.error('断开连接失败:', data.message);
+                // 断开noVNC连接
+                if (window.currentRfb) {
+                    window.currentRfb.disconnect();
+                    window.currentRfb = null;
                 }
+                
+                // 调用后端API断开websockify
+                if (currentVncClientIp) {
+                    const response = await fetch('/api/vnc/disconnect', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            client_ip: currentVncClientIp
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    console.log('后端断开连接响应:', data);
+                }
+                
+                // 重置状态
+                document.getElementById('vncStatus').textContent = '未连接';
+                document.getElementById('vncStatus').className = 'badge bg-secondary';
+                
+                // 重置当前客户端IP
+                currentVncClientIp = null;
+                
+                // 关闭模态框
+                const modal = bootstrap.Modal.getInstance(document.getElementById('vncModal'));
+                if (modal) {
+                    modal.hide();
+                }
+                
             } catch (error) {
                 console.error('断开VNC连接失败:', error);
-            } finally {
-                // 无论成功失败都关闭模态框
-                bootstrap.Modal.getInstance(document.getElementById('vncModal')).hide();
-                currentVncClientIp = null;
+            }
+        }
+
+        // 初始化noVNC连接
+        function initNoVNCConnection(websocketPort, password, clientIp) {
+            console.log('初始化noVNC连接:', { websocketPort, clientIp });
+            
+            try {
+                // 隐藏加载界面，显示VNC界面
+                document.getElementById('vncLoadingDiv').style.display = 'none';
+                document.getElementById('vncContentDiv').style.display = 'block';
+                
+                // 更新状态
+                document.getElementById('vncStatus').textContent = '连接中';
+                document.getElementById('vncStatus').className = 'badge bg-warning';
+                
+                // 构建WebSocket URL
+                const wsUrl = `ws://127.0.0.1:${websocketPort}`;
+                console.log('WebSocket URL:', wsUrl);
+                
+                // 创建noVNC连接
+                const rfb = new RFB(document.getElementById('vncScreen'), wsUrl, {
+                    credentials: { password: password || '' },
+                    repeaterID: '',
+                    shared: true,
+                    wsProtocols: ['binary']
+                });
+                
+                // 存储RFB实例到全局变量
+                window.currentRfb = rfb;
+                
+                // 设置事件监听器
+                rfb.addEventListener('connect', function(e) {
+                    console.log('noVNC连接成功');
+                    document.getElementById('vncStatus').textContent = '已连接';
+                    document.getElementById('vncStatus').className = 'badge bg-success';
+                });
+                
+                rfb.addEventListener('disconnect', function(e) {
+                    console.log('noVNC连接断开:', e.detail);
+                    document.getElementById('vncStatus').textContent = '已断开';
+                    document.getElementById('vncStatus').className = 'badge bg-danger';
+                    window.currentRfb = null;
+                });
+                
+                rfb.addEventListener('credentialsrequired', function(e) {
+                    console.log('需要认证');
+                    document.getElementById('vncStatus').textContent = '需要认证';
+                    document.getElementById('vncStatus').className = 'badge bg-warning';
+                });
+                
+                rfb.addEventListener('securityfailure', function(e) {
+                    console.error('安全验证失败:', e.detail);
+                    document.getElementById('vncStatus').textContent = '认证失败';
+                    document.getElementById('vncStatus').className = 'badge bg-danger';
+                    
+                    // 显示错误信息
+                    document.getElementById('vncContentDiv').style.display = 'none';
+                    document.getElementById('vncErrorDiv').style.display = 'block';
+                    document.getElementById('vncErrorMessage').textContent = '认证失败，请检查VNC密码';
+                });
+                
+                // 设置连接超时
+                setTimeout(() => {
+                    if (window.currentRfb && document.getElementById('vncStatus').textContent === '连接中') {
+                        console.log('连接超时');
+                        document.getElementById('vncStatus').textContent = '连接超时';
+                        document.getElementById('vncStatus').className = 'badge bg-danger';
+                        
+                        // 显示错误信息
+                        document.getElementById('vncContentDiv').style.display = 'none';
+                        document.getElementById('vncErrorDiv').style.display = 'block';
+                        document.getElementById('vncErrorMessage').innerHTML = `
+                            <div>连接超时</div>
+                            <div class="mt-2">
+                                <button class="btn btn-sm btn-primary" onclick="reconnectVNC()">重试连接</button>
+                            </div>
+                        `;
+                    }
+                }, 10000);
+                
+            } catch (error) {
+                console.error('初始化noVNC连接失败:', error);
+                document.getElementById('vncLoadingDiv').style.display = 'none';
+                document.getElementById('vncErrorDiv').style.display = 'block';
+                document.getElementById('vncErrorMessage').textContent = error.message || '初始化失败';
+            }
+        }
+        
+        // 重连VNC
+        function reconnectVNC() {
+            if (currentVncClientIp) {
+                connectVNC(currentVncClientIp);
             }
         }
 
@@ -2607,7 +2633,10 @@
     </script>
     
     <!-- noVNC库 -->
-    <script src="/static/js/novnc/rfb.js"></script>
+    <script type="module">
+        import RFB from '/static/js/novnc/rfb.js';
+        window.RFB = RFB;
+    </script>
     
     <!-- Socket.IO库 -->
     <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
