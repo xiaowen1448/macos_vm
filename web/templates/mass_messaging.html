@@ -531,9 +531,6 @@
                                 <button type="button" class="btn btn-primary" onclick="scanClients()">
                                     <i class="fas fa-search me-2"></i>扫描客户端
                                 </button>
-                                <button type="button" class="btn btn-success btn-sm" id="autoScanBtn" onclick="toggleAutoScan()">
-                                    <i class="fas fa-play"></i> 开启自动扫描
-                                </button>
                                 <button type="button" class="btn btn-warning" onclick="batchSendMessage()" id="batchSendBtn" disabled>
                                     <i class="fas fa-paper-plane me-2"></i>批量发信
                                 </button>
@@ -718,22 +715,7 @@
         </div>
     </div>
 
-    <!-- 任务详情模态框 -->
-    <div class="modal fade" id="taskDetailModal" tabindex="-1">
-        <div class="modal-dialog modal-xl">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">任务详细信息</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div id="taskDetailContent">
-                        <!-- 任务详情内容将在这里动态加载 -->
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+   
 
     <!-- 批量发信模态框 -->
     <div class="modal fade" id="batchSendModal" tabindex="-1">
@@ -805,8 +787,8 @@
 
     <!-- VNC连接模态框 -->
     <div class="modal fade" id="vncModal" tabindex="-1">
-        <div class="modal-dialog modal-lg" style="max-width: 50%; width: 50%;">
-            <div class="modal-content">
+        <div class="modal-dialog modal-lg vnc-resizable" style="max-width: 50%; width: 50%; min-width: 400px; min-height: 300px;">
+            <div class="modal-content vnc-modal-content">
                 <div class="modal-header bg-primary text-white">
                     <h5 class="modal-title">
                         <i class="fas fa-desktop me-2"></i>VNC远程连接
@@ -834,8 +816,8 @@
                                     </small>
                                 </div>
                                 <div class="vnc-controls">
-                                    <button type="button" class="btn btn-sm btn-outline-secondary me-2" onclick="refreshVNC()" title="刷新连接">
-                                        <i class="fas fa-sync-alt"></i> 刷新
+                                    <button type="button" class="btn btn-sm btn-outline-info me-2" onclick="toggleFullscreen()" title="全屏/退出全屏" id="fullscreenBtn">
+                                        <i class="fas fa-expand"></i> 全屏
                                     </button>
                                     <button type="button" class="btn btn-sm btn-outline-warning me-2" onclick="sendCtrlAltDel()" title="发送Ctrl+Alt+Del">
                                         <i class="fas fa-keyboard"></i> Ctrl+Alt+Del
@@ -874,13 +856,6 @@
                             </div>
                         </div>
                     </div>
-                </div>
-                <div class="modal-footer bg-light">
-                    <small class="text-muted me-auto">
-                        <i class="fas fa-info-circle me-1"></i>
-                        提示：可使用工具栏按钮进行远程操作
-                    </small>
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
                 </div>
             </div>
         </div>
@@ -989,7 +964,7 @@
                 alert('请填写任务名称、选择至少一个客户端、至少一个手机号，并输入消息内容');
                 return;
             }
-            
+    
             // 构建任务数据
             const taskData = {
                 name: taskName,
@@ -1128,9 +1103,6 @@
                         </span>
                     </td>
                     <td>
-                        <button class="btn btn-sm btn-outline-primary me-1" onclick="viewClientDetail('${client.ip}')">
-                            <i class="fas fa-eye"></i> 详情
-                        </button>
                         <button class="btn btn-sm btn-outline-success" onclick="connectVNC('${client.ip}')" title="VNC登录">
                             <i class="fas fa-desktop"></i> VNC
                         </button>
@@ -1158,6 +1130,9 @@
             
             const batchSendBtn = document.getElementById('batchSendBtn');
             batchSendBtn.disabled = onlineCheckboxes.length === 0;
+            
+            // 同时更新全选复选框状态
+            updateSelectAllCheckbox();
         }
 
         // 批量发信
@@ -1301,12 +1276,6 @@
                 bootstrap.Modal.getInstance(document.getElementById('batchSendModal')).hide();
             }
         }
-
-        // 查看客户端详情
-        function viewClientDetail(clientIp) {
-            alert(`查看客户端详情: ${clientIp}\n功能开发中...`);
-        }
-
         // VNC连接
         async function connectVNC(clientIp) {
             console.log('连接VNC:', clientIp);
@@ -1377,23 +1346,6 @@
         // 存储当前VNC连接的客户端IP
         let currentVncClientIp = null;
 
-        // 刷新VNC连接
-        async function refreshVNC() {
-            if (!currentVncClientIp) {
-                alert('无法获取客户端IP信息');
-                return;
-            }
-            
-            console.log('刷新VNC连接:', currentVncClientIp);
-            
-            // 断开当前连接
-            await disconnectVNC();
-            
-            // 重新连接
-            setTimeout(() => {
-                connectVNC(currentVncClientIp);
-            }, 1000);
-        }
 
         // 发送Ctrl+Alt+Del
         function sendCtrlAltDel() {
@@ -1768,9 +1720,7 @@
                     scanClients();
                 }
             }, 300000); // 5分钟
-            
-            // 更新按钮状态
-            updateAutoScanButton();
+
         }
         
         // 停止自动扫描
@@ -1795,20 +1745,7 @@
                 startAutoScan();
             }
         }
-        
-        // 更新自动扫描按钮状态
-        function updateAutoScanButton() {
-            const autoScanBtn = document.getElementById('autoScanBtn');
-            if (autoScanBtn) {
-                if (isAutoScanEnabled) {
-                    autoScanBtn.innerHTML = '<i class="fas fa-stop"></i> 停止自动扫描';
-                    autoScanBtn.className = 'btn btn-warning btn-sm';
-                } else {
-                    autoScanBtn.innerHTML = '<i class="fas fa-play"></i> 开启自动扫描';
-                    autoScanBtn.className = 'btn btn-success btn-sm';
-                }
-            }
-        }
+    
         
         // 异步获取JSON数据的通用函数
         async function fetchJsonData(url, options = {}) {
@@ -1863,9 +1800,50 @@
             }
         }
         
+        // 全选/全不选功能
+        function toggleSelectAll() {
+            const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+            const clientCheckboxes = document.querySelectorAll('.client-checkbox');
+            
+            // 根据全选复选框的状态来设置所有客户端复选框
+            clientCheckboxes.forEach(checkbox => {
+                checkbox.checked = selectAllCheckbox.checked;
+            });
+            
+            // 更新批量发信按钮状态
+            updateBatchSendButton();
+        }
+        
+        // 更新全选复选框状态
+        function updateSelectAllCheckbox() {
+            const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+            const clientCheckboxes = document.querySelectorAll('.client-checkbox');
+            const checkedCheckboxes = document.querySelectorAll('.client-checkbox:checked');
+            
+            if (clientCheckboxes.length === 0) {
+                selectAllCheckbox.checked = false;
+                selectAllCheckbox.indeterminate = false;
+            } else if (checkedCheckboxes.length === clientCheckboxes.length) {
+                selectAllCheckbox.checked = true;
+                selectAllCheckbox.indeterminate = false;
+            } else if (checkedCheckboxes.length > 0) {
+                selectAllCheckbox.checked = false;
+                selectAllCheckbox.indeterminate = true;
+            } else {
+                selectAllCheckbox.checked = false;
+                selectAllCheckbox.indeterminate = false;
+            }
+        }
+
         // 页面加载完成后初始化
         document.addEventListener('DOMContentLoaded', function() {
             console.log('群发管理界面已加载');
+            
+            // 添加全选复选框事件监听器
+            const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+            if (selectAllCheckbox) {
+                selectAllCheckbox.addEventListener('change', toggleSelectAll);
+            }
             
             // 自动开始扫描客户端
             scanClients();
@@ -2643,5 +2621,282 @@
     
     <!-- Bootstrap JavaScript -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- VNC窗口增强功能样式 -->
+    <style>
+        /* 全屏样式 */
+        .vnc-fullscreen {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            max-width: none !important;
+            z-index: 9999 !important;
+            margin: 0 !important;
+        }
+        
+        .vnc-fullscreen .modal-content {
+            height: 100vh !important;
+            border-radius: 0 !important;
+        }
+        
+        .vnc-fullscreen #vncScreen {
+            height: calc(100vh - 120px) !important;
+        }
+        
+        /* 可拖拽调整大小样式 */
+        .vnc-resizable {
+            position: relative;
+        }
+        
+        .vnc-modal-content {
+            position: relative;
+        }
+        
+        /* 拖拽手柄 */
+        .resize-handle {
+            position: absolute;
+            background: transparent;
+        }
+        
+        .resize-handle:hover {
+            background: rgba(0, 123, 255, 0.3);
+        }
+        
+        .resize-n {
+            top: -5px;
+            left: 10px;
+            right: 10px;
+            height: 10px;
+            cursor: n-resize;
+        }
+        
+        .resize-s {
+            bottom: -5px;
+            left: 10px;
+            right: 10px;
+            height: 10px;
+            cursor: s-resize;
+        }
+        
+        .resize-w {
+            top: 10px;
+            left: -5px;
+            bottom: 10px;
+            width: 10px;
+            cursor: w-resize;
+        }
+        
+        .resize-e {
+            top: 10px;
+            right: -5px;
+            bottom: 10px;
+            width: 10px;
+            cursor: e-resize;
+        }
+        
+        .resize-nw {
+            top: -5px;
+            left: -5px;
+            width: 15px;
+            height: 15px;
+            cursor: nw-resize;
+        }
+        
+        .resize-ne {
+            top: -5px;
+            right: -5px;
+            width: 15px;
+            height: 15px;
+            cursor: ne-resize;
+        }
+        
+        .resize-sw {
+            bottom: -5px;
+            left: -5px;
+            width: 15px;
+            height: 15px;
+            cursor: sw-resize;
+        }
+        
+        .resize-se {
+            bottom: -5px;
+            right: -5px;
+            width: 15px;
+            height: 15px;
+            cursor: se-resize;
+        }
+    </style>
+    
+    <!-- VNC窗口增强功能脚本 -->
+    <script>
+        let isFullscreen = false;
+        let originalModalStyle = {};
+        let isResizing = false;
+        let resizeDirection = '';
+        let startX, startY, startWidth, startHeight, startLeft, startTop;
+        
+        // 全屏切换功能
+        function toggleFullscreen() {
+            const modal = document.querySelector('#vncModal .modal-dialog');
+            const fullscreenBtn = document.getElementById('fullscreenBtn');
+            const vncScreen = document.getElementById('vncScreen');
+            
+            if (!isFullscreen) {
+                // 进入全屏
+                originalModalStyle = {
+                    position: modal.style.position,
+                    top: modal.style.top,
+                    left: modal.style.left,
+                    width: modal.style.width,
+                    height: modal.style.height,
+                    maxWidth: modal.style.maxWidth,
+                    zIndex: modal.style.zIndex,
+                    margin: modal.style.margin
+                };
+                
+                modal.classList.add('vnc-fullscreen');
+                fullscreenBtn.innerHTML = '<i class="fas fa-compress"></i> 退出全屏';
+                isFullscreen = true;
+                
+                // 调整VNC屏幕大小
+                if (vncScreen) {
+                    vncScreen.style.height = 'calc(100vh - 120px)';
+                }
+            } else {
+                // 退出全屏
+                modal.classList.remove('vnc-fullscreen');
+                
+                // 恢复原始样式
+                Object.keys(originalModalStyle).forEach(key => {
+                    modal.style[key] = originalModalStyle[key];
+                });
+                
+                fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i> 全屏';
+                isFullscreen = false;
+                
+                // 恢复VNC屏幕大小
+                if (vncScreen) {
+                    vncScreen.style.height = '400px';
+                }
+            }
+        }
+        
+        // 初始化拖拽调整大小功能
+        function initResizable() {
+            const modalContent = document.querySelector('#vncModal .vnc-modal-content');
+            if (!modalContent) return;
+            
+            // 创建拖拽手柄
+            const handles = ['n', 's', 'w', 'e', 'nw', 'ne', 'sw', 'se'];
+            handles.forEach(direction => {
+                const handle = document.createElement('div');
+                handle.className = `resize-handle resize-${direction}`;
+                handle.addEventListener('mousedown', (e) => startResize(e, direction));
+                modalContent.appendChild(handle);
+            });
+        }
+        
+        // 开始调整大小
+        function startResize(e, direction) {
+            if (isFullscreen) return; // 全屏模式下不允许调整大小
+            
+            e.preventDefault();
+            isResizing = true;
+            resizeDirection = direction;
+            
+            const modal = document.querySelector('#vncModal .modal-dialog');
+            const rect = modal.getBoundingClientRect();
+            
+            startX = e.clientX;
+            startY = e.clientY;
+            startWidth = rect.width;
+            startHeight = rect.height;
+            startLeft = rect.left;
+            startTop = rect.top;
+            
+            document.addEventListener('mousemove', doResize);
+            document.addEventListener('mouseup', stopResize);
+            document.body.style.userSelect = 'none';
+        }
+        
+        // 执行调整大小
+        function doResize(e) {
+            if (!isResizing) return;
+            
+            const modal = document.querySelector('#vncModal .modal-dialog');
+            const vncScreen = document.getElementById('vncScreen');
+            
+            const deltaX = e.clientX - startX;
+            const deltaY = e.clientY - startY;
+            
+            let newWidth = startWidth;
+            let newHeight = startHeight;
+            let newLeft = startLeft;
+            let newTop = startTop;
+            
+            // 根据拖拽方向调整尺寸和位置
+            if (resizeDirection.includes('e')) {
+                newWidth = Math.max(400, startWidth + deltaX);
+            }
+            if (resizeDirection.includes('w')) {
+                newWidth = Math.max(400, startWidth - deltaX);
+                newLeft = startLeft + deltaX;
+            }
+            if (resizeDirection.includes('s')) {
+                newHeight = Math.max(300, startHeight + deltaY);
+            }
+            if (resizeDirection.includes('n')) {
+                newHeight = Math.max(300, startHeight - deltaY);
+                newTop = startTop + deltaY;
+            }
+            
+            // 应用新的尺寸和位置
+            modal.style.width = newWidth + 'px';
+            modal.style.height = newHeight + 'px';
+            modal.style.maxWidth = 'none';
+            modal.style.position = 'fixed';
+            modal.style.left = newLeft + 'px';
+            modal.style.top = newTop + 'px';
+            modal.style.margin = '0';
+            
+            // 调整VNC屏幕高度
+            if (vncScreen) {
+                const headerHeight = 60; // 模态框头部高度
+                const toolbarHeight = 60; // 工具栏高度
+                vncScreen.style.height = (newHeight - headerHeight - toolbarHeight) + 'px';
+            }
+        }
+        
+        // 停止调整大小
+        function stopResize() {
+            isResizing = false;
+            resizeDirection = '';
+            document.removeEventListener('mousemove', doResize);
+            document.removeEventListener('mouseup', stopResize);
+            document.body.style.userSelect = '';
+        }
+        
+        // 当VNC模态框显示时初始化拖拽功能
+        document.addEventListener('DOMContentLoaded', function() {
+            const vncModal = document.getElementById('vncModal');
+            if (vncModal) {
+                vncModal.addEventListener('shown.bs.modal', function() {
+                    setTimeout(initResizable, 100); // 延迟初始化以确保DOM完全加载
+                });
+                
+                // 模态框关闭时重置状态
+                vncModal.addEventListener('hidden.bs.modal', function() {
+                    if (isFullscreen) {
+                        toggleFullscreen(); // 退出全屏
+                    }
+                    // 清理拖拽手柄
+                    const handles = document.querySelectorAll('#vncModal .resize-handle');
+                    handles.forEach(handle => handle.remove());
+                });
+            }
+        });
+    </script>
 </body>
 </html>
