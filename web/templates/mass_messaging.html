@@ -1276,17 +1276,20 @@
                 bootstrap.Modal.getInstance(document.getElementById('batchSendModal')).hide();
             }
         }
-        // VNC连接
+        // 简单的Base64编码函数用于加密URL参数
+        function encryptConnectionString(str) {
+            return btoa(encodeURIComponent(str)).replace(/[+\/=]/g, function(match) {
+                return {
+                    '+': '-',
+                    '/': '_',
+                    '=': ''
+                }[match];
+            });
+        }
+        
+        // VNC连接 - 在新窗口中打开
         async function connectVNC(clientIp) {
             console.log('连接VNC:', clientIp);
-            
-            // 显示模态框和加载状态
-            document.getElementById('vncLoadingDiv').style.display = 'block';
-            document.getElementById('vncContentDiv').style.display = 'none';
-            document.getElementById('vncErrorDiv').style.display = 'none';
-            
-            const modal = new bootstrap.Modal(document.getElementById('vncModal'));
-            modal.show();
             
             try {
                 // 调用后端API启动websockify并获取连接信息
@@ -1303,43 +1306,34 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    // 设置当前连接的客户端IP
-                    currentVncClientIp = clientIp;
+                    // 构建连接字符串并加密
+                    const connectionString = `ip=${clientIp}&port=${data.vnc_config.websocket_port}&password=${data.vnc_config.password || ''}`;
+                    const encryptedParams = encryptConnectionString(connectionString);
                     
-                    // 更新连接信息
-                    document.getElementById('vncHostInfo').textContent = 
-                        `${clientIp} -> 127.0.0.1:${data.vnc_config.websocket_port} (VNC: ${data.vnc_config.vnc_port})`;
+                    // 在新窗口中打开VNC连接，使用127.0.0.1作为服务器地址
+                    const vncUrl = `http://127.0.0.1:5000/vnc_viewer?params=${encryptedParams}`;
                     
-                    // 隐藏加载状态，显示VNC内容
-                    document.getElementById('vncLoadingDiv').style.display = 'none';
-                    document.getElementById('vncContentDiv').style.display = 'block';
+                    // 打开新窗口，设置合适的尺寸
+                    const vncWindow = window.open(
+                        vncUrl,
+                        `vnc_${clientIp.replace(/\./g, '_')}`,
+                        'width=1024,height=768,resizable=yes,scrollbars=no,toolbar=no,menubar=no,location=no,status=no'
+                    );
                     
-                    // 初始化noVNC连接
-                    setTimeout(() => {
-                        initNoVNCConnection(data.vnc_config.websocket_port, data.vnc_config.password || '', '127.0.0.1');
-                    }, 500);
+                    if (!vncWindow) {
+                        alert('无法打开VNC窗口，请检查浏览器弹窗设置');
+                        return;
+                    }
+                    
+                    // 设置窗口标题
+                    vncWindow.document.title = `VNC - ${clientIp}`;
+                    
                 } else {
-                    // 显示错误信息
-                    document.getElementById('vncLoadingDiv').style.display = 'none';
-                    document.getElementById('vncErrorDiv').style.display = 'block';
-                    document.getElementById('vncErrorMessage').innerHTML = `
-                        <div>${data.message || '连接失败'}</div>
-                        <div class="mt-2">
-                            <small class="text-muted">可能的原因:</small>
-                            <ul class="small text-muted mt-1">
-                                <li>VMX文件不存在或无法读取</li>
-                                <li>VNC配置未启用</li>
-                                <li>虚拟机未运行</li>
-                                <li>websockify启动失败</li>
-                            </ul>
-                        </div>
-                    `;
+                    alert(`VNC连接失败: ${data.message || '未知错误'}\n\n可能的原因:\n- VMX文件不存在或无法读取\n- VNC配置未启用\n- 虚拟机未运行\n- websockify启动失败`);
                 }
             } catch (error) {
                 console.error('VNC连接失败:', error);
-                document.getElementById('vncLoadingDiv').style.display = 'none';
-                document.getElementById('vncErrorDiv').style.display = 'block';
-                document.getElementById('vncErrorMessage').textContent = error.message || '未知错误';
+                alert(`VNC连接失败: ${error.message || '未知错误'}`);
             }
         }
 
@@ -2610,9 +2604,9 @@
         }
     </script>
     
-    <!-- noVNC库 -->
+    <!-- noVNC库 (使用jsDelivr CDN) -->
     <script type="module">
-        import RFB from '/static/js/novnc/rfb.js';
+        import RFB from '/static/js/noVNC-1.4.0/core/rfb.js';
         window.RFB = RFB;
     </script>
     

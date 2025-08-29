@@ -9037,6 +9037,12 @@ def restore_phone():
             'message': str(e)
         })
 
+# VNC查看器页面路由
+@app.route('/vnc_viewer')
+def vnc_viewer():
+    """VNC查看器页面"""
+    return render_template('vnc_viewer.html')
+
 # 处理@vite/client请求，避免404错误（通常由浏览器开发者工具或扩展产生）
 @app.route('/@vite/client')
 def vite_client():
