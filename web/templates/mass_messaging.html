@@ -735,6 +735,13 @@
                                 </div>
                                 <div class="card-body p-2">
                                     <div class="mb-2">
+                                        <label for="phoneTemplate" class="form-label small">选择手机号模板</label>
+                                        <select class="form-control form-control-sm" id="phoneTemplate" onchange="previewPhoneTemplate()">
+                                            <option value="">请选择手机号模板</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="mb-2">
                                         <label for="batchTemplate" class="form-label small">选择模板</label>
                                         <select class="form-control form-control-sm" id="batchTemplate" onchange="previewTemplate()">
                                             <option value="">请选择模板</option>
@@ -752,7 +759,7 @@
                                     <!-- 附件预览 -->
                                     <div class="mb-2">
                                         <label class="form-label small">附件预览</label>
-                                        <div class="border rounded p-2 small" id="attachmentPreview" style="height: 80px; overflow-y: auto; background-color: #f8f9fa;">
+                                        <div class="border rounded p-2 small" id="attachmentPreview" style="height: 60px; overflow-y: auto; background-color: #f8f9fa;">
                                             <span class="text-muted">暂无附件</span>
                                         </div>
                                     </div>
@@ -1188,8 +1195,9 @@
             `).join('');
         }
 
-        // 全局模板数据
+        // 全局变量
         let globalTemplates = [];
+        let globalPhoneTemplates = [];
         
         // 加载模板列表
         async function loadTemplates() {
@@ -1206,6 +1214,37 @@
             } catch (error) {
                 console.error('加载模板失败:', error);
                 alert('加载模板失败: ' + error.message);
+            }
+        }
+        
+        // 加载手机号模板列表
+        async function loadPhoneTemplates() {
+            console.log('开始加载手机号模板...');
+            try {
+                const response = await fetch('/api/phone_templates');
+                console.log('手机号模板API响应状态:', response.status);
+                const data = await response.json();
+                console.log('手机号模板API响应数据:', data);
+                
+                if (data.success) {
+                    globalPhoneTemplates = data.data;
+                    console.log('成功加载手机号模板:', globalPhoneTemplates.length, '个');
+                    updatePhoneTemplateSelect();
+                } else {
+                    console.error('加载手机号模板失败:', data?.message);
+                    // 显示错误信息到页面
+                    const phoneSelect = document.getElementById('phoneTemplate');
+                    if (phoneSelect) {
+                        phoneSelect.innerHTML = '<option value="" disabled>加载失败: ' + (data?.message || '未知错误') + '</option>';
+                    }
+                }
+            } catch (error) {
+                console.error('加载手机号模板失败:', error);
+                // 显示错误信息到页面
+                const phoneSelect = document.getElementById('phoneTemplate');
+                if (phoneSelect) {
+                    phoneSelect.innerHTML = '<option value="" disabled>网络错误: ' + error.message + '</option>';
+                }
             }
         }
         
@@ -1235,6 +1274,29 @@
                     option.textContent = template.name;
                     taskSelect.appendChild(option);
                 });
+            }
+        }
+        
+        // 更新手机号模板下拉选择
+        function updatePhoneTemplateSelect() {
+            console.log('开始更新手机号模板下拉选择...');
+            const phoneSelect = document.getElementById('phoneTemplate');
+            console.log('phoneTemplate元素:', phoneSelect);
+            if (phoneSelect) {
+                phoneSelect.innerHTML = '<option value="">请选择手机号模板</option>';
+                console.log('准备添加', globalPhoneTemplates.length, '个手机号模板选项');
+                
+                globalPhoneTemplates.forEach(template => {
+                    const option = document.createElement('option');
+                    option.value = template.id;
+                    option.textContent = template.name;
+                    phoneSelect.appendChild(option);
+                    console.log('添加手机号模板选项:', template.name);
+                });
+                
+                console.log('手机号模板下拉选择更新完成，当前选项数量:', phoneSelect.options.length);
+            } else {
+                console.error('找不到phoneTemplate元素');
             }
         }
         
@@ -1271,12 +1333,49 @@
             }
         }
 
+        // 手机号模板预览
+        function previewPhoneTemplate() {
+            const phoneTemplateId = document.getElementById('phoneTemplate').value;
+            const phonePreview = document.getElementById('phonePreview');
+            
+            if (!phoneTemplateId) {
+                phonePreview.innerHTML = '<span class="text-muted">暂无手机号模板</span>';
+                return;
+            }
+            
+            // 从全局手机号模板数据中查找
+            const phoneTemplate = globalPhoneTemplates.find(t => t.id == phoneTemplateId);
+            if (phoneTemplate) {
+                // 显示手机号数量和部分内容预览
+                const phoneCount = phoneTemplate.phone_count || 0;
+                const previewContent = phoneTemplate.preview_content || '暂无预览内容';
+                phonePreview.innerHTML = `
+                    <div class="d-flex align-items-center mb-1">
+                        <i class="fas fa-phone me-2"></i>
+                        <span class="fw-bold">${phoneTemplate.name}</span>
+                    </div>
+                    <div class="text-muted small">
+                        包含 ${phoneCount} 个手机号<br>
+                        预览: ${previewContent}
+                    </div>
+                `;
+            } else {
+                phonePreview.innerHTML = '<span class="text-danger">手机号模板不存在</span>';
+            }
+        }
+        
         // 执行批量发信
         async function executeBatchSend() {
             const templateId = document.getElementById('batchTemplate').value;
+            const phoneTemplateId = document.getElementById('phoneTemplate').value;
             
             if (!templateId) {
                 alert('请选择发信模板');
+                return;
+            }
+            
+            if (!phoneTemplateId) {
+                alert('请选择手机号模板');
                 return;
             }
             
@@ -1308,6 +1407,7 @@
                     },
                     body: JSON.stringify({
                         template_id: templateId,
+                        phone_template_id: phoneTemplateId,
                         selected_clients: selectedClients
                     })
                 });
@@ -1984,6 +2084,9 @@
             
             // 加载模板列表
             loadTemplates();
+            
+            // 加载手机号模板列表
+            loadPhoneTemplates();
             
             // 开启自动扫描
             startAutoScan();

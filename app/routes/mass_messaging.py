@@ -99,6 +99,155 @@ def api_get_templates():
         logger.error(f"获取模板列表失败: {str(e)}")
         return jsonify({'success': False, 'message': str(e)})
 
+# 手机号模板管理API
+@mass_messaging_bp.route('/api/phone_templates', methods=['GET'])
+@login_required
+def api_get_phone_templates():
+    """获取手机号模板列表 - 从phone_unused_dir目录读取"""
+    try:
+        templates = []
+        # 获取项目根目录
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        
+        # 从配置文件获取phone_unused_dir路径
+        from config import phone_unused_dir
+        phone_template_dir = os.path.join(project_root, phone_unused_dir)
+        
+        # 确保目录存在
+        if not os.path.exists(phone_template_dir):
+            return jsonify({'success': True, 'data': [], 'message': '手机号模板目录不存在'})
+        
+        # 扫描手机号模板文件
+        for filename in os.listdir(phone_template_dir):
+            if filename.endswith('.txt') and filename != '.gitkeep':
+                template_name = filename.replace('.txt', '')
+                file_path = os.path.join(phone_template_dir, filename)
+                
+                # 读取文件内容获取手机号数量和预览
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        content = f.read().strip()
+                        phone_numbers = [line.strip() for line in content.split('\n') if line.strip()]
+                        phone_count = len(phone_numbers)
+                        
+                        # 生成预览内容（显示前3个手机号）
+                        preview_content = ', '.join(phone_numbers[:3])
+                        if phone_count > 3:
+                            preview_content += f' ... (共{phone_count}个)'
+                        
+                        templates.append({
+                            'id': template_name,
+                            'name': template_name,
+                            'phone_count': phone_count,
+                            'preview_content': preview_content,
+                            'file_path': filename
+                        })
+                except Exception as e:
+                    logger.error(f"读取手机号模板文件失败 {filename}: {str(e)}")
+                    continue
+        
+        # 按名称排序
+        templates.sort(key=lambda x: x['name'])
+        
+        return jsonify({
+            'success': True,
+            'data': templates,
+            'message': f'成功获取 {len(templates)} 个手机号模板'
+        })
+        
+    except Exception as e:
+        logger.error(f"获取手机号模板列表失败: {str(e)}")
+        return jsonify({'success': False, 'message': str(e)})
+
+@mass_messaging_bp.route('/api/phone_templates', methods=['POST'])
+@login_required
+def api_upload_phone_template():
+    """上传手机号模板"""
+    try:
+        # 获取表单数据
+        template_name = request.form.get('template_name')
+        if not template_name:
+            return jsonify({'success': False, 'message': '模板名称不能为空'})
+        
+        # 检查是否有上传的文件
+        if 'phone_file' not in request.files:
+            return jsonify({'success': False, 'message': '请选择要上传的手机号文件'})
+        
+        file = request.files['phone_file']
+        if file.filename == '':
+            return jsonify({'success': False, 'message': '请选择要上传的手机号文件'})
+        
+        # 获取项目根目录
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        
+        # 从配置文件获取phone_unused_dir路径
+        from config import phone_unused_dir
+        phone_template_dir = os.path.join(project_root, phone_unused_dir)
+        
+        # 确保目录存在
+        if not os.path.exists(phone_template_dir):
+            os.makedirs(phone_template_dir)
+        
+        # 保存文件
+        filename = f"{template_name}.txt"
+        file_path = os.path.join(phone_template_dir, filename)
+        
+        # 读取并验证文件内容
+        content = file.read().decode('utf-8')
+        phone_numbers = [line.strip() for line in content.split('\n') if line.strip()]
+        
+        if len(phone_numbers) == 0:
+            return jsonify({'success': False, 'message': '文件中没有有效的手机号'})
+        
+        # 保存文件
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(phone_numbers))
+        
+        logger.info(f"手机号模板上传成功: {template_name}, 包含 {len(phone_numbers)} 个手机号")
+        
+        return jsonify({
+            'success': True,
+            'message': f'手机号模板 "{template_name}" 上传成功，包含 {len(phone_numbers)} 个手机号'
+        })
+        
+    except Exception as e:
+        logger.error(f"上传手机号模板失败: {str(e)}")
+        return jsonify({'success': False, 'message': str(e)})
+
+@mass_messaging_bp.route('/api/phone_templates/<template_name>', methods=['DELETE'])
+@login_required
+def api_delete_phone_template(template_name):
+    """删除手机号模板"""
+    try:
+        # 获取项目根目录
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        
+        # 从配置文件获取phone_unused_dir路径
+        from config import phone_unused_dir
+        phone_template_dir = os.path.join(project_root, phone_unused_dir)
+        
+        # 构建文件路径
+        filename = f"{template_name}.txt"
+        file_path = os.path.join(phone_template_dir, filename)
+        
+        # 检查文件是否存在
+        if not os.path.exists(file_path):
+            return jsonify({'success': False, 'message': '手机号模板不存在'})
+        
+        # 删除文件
+        os.remove(file_path)
+        
+        logger.info(f"手机号模板删除成功: {template_name}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'手机号模板 "{template_name}" 删除成功'
+        })
+        
+    except Exception as e:
+        logger.error(f"删除手机号模板失败: {str(e)}")
+        return jsonify({'success': False, 'message': str(e)})
+
 @mass_messaging_bp.route('/api/mass_messaging/templates', methods=['POST'])
 @login_required
 def api_save_template():
@@ -220,10 +369,14 @@ def api_send_mass_message():
     try:
         data = request.get_json()
         template_id = data.get('template_id')
+        phone_template_id = data.get('phone_template_id')
         selected_clients = data.get('selected_clients', [])
         
         if not template_id:
             return jsonify({'success': False, 'message': '请选择发信模板'})
+        
+        if not phone_template_id:
+            return jsonify({'success': False, 'message': '请选择手机号模板'})
         
         if not selected_clients:
             return jsonify({'success': False, 'message': '请选择客户端'})
@@ -239,6 +392,8 @@ def api_send_mass_message():
         template_content = ''
         template_name = ''
         attachment_file = None
+        phone_template_content = ''
+        phone_template_name = phone_template_id
         
         # 首先获取所有模板信息以建立ID映射
         template_names = set()
@@ -281,6 +436,24 @@ def api_send_mass_message():
         if not template_content:
             return jsonify({'success': False, 'message': '模板内容为空或读取失败'})
         
+        # 读取手机号模板内容 - 从phone_unused_dir目录读取
+        from config import phone_unused_dir
+        phone_template_dir = os.path.join(project_root, phone_unused_dir)
+        phone_template_path = os.path.join(phone_template_dir, f"{phone_template_name}.txt")
+        
+        if not os.path.exists(phone_template_path):
+            return jsonify({'success': False, 'message': '手机号模板文件不存在'})
+        
+        try:
+            with open(phone_template_path, 'r', encoding='utf-8') as f:
+                phone_template_content = f.read().strip()
+        except Exception as e:
+            logger.error(f"读取手机号模板文件失败 {phone_template_path}: {str(e)}")
+            return jsonify({'success': False, 'message': f'读取手机号模板文件失败: {str(e)}'})
+        
+        if not phone_template_content:
+            return jsonify({'success': False, 'message': '手机号模板内容为空'})
+        
         # 查找对应的附件文件
         if os.path.exists(attachment_dir) and template_name:
             for att_file in os.listdir(attachment_dir):
@@ -293,6 +466,7 @@ def api_send_mass_message():
         base_path = appleidtxt_path  # '/Users/wx/Documents/'
         text_target_dir = f"{base_path}send_default/"
         attachment_target_dir = f"{base_path}send_default/images/"
+        phone_target_dir = f"{base_path}send_default/"
         
         # 执行文件传输
         results = []
@@ -309,12 +483,19 @@ def api_send_mass_message():
                 continue
             
             try:
-                # 创建临时文本文件
-                temp_text_file = os.path.join(project_root, 'temp', f'send_text_{client_ip.replace(".", "_")}.txt')
-                os.makedirs(os.path.dirname(temp_text_file), exist_ok=True)
+                # 创建临时文件目录
+                temp_dir = os.path.join(project_root, 'temp')
+                os.makedirs(temp_dir, exist_ok=True)
                 
+                # 创建临时文本文件
+                temp_text_file = os.path.join(temp_dir, f'send_text_{client_ip.replace(".", "_")}.txt')
                 with open(temp_text_file, 'w', encoding='utf-8') as f:
                     f.write(template_content)
+                
+                # 创建临时手机号文件
+                temp_phone_file = os.path.join(temp_dir, f'phone_numbers_{client_ip.replace(".", "_")}.txt')
+                with open(temp_phone_file, 'w', encoding='utf-8') as f:
+                    f.write(phone_template_content)
                 
                 # 传输文本文件
                 text_scp_cmd = [
@@ -326,8 +507,20 @@ def api_send_mass_message():
                 
                 logger.info(f"传输文本到 {client_ip}: {' '.join(text_scp_cmd)}")
                 text_result = subprocess.run(text_scp_cmd, capture_output=True, text=True, timeout=60)
-                
                 text_success = text_result.returncode == 0
+                
+                # 传输手机号文件
+                phone_scp_cmd = [
+                    'scp',
+                    '-o', 'StrictHostKeyChecking=no',
+                    temp_phone_file,
+                    f"{vm_username}@{client_ip}:{phone_target_dir}phone_numbers.txt"
+                ]
+                
+                logger.info(f"传输手机号到 {client_ip}: {' '.join(phone_scp_cmd)}")
+                phone_result = subprocess.run(phone_scp_cmd, capture_output=True, text=True, timeout=60)
+                phone_success = phone_result.returncode == 0
+                
                 attachment_success = True  # 默认附件传输成功
                 
                 # 如果有附件，传输附件文件
@@ -349,11 +542,12 @@ def api_send_mass_message():
                 # 清理临时文件
                 try:
                     os.remove(temp_text_file)
+                    os.remove(temp_phone_file)
                 except Exception as e:
                     logger.warning(f"清理临时文件失败: {str(e)}")
                 
                 # 记录结果
-                if text_success and attachment_success:
+                if text_success and phone_success and attachment_success:
                     # 文件传输成功后，调用客户端API执行发信脚本
                     script_result = None
                     script_success = False
@@ -393,7 +587,8 @@ def api_send_mass_message():
                             'client_ip': client_ip,
                             'success': True,
                             'message': '文件传输和发信执行成功',
-                            'text_path': f"{text_target_dir}send_default.txt",
+                            'text_path': f"{text_target_dir}message_template.txt",
+                            'phone_path': f"{phone_target_dir}phone_numbers.txt",
                             'attachment_path': f"{attachment_target_dir}attachment.png" if attachment_file else None,
                             'script_result': script_result
                         })
@@ -402,7 +597,8 @@ def api_send_mass_message():
                             'client_ip': client_ip,
                             'success': False,
                             'message': f'文件传输成功，但发信执行失败: {script_result.get("message", "未知错误") if script_result else "脚本调用失败"}',
-                            'text_path': f"{text_target_dir}send_default.txt",
+                            'text_path': f"{text_target_dir}message_template.txt",
+                            'phone_path': f"{phone_target_dir}phone_numbers.txt",
                             'attachment_path': f"{attachment_target_dir}attachment.png" if attachment_file else None,
                             'script_result': script_result
                         })
@@ -410,6 +606,8 @@ def api_send_mass_message():
                     error_msg = []
                     if not text_success:
                         error_msg.append(f"文本传输失败: {text_result.stderr.strip()}")
+                    if not phone_success:
+                        error_msg.append(f"手机号传输失败: {phone_result.stderr.strip()}")
                     if not attachment_success:
                         error_msg.append(f"附件传输失败: {attachment_result.stderr.strip()}")
                     
@@ -449,8 +647,10 @@ def api_send_mass_message():
                 'success_count': success_count,
                 'failed_count': len(selected_clients) - success_count,
                 'template_name': template_name,
+                'phone_template_name': phone_template_name,
                 'has_attachment': attachment_file is not None,
                 'text_target_path': text_target_dir,
+                'phone_target_path': phone_target_dir,
                 'attachment_target_path': attachment_target_dir
             }
         })

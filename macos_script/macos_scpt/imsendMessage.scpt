@@ -1,4 +1,4 @@
--- iMessage自动发送脚本 - JSON结果版（支持图片附件和文本）
+-- iMessage自动发送脚本 - JSON结果版（修复输出问题）
 -- 用法：需要准备包含手机号、消息内容和图片的文件
 
 -- 配置文件路径（请修改为你的实际路径）
@@ -26,10 +26,12 @@ try
 	
 	if (count of validPhones) = 0 then
 		set errorResult to createErrorJSON("手机号文件为空或格式错误")
+		log "脚本结果: " & errorResult
 		return errorResult
 	end if
 on error errMsg
 	set errorResult to createErrorJSON("无法读取手机号文件: " & errMsg)
+	log "脚本结果: " & errorResult
 	return errorResult
 end try
 
@@ -42,11 +44,13 @@ try
 	
 	if length of messageContent = 0 then
 		set errorResult to createErrorJSON("消息模板文件为空")
+		log "脚本结果: " & errorResult
 		return errorResult
 	end if
 	
 on error errMsg
 	set errorResult to createErrorJSON("无法读取消息模板文件: " & errMsg)
+	log "脚本结果: " & errorResult
 	return errorResult
 end try
 
@@ -76,12 +80,14 @@ if includeImage then
 		tell application "Finder"
 			if not (exists imageAttachment) then
 				set errorResult to createErrorJSON("图片文件不存在: " & fixedImagePath)
+				log "脚本结果: " & errorResult
 				return errorResult
 			end if
 		end tell
 		set imageStatus to "ready"
 	on error errMsg
 		set errorResult to createErrorJSON("图片文件验证失败: " & errMsg)
+		log "脚本结果: " & errorResult
 		return errorResult
 	end try
 end if
@@ -90,6 +96,7 @@ end if
 repeat with phoneNumber in validPhones
 	if length of phoneNumber < 10 then
 		set errorResult to createErrorJSON("手机号格式可能不正确: " & phoneNumber)
+		log "脚本结果: " & errorResult
 		return errorResult
 	end if
 end repeat
@@ -250,13 +257,35 @@ on error
 	display notification "保存JSON结果失败" with title "警告"
 end try
 
--- 显示JSON结果
-display dialog "=== 发送结果 (JSON格式) ===" & return & return & finalJSON buttons {"确定"} default button 1 with title "批量发送完成"
+-- === 关键修改：确保在脚本编辑器中显示结果 ===
 
--- 同时在控制台输出（用于调试）
-log "=== JSON结果 ===" & return & finalJSON
+-- 1. 在控制台日志中输出（查看方式：脚本编辑器 -> 窗口 -> 日志）
+log "=== 完整JSON结果开始 ==="
+log finalJSON
+log "=== 完整JSON结果结束 ==="
 
--- 返回JSON字符串作为脚本结果
+-- 2. 使用简化的对话框显示关键信息（不显示完整JSON避免太长）
+set summaryText to "发送完成!" & return & ¬
+	"总计: " & totalPhones & " 个号码" & return & ¬
+	"成功: " & successCount & " 个" & return & ¬
+	"失败: " & failureCount & " 个" & return & ¬
+	"成功率: " & (round ((successCount / totalPhones) * 100)) & "%" & return & return & ¬
+	"完整JSON结果已保存到文件并输出到日志中"
+
+--display dialog summaryText buttons {"查看JSON文件", "确定"} default button 2 with title "批量发送完成"
+
+-- 3. 如果用户选择查看JSON文件，尝试打开文件
+if button returned of result is "查看JSON文件" then
+	try
+		tell application "Finder"
+			open POSIX file jsonFilePath
+		end tell
+	on error
+		--display dialog "无法打开JSON文件，请手动打开: " & jsonFilePath buttons {"确定"}
+	end try
+end if
+
+-- 4. 最终返回JSON（这将在脚本编辑器的结果面板中显示）
 return finalJSON
 
 -- 创建错误JSON的函数
@@ -276,8 +305,12 @@ on createErrorJSON(errorMessage)
 		"  }" & return & ¬
 		"}"
 	
-	-- 显示错误信息
-	display dialog "错误: " & errorMessage & return & return & "JSON结果:" & return & errorJSON buttons {"确定"} default button 1 with title "脚本执行失败"
+	-- 添加日志输出
+	log "=== 错误JSON结果 ==="
+	log errorJSON
+	
+	-- 显示错误信息（简化版）
+	--display dialog "错误: " & errorMessage & return & return & "详细JSON已输出到日志中" buttons {"确定"} default button 1 with title "脚本执行失败"
 	
 	-- 保存错误JSON到文件
 	set jsonFilePath to "/Users/wx/Documents/send_default/send_results.json"
