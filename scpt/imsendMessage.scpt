@@ -1,4 +1,4 @@
--- iMessage自动发送脚本 - 修正版（支持图片附件和文本）
+-- iMessage自动发送脚本 - JSON结果版（支持图片附件和文本）
 -- 用法：需要准备包含手机号、消息内容和图片的文件
 
 -- 配置文件路径（请修改为你的实际路径）
@@ -8,6 +8,9 @@ set templateFilePath to "/Users/wx/Documents/send_default/message_template.txt"
 -- 图片配置 - 使用固定路径
 set fixedImagePath to "/Users/wx/Documents/send_default/images/attachment.png" -- 修改为你的实际图片路径
 set includeImage to true -- 设置为false如果不需要发送图片
+
+-- JSON结果存储
+set jsonResult to {}
 
 -- 读取手机号文件
 try
@@ -22,12 +25,12 @@ try
 	end repeat
 	
 	if (count of validPhones) = 0 then
-		log "手机号文件为空或格式错误" buttons {"确定"} default button 1
-		return
+		set errorResult to createErrorJSON("手机号文件为空或格式错误")
+		return errorResult
 	end if
-on error
-	log "无法读取手机号文件：" & phoneFilePath buttons {"确定"} default button 1
-	return
+on error errMsg
+	set errorResult to createErrorJSON("无法读取手机号文件: " & errMsg)
+	return errorResult
 end try
 
 -- 读取消息模板文件
@@ -38,16 +41,13 @@ try
 	set messageContent to removeTrailingNewlines(messageContent)
 	
 	if length of messageContent = 0 then
-		log "消息模板文件为空" buttons {"确定"} default button 1
-		return
+		set errorResult to createErrorJSON("消息模板文件为空")
+		return errorResult
 	end if
 	
-	-- 记录读取成功的日志
-	log "成功读取模板文件，内容长度: " & (length of messageContent) & " 字符"
-	log "包含段落数: " & (count of paragraphs of messageContent)
-on error
-	log "无法读取消息模板文件：" & templateFilePath buttons {"确定"} default button 1
-	return
+on error errMsg
+	set errorResult to createErrorJSON("无法读取消息模板文件: " & errMsg)
+	return errorResult
 end try
 
 -- 处理换行符的函数
@@ -68,44 +68,29 @@ end removeTrailingNewlines
 
 -- 验证图片文件
 set imageAttachment to null
+set imageStatus to "none"
 if includeImage then
 	try
 		set imageAttachment to POSIX file fixedImagePath
 		-- 检查文件是否存在
 		tell application "Finder"
 			if not (exists imageAttachment) then
-				log "图片文件不存在：" & fixedImagePath buttons {"确定"} default button 1
-				return
+				set errorResult to createErrorJSON("图片文件不存在: " & fixedImagePath)
+				return errorResult
 			end if
 		end tell
-		log "✓ 图片文件验证成功"
+		set imageStatus to "ready"
 	on error errMsg
-		log "✗ 图片文件验证失败：" & errMsg buttons {"确定"} default button 1
-		return
+		set errorResult to createErrorJSON("图片文件验证失败: " & errMsg)
+		return errorResult
 	end try
 end if
-
--- 显示将要发送的信息概览
-set phoneList to ""
-repeat with phoneNum in validPhones
-	set phoneList to phoneList & phoneNum & return
-end repeat
-
-set imageInfo to ""
-if includeImage and imageAttachment is not null then
-	set imageInfo to return & "包含图片附件：是"
-else
-	set imageInfo to return & "包含图片附件：否"
-end if
-
-log "准备发送消息到以下号码：" & return & phoneList & return & "消息内容：" & return & messageContent & imageInfo buttons {"确定"} default button 1 
- 
 
 -- 验证手机号格式（简单验证）
 repeat with phoneNumber in validPhones
 	if length of phoneNumber < 10 then
-		log "手机号格式可能不正确：" & phoneNumber buttons {"确定"} default button 1
-		return
+		set errorResult to createErrorJSON("手机号格式可能不正确: " & phoneNumber)
+		return errorResult
 	end if
 end repeat
 
@@ -119,52 +104,92 @@ on sendMessage(targetNumber, msgContent, imgAttachment, hasImage)
 			-- 获取或创建对话
 			set targetService to 1st service whose service type = iMessage
 			set targetBuddy to buddy targetNumber of targetService
-				-- 发送图片附件
+			
+			set imageSuccess to false
+			set textSuccess to false
+			set errorMessages to {}
+			
+			-- 发送图片附件
 			if hasImage and imgAttachment is not null then
 				try
 					send imgAttachment to targetBuddy
 					delay 2
-					log "图片附件发送成功到: " & targetNumber
+					set imageSuccess to true
 				on error imgErr
-					log "图片发送失败到 " & targetNumber & ": " & imgErr
-					-- 即使图片发送失败，文本消息可能已经成功
+					set end of errorMessages to ("图片发送失败: " & imgErr)
 				end try
 			end if
+			
 			-- 发送文本消息
 			if length of msgContent > 0 then
-				send msgContent to targetBuddy
-				delay 1
-				log "文本消息发送成功到: " & targetNumber
+				try
+					send msgContent to targetBuddy
+					delay 1
+					set textSuccess to true
+				on error textErr
+					set end of errorMessages to ("文本发送失败: " & textErr)
+				end try
 			end if
 			
-			return true
+			-- 返回发送结果
+			return {success:(textSuccess or imageSuccess), imageSuccess:imageSuccess, textSuccess:textSuccess, errors:errorMessages}
 		end tell
 		
 	on error errMsg
-		log "发送到 " & targetNumber & " 失败: " & errMsg
-		return false
+		return {success:false, imageSuccess:false, textSuccess:false, errors:{errMsg}}
 	end try
 end sendMessage
 
 -- 主发送逻辑
 set totalPhones to count of validPhones
 set successCount to 0
-set failureList to {}
+set failureCount to 0
+set successNumbers to {}
+set failureNumbers to {}
+set detailedResults to {}
+
+-- 获取当前时间戳
+set currentDate to (current date)
+set timestamp to (currentDate as string)
 
 repeat with i from 1 to totalPhones
 	set currentPhone to item i of validPhones
-	log "正在发送到 " & currentPhone & " (" & i & "/" & totalPhones & ")" buttons {"确定"} default button 1 giving up after 2
 	
 	-- 发送消息
 	set sendResult to sendMessage(currentPhone, messageContent, imageAttachment, includeImage)
 	
-	if sendResult then
+	-- 解析发送结果
+	set phoneSuccess to success of sendResult
+	set phoneImageSuccess to imageSuccess of sendResult
+	set phoneTextSuccess to textSuccess of sendResult
+	set phoneErrors to errors of sendResult
+	
+	if phoneSuccess then
 		set successCount to successCount + 1
-		log "成功发送到: " & currentPhone
+		set end of successNumbers to currentPhone
 	else
-		set end of failureList to currentPhone
-		log "发送失败: " & currentPhone
+		set failureCount to failureCount + 1
+		set end of failureNumbers to currentPhone
 	end if
+	
+	-- 创建详细结果记录
+	set phoneResult to "{" & return & ¬
+		"    \"phone\": \"" & currentPhone & "\"," & return & ¬
+		"    \"success\": " & (phoneSuccess as string) & "," & return & ¬
+		"    \"text_sent\": " & (phoneTextSuccess as string) & "," & return & ¬
+		"    \"image_sent\": " & (phoneImageSuccess as string)
+	
+	if (count of phoneErrors) > 0 then
+		set errorStr to ""
+		repeat with errorMsg in phoneErrors
+			if errorStr ≠ "" then set errorStr to errorStr & ", "
+			set errorStr to errorStr & "\"" & escapeJsonString(errorMsg as string) & "\""
+		end repeat
+		set phoneResult to phoneResult & "," & return & "    \"errors\": [" & errorStr & "]"
+	end if
+	
+	set phoneResult to phoneResult & return & "  }"
+	set end of detailedResults to phoneResult
 	
 	-- 发送间隔，避免过于频繁
 	if i < totalPhones then
@@ -172,17 +197,106 @@ repeat with i from 1 to totalPhones
 	end if
 end repeat
 
--- 显示发送结果
-set resultMessage to "发送完成！" & return & "成功: " & successCount & " 个" & return & "失败: " & (totalPhones - successCount) & " 个"
+-- 构建成功和失败号码的JSON数组
+set successArray to ""
+repeat with successPhone in successNumbers
+	if successArray ≠ "" then set successArray to successArray & ", "
+	set successArray to successArray & "\"" & successPhone & "\""
+end repeat
 
-if (count of failureList) > 0 then
-	set failureNumbers to ""
-	repeat with failedPhone in failureList
-		set failureNumbers to failureNumbers & failedPhone & return
-	end repeat
-	set resultMessage to resultMessage & return & return & "失败的号码：" & return & failureNumbers
-end if
+set failureArray to ""
+repeat with failurePhone in failureNumbers
+	if failureArray ≠ "" then set failureArray to failureArray & ", "
+	set failureArray to failureArray & "\"" & failurePhone & "\""
+end repeat
 
-log resultMessage buttons {"确定"} default button 1
+-- 构建详细结果的JSON数组
+set detailedArray to ""
+repeat with detailResult in detailedResults
+	if detailedArray ≠ "" then set detailedArray to detailedArray & "," & return
+	set detailedArray to detailedArray & "  " & detailResult
+end repeat
 
-log "批量发送任务完成。成功: " & successCount & ", 失败: " & (totalPhones - successCount)
+-- 构建完整的JSON结果
+set finalJSON to "{" & return & ¬
+	"  \"status\": \"completed\"," & return & ¬
+	"  \"timestamp\": \"" & timestamp & "\"," & return & ¬
+	"  \"message_content\": \"" & escapeJsonString(messageContent) & "\"," & return & ¬
+	"  \"image_included\": " & (includeImage as string) & "," & return & ¬
+	"  \"image_path\": \"" & fixedImagePath & "\"," & return & ¬
+	"  \"summary\": {" & return & ¬
+	"    \"total_numbers\": " & totalPhones & "," & return & ¬
+	"    \"successful_sends\": " & successCount & "," & return & ¬
+	"    \"failed_sends\": " & failureCount & "," & return & ¬
+	"    \"success_rate\": " & (round ((successCount / totalPhones) * 100)) & "%" & return & ¬
+	"  }," & return & ¬
+	"  \"successful_numbers\": [" & successArray & "]," & return & ¬
+	"  \"failed_numbers\": [" & failureArray & "]," & return & ¬
+	"  \"detailed_results\": [" & return & detailedArray & return & "  ]" & return & ¬
+	"}"
+
+-- 保存JSON结果到文件
+set jsonFilePath to "/Users/wx/Documents/send_default/send_results.json"
+try
+	set jsonFile to open for access POSIX file jsonFilePath with write permission
+	set eof of jsonFile to 0
+	write finalJSON to jsonFile as «class utf8»
+	close access jsonFile
+	log "JSON结果已保存到: " & jsonFilePath
+on error
+	try
+		close access POSIX file jsonFilePath
+	end try
+	log "保存JSON结果失败"
+end try
+
+-- 同时返回JSON结果（在日志中显示）
+log "=== JSON结果 ===" & return & finalJSON
+
+-- 创建错误JSON的函数
+on createErrorJSON(errorMessage)
+	set currentDate to (current date)
+	set timestamp to (currentDate as string)
+	
+	return "{" & return & ¬
+		"  \"status\": \"error\"," & return & ¬
+		"  \"timestamp\": \"" & timestamp & "\"," & return & ¬
+		"  \"error_message\": \"" & escapeJsonString(errorMessage) & "\"," & return & ¬
+		"  \"summary\": {" & return & ¬
+		"    \"total_numbers\": 0," & return & ¬
+		"    \"successful_sends\": 0," & return & ¬
+		"    \"failed_sends\": 0," & return & ¬
+		"    \"success_rate\": \"0%\"" & return & ¬
+		"  }" & return & ¬
+		"}"
+end createErrorJSON
+
+-- JSON字符串转义函数
+on escapeJsonString(inputString)
+	set escapedString to inputString
+	
+	-- 转义反斜杠
+	set escapedString to replaceText(escapedString, "\\", "\\\\")
+	
+	-- 转义双引号
+	set escapedString to replaceText(escapedString, "\"", "\\\"")
+	
+	-- 转义换行符
+	set escapedString to replaceText(escapedString, return, "\\n")
+	set escapedString to replaceText(escapedString, linefeed, "\\n")
+	
+	-- 转义制表符
+	set escapedString to replaceText(escapedString, tab, "\\t")
+	
+	return escapedString
+end escapeJsonString
+
+-- 文本替换函数
+on replaceText(inputString, searchString, replaceString)
+	set AppleScript's text item delimiters to searchString
+	set textItems to text items of inputString
+	set AppleScript's text item delimiters to replaceString
+	set outputString to textItems as string
+	set AppleScript's text item delimiters to ""
+	return outputString
+end replaceText

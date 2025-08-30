@@ -382,7 +382,7 @@
                                 <a class="nav-link active" href="{{ url_for('phone_management_page') }}"><i class="fas fa-phone me-2"></i>手机号管理</a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('mass_messaging_page') }}"><i class="fas fa-broadcast-tower me-2"></i>群发管理</a>
+                                <a class="nav-link" href="{{ url_for('mass_messaging.mass_messaging_page') }}"><i class="fas fa-broadcast-tower me-2"></i>群发管理</a>
                             </li>
                         </ul>
                     </div>
@@ -1138,12 +1138,18 @@
             updateSelectAllCheckbox();
         }
 
-        // 批量发信
-        async function batchSendMessage() {
+        // 获取选中的客户端
+        function getSelectedClients() {
             const checkboxes = document.querySelectorAll('.client-checkbox:checked');
             const selectedClients = Array.from(checkboxes)
                 .map(cb => JSON.parse(cb.dataset.client))
                 .filter(client => client.status === 'online');
+            return selectedClients;
+        }
+
+        // 批量发信
+        async function batchSendMessage() {
+            const selectedClients = getSelectedClients();
             
             if (selectedClients.length === 0) {
                 alert('请选择至少一个在线的客户端');
@@ -1266,7 +1272,7 @@
         }
 
         // 执行批量发信
-        function executeBatchSend() {
+        async function executeBatchSend() {
             const templateId = document.getElementById('batchTemplate').value;
             
             if (!templateId) {
@@ -1274,9 +1280,55 @@
                 return;
             }
             
-            if (confirm('确定要执行批量发信吗？')) {
-                alert('批量发信任务已提交，请在任务列表中查看执行状态');
-                bootstrap.Modal.getInstance(document.getElementById('batchSendModal')).hide();
+            // 获取选中的客户端
+            const selectedClients = getSelectedClients();
+            if (selectedClients.length === 0) {
+                alert('请选择至少一个在线的客户端');
+                return;
+            }
+            
+            if (!confirm(`确定要向 ${selectedClients.length} 个客户端执行批量发信吗？`)) {
+                return;
+            }
+            
+            // 获取按钮元素和原始文本
+            const executeBtn = document.querySelector('#batchSendModal .btn-primary');
+            const originalText = executeBtn.textContent;
+            
+            try {
+                // 显示加载状态
+                executeBtn.disabled = true;
+                executeBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>发送中...';
+                
+                // 发送批量发信请求
+                const response = await fetch('/api/mass_messaging/send', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        template_id: templateId,
+                        selected_clients: selectedClients
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(`批量发信任务完成！\n${result.message}\n\n详细结果：\n${result.results.map(r => `${r.client_ip}: ${r.success ? '成功' : r.message}`).join('\n')}`);
+                    bootstrap.Modal.getInstance(document.getElementById('batchSendModal')).hide();
+                } else {
+                    alert('批量发信失败: ' + result.message);
+                }
+                
+            } catch (error) {
+                console.error('批量发信失败:', error);
+                alert('批量发信失败: ' + error.message);
+            } finally {
+                // 恢复按钮状态
+                const executeBtn = document.querySelector('#batchSendModal .btn-primary');
+                executeBtn.disabled = false;
+                executeBtn.textContent = originalText;
             }
         }
         // 简单的Base64编码函数用于加密URL参数
