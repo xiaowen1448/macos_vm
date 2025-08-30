@@ -767,6 +767,10 @@
                                 <div class="stat-label">已停止</div>
                             </div>
                             <div class="stat-card">
+                                <div class="stat-number" id="suspendedVMs">-</div>
+                                <div class="stat-label">挂起</div>
+                            </div>
+                            <div class="stat-card">
                                 <div class="stat-number" id="onlineVMs">-</div>
                                 <div class="stat-label">在线</div>
                             </div>
@@ -1321,10 +1325,11 @@
             document.getElementById('totalVMs').textContent = stats.total || 0;
             document.getElementById('runningVMs').textContent = stats.running || 0;
             document.getElementById('stoppedVMs').textContent = stats.stopped || 0;
+            document.getElementById('suspendedVMs').textContent = stats.suspended || 0;
             document.getElementById('onlineVMs').textContent = '检测中...';
             
             // 初始统计卡片颜色
-            const onlineCard = document.querySelector('.stat-card:nth-child(4)');
+            const onlineCard = document.querySelector('.stat-card:nth-child(5)');
             if (onlineCard) {
                 onlineCard.style.borderColor = '#6c757d';
                 onlineCard.style.color = '#6c757d';
@@ -1433,6 +1438,9 @@
                             </button>
                             <button class="btn btn-outline-warning btn-sm" onclick="executeScriptOnVM('${vm.name}')" ${vm.status !== 'running' ? 'disabled' : ''} title="${vm.status !== 'running' ? '虚拟机未运行，无法执行脚本' : '执行脚本'}" style="cursor: pointer;">
                                 <i class="fas fa-terminal"></i>
+                            </button>
+                            <button class="btn btn-outline-primary btn-sm" onclick="connectVNC('${vm.name}')" ${vm.status !== 'running' ? 'disabled' : ''} title="${vm.status !== 'running' ? '虚拟机未运行，无法连接VNC' : 'VNC远程连接'}" style="cursor: pointer;">
+                                <i class="fas fa-desktop"></i>
                             </button>
                         </div>
                     </td>
@@ -2151,7 +2159,7 @@
             document.getElementById('onlineVMs').textContent = onlineCount;
             
             // 更新统计卡片颜色
-            const onlineCard = document.querySelector('.stat-card:nth-child(4)');
+            const onlineCard = document.querySelector('.stat-card:nth-child(5)');
             if (onlineCard) {
                 const percentage = totalCount > 0 ? (onlineCount / totalCount * 100).toFixed(1) : 0;
                 
@@ -3557,6 +3565,14 @@
                                                     <span class="badge status-badge ${getStatusClass(vmInfo.status)}">
                                                         ${getStatusText(vmInfo.status)}
                                                     </span>
+                                                    ${vmInfo.status === 'suspended' && vmInfo.suspend_time ? `
+                                                        <div class="mt-1">
+                                                            <small class="text-muted">
+                                                                <i class="fas fa-clock me-1"></i>
+                                                                挂起时间: ${formatSuspendTime(vmInfo.suspend_time)}
+                                                            </small>
+                                                        </div>
+                                                    ` : ''}
                                                 </td>
                                             </tr>
                                             <tr>
@@ -5006,6 +5022,8 @@
                     statusBadge = '<span class="badge bg-secondary">已停止</span>';
                 } else if (vm.status === 'deleted') {
                     statusBadge = '<span class="badge bg-danger">已删除</span>';
+                } else if (vm.status === 'suspended') {
+                    statusBadge = '<span class="badge bg-secondary">已挂起</span>';
                 } else {
                     statusBadge = '<span class="badge bg-info">未知</span>';
                 }
@@ -6232,6 +6250,45 @@
             }
         }
         
+        // 格式化挂起时间显示
+        function formatSuspendTime(suspendTime) {
+            if (!suspendTime) return '-';
+            
+            try {
+                const suspendDate = new Date(suspendTime);
+                const now = new Date();
+                const diffMs = now - suspendDate;
+                const diffMinutes = Math.floor(diffMs / (1000 * 60));
+                const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                
+                let timeAgo = '';
+                if (diffDays > 0) {
+                    timeAgo = `${diffDays}天前`;
+                } else if (diffHours > 0) {
+                    timeAgo = `${diffHours}小时前`;
+                } else if (diffMinutes > 0) {
+                    timeAgo = `${diffMinutes}分钟前`;
+                } else {
+                    timeAgo = '刚刚';
+                }
+                
+                const formattedDate = suspendDate.toLocaleString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+                
+                return `${formattedDate} (${timeAgo})`;
+            } catch (error) {
+                console.error('格式化挂起时间失败:', error);
+                return suspendTime;
+            }
+        }
+        
         // 加载虚拟机详细信息（刷新SSH状态等）
         function loadVMDetails(vmName) {
             console.log('刷新虚拟机详细信息:', vmName);
@@ -6302,7 +6359,83 @@
                 }
             });
         }
+        
+        // VNC连接相关函数
+        // 加密连接字符串
+        function encryptConnectionString(str) {
+            // 简单的Base64编码，实际应用中应使用更安全的加密方式
+            return btoa(encodeURIComponent(str)).replace(/[+\/=]/g, function(match) {
+                return {
+                    '+': '-',
+                    '/': '_',
+                    '=': ''
+                }[match];
+            });
+        }
+        
+        // VNC连接 - 在新窗口中打开
+        async function connectVNC(vmName) {
+            console.log('连接VNC:', vmName);
+            
+            try {
+                // 首先获取虚拟机的IP地址
+                let vmInfo = vmDataList.find(vm => vm.name === vmName);
+                if (!vmInfo) {
+                    vmInfo = totalVMs.find(vm => vm.name === vmName);
+                }
+                
+                if (!vmInfo || !vmInfo.ip) {
+                    alert('无法获取虚拟机IP地址，请确保虚拟机正在运行');
+                    return;
+                }
+                
+                const clientIp = vmInfo.ip;
+                console.log('虚拟机IP地址:', clientIp);
+                
+                // 调用后端API启动websockify并获取连接信息
+                const response = await fetch('/api/vnc/connect', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        client_ip: clientIp
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // 构建连接字符串并加密
+                    const connectionString = `ip=${clientIp}&port=${data.vnc_config.websocket_port}&password=${data.vnc_config.password || ''}`;
+                    const encryptedParams = encryptConnectionString(connectionString);
+                    
+                    // 在新窗口中打开VNC连接，使用127.0.0.1作为服务器地址
+                    const vncUrl = `http://127.0.0.1:5000/vnc_viewer?params=${encryptedParams}`;
+                    
+                    // 打开新窗口，设置合适的尺寸
+                    const vncWindow = window.open(
+                        vncUrl,
+                        `vnc_${vmName.replace(/[^a-zA-Z0-9]/g, '_')}`,
+                        'width=1024,height=768,resizable=yes,scrollbars=no,toolbar=no,menubar=no,location=no,status=no'
+                    );
+                    
+                    if (!vncWindow) {
+                        alert('无法打开VNC窗口，请检查浏览器弹窗设置');
+                        return;
+                    }
+                    
+                    // 设置窗口标题
+                    vncWindow.document.title = `VNC - ${vmName}`;
+                    
+                } else {
+                    alert(`VNC连接失败: ${data.message || '未知错误'}\n\n可能的原因:\n- VMX文件不存在或无法读取\n- VNC配置未启用\n- 虚拟机未运行\n- websockify启动失败`);
+                }
+            } catch (error) {
+                console.error('VNC连接失败:', error);
+                alert(`VNC连接失败: ${error.message || '未知错误'}`);
+            }
+        }
     </script>
-
 </body>
 </html>

@@ -462,7 +462,7 @@ def get_vm_list_from_directory(vm_dir, vm_type_name):
         logger.debug(f"分页参数 - 页码: {page}, 每页大小: {page_size}")
         
         vms = []
-        stats = {'total': 0, 'running': 0, 'stopped': 0, 'online': 0}
+        stats = {'total': 0, 'running': 0, 'stopped': 0, 'suspended': 0, 'online': 0}
         
         logger.debug(f"开始扫描{vm_type_name}虚拟机目录: {vm_dir}")
         
@@ -490,12 +490,19 @@ def get_vm_list_from_directory(vm_dir, vm_type_name):
                         vm_path = os.path.join(root, file)
                         vm_name = os.path.splitext(file)[0]
                         
-                        # 快速判断虚拟机状态（基于文件名匹配）
+                        # 快速判断虚拟机状态（基于文件名匹配和挂起文件检查）
                         vm_status = 'stopped'
                         for running_vm in running_vms:
                             if vm_name in running_vm:
                                 vm_status = 'running'
                                 break
+                        
+                        # 如果不是运行状态，检查是否为挂起状态
+                        if vm_status != 'running':
+                            vm_dir_path = os.path.dirname(vm_path)
+                            vmss_files = [f for f in os.listdir(vm_dir_path) if f.endswith('.vmss')]
+                            if vmss_files:
+                                vm_status = 'suspended'
                         
                         logger.debug(f"找到{vm_type_name}虚拟机: {vm_name}, 状态: {vm_status}")
                         
@@ -522,6 +529,8 @@ def get_vm_list_from_directory(vm_dir, vm_type_name):
                             stats['running'] += 1
                         elif vm_status == 'stopped':
                             stats['stopped'] += 1
+                        elif vm_status == 'suspended':
+                            stats['suspended'] += 1
         else:
             logger.warning(f"{vm_type_name}虚拟机目录不存在: {vm_dir}")
         
@@ -537,7 +546,7 @@ def get_vm_list_from_directory(vm_dir, vm_type_name):
         # 分页数据
         paged_vms = vms[start_index:end_index] if vms else []
         
-        logger.info(f"{vm_type_name}虚拟机列表获取完成 - 总数: {total_count}, 运行中: {stats['running']}, 已停止: {stats['stopped']}")
+        logger.info(f"{vm_type_name}虚拟机列表获取完成 - 总数: {total_count}, 运行中: {stats['running']}, 已停止: {stats['stopped']}, 挂起: {stats['suspended']}")
         
         return jsonify({
             'success': True,
@@ -836,15 +845,24 @@ def get_vm_info_generic(vm_name, vm_type_name, vm_dir):
         # 获取虚拟机配置
         config = get_vm_config(vm_file)
         
+        # 构建返回的虚拟机信息
+        vm_info = {
+            'name': vm_name,
+            'path': vm_file,
+            'status': vm_status,
+            'snapshots': snapshots,
+            'config': config
+        }
+        
+        # 如果虚拟机处于挂起状态，获取挂起时间
+        if vm_status == 'suspended':
+            suspend_time = get_vm_suspend_time(vm_file)
+            if suspend_time:
+                vm_info['suspend_time'] = suspend_time
+        
         return jsonify({
             'success': True,
-            'vm_info': {
-                'name': vm_name,
-                'path': vm_file,
-                'status': vm_status,
-                'snapshots': snapshots,
-                'config': config
-            }
+            'vm_info': vm_info
         })
     except Exception as e:
         logger.error(f"获取{vm_type_name}虚拟机详细信息失败: {str(e)}")
@@ -3810,6 +3828,39 @@ def get_vm_status(vm_path):
     except Exception as e:
         print(f"[DEBUG] 获取虚拟机状态失败: {str(e)}")
         return 'unknown'
+
+
+def get_vm_suspend_time(vm_path):
+    """获取虚拟机挂起时间"""
+    try:
+        vm_dir = os.path.dirname(vm_path)
+        vm_name = os.path.splitext(os.path.basename(vm_path))[0]
+        
+        # 查找.vmss文件（挂起状态文件）
+        vmss_files = [f for f in os.listdir(vm_dir) if f.endswith('.vmss')]
+        
+        if vmss_files:
+            # 获取最新的.vmss文件的修改时间
+            latest_vmss = None
+            latest_time = None
+            
+            for vmss_file in vmss_files:
+                vmss_path = os.path.join(vm_dir, vmss_file)
+                mtime = os.path.getmtime(vmss_path)
+                if latest_time is None or mtime > latest_time:
+                    latest_time = mtime
+                    latest_vmss = vmss_path
+            
+            if latest_time:
+                # 将时间戳转换为ISO格式字符串
+                suspend_time = datetime.fromtimestamp(latest_time)
+                return suspend_time.isoformat()
+        
+        return None
+        
+    except Exception as e:
+        logger.error(f"获取虚拟机挂起时间失败: {str(e)}")
+        return None
 
 
 def get_vm_ip(vm_name):
