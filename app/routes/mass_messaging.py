@@ -4,7 +4,8 @@ import os
 import subprocess
 import time
 import logging
-from config import vm_username, project_root
+import requests
+from config import vm_username, project_root, script_remote_path
 
 # 创建蓝图
 mass_messaging_bp = Blueprint('mass_messaging', __name__)
@@ -320,7 +321,7 @@ def api_send_mass_message():
                     'scp',
                     '-o', 'StrictHostKeyChecking=no',
                     temp_text_file,
-                    f"{vm_username}@{client_ip}:{text_target_dir}send_default.txt"
+                    f"{vm_username}@{client_ip}:{text_target_dir}message_template.txt"
                 ]
                 
                 logger.info(f"传输文本到 {client_ip}: {' '.join(text_scp_cmd)}")
@@ -353,14 +354,58 @@ def api_send_mass_message():
                 
                 # 记录结果
                 if text_success and attachment_success:
-                    success_count += 1
-                    results.append({
-                        'client_ip': client_ip,
-                        'success': True,
-                        'message': '文本和附件传输成功',
-                        'text_path': f"{text_target_dir}send_default.txt",
-                        'attachment_path': f"{attachment_target_dir}attachment.png" if attachment_file else None
-                    })
+                    # 文件传输成功后，调用客户端API执行发信脚本
+                    script_result = None
+                    script_success = False
+                    
+                    try:
+                        # 调用客户端8787端口API执行imsendMessage.scpt脚本
+                        script_api_url = f"http://{client_ip}:8787/run?path={script_remote_path}imsendMessage.scpt"
+                        
+                        logger.info(f"调用客户端API执行发信脚本: {script_api_url}")
+                        script_response = requests.get(
+                            script_api_url, 
+                            timeout=30
+                        )
+                        
+                        if script_response.status_code == 200:
+                            script_result = script_response.json()
+                            script_success = script_result.get('success', False)
+                            logger.info(f"脚本执行结果 {client_ip}: {script_result}")
+                        else:
+                            logger.error(f"脚本API调用失败 {client_ip}: HTTP {script_response.status_code}")
+                            script_result = {'success': False, 'message': f'API调用失败: HTTP {script_response.status_code}'}
+                            
+                    except requests.exceptions.Timeout:
+                        logger.error(f"脚本执行超时 {client_ip}")
+                        script_result = {'success': False, 'message': '脚本执行超时（30秒）'}
+                    except requests.exceptions.ConnectionError:
+                        logger.error(f"无法连接到客户端API {client_ip}:8787")
+                        script_result = {'success': False, 'message': '无法连接到客户端API'}
+                    except Exception as e:
+                        logger.error(f"脚本执行异常 {client_ip}: {str(e)}")
+                        script_result = {'success': False, 'message': f'脚本执行异常: {str(e)}'}
+                    
+                    # 根据脚本执行结果更新成功计数和结果
+                    if script_success:
+                        success_count += 1
+                        results.append({
+                            'client_ip': client_ip,
+                            'success': True,
+                            'message': '文件传输和发信执行成功',
+                            'text_path': f"{text_target_dir}send_default.txt",
+                            'attachment_path': f"{attachment_target_dir}attachment.png" if attachment_file else None,
+                            'script_result': script_result
+                        })
+                    else:
+                        results.append({
+                            'client_ip': client_ip,
+                            'success': False,
+                            'message': f'文件传输成功，但发信执行失败: {script_result.get("message", "未知错误") if script_result else "脚本调用失败"}',
+                            'text_path': f"{text_target_dir}send_default.txt",
+                            'attachment_path': f"{attachment_target_dir}attachment.png" if attachment_file else None,
+                            'script_result': script_result
+                        })
                 else:
                     error_msg = []
                     if not text_success:

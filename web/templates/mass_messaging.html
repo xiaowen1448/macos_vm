@@ -1315,7 +1315,25 @@
                 const result = await response.json();
                 
                 if (result.success) {
-                    alert(`批量发信任务完成！\n${result.message}\n\n详细结果：\n${result.results.map(r => `${r.client_ip}: ${r.success ? '成功' : r.message}`).join('\n')}`);
+                    // 构建详细结果显示
+                    let detailsText = result.results.map(r => {
+                        let status = r.success ? '✅ 成功' : '❌ 失败';
+                        let message = r.message;
+                        
+                        // 如果有脚本执行结果，添加到显示中
+                        if (r.script_result) {
+                            const scriptStatus = r.script_result.success ? '✅ 脚本执行成功' : '❌ 脚本执行失败';
+                            const scriptMessage = r.script_result.message || '';
+                            message += `\n  脚本状态: ${scriptStatus}`;
+                            if (scriptMessage) {
+                                message += `\n  脚本输出: ${scriptMessage}`;
+                            }
+                        }
+                        
+                        return `${r.client_ip}: ${status}\n  ${message}`;
+                    }).join('\n\n');
+                    
+                    alert(`批量发信任务完成！\n${result.message}\n\n详细结果：\n${detailsText}`);
                     bootstrap.Modal.getInstance(document.getElementById('batchSendModal')).hide();
                 } else {
                     alert('批量发信失败: ' + result.message);
