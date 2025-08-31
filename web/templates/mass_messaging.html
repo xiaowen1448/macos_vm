@@ -719,7 +719,7 @@
 
     <!-- 批量发信模态框 -->
     <div class="modal fade" id="batchSendModal" tabindex="-1">
-        <div class="modal-dialog modal-xl">
+        <div class="modal-dialog modal-lg modal-dialog-centered" style="max-width: 75%; width: 75%;">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">批量发信</h5>
@@ -729,7 +729,7 @@
                     <div class="row">
                         <!-- 左侧：模板选择和预览 -->
                         <div class="col-md-6">
-                            <div class="card" style="height: 350px;">
+                            <div class="card" style="height: 500px;">
                                 <div class="card-header py-2">
                                     <h6 class="mb-0 small">发信模板</h6>
                                 </div>
@@ -739,6 +739,10 @@
                                         <select class="form-control form-control-sm" id="phoneTemplate" onchange="previewPhoneTemplate()">
                                             <option value="">请选择手机号模板</option>
                                         </select>
+                                        <!-- 手机号模板预览 -->
+                                        <div class="border rounded p-2 small mt-1" id="phonePreview" style="height: 50px; overflow-y: auto; background-color: #f8f9fa;">
+                                            <span class="text-muted">暂无手机号模板</span>
+                                        </div>
                                     </div>
                                     
                                     <div class="mb-2">
@@ -759,7 +763,7 @@
                                     <!-- 附件预览 -->
                                     <div class="mb-2">
                                         <label class="form-label small">附件预览</label>
-                                        <div class="border rounded p-2 small" id="attachmentPreview" style="height: 60px; overflow-y: auto; background-color: #f8f9fa;">
+                                        <div class="border rounded p-2 small" id="attachmentPreview" style="height: 50px; overflow-y: auto; background-color: #f8f9fa;">
                                             <span class="text-muted">暂无附件</span>
                                         </div>
                                     </div>
@@ -769,12 +773,12 @@
                         
                         <!-- 右侧：选中的客户端信息 -->
                         <div class="col-md-6">
-                            <div class="card" style="height: 350px;">
+                            <div class="card" style="height: 450px;">
                                 <div class="card-header py-2">
                                     <h6 class="mb-0 small">选中的客户端 (<span id="selectedClientCount">0</span>)</h6>
                                 </div>
                                 <div class="card-body p-2">
-                                    <div id="selectedClientsInfo" style="height: 300px; overflow-y: auto;">
+                                    <div id="selectedClientsInfo" style="height: 400px; overflow-y: auto;">
                                         <div class="text-muted text-center py-3 small">
                                             暂无选中的客户端
                                         </div>
@@ -871,6 +875,52 @@
         </div>
     </div>
 
+    <!-- 发信记录模态框 -->
+    <div class="modal fade" id="messageRecordsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered" style="max-width: 75%; width: 75%;">
+            <div class="modal-content">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-history me-2"></i>发信记录
+                    </h5>
+                    <div class="d-flex align-items-center">
+                        <button type="button" class="btn btn-outline-light btn-sm me-2" id="exportRecordsBtn">
+                            <i class="fas fa-download me-1"></i>导出
+                        </button>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                </div>
+                <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                    <!-- 发信记录内容将在这里动态加载 -->
+                    <div class="text-center">
+                        <i class="fas fa-spinner fa-spin me-2"></i>正在加载发信记录...
+                    </div>
+                </div>
+                <div class="modal-footer d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center">
+                        <span class="text-muted me-3" id="recordsInfo">共 0 条记录</span>
+                        <select class="form-select form-select-sm me-2" id="recordsPageSizeSelect" style="width: auto;">
+                            <option value="10">每页 10 条</option>
+                            <option value="20" selected>每页 20 条</option>
+                            <option value="50">每页 50 条</option>
+                            <option value="100">每页 100 条</option>
+                        </select>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <nav>
+                            <ul class="pagination pagination-sm mb-0 me-3" id="recordsPagination">
+                                <!-- 分页按钮将在这里动态生成 -->
+                            </ul>
+                        </nav>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                            <i class="fas fa-times me-2"></i>关闭
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // 新建群发任务
@@ -921,6 +971,313 @@
                 console.error('加载客户端列表失败:', error);
                 clientSelect.innerHTML = '<option value="" disabled>加载客户端列表失败</option>';
             }
+        }
+
+        // 查看发信记录函数
+        async function viewMessageRecords(clientIp, vmName) {
+            try {
+                // 显示加载状态
+                const modal = new bootstrap.Modal(document.getElementById('messageRecordsModal'));
+                const modalBody = document.querySelector('#messageRecordsModal .modal-body');
+                modalBody.innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin me-2"></i>正在下载并解析发信记录...</div>';
+                modal.show();
+                
+                // 设置模态框标题
+                document.querySelector('#messageRecordsModal .modal-title').textContent = `发信记录 - ${vmName || clientIp}`;
+                
+                // 调用后端API下载chat.db文件
+                const downloadResponse = await fetch('/api/mass_messaging/download_chat_db', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        client_ip: clientIp,
+                        vm_name: vmName || clientIp
+                    })
+                });
+                
+                if (!downloadResponse.ok) {
+                    throw new Error('下载chat.db文件失败');
+                }
+                
+                const downloadResult = await downloadResponse.json();
+                if (!downloadResult.success) {
+                    throw new Error(downloadResult.message || '下载chat.db文件失败');
+                }
+                
+                // 调用后端API解析数据库并获取发信记录
+                const recordsResponse = await fetch(`/api/mass_messaging/get_message_records?vm_name=${encodeURIComponent(vmName || clientIp)}`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                if (!recordsResponse.ok) {
+                    throw new Error('获取发信记录失败');
+                }
+                
+                const recordsResult = await recordsResponse.json();
+                if (!recordsResult.success) {
+                    throw new Error(recordsResult.message || '获取发信记录失败');
+                }
+                
+                // 显示发信记录
+                displayMessageRecords(recordsResult.records || []);
+                
+            } catch (error) {
+                console.error('查看发信记录失败:', error);
+                const modalBody = document.querySelector('#messageRecordsModal .modal-body');
+                modalBody.innerHTML = `<div class="alert alert-danger"><i class="fas fa-exclamation-triangle me-2"></i>查看发信记录失败: ${error.message}</div>`;
+            }
+        }
+        
+        // 全局变量存储发信记录数据
+        let globalMessageRecords = [];
+        let currentPage = 1;
+        let pageSize = 20;
+        
+        // 显示发信记录
+        function displayMessageRecords(records) {
+            globalMessageRecords = records || [];
+            currentPage = 1;
+            pageSize = parseInt(document.getElementById('pageSizeSelect').value) || 20;
+            
+            if (globalMessageRecords.length === 0) {
+                const modalBody = document.querySelector('#messageRecordsModal .modal-body');
+                modalBody.innerHTML = '<div class="alert alert-info"><i class="fas fa-info-circle me-2"></i>暂无发信记录</div>';
+                updateRecordsInfo(0, 0, 0);
+                updatePagination(0);
+                return;
+            }
+            
+            renderRecordsPage();
+            setupPaginationEvents();
+            setupExportEvent();
+        }
+        
+        // 渲染当前页的记录
+        function renderRecordsPage() {
+            const modalBody = document.querySelector('#messageRecordsModal .modal-body');
+            const startIndex = (currentPage - 1) * pageSize;
+            const endIndex = Math.min(startIndex + pageSize, globalMessageRecords.length);
+            const pageRecords = globalMessageRecords.slice(startIndex, endIndex);
+            
+            let tableHtml = `
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover table-sm">
+                        <thead class="table-dark">
+                            <tr>
+                                <th style="width: 12%;">消息ID</th>
+                                <th style="width: 12%;">发送账号</th>
+                                <th style="width: 12%;">联系人ID</th>
+                                <th style="width: 25%;">消息正文</th>
+                                <th style="width: 10%;">服务类型</th>
+                                <th style="width: 8%;">发送</th>
+                                <th style="width: 8%;">送达</th>
+                                <th style="width: 8%;">已读</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            pageRecords.forEach(record => {
+                // 截断过长的消息内容
+                const shortContent = record.message_content && record.message_content.length > 40 
+                    ? record.message_content.substring(0, 40) + '...' 
+                    : (record.message_content || 'N/A');
+                
+                // 截断过长的联系人ID
+                const shortContactId = record.contact_id && record.contact_id.length > 15
+                    ? record.contact_id.substring(0, 15) + '...'
+                    : (record.contact_id || 'N/A');
+                    
+                // 截断过长的消息ID
+                const shortMessageId = record.message_id && record.message_id.length > 15
+                    ? record.message_id.substring(0, 15) + '...'
+                    : (record.message_id || 'N/A');
+                
+                tableHtml += `
+                    <tr>
+                        <td><small><code title="${record.message_id || ''}">${shortMessageId}</code></small></td>
+                        <td><small>${record.sender_account || 'N/A'}</small></td>
+                        <td><small title="${record.contact_id || ''}">${shortContactId}</small></td>
+                        <td><small title="${record.message_content || ''}">${shortContent}</small></td>
+                        <td><small><span class="badge bg-info">${record.service_type || 'N/A'}</span></small></td>
+                        <td><span class="badge ${record.is_sent === '是' ? 'bg-success' : 'bg-danger'} badge-sm">${record.is_sent}</span></td>
+                        <td><span class="badge ${record.is_delivered === '是' ? 'bg-success' : 'bg-warning'} badge-sm">${record.is_delivered}</span></td>
+                        <td><span class="badge ${record.is_read === '是' ? 'bg-success' : 'bg-secondary'} badge-sm">${record.is_read}</span></td>
+                    </tr>
+                `;
+            });
+            
+            tableHtml += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            
+            modalBody.innerHTML = tableHtml;
+            updateRecordsInfo(globalMessageRecords.length, startIndex + 1, endIndex);
+            updatePagination(globalMessageRecords.length);
+        }
+        
+        // 更新记录信息
+        function updateRecordsInfo(total, start, end) {
+            const recordsInfo = document.getElementById('recordsInfo');
+            if (total === 0) {
+                recordsInfo.textContent = '共 0 条记录';
+            } else {
+                recordsInfo.textContent = `显示 ${start}-${end} 条，共 ${total} 条记录`;
+            }
+        }
+        
+        // 更新分页
+        function updatePagination(totalRecords) {
+            const pagination = document.getElementById('recordsPagination');
+            const totalPages = Math.ceil(totalRecords / pageSize);
+            
+            if (totalPages <= 1) {
+                pagination.innerHTML = '';
+                return;
+            }
+            
+            let paginationHtml = '';
+            
+            // 上一页按钮
+            paginationHtml += `
+                <li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
+                    <a class="page-link" href="#" data-page="${currentPage - 1}">
+                        <i class="fas fa-chevron-left"></i>
+                    </a>
+                </li>
+            `;
+            
+            // 页码按钮
+            const startPage = Math.max(1, currentPage - 2);
+            const endPage = Math.min(totalPages, currentPage + 2);
+            
+            if (startPage > 1) {
+                paginationHtml += '<li class="page-item"><a class="page-link" href="#" data-page="1">1</a></li>';
+                if (startPage > 2) {
+                    paginationHtml += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                }
+            }
+            
+            for (let i = startPage; i <= endPage; i++) {
+                paginationHtml += `
+                    <li class="page-item ${i === currentPage ? 'active' : ''}">
+                        <a class="page-link" href="#" data-page="${i}">${i}</a>
+                    </li>
+                `;
+            }
+            
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) {
+                    paginationHtml += '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                }
+                paginationHtml += `<li class="page-item"><a class="page-link" href="#" data-page="${totalPages}">${totalPages}</a></li>`;
+            }
+            
+            // 下一页按钮
+            paginationHtml += `
+                <li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
+                    <a class="page-link" href="#" data-page="${currentPage + 1}">
+                        <i class="fas fa-chevron-right"></i>
+                    </a>
+                </li>
+            `;
+            
+            pagination.innerHTML = paginationHtml;
+        }
+        
+        // 设置分页事件
+        function setupPaginationEvents() {
+            // 分页大小改变事件
+            document.getElementById('recordsPageSizeSelect').addEventListener('change', function() {
+                pageSize = parseInt(this.value);
+                currentPage = 1;
+                renderRecordsPage();
+            });
+            
+            // 分页点击事件
+            document.getElementById('recordsPagination').addEventListener('click', function(e) {
+                e.preventDefault();
+                if (e.target.tagName === 'A' && e.target.dataset.page) {
+                    const newPage = parseInt(e.target.dataset.page);
+                    if (newPage !== currentPage && newPage > 0 && newPage <= Math.ceil(globalMessageRecords.length / pageSize)) {
+                        currentPage = newPage;
+                        renderRecordsPage();
+                    }
+                }
+            });
+        }
+        
+        // 设置导出事件
+        function setupExportEvent() {
+            document.getElementById('exportRecordsBtn').addEventListener('click', function() {
+                exportRecordsToCSV();
+            });
+        }
+        
+        // 导出记录为CSV
+        function exportRecordsToCSV() {
+            if (!globalMessageRecords || globalMessageRecords.length === 0) {
+                alert('没有可导出的数据');
+                return;
+            }
+            
+            // CSV头部
+            const headers = ['消息唯一ID', '发送账号', '联系人ID', '消息正文', '服务类型', '是否发送', '是否送达', '是否已读'];
+            let csvContent = headers.join(',') + '\n';
+            
+            // CSV数据行
+            globalMessageRecords.forEach(record => {
+                const row = [
+                    `"${(record.message_id || 'N/A').replace(/"/g, '""')}"`,
+                    `"${(record.sender_account || 'N/A').replace(/"/g, '""')}"`,
+                    `"${(record.contact_id || 'N/A').replace(/"/g, '""')}"`,
+                    `"${(record.message_content || 'N/A').replace(/"/g, '""')}"`,
+                    `"${(record.service_type || 'N/A').replace(/"/g, '""')}"`,
+                    `"${record.is_sent || 'N/A'}"`,
+                    `"${record.is_delivered || 'N/A'}"`,
+                    `"${record.is_read || 'N/A'}"`
+                ];
+                csvContent += row.join(',') + '\n';
+            });
+            
+            // 创建下载链接
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            
+            // 生成文件名
+            const now = new Date();
+            const timestamp = now.getFullYear() + 
+                String(now.getMonth() + 1).padStart(2, '0') + 
+                String(now.getDate()).padStart(2, '0') + '_' +
+                String(now.getHours()).padStart(2, '0') + 
+                String(now.getMinutes()).padStart(2, '0') + 
+                String(now.getSeconds()).padStart(2, '0');
+            
+            link.setAttribute('download', `发信记录_${timestamp}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            // 显示成功提示
+            const exportBtn = document.getElementById('exportRecordsBtn');
+            const originalText = exportBtn.innerHTML;
+            exportBtn.innerHTML = '<i class="fas fa-check me-1"></i>已导出';
+            exportBtn.disabled = true;
+            
+            setTimeout(() => {
+                exportBtn.innerHTML = originalText;
+                exportBtn.disabled = false;
+            }, 2000);
         }
 
         // 加载手机号列表
@@ -1113,8 +1470,11 @@
                         </span>
                     </td>
                     <td>
-                        <button class="btn btn-sm btn-outline-success" onclick="connectVNC('${client.ip}')" title="VNC登录">
+                        <button class="btn btn-sm btn-outline-success me-1" onclick="connectVNC('${client.ip}')" title="VNC登录">
                             <i class="fas fa-desktop"></i> VNC
+                        </button>
+                        <button class="btn btn-sm btn-outline-primary" onclick="viewMessageRecords('${client.ip}', '${client.vm_name || client.ip}')" title="查看发信记录">
+                            <i class="fas fa-history"></i> 记录
                         </button>
                     </td>
                 </tr>
@@ -1413,6 +1773,7 @@
                 });
                 
                 const result = await response.json();
+                console.log('批量发信响应数据:', result);
                 
                 if (result.success) {
                     // 构建详细结果显示
@@ -1422,12 +1783,17 @@
                         
                         // 如果有脚本执行结果，添加到显示中
                         if (r.script_result) {
-                            const scriptStatus = r.script_result.success ? '✅ 脚本执行成功' : '❌ 脚本执行失败';
-                            const scriptMessage = r.script_result.message || '';
+                            console.log(`客户端 ${r.client_ip} 脚本结果:`, r.script_result);
+                            // 根据后端逻辑，检查status字段是否为completed
+                            const scriptSuccess = r.script_result.status === 'completed' || r.script_result.success === true;
+                            const scriptStatus = scriptSuccess ? '✅ 脚本执行成功' : '❌ 脚本执行失败';
+                            const scriptMessage = r.script_result.error_message || r.script_result.message || '';
                             message += `\n  脚本状态: ${scriptStatus}`;
                             if (scriptMessage) {
                                 message += `\n  脚本输出: ${scriptMessage}`;
                             }
+                        } else {
+                            console.log(`客户端 ${r.client_ip} 没有脚本结果`);
                         }
                         
                         return `${r.client_ip}: ${status}\n  ${message}`;

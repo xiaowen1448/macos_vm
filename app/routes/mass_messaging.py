@@ -5,6 +5,8 @@ import subprocess
 import time
 import logging
 import requests
+import json
+import sqlite3
 from config import vm_username, project_root, script_remote_path
 
 # 创建蓝图
@@ -98,6 +100,262 @@ def api_get_templates():
     except Exception as e:
         logger.error(f"获取模板列表失败: {str(e)}")
         return jsonify({'success': False, 'message': str(e)})
+
+@mass_messaging_bp.route('/api/mass_messaging/download_chat_db', methods=['POST'])
+@login_required
+def api_download_chat_db():
+    """下载远端客户端的chat.db文件到本地db目录，使用虚拟机名称作为文件名"""
+    try:
+        data = request.get_json()
+        client_ip = data.get('client_ip')
+        vm_name = data.get('vm_name')
+        
+        if not client_ip:
+            return jsonify({'success': False, 'message': '客户端IP不能为空'})
+        
+        if not vm_name:
+            return jsonify({'success': False, 'message': '虚拟机名称不能为空'})
+        
+        # 获取项目根目录
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        db_dir = os.path.join(project_root, 'db')
+        vm_db_dir = os.path.join(db_dir, vm_name)
+        
+        # 确保虚拟机专用目录存在
+        os.makedirs(vm_db_dir, exist_ok=True)
+        
+        # 定义本地文件路径
+        local_chat_db = os.path.join(vm_db_dir, f'{vm_name}.db')
+        local_chat_shm = os.path.join(vm_db_dir, f'{vm_name}.db-shm')
+        local_chat_wal = os.path.join(vm_db_dir, f'{vm_name}.db-wal')
+        
+        # 定义远端文件路径
+        remote_base_path = '/Users/wx/Library/Messages'
+        remote_files = [
+            ('chat.db', local_chat_db),
+            ('chat.db-shm', local_chat_shm),
+            ('chat.db-wal', local_chat_wal)
+        ]
+        
+        downloaded_files = []
+        
+        # 下载所有相关文件
+        for remote_file, local_file in remote_files:
+            remote_path = f'{remote_base_path}/{remote_file}'
+            
+            scp_command = [
+                'scp',
+                '-o', 'StrictHostKeyChecking=no',
+                '-o', 'UserKnownHostsFile=/dev/null',
+                f'{vm_username}@{client_ip}:{remote_path}',
+                local_file
+            ]
+            
+            logger.info(f"尝试下载文件: {remote_file}")
+            
+            try:
+                result = subprocess.run(
+                    scp_command,
+                    capture_output=True,
+                    text=True,
+                    timeout=60
+                )
+                
+                if result.returncode == 0 and os.path.exists(local_file) and os.path.getsize(local_file) > 0:
+                    downloaded_files.append(remote_file)
+                    logger.info(f"文件下载成功: {remote_file} -> {local_file}, 大小: {os.path.getsize(local_file)} bytes")
+                else:
+                    logger.warning(f"文件下载失败或不存在: {remote_file}, 返回码: {result.returncode}")
+                    if result.stderr:
+                        logger.warning(f"SCP错误信息: {result.stderr.strip()}")
+                    # 删除可能创建的空文件
+                    if os.path.exists(local_file):
+                        logger.debug(f"删除空文件: {local_file}")
+                        os.remove(local_file)
+                        
+            except subprocess.TimeoutExpired:
+                logger.warning(f"下载文件超时: {remote_file}")
+                if os.path.exists(local_file):
+                    os.remove(local_file)
+            except Exception as e:
+                logger.warning(f"下载文件异常: {remote_file}, 错误: {str(e)}")
+                if os.path.exists(local_file):
+                    os.remove(local_file)
+        
+        # 检查是否至少下载了主数据库文件
+        if 'chat.db' not in downloaded_files:
+            logger.error(f"主数据库文件chat.db下载失败，已下载文件: {downloaded_files}")
+            return jsonify({'success': False, 'message': f'主数据库文件chat.db下载失败'})
+        
+        # 记录下载完成后的目录状态
+        logger.info(f"下载完成，虚拟机目录: {vm_db_dir}")
+        if os.path.exists(vm_db_dir):
+            files_in_dir = os.listdir(vm_db_dir)
+            logger.info(f"目录中的文件: {files_in_dir}")
+        else:
+            logger.error(f"虚拟机目录不存在: {vm_db_dir}")
+        
+        # 记录下载成功的文件详情
+        logger.info(f"下载成功的文件列表: {downloaded_files}")
+        for file_name in downloaded_files:
+            if file_name == 'chat.db':
+                file_path = local_chat_db
+            elif file_name == 'chat.db-shm':
+                file_path = local_chat_shm
+            elif file_name == 'chat.db-wal':
+                file_path = local_chat_wal
+            else:
+                continue
+            
+            if os.path.exists(file_path):
+                logger.info(f"文件存在确认: {file_path}, 大小: {os.path.getsize(file_path)} bytes")
+            else:
+                logger.warning(f"文件不存在: {file_path}")
+        
+        # 如果存在WAL文件，进行数据库合并
+        if 'chat.db-wal' in downloaded_files:
+            try:
+                logger.info(f"开始合并WAL数据库: {vm_name}")
+                
+                # 检查WAL文件是否真实存在
+                if not os.path.exists(local_chat_wal):
+                    logger.error(f"WAL文件不存在，无法合并: {local_chat_wal}")
+                    return jsonify({'success': False, 'message': f'WAL文件不存在: {local_chat_wal}'})
+                
+                # 直接执行WAL数据库合并
+                logger.info(f"开始执行WAL数据库合并: {vm_name}")
+                
+                conn = sqlite3.connect(local_chat_db)
+                cursor = conn.cursor()
+                
+                # 执行WAL检查点，将WAL文件的内容合并到主数据库
+                result = cursor.execute('PRAGMA wal_checkpoint(FULL)')
+                checkpoint_result = result.fetchone()
+                logger.info(f"WAL检查点结果: {checkpoint_result}")
+                
+                conn.commit()
+                conn.close()
+                
+                logger.info(f"数据库WAL合并完成: {vm_name}")
+                
+                # 检查合并后的文件状态
+                logger.info(f"合并后文件状态:")
+                for file_path in [local_chat_db, local_chat_shm, local_chat_wal]:
+                    if os.path.exists(file_path):
+                        logger.info(f"文件存在: {file_path}, 大小: {os.path.getsize(file_path)} bytes")
+                    else:
+                        logger.info(f"文件不存在: {file_path}")
+                        
+            except Exception as e:
+                logger.error(f"数据库合并失败: {str(e)}")
+                return jsonify({'success': False, 'message': f'数据库合并失败: {str(e)}'})
+        
+        # 返回成功信息
+        file_size = os.path.getsize(local_chat_db) if os.path.exists(local_chat_db) else 0
+        return jsonify({
+            'success': True,
+            'message': f'{vm_name} 的数据库文件下载并处理完成',
+            'file_path': local_chat_db,
+            'file_size': file_size,
+            'vm_name': vm_name,
+            'downloaded_files': downloaded_files
+        })
+            
+    except subprocess.TimeoutExpired:
+        logger.error("下载chat.db文件超时")
+        return jsonify({'success': False, 'message': '下载超时，请检查网络连接'})
+    except Exception as e:
+         logger.error(f"下载chat.db文件时发生错误: {str(e)}")
+         return jsonify({'success': False, 'message': f'下载失败: {str(e)}'})
+
+@mass_messaging_bp.route('/api/mass_messaging/get_message_records', methods=['GET'])
+@login_required
+def api_get_message_records():
+    """解析chat.db数据库并返回发信记录数据，根据虚拟机名称查询对应的数据库文件"""
+    try:
+        # 获取虚拟机名称参数
+        vm_name = request.args.get('vm_name')
+        
+        if not vm_name:
+            return jsonify({'success': False, 'message': '虚拟机名称不能为空'})
+        
+        # 获取项目根目录
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        db_dir = os.path.join(project_root, 'db')
+        vm_db_dir = os.path.join(db_dir, vm_name)
+        
+        # 根据新的目录结构构建数据库文件路径
+        db_path = os.path.join(vm_db_dir, f'{vm_name}.db')
+        
+        # 检查数据库文件是否存在
+        if not os.path.exists(db_path):
+            return jsonify({'success': False, 'message': f'{vm_name} 的chat.db文件不存在，请先下载数据库文件'})
+        
+        # 连接数据库
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        # 查询发信记录数据
+        # 根据imessage数据库表结构文档，构建查询语句
+        query = """
+        SELECT 
+            m.ROWID as message_id,
+            h.id as contact_id,
+            m.text as message_content,
+            m.service as service_type,
+            CASE 
+                WHEN m.is_sent = 1 THEN '是'
+                ELSE '否'
+            END as is_sent,
+            CASE 
+                WHEN m.is_delivered = 1 THEN '是'
+                ELSE '否'
+            END as is_delivered,
+            CASE 
+                WHEN m.is_read = 1 THEN '是'
+                ELSE '否'
+            END as is_read,
+            datetime(m.date/1000000000 + strftime('%s', '2001-01-01'), 'unixepoch', 'localtime') as send_time,
+            m.account as sender_account
+        FROM message m
+        LEFT JOIN handle h ON m.handle_id = h.ROWID
+        ORDER BY m.date DESC
+        LIMIT 1000
+        """
+        
+        cursor.execute(query)
+        records = cursor.fetchall()
+        
+        # 构建返回数据
+        message_records = []
+        for record in records:
+            message_records.append({
+                'message_id': record[0] or '',
+                'contact_id': record[1] or '',
+                'message_content': record[2] or '',
+                'service_type': record[3] or '',
+                'is_sent': record[4],
+                'is_delivered': record[5],
+                'is_read': record[6],
+                'send_time': record[7] or '',
+                'sender_account': record[8] or ''
+            })
+        
+        conn.close()
+        
+        logger.info(f"成功获取发信记录，共{len(message_records)}条")
+        return jsonify({
+            'success': True,
+            'message': f'成功获取发信记录，共{len(message_records)}条',
+            'records': message_records
+        })
+        
+    except sqlite3.Error as e:
+        logger.error(f"数据库查询错误: {str(e)}")
+        return jsonify({'success': False, 'message': f'数据库查询错误: {str(e)}'})
+    except Exception as e:
+        logger.error(f"获取发信记录时发生错误: {str(e)}")
+        return jsonify({'success': False, 'message': f'获取发信记录失败: {str(e)}'})
 
 # 手机号模板管理API
 @mass_messaging_bp.route('/api/phone_templates', methods=['GET'])
@@ -561,15 +819,40 @@ def api_send_mass_message():
                             script_api_url, 
                             timeout=30
                         )
-                        
+                        script_result=script_response.json()
+                       # script_result = json.dumps(script_response.json(), ensure_ascii=False, indent=2)
+                        logger.info(f"script_result: {json.dumps(script_response.json(), ensure_ascii=False, indent=2)}")
                         if script_response.status_code == 200:
-                            script_result = script_response.json()
-                            script_success = script_result.get('success', False)
-                            logger.info(f"脚本执行结果 {client_ip}: {script_result}")
+                            try:
+                                # 根据脚本返回.txt中的JSON格式重新判断发信执行结果
+                                # 成功格式：包含status、timestamp、message_content等字段
+                                # 失败格式：包含error_message和summary字段
+                                if 'error_message' in script_result:
+                                    # 失败情况
+                                    script_success = False
+                                    logger.error(f"脚本执行失败 {client_ip}: {script_result.get('error_message', '未知错误')}")
+                                elif 'status' in script_result and script_result.get('status') == 'completed':
+                                    # 成功情况
+                                    script_success = True
+                                    logger.info(f"脚本执行成功 {client_ip}: 成功发送 {script_result.get('successful_numbers', 0)} 条消息")
+                                else:
+                                    # 兼容旧格式或其他格式
+                                    script_success = script_result.get('success', False)
+                                    logger.warning(f"脚本返回未知格式 {client_ip}: {script_result}")
+                                
+                                logger.info(f"脚本执行结果 {client_ip}: {script_result}")
+                                logger.info(f"脚本返回的原始响应 {client_ip}: {script_response.text}")
+                            except ValueError as json_error:
+                                logger.error(f"脚本返回非JSON格式数据 {client_ip}: {script_response.text}")
+                                script_result = {
+                                    'success': False, 
+                                    'message': f'脚本返回非JSON格式数据: {script_response.text[:200]}'
+                                }
+                                script_success = False
                         else:
                             logger.error(f"脚本API调用失败 {client_ip}: HTTP {script_response.status_code}")
                             script_result = {'success': False, 'message': f'API调用失败: HTTP {script_response.status_code}'}
-                            
+                          
                     except requests.exceptions.Timeout:
                         logger.error(f"脚本执行超时 {client_ip}")
                         script_result = {'success': False, 'message': '脚本执行超时（30秒）'}
@@ -596,7 +879,7 @@ def api_send_mass_message():
                         results.append({
                             'client_ip': client_ip,
                             'success': False,
-                            'message': f'文件传输成功，但发信执行失败: {script_result.get("message", "未知错误") if script_result else "脚本调用失败"}',
+                            'message': f'文件传输成功，但发信执行失败: {script_result.get("error_message", "未知错误") if script_result else "脚本调用失败"}',
                             'text_path': f"{text_target_dir}message_template.txt",
                             'phone_path': f"{phone_target_dir}phone_numbers.txt",
                             'attachment_path': f"{attachment_target_dir}attachment.png" if attachment_file else None,
