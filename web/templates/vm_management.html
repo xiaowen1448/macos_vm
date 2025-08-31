@@ -1466,19 +1466,19 @@
                 loadWumaAndJuStatus();
             }, 200);
             
-            // 设置定时器，每30秒自动刷新五码信息和JU值信息状态
+            // 设置定时器，每10分钟自动刷新五码信息和JU值信息状态
             setInterval(() => {
                 if (totalVMs.length > 0) {
                     loadWumaAndJuStatus();
                 }
-            }, 30000); // 30秒刷新一次
+            }, 600000); // 10分钟刷新一次
             
-            // 设置定时器，每60秒自动刷新在线状态
+            // 设置定时器，每10分钟自动刷新在线状态
             setInterval(() => {
                 if (totalVMs.length > 0) {
                     loadRunningVMOnlineStatus();
                 }
-            }, 60000); // 60秒刷新一次
+            }, 600000); // 10分钟刷新一次
         }
 
         // 更新分页控件
@@ -5785,16 +5785,72 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert('批量IM登录任务已提交');
-                    // 关闭模态框
-                    const modal = bootstrap.Modal.getInstance(document.getElementById('batchIMLoginModal'));
-                    modal.hide();
-                    // 清空选择
-                    selectedIMVMs.clear();
-                    selectedIMId = '';
-                    updateSubmitButton();
+                    // 更新按钮为执行完毕状态
+                    submitBtn.innerHTML = '<i class="fas fa-check me-1"></i>执行完毕';
+                    submitBtn.disabled = true;
+                    submitBtn.classList.remove('btn-primary');
+                    submitBtn.classList.add('btn-success');
+                    
+                    // 显示执行成功的虚拟机列表
+                    const resultContainer = document.getElementById('imLoginResultContainer');
+                    if (resultContainer) {
+                        let successVMs = [];
+                        let failedVMs = [];
+                        
+                        if (data.results && data.results.length > 0) {
+                            data.results.forEach(result => {
+                                if (result.success && result.script_executed) {
+                                    successVMs.push(result.vm_name);
+                                } else {
+                                    failedVMs.push({
+                                        name: result.vm_name,
+                                        message: result.message || result.script_message || '执行失败'
+                                    });
+                                }
+                            });
+                        }
+                        
+                        let resultHTML = '<div class="mt-3">';
+                        resultHTML += '<h6><i class="fas fa-check-circle text-success me-2"></i>批量IM登录执行完成</h6>';
+                        
+                        if (successVMs.length > 0) {
+                            resultHTML += '<div class="alert alert-success" role="alert">';
+                            resultHTML += `<strong>执行成功的虚拟机 (${successVMs.length}个):</strong><br>`;
+                            successVMs.forEach(vmName => {
+                                resultHTML += `<span class="badge bg-success me-1 mb-1">${vmName}</span>`;
+                            });
+                            resultHTML += '</div>';
+                        }
+                        
+                        if (failedVMs.length > 0) {
+                            resultHTML += '<div class="alert alert-warning" role="alert">';
+                            resultHTML += `<strong>执行失败的虚拟机 (${failedVMs.length}个):</strong><br>`;
+                            failedVMs.forEach(vm => {
+                                resultHTML += `<span class="badge bg-warning text-dark me-1 mb-1" title="${vm.message}">${vm.name}</span>`;
+                            });
+                            resultHTML += '</div>';
+                        }
+                        
+                        // 显示脚本执行统计信息
+                        if (data.summary && data.summary.script_execution) {
+                            const scriptStats = data.summary.script_execution;
+                            resultHTML += `<div class="alert alert-info" role="alert">`;
+                            resultHTML += `<strong>执行统计:</strong> ${scriptStats.script_success_rate}`;
+                            resultHTML += `</div>`;
+                        }
+                        
+                        resultHTML += '</div>';
+                        resultContainer.innerHTML = resultHTML;
+                        resultContainer.style.display = 'block';
+                    }
+                    
+                    // 不关闭模态框，保持显示结果
+                    // 不清空选择，保持当前状态
                 } else {
                     alert('提交失败: ' + (data.message || '未知错误'));
+                    // 恢复按钮状态
+                    submitBtn.innerHTML = originalText;
+                    submitBtn.disabled = false;
                 }
             })
             .catch(error => {
@@ -5944,6 +6000,51 @@
                                     <i class="fas fa-info-circle text-info me-2"></i>
                                     <span id="appleIdQuantity">0 (已使用: 0) 个</span>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 执行结果显示区域 -->
+                    <div id="batchIMLoginResults" class="mt-4" style="display: none;">
+                        <h6><i class="fas fa-chart-bar me-2"></i>执行结果</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card border-success">
+                                    <div class="card-header bg-success text-white">
+                                        <i class="fas fa-check-circle me-2"></i>执行成功
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <span>成功数量:</span>
+                                            <span class="badge bg-success" id="successCount">0</span>
+                                        </div>
+                                        <div id="successVMList" class="small text-muted">
+                                            <!-- 成功的虚拟机列表 -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card border-danger">
+                                    <div class="card-header bg-danger text-white">
+                                        <i class="fas fa-times-circle me-2"></i>执行失败
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <span>失败数量:</span>
+                                            <span class="badge bg-danger" id="failureCount">0</span>
+                                        </div>
+                                        <div id="failureVMList" class="small text-muted">
+                                            <!-- 失败的虚拟机列表 -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>执行统计:</strong> 总共 <span id="totalVMCount">0</span> 台虚拟机，成功 <span id="totalSuccessCount">0</span> 台，失败 <span id="totalFailureCount">0</span> 台
                             </div>
                         </div>
                     </div>

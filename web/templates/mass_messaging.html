@@ -1750,17 +1750,16 @@
                 return;
             }
             
-            // 获取按钮元素和原始文本
+            // 获取按钮元素
             const executeBtn = document.querySelector('#batchSendModal .btn-primary');
-            const originalText = executeBtn.textContent;
             
             try {
-                // 显示加载状态
+                // 显示执行中状态
                 executeBtn.disabled = true;
-                executeBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>发送中...';
+                executeBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>执行中...';
                 
-                // 发送批量发信请求
-                const response = await fetch('/api/mass_messaging/send', {
+                // 发送批量发信异步请求
+                const response = await fetch('/api/mass_messaging/send_async', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -1773,46 +1772,38 @@
                 });
                 
                 const result = await response.json();
-                console.log('批量发信响应数据:', result);
+                console.log('批量发信异步响应数据:', result);
                 
                 if (result.success) {
-                    // 构建详细结果显示
+                    // 构建简化的结果显示
                     let detailsText = result.results.map(r => {
-                        let status = r.success ? '✅ 成功' : '❌ 失败';
-                        let message = r.message;
-                        
-                        // 如果有脚本执行结果，添加到显示中
-                        if (r.script_result) {
-                            console.log(`客户端 ${r.client_ip} 脚本结果:`, r.script_result);
-                            // 根据后端逻辑，检查status字段是否为completed
-                            const scriptSuccess = r.script_result.status === 'completed' || r.script_result.success === true;
-                            const scriptStatus = scriptSuccess ? '✅ 脚本执行成功' : '❌ 脚本执行失败';
-                            const scriptMessage = r.script_result.error_message || r.script_result.message || '';
-                            message += `\n  脚本状态: ${scriptStatus}`;
-                            if (scriptMessage) {
-                                message += `\n  脚本输出: ${scriptMessage}`;
-                            }
-                        } else {
-                            console.log(`客户端 ${r.client_ip} 没有脚本结果`);
-                        }
-                        
-                        return `${r.client_ip}: ${status}\n  ${message}`;
-                    }).join('\n\n');
+                        let status = r.success ? '✅ 已执行' : '❌ 失败';
+                        return `${r.client_ip}: ${status} - ${r.message}`;
+                    }).join('\n');
                     
-                    alert(`批量发信任务完成！\n${result.message}\n\n详细结果：\n${detailsText}`);
-                    bootstrap.Modal.getInstance(document.getElementById('batchSendModal')).hide();
+                    // 更新按钮为执行完毕状态
+                    executeBtn.innerHTML = '<i class="fas fa-check me-2"></i>执行完毕';
+                    executeBtn.disabled = true;
+                    executeBtn.classList.remove('btn-primary');
+                    executeBtn.classList.add('btn-success');
+                    
+                    // 显示执行结果
+                    alert(`批量发信任务已执行完毕！\n${result.message}\n\n执行状态：\n${detailsText}\n\n注意：脚本正在后台异步执行，请稍后查看发信记录确认结果。`);
+                    
+                    // 不关闭模态框，保持页面显示
                 } else {
-                    alert('批量发信失败: ' + result.message);
+                    alert('批量发信执行失败: ' + result.message);
+                    // 恢复按钮状态
+                    executeBtn.disabled = false;
+                    executeBtn.innerHTML = '执行';
                 }
                 
             } catch (error) {
-                console.error('批量发信失败:', error);
-                alert('批量发信失败: ' + error.message);
-            } finally {
+                console.error('批量发信执行失败:', error);
+                alert('批量发信执行失败: ' + error.message);
                 // 恢复按钮状态
-                const executeBtn = document.querySelector('#batchSendModal .btn-primary');
                 executeBtn.disabled = false;
-                executeBtn.textContent = originalText;
+                executeBtn.innerHTML = '执行';
             }
         }
         // 简单的Base64编码函数用于加密URL参数

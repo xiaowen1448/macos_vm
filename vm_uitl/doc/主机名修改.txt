@@ -31,7 +31,7 @@ Password:
 
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/wx/random_hostname.sh</string>
+        <string>/Users/wx/Documents/macos_sh/random_hostname.sh</string>
     </array>
 
     <key>RunAtLoad</key>

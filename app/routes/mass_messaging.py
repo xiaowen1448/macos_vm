@@ -546,7 +546,7 @@ def api_save_template():
 def api_delete_template(template_name):
     """删除发送模板"""
     try:
-        template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'web', 'config', 'im_default', 'txt')
+        template_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'web', 'config', 'im_default', 'txt')
         template_filename = f"{template_name}_imessage.txt"
         template_path = os.path.join(template_dir, template_filename)
         
@@ -557,7 +557,7 @@ def api_delete_template(template_name):
         os.remove(template_path)
         
         # 删除对应的附件文件（如果存在）
-        attachment_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'web', 'config', 'im_default', 'file')
+        attachment_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'web', 'config', 'im_default', 'file')
         if os.path.exists(attachment_dir):
             for filename in os.listdir(attachment_dir):
                 if filename.startswith(f"{template_name}_imessage."):
@@ -596,7 +596,7 @@ def api_upload_template_attachment():
         
         # 生成附件文件名
         attachment_filename = f"{template_name}_imessage{file_ext}"
-        attachment_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'web', 'config', 'im_default', 'file')
+        attachment_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'web', 'config', 'im_default', 'file')
         attachment_path = os.path.join(attachment_dir, attachment_filename)
         
         # 检查文件是否已存在
@@ -624,6 +624,8 @@ def api_upload_template_attachment():
 @login_required
 def api_send_mass_message():
     """批量发信 - 将模板文本和附件传输到选中的客户端"""
+    # 这个try语句块在原始代码中有对应的except子句
+    # 保持原样即可,因为它不是孤立的try语句
     try:
         data = request.get_json()
         template_id = data.get('template_id')
@@ -937,9 +939,289 @@ def api_send_mass_message():
                 'attachment_target_path': attachment_target_dir
             }
         })
+    
+    except Exception as e:
+        logger.error(f"批量发信任务失败: {str(e)}")
+        return jsonify({'success': False, 'message': f'批量发信任务失败: {str(e)}'})
+
+@mass_messaging_bp.route('/api/mass_messaging/send_async', methods=['POST'])
+@login_required
+def api_send_mass_message_async():
+    """批量发信异步版本 - 执行文件传输和脚本调用后立即返回，不等待脚本执行结果"""
+    try:
+        data = request.get_json()
+        template_id = data.get('template_id')
+        phone_template_id = data.get('phone_template_id')
+        selected_clients = data.get('selected_clients', [])
+        
+        if not template_id:
+            return jsonify({'success': False, 'message': '请选择发信模板'})
+        
+        if not phone_template_id:
+            return jsonify({'success': False, 'message': '请选择手机号模板'})
+        
+        if not selected_clients:
+            return jsonify({'success': False, 'message': '请选择客户端'})
+        
+        logger.info(f"开始批量发信异步任务 - 模板ID: {template_id}, 客户端数量: {len(selected_clients)}")
+        
+        # 获取模板信息（复用原有逻辑）
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        template_dir = os.path.join(project_root, 'web', 'config', 'im_default', 'txt')
+        attachment_dir = os.path.join(project_root, 'web', 'config', 'im_default', 'file')
+        
+        # 查找模板文件
+        template_content = ''
+        template_name = ''
+        attachment_file = None
+        phone_template_content = ''
+        phone_template_name = phone_template_id
+        
+        # 首先获取所有模板信息以建立ID映射
+        template_names = set()
+        if os.path.exists(template_dir):
+            for filename in os.listdir(template_dir):
+                if filename.endswith('_imessage.txt') and filename != '.gitkeep':
+                    template_name = filename.replace('_imessage.txt', '')
+                    template_names.add(template_name)
+        
+        if os.path.exists(attachment_dir):
+            for filename in os.listdir(attachment_dir):
+                if filename.endswith(('_imessage.png', '_imessage.jpg', '_imessage.jpeg', '_imessage.gif', '_imessage.mp4', '_imessage.mov')) and filename != '.gitkeep':
+                    for ext in ['_imessage.png', '_imessage.jpg', '_imessage.jpeg', '_imessage.gif', '_imessage.mp4', '_imessage.mov']:
+                        if filename.endswith(ext):
+                            template_name = filename.replace(ext, '')
+                            template_names.add(template_name)
+                            break
+        
+        # 根据模板ID查找对应的模板（ID对应排序后的索引）
+        sorted_names = sorted(template_names)
+        try:
+            template_index = int(template_id) - 1  # ID从1开始，索引从0开始
+            if 0 <= template_index < len(sorted_names):
+                template_name = sorted_names[template_index]
+                
+                # 读取模板内容
+                txt_path = os.path.join(template_dir, f"{template_name}_imessage.txt")
+                if os.path.exists(txt_path):
+                    try:
+                        with open(txt_path, 'r', encoding='utf-8') as f:
+                            template_content = f.read().strip()
+                    except Exception as e:
+                        logger.error(f"读取模板文件失败 {txt_path}: {str(e)}")
+                        return jsonify({'success': False, 'message': f'读取模板文件失败: {str(e)}'})
+            else:
+                return jsonify({'success': False, 'message': '模板ID无效'})
+        except (ValueError, IndexError):
+            return jsonify({'success': False, 'message': '模板ID格式错误'})
+        
+        if not template_content:
+            return jsonify({'success': False, 'message': '模板内容为空或读取失败'})
+        
+        # 读取手机号模板内容
+        from config import phone_unused_dir
+        phone_template_dir = os.path.join(project_root, phone_unused_dir)
+        phone_template_path = os.path.join(phone_template_dir, f"{phone_template_name}.txt")
+        
+        if not os.path.exists(phone_template_path):
+            return jsonify({'success': False, 'message': '手机号模板文件不存在'})
+        
+        try:
+            with open(phone_template_path, 'r', encoding='utf-8') as f:
+                phone_template_content = f.read().strip()
+        except Exception as e:
+            logger.error(f"读取手机号模板文件失败 {phone_template_path}: {str(e)}")
+            return jsonify({'success': False, 'message': f'读取手机号模板文件失败: {str(e)}'})
+        
+        if not phone_template_content:
+            return jsonify({'success': False, 'message': '手机号模板内容为空'})
+        
+        # 查找对应的附件文件
+        if os.path.exists(attachment_dir) and template_name:
+            for att_file in os.listdir(attachment_dir):
+                if att_file.startswith(f"{template_name}_imessage."):
+                    attachment_file = os.path.join(attachment_dir, att_file)
+                    break
+        
+        # 配置SSH传输路径
+        from config import appleidtxt_path
+        base_path = appleidtxt_path
+        text_target_dir = f"{base_path}send_default/"
+        attachment_target_dir = f"{base_path}send_default/images/"
+        phone_target_dir = f"{base_path}send_default/"
+        
+        # 执行文件传输和脚本调用（异步，不等待结果）
+        results = []
+        success_count = 0
+        
+        for client in selected_clients:
+            client_ip = client.get('ip')
+            if not client_ip:
+                results.append({
+                    'client_ip': 'unknown',
+                    'success': False,
+                    'message': '客户端IP地址无效'
+                })
+                continue
+            
+            try:
+                # 创建临时文件目录
+                temp_dir = os.path.join(project_root, 'temp')
+                os.makedirs(temp_dir, exist_ok=True)
+                
+                # 创建临时文本文件
+                temp_text_file = os.path.join(temp_dir, f'send_text_{client_ip.replace(".", "_")}.txt')
+                with open(temp_text_file, 'w', encoding='utf-8') as f:
+                    f.write(template_content)
+                
+                # 创建临时手机号文件
+                temp_phone_file = os.path.join(temp_dir, f'phone_numbers_{client_ip.replace(".", "_")}.txt')
+                with open(temp_phone_file, 'w', encoding='utf-8') as f:
+                    f.write(phone_template_content)
+                
+                # 传输文本文件
+                text_scp_cmd = [
+                    'scp',
+                    '-o', 'StrictHostKeyChecking=no',
+                    temp_text_file,
+                    f"{vm_username}@{client_ip}:{text_target_dir}message_template.txt"
+                ]
+                
+                logger.info(f"传输文本到 {client_ip}: {' '.join(text_scp_cmd)}")
+                text_result = subprocess.run(text_scp_cmd, capture_output=True, text=True, timeout=60)
+                text_success = text_result.returncode == 0
+                
+                # 传输手机号文件
+                phone_scp_cmd = [
+                    'scp',
+                    '-o', 'StrictHostKeyChecking=no',
+                    temp_phone_file,
+                    f"{vm_username}@{client_ip}:{phone_target_dir}phone_numbers.txt"
+                ]
+                
+                logger.info(f"传输手机号到 {client_ip}: {' '.join(phone_scp_cmd)}")
+                phone_result = subprocess.run(phone_scp_cmd, capture_output=True, text=True, timeout=60)
+                phone_success = phone_result.returncode == 0
+                
+                attachment_success = True  # 默认附件传输成功
+                
+                # 如果有附件，传输附件文件
+                if attachment_file and os.path.exists(attachment_file):
+                    attachment_scp_cmd = [
+                        'scp',
+                        '-o', 'StrictHostKeyChecking=no',
+                        attachment_file,
+                        f"{vm_username}@{client_ip}:{attachment_target_dir}attachment.png"
+                    ]
+                    
+                    logger.info(f"传输附件到 {client_ip}: {' '.join(attachment_scp_cmd)}")
+                    attachment_result = subprocess.run(attachment_scp_cmd, capture_output=True, text=True, timeout=60)
+                    attachment_success = attachment_result.returncode == 0
+                    
+                    if not attachment_success:
+                        logger.error(f"附件传输失败到 {client_ip}: {attachment_result.stderr}")
+                
+                # 清理临时文件
+                try:
+                    os.remove(temp_text_file)
+                    os.remove(temp_phone_file)
+                except Exception as e:
+                    logger.warning(f"清理临时文件失败: {str(e)}")
+                
+                # 记录结果
+                if text_success and phone_success and attachment_success:
+                    # 文件传输成功后，异步调用客户端API执行发信脚本（不等待结果）
+                    try:
+                        # 调用客户端8787端口API执行imsendMessage.scpt脚本
+                        script_api_url = f"http://{client_ip}:8787/run?path={script_remote_path}imsendMessage.scpt"
+                        
+                        logger.info(f"异步调用客户端API执行发信脚本: {script_api_url}")
+                        # 使用异步方式调用，不等待响应
+                        import threading
+                        def async_script_call():
+                            try:
+                                requests.get(script_api_url, timeout=5)  # 短超时，不关心结果
+                            except:
+                                pass  # 忽略所有异常
+                        
+                        thread = threading.Thread(target=async_script_call)
+                        thread.daemon = True
+                        thread.start()
+                        
+                        success_count += 1
+                        results.append({
+                            'client_ip': client_ip,
+                            'success': True,
+                            'message': '文件传输成功，脚本已异步执行',
+                            'text_path': f"{text_target_dir}message_template.txt",
+                            'phone_path': f"{phone_target_dir}phone_numbers.txt",
+                            'attachment_path': f"{attachment_target_dir}attachment.png" if attachment_file else None
+                        })
+                        
+                    except Exception as e:
+                        logger.error(f"脚本异步调用异常 {client_ip}: {str(e)}")
+                        success_count += 1  # 文件传输成功就算成功
+                        results.append({
+                            'client_ip': client_ip,
+                            'success': True,
+                            'message': '文件传输成功，脚本调用可能失败',
+                            'text_path': f"{text_target_dir}message_template.txt",
+                            'phone_path': f"{phone_target_dir}phone_numbers.txt",
+                            'attachment_path': f"{attachment_target_dir}attachment.png" if attachment_file else None
+                        })
+                else:
+                    error_msg = []
+                    if not text_success:
+                        error_msg.append(f"文本传输失败: {text_result.stderr.strip()}")
+                    if not phone_success:
+                        error_msg.append(f"手机号传输失败: {phone_result.stderr.strip()}")
+                    if not attachment_success:
+                        error_msg.append(f"附件传输失败: {attachment_result.stderr.strip()}")
+                    
+                    results.append({
+                        'client_ip': client_ip,
+                        'success': False,
+                        'message': '; '.join(error_msg)
+                    })
+                
+            except subprocess.TimeoutExpired:
+                logger.error(f"传输到客户端 {client_ip} 超时")
+                results.append({
+                    'client_ip': client_ip,
+                    'success': False,
+                    'message': '传输超时（60秒）'
+                })
+            except Exception as e:
+                logger.error(f"处理客户端 {client_ip} 时发生错误: {str(e)}")
+                results.append({
+                    'client_ip': client_ip,
+                    'success': False,
+                    'message': f'处理失败: {str(e)}'
+                })
+        
+        # 生成任务ID
+        task_id = f"batch_send_async_{int(time.time())}"
+        
+        logger.info(f"批量发信异步任务完成 - 任务ID: {task_id}, 成功: {success_count}/{len(selected_clients)}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'批量发信任务已执行完毕，成功处理 {success_count}/{len(selected_clients)} 个客户端',
+            'task_id': task_id,
+            'results': results,
+            'summary': {
+                'total_clients': len(selected_clients),
+                'success_count': success_count,
+                'failed_count': len(selected_clients) - success_count,
+                'template_name': template_name,
+                'phone_template_name': phone_template_name,
+                'has_attachment': attachment_file is not None,
+                'execution_mode': 'async'
+            }
+        })
         
     except Exception as e:
-        logger.error(f"批量发信失败: {str(e)}")
+        logger.error(f"批量发信异步任务失败: {str(e)}")
         return jsonify({'success': False, 'message': str(e)})
 
 @mass_messaging_bp.route('/api/mass_messaging/receipts', methods=['GET'])

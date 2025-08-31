@@ -1588,27 +1588,24 @@ def find_vmx_file_by_ip(target_ip):
                 logger.debug(f"检查虚拟机 {vm_path} 的IP时出错: {str(e)}")
                 continue
         
-        # 如果没有找到匹配的运行中虚拟机，搜索克隆目录中的所有VMX文件
-        logger.warning(f"未找到运行中的虚拟机匹配IP {target_ip}，搜索所有VMX文件")
+        # 如果没有找到匹配的运行中虚拟机，尝试根据IP查找对应的VMX文件
+        logger.warning(f"未找到运行中的虚拟机匹配IP {target_ip}，尝试根据IP查找对应的VMX文件")
+        
+        # 根据IP地址推断可能的虚拟机名称或目录
+        # 搜索克隆目录中包含该IP信息的VMX文件
         for root, dirs, files in os.walk(clone_dir):
             for file in files:
                 if file.endswith('.vmx'):
                     vmx_path = os.path.join(root, file)
-                    # 检查VMX文件是否有VNC配置
+                    # 检查VMX文件是否有VNC配置，并且路径中包含IP相关信息
                     if has_vnc_config(vmx_path):
-                        logger.info(f"找到可用的VMX文件: {vmx_path}")
-                        return vmx_path
+                        # 尝试从VMX文件路径或内容中匹配IP
+                        if is_vmx_for_ip(vmx_path, target_ip):
+                            logger.info(f"根据IP匹配找到VMX文件: {vmx_path}")
+                            return vmx_path
         
-        # 如果在克隆目录中没找到，搜索虚拟机模板目录
-        vm_template_dir = template_dir  # 使用从config导入的虚拟机模板目录
-        for root, dirs, files in os.walk(vm_template_dir):
-            for file in files:
-                if file.endswith('.vmx'):
-                    vmx_path = os.path.join(root, file)
-                    # 检查VMX文件是否有VNC配置
-                    if has_vnc_config(vmx_path):
-                        logger.info(f"找到可用的VMX文件: {vmx_path}")
-                        return vmx_path
+        # 如果仍然没找到，记录错误并返回None
+        logger.error(f"无法找到IP {target_ip} 对应的VMX文件")
         
         return None
     except Exception as e:
@@ -1624,6 +1621,43 @@ def has_vnc_config(vmx_path):
             return 'RemoteDisplay.vnc.enabled' in content and 'RemoteDisplay.vnc.port' in content
     except Exception as e:
         logger.error(f"读取VMX文件 {vmx_path} 时出错: {str(e)}")
+        return False
+
+def is_vmx_for_ip(vmx_path, target_ip):
+    """判断VMX文件是否对应指定的IP地址"""
+    try:
+        # 方法1: 检查文件路径中是否包含IP相关信息
+        # 从IP地址提取最后一段作为标识符
+        ip_parts = target_ip.split('.')
+        if len(ip_parts) >= 4:
+            last_octet = ip_parts[-1]  # 获取IP的最后一段
+            # 检查VMX文件路径中是否包含这个数字
+            if last_octet in vmx_path:
+                logger.debug(f"VMX文件路径 {vmx_path} 包含IP最后一段 {last_octet}")
+                return True
+        
+        # 方法2: 检查VMX文件内容中是否有IP相关配置
+        with open(vmx_path, 'r', encoding='utf-8', errors='ignore') as f:
+            content = f.read()
+            # 检查是否包含目标IP
+            if target_ip in content:
+                logger.debug(f"VMX文件内容包含目标IP {target_ip}")
+                return True
+        
+        # 方法3: 尝试从虚拟机名称推断
+        # 提取虚拟机目录名称，通常包含虚拟机标识
+        vm_dir = os.path.dirname(vmx_path)
+        vm_name = os.path.basename(vm_dir)
+        
+        # 如果虚拟机名称中包含IP的最后一段，认为匹配
+        if len(ip_parts) >= 4 and ip_parts[-1] in vm_name:
+            logger.debug(f"虚拟机名称 {vm_name} 包含IP最后一段 {ip_parts[-1]}")
+            return True
+            
+        return False
+        
+    except Exception as e:
+        logger.error(f"判断VMX文件 {vmx_path} 是否对应IP {target_ip} 时出错: {str(e)}")
         return False
 
 def read_vnc_config_from_vmx(vmx_path):
@@ -1808,8 +1842,14 @@ def cleanup_all_vnc_connections():
         for session_id in session_ids:
             try:
                 connection = vnc_connections[session_id]
-                if 'socket' in connection:
-                    connection['socket'].close()
+                if 'socket' in connection and connection['socket']:
+                    try:
+                        # 检查套接字是否仍然有效
+                        if hasattr(connection['socket'], 'fileno'):
+                            connection['socket'].close()
+                    except (OSError, AttributeError) as e:
+                        # 忽略套接字已关闭或无效的错误
+                        logger.debug(f"套接字已关闭或无效: {str(e)}")
                 del vnc_connections[session_id]
                 logger.info(f"清理VNC连接: {session_id}")
             except Exception as e:
@@ -7548,7 +7588,7 @@ def api_batch_im_login():
         logger.info(f"批量IM登录验证通过 - 运行中虚拟机: {running_vms}, Apple ID文件: {apple_id_file}")
         
         # 读取Apple ID文件内容
-        from config import appleid_unused_dir
+        from config import appleid_unused_dir, appleidtxt_path, vm_username
         apple_id_file_path = os.path.join(project_root, appleid_unused_dir, apple_id_file)
         
         if not os.path.exists(apple_id_file_path):
@@ -7616,109 +7656,217 @@ def api_batch_im_login():
         
         logger.info(f"每个虚拟机分配 {apple_ids_per_vm} 个Apple ID，共使用 {len(apple_ids_to_distribute)} 个")
         
-        # 为每个虚拟机创建临时文件并传输
-        results = []
-        start_index = 0
+        # 使用多线程并发处理每个虚拟机的登录
+        import threading
+        from concurrent.futures import ThreadPoolExecutor, as_completed
         
-        for i, vm_name in enumerate(running_vms):
+        results = []
+        results_lock = threading.Lock()  # 用于保护results列表的线程安全
+        
+        def process_vm_login(vm_name, vm_index, apple_id_data):
+            """处理单个虚拟机的登录过程"""
+            vm_result = {
+                'vm_name': vm_name,
+                'success': False,
+                'message': '',
+                'apple_id_count': 1,
+                'apple_id_range': f"{vm_index+1}",
+                'script_executed': False,
+                'script_message': ''
+            }
+            
             try:
-                # 获取虚拟机IP
-                vm_ip = get_vm_ip(vm_name)
-                if not vm_ip:
-                    results.append({
-                        'vm_name': vm_name,
-                        'success': False,
-                        'message': '无法获取虚拟机IP地址'
-                    })
-                    continue
+                 logger.info(f"[线程] 开始处理虚拟机 {vm_name} 的登录")
+                 
+                 # 获取虚拟机IP
+                 vm_ip = get_vm_ip(vm_name)
+                 if not vm_ip:
+                     vm_result['message'] = '无法获取虚拟机IP地址'
+                     return vm_result
                 
                 # 获取分配给当前虚拟机的Apple ID（每个虚拟机一个）
-                vm_apple_ids = [apple_ids_to_distribute[i]]
+                 vm_apple_ids = [apple_id_data]
+                 
+                 logger.info(f"[线程] 虚拟机 {vm_name} 分配第 {vm_index+1} 个Apple ID: {vm_apple_ids[0]}")
+                 
+                 # 创建临时文件
+                 temp_file_name = f"{vm_name}_appleid.txt"
+                 temp_file_path = os.path.join(project_root, 'temp', temp_file_name)
+                 
+                 # 确保临时目录存在
+                 os.makedirs(os.path.dirname(temp_file_path), exist_ok=True)
+                 
+                 # 写入分配给当前虚拟机的Apple ID到临时文件
+                 with open(temp_file_path, 'w', encoding='utf-8') as f:
+                     f.write(vm_apple_ids[0])
+                 
+                 logger.info(f"[线程] 创建临时文件: {temp_file_path}，包含 1 个Apple ID")
                 
-                logger.info(f"虚拟机 {vm_name} 分配第 {i+1} 个Apple ID: {vm_apple_ids[0]}")
+                 # 直接传输文件，不校验远端目录是否存在
+                 logger.info(f"[线程] 直接传输Apple ID文件到虚拟机 {vm_name}，不校验远端目录")
+                 
+                 # 使用SCP传输文件到虚拟机的Documents目录，文件名固定为appleid.txt
+                 remote_file_path = f"{appleidtxt_path}appleid.txt"
+                 
+                 scp_cmd = [
+                     'scp',
+                     '-o', 'StrictHostKeyChecking=no',
+                     temp_file_path,
+                     f"{vm_username}@{vm_ip}:{remote_file_path}"
+                 ]
+                 
+                 logger.info(f"[线程] 执行SCP命令: {' '.join(scp_cmd)}")
+                 result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=60)
                 
-                # 创建临时文件
-                temp_file_name = f"{vm_name}_appleid.txt"
-                temp_file_path = os.path.join(project_root, 'temp', temp_file_name)
+                 if result.returncode == 0:
+                     logger.info(f"[线程] 成功传输Apple ID文件到虚拟机 {vm_name} 的Documents目录")
+                     
+                     # 执行登录脚本
+                     script_success = False
+                     script_message = ""
+                    
+                     try:
+                         # 从config导入script_upload_dirs
+                         from config import script_upload_dirs
+                         
+                         # 查找imessage_test.scpt脚本
+                         script_found = False
+                         script_path = None
+                         
+                         for script_dir in script_upload_dirs:
+                             # 直接使用完整路径
+                             potential_script_path = os.path.join(script_dir, 'imessage_test.scpt')
+                             logger.info(f"[线程] 检查脚本路径: {potential_script_path}")
+                             if os.path.exists(potential_script_path):
+                                 script_path = potential_script_path
+                                 script_found = True
+                                 logger.info(f"[线程] 找到登录脚本: {script_path}")
+                                 break
+                             else:
+                                 logger.warning(f"[线程] 脚本不存在: {potential_script_path}")
+                        
+                         if script_found:
+                             # 先传输脚本到虚拟机，然后调用API执行
+                             remote_script_path = f"{script_remote_path}imessage_test.scpt"
+                             scp_script_cmd = [
+                                 'scp',
+                                 '-o', 'StrictHostKeyChecking=no',
+                                 script_path,
+                                 f"{vm_username}@{vm_ip}:{remote_script_path}"
+                             ]
+                             
+                             logger.info(f"[线程] 传输登录脚本到虚拟机 {vm_name}: {' '.join(scp_script_cmd)}")
+                             script_transfer_result = subprocess.run(scp_script_cmd, capture_output=True, text=True, timeout=60)
+                             
+                             if script_transfer_result.returncode == 0:
+                                 logger.info(f"[线程] 成功传输登录脚本到虚拟机 {vm_name}")
+                                
+                                 # 调用客户端8787端口API执行登录脚本
+                                 try:
+                                     import requests
+                                     
+                                     script_api_url = f"http://{vm_ip}:8787/run?path={remote_script_path}"
+                                     logger.info(f"[线程] 调用客户端API执行登录脚本: {script_api_url}")
+                                     
+                                     response = requests.get(script_api_url, timeout=300)
+                                     
+                                     if response.status_code == 200:
+                                         script_output = response.text.strip()
+                                         logger.info(f"[线程] 虚拟机 {vm_name} 登录脚本执行成功，输出: {script_output}")
+                                         script_success = True
+                                         script_message = f"登录脚本执行成功: {script_output}"
+                                     else:
+                                         logger.error(f"[线程] 虚拟机 {vm_name} 登录脚本执行失败，HTTP状态码: {response.status_code}")
+                                         script_message = f"登录脚本执行失败: HTTP {response.status_code}"
+                                        
+                                 except requests.exceptions.Timeout:
+                                     logger.error(f"[线程] 虚拟机 {vm_name} 登录脚本执行超时")
+                                     script_message = "登录脚本执行超时"
+                                 except requests.exceptions.ConnectionError:
+                                     logger.error(f"[线程] 虚拟机 {vm_name} 无法连接到8787端口")
+                                     script_message = "无法连接到客户端8787端口"
+                                 except Exception as api_error:
+                                     logger.error(f"[线程] 虚拟机 {vm_name} API调用异常: {str(api_error)}")
+                                     script_message = f"API调用异常: {str(api_error)}"
+                             else:
+                                 script_error = script_transfer_result.stderr.strip() if script_transfer_result.stderr else '未知错误'
+                                 logger.error(f"[线程] 传输登录脚本到虚拟机 {vm_name} 失败: {script_error}")
+                                 script_message = f"登录脚本传输失败: {script_error}"
+                         else:
+                             logger.warning(f"[线程] 未找到imessage_test.scpt登录脚本")
+                             script_message = "未找到登录脚本"
+                            
+                     except Exception as e:
+                         logger.error(f"[线程] 执行登录脚本时发生错误: {str(e)}")
+                         script_message = f"脚本执行异常: {str(e)}"
+                     
+                     # 组合结果消息
+                     final_message = f'appleid.txt文件已成功传输到虚拟机 {vm_name} 的Documents目录'
+                     if script_message:
+                         final_message += f'; {script_message}'
+                     
+                     # 使用线程锁保护共享资源
+                     with results_lock:
+                         results.append({
+                             'vm_name': vm_name,
+                             'success': True,
+                             'message': final_message,
+                             'remote_path': remote_file_path,
+                             'apple_id_count': len(vm_apple_ids),
+                             'apple_id_range': f"{i+1}",
+                             'script_executed': script_success,
+                             'script_message': script_message
+                         })
+                 else:
+                     error_msg = result.stderr.strip() if result.stderr else '未知错误'
+                     logger.error(f"[线程] 传输Apple ID文件到虚拟机 {vm_name} 失败: {error_msg}")
+                     with results_lock:
+                         results.append({
+                             'vm_name': vm_name,
+                             'success': False,
+                             'message': f'传输失败: {error_msg}',
+                             'apple_id_count': len(vm_apple_ids),
+                             'apple_id_range': f"{i+1}"
+                         })
                 
-                # 确保临时目录存在
-                os.makedirs(os.path.dirname(temp_file_path), exist_ok=True)
+                 # 清理临时文件
+                 try:
+                     os.remove(temp_file_path)
+                     logger.info(f"[线程] 清理临时文件: {temp_file_path}")
+                 except Exception as e:
+                     logger.warning(f"[线程] 清理临时文件失败: {str(e)}")
                 
-                # 写入分配给当前虚拟机的Apple ID到临时文件
-                with open(temp_file_path, 'w', encoding='utf-8') as f:
-                    f.write(vm_apple_ids[0])
-                
-                logger.info(f"创建临时文件: {temp_file_path}，包含 1 个Apple ID")
-                
-                # 确保Documents目录存在
-                mkdir_cmd = [
-                    'ssh',
-                    '-o', 'StrictHostKeyChecking=no',
-                    f"{vm_username}@{vm_ip}",
-                    'mkdir -p ~/Documents'
-                ]
-                
-                logger.info(f"确保Documents目录存在: {' '.join(mkdir_cmd)}")
-                mkdir_result = subprocess.run(mkdir_cmd, capture_output=True, text=True, timeout=30)
-                
-                if mkdir_result.returncode != 0:
-                    logger.warning(f"创建Documents目录失败，但继续尝试传输文件: {mkdir_result.stderr}")
-                
-                # 使用SCP传输文件到虚拟机的Documents目录，文件名固定为appleid.txt
-                remote_file_path = f"{appleidtxt_path}appleid.txt"
-                
-                scp_cmd = [
-                    'scp',
-                    '-o', 'StrictHostKeyChecking=no',
-                    temp_file_path,
-                    f"{vm_username}@{vm_ip}:{remote_file_path}"
-                ]
-                
-                logger.info(f"执行SCP命令: {' '.join(scp_cmd)}")
-                result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=60)
-                
-                if result.returncode == 0:
-                    logger.info(f"成功传输Apple ID文件到虚拟机 {vm_name} 的Documents目录")
-                    results.append({
-                        'vm_name': vm_name,
-                        'success': True,
-                        'message': f'appleid.txt文件已成功传输到虚拟机 {vm_name} 的Documents目录',
-                        'remote_path': remote_file_path,
-                        'apple_id_count': len(vm_apple_ids),
-                        'apple_id_range': f"{i+1}"
-                    })
-                else:
-                    error_msg = result.stderr.strip() if result.stderr else '未知错误'
-                    logger.error(f"传输Apple ID文件到虚拟机 {vm_name} 失败: {error_msg}")
+            except subprocess.TimeoutExpired:
+                logger.error(f"[线程] 传输Apple ID文件到虚拟机 {vm_name} 超时")
+                with results_lock:
                     results.append({
                         'vm_name': vm_name,
                         'success': False,
-                        'message': f'传输失败: {error_msg}',
-                        'apple_id_count': len(vm_apple_ids),
-                        'apple_id_range': f"{i+1}"
+                        'message': '传输超时（60秒）'
                     })
-                
-                # 清理临时文件
-                try:
-                    os.remove(temp_file_path)
-                    logger.info(f"清理临时文件: {temp_file_path}")
-                except Exception as e:
-                    logger.warning(f"清理临时文件失败: {str(e)}")
-                
-            except subprocess.TimeoutExpired:
-                logger.error(f"传输Apple ID文件到虚拟机 {vm_name} 超时")
-                results.append({
-                    'vm_name': vm_name,
-                    'success': False,
-                    'message': '传输超时（60秒）'
-                })
             except Exception as e:
-                logger.error(f"处理虚拟机 {vm_name} 时发生错误: {str(e)}")
-                results.append({
-                    'vm_name': vm_name,
-                    'success': False,
-                    'message': f'处理失败: {str(e)}'
-                })
+                logger.error(f"[线程] 处理虚拟机 {vm_name} 时发生错误: {str(e)}")
+                with results_lock:
+                    results.append({
+                        'vm_name': vm_name,
+                        'success': False,
+                        'message': f'处理失败: {str(e)}'
+                    })
+        
+        # 使用线程池并发执行虚拟机登录任务
+        with ThreadPoolExecutor(max_workers=min(len(running_vms), 10)) as executor:
+            # 提交所有任务
+            futures = []
+            for i, vm_name in enumerate(running_vms):
+                future = executor.submit(process_vm_login, vm_name, i, apple_ids_to_distribute[i])
+                futures.append(future)
+            
+            # 等待所有任务完成
+            for future in as_completed(futures):
+                try:
+                    future.result()  # 获取结果，如果有异常会抛出
+                except Exception as e:
+                    logger.error(f"线程执行异常: {str(e)}")
         
         # 统计结果
         success_count = sum(1 for r in results if r['success'])
@@ -7726,6 +7874,10 @@ def api_batch_im_login():
         
         # 计算分配的Apple ID总数
         total_allocated = sum(r.get('apple_id_count', 0) for r in results if r['success'])
+        
+        # 统计脚本执行结果
+        script_success_count = sum(1 for r in results if r.get('script_executed', False))
+        script_total_count = sum(1 for r in results if r['success'])  # 只统计文件传输成功的虚拟机
         
         # 如果有成功的分发，则标记Apple ID为已使用
         used_apple_ids = []
@@ -7803,9 +7955,14 @@ def api_batch_im_login():
             except Exception as e:
                 logger.error(f"标记Apple ID为已使用时发生错误: {str(e)}")
         
+        # 构建完整的结果消息
+        result_message = f'批量IM登录任务完成，appleid.txt文件已成功传输到 {success_count}/{total_count} 个虚拟机的Documents目录，共分配 {total_allocated} 个Apple ID'
+        if script_total_count > 0:
+            result_message += f'，登录脚本执行成功 {script_success_count}/{script_total_count} 个虚拟机'
+        
         return jsonify({
             'success': True,
-            'message': f'批量IM登录任务完成，appleid.txt文件已成功传输到 {success_count}/{total_count} 个虚拟机的Documents目录，共分配 {total_allocated} 个Apple ID',
+            'message': result_message,
             'results': results,
             'summary': {
                 'total_vms': total_count,
@@ -7816,6 +7973,11 @@ def api_batch_im_login():
                 'used_apple_ids': len(used_apple_ids),
                 'source_file': apple_id_file,
                 'backup_file': backup_file_name if used_apple_ids else None,
+                'script_execution': {
+                    'script_success_count': script_success_count,
+                    'script_total_count': script_total_count,
+                    'script_success_rate': f'{script_success_count}/{script_total_count}' if script_total_count > 0 else '0/0'
+                },
                 'distribution_info': {
                     'apple_ids_per_vm': apple_ids_per_vm,
                     'total_apple_ids_used': len(apple_ids_to_distribute),
@@ -9020,12 +9182,23 @@ def vite_client():
     """处理vite客户端请求，返回204状态码"""
     return '', 204
 
+# 全局标志，防止重复清理
+_cleanup_done = False
+
 # 应用退出时的清理函数
 def cleanup_on_exit():
     """应用退出时清理资源"""
+    global _cleanup_done
+    if _cleanup_done:
+        return
+    _cleanup_done = True
+    
     logger.info("应用正在退出，开始清理资源...")
-    cleanup_all_vnc_connections()
-    logger.info("资源清理完成")
+    try:
+        cleanup_all_vnc_connections()
+        logger.info("资源清理完成")
+    except Exception as e:
+        logger.error(f"清理资源时出错: {str(e)}")
 
 # 注册退出处理函数
 import atexit
@@ -9036,8 +9209,12 @@ import signal
 
 def signal_handler(signum, frame):
     """处理系统信号"""
+    global _cleanup_done
+    if _cleanup_done:
+        sys.exit(0)
+        
     logger.info(f"收到信号 {signum}，开始清理资源...")
-    cleanup_all_vnc_connections()
+    cleanup_on_exit()
     logger.info("资源清理完成，退出应用")
     sys.exit(0)
 
