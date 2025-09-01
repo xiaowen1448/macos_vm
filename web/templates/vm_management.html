@@ -742,12 +742,15 @@
                                 <i class="fas fa-server me-2"></i>虚拟机信息管理
                             </h4>
                             <div class="btn-group">
-                                <button class="btn btn-primary" onclick="refreshData()">
+                                <button class="btn btn-primary" onclick="refreshData()" title="刷新虚拟机基本数据">
                                     <i class="fas fa-sync-alt me-2"></i>刷新数据
                                 </button>
                                 <button class="btn btn-outline-info" onclick="refreshOnlineStatus()" title="重新检测在线状态">
                                     <i class="fas fa-wifi me-2"></i>检测在线
                                 </button>
+                                <!-- <button class="btn btn-outline-warning" onclick="refreshWumaAndJuStatus()" title="重新获取五码和JU值信息">
+                                    <i class="fas fa-code me-2"></i>检测五码JU
+                                </button> -->
                             </div>
                         </div>
                     </div>
@@ -1308,16 +1311,50 @@
                 });
         }
 
-        // 刷新虚拟机数据
+        // 防抖变量
+        let refreshDataDebounce = null;
+        let refreshOnlineStatusDebounce = null;
+        let refreshWumaJuDebounce = null;
+        
+        // 优化后的刷新虚拟机数据函数，添加防抖逻辑
         function refreshData() {
-            console.log('刷新虚拟机数据，运行中的虚拟机将排序到最前面');
-            loadVMData(1);
+            // 清除之前的定时器
+            if (refreshDataDebounce) {
+                clearTimeout(refreshDataDebounce);
+            }
+            
+            // 设置新的定时器，防止频繁点击
+            refreshDataDebounce = setTimeout(() => {
+                console.log('刷新虚拟机数据，运行中的虚拟机将排序到最前面');
+                loadVMData(1);
+                refreshDataDebounce = null;
+            }, 1000); // 1秒防抖
         }
         
-        // 刷新在线状态
+        // 优化后的刷新在线状态函数，添加防抖逻辑
         function refreshOnlineStatus() {
-            console.log('手动刷新在线状态');
-            loadRunningVMOnlineStatus();
+            if (refreshOnlineStatusDebounce) {
+                clearTimeout(refreshOnlineStatusDebounce);
+            }
+            
+            refreshOnlineStatusDebounce = setTimeout(() => {
+                console.log('手动刷新在线状态');
+                loadRunningVMOnlineStatus();
+                refreshOnlineStatusDebounce = null;
+            }, 2000); // 2秒防抖，在线状态检测较耗时
+        }
+        
+        // 新增：手动刷新五码和JU值状态函数
+        function refreshWumaAndJuStatus() {
+            if (refreshWumaJuDebounce) {
+                clearTimeout(refreshWumaJuDebounce);
+            }
+            
+            refreshWumaJuDebounce = setTimeout(() => {
+                console.log('手动刷新五码和JU值状态');
+                loadWumaAndJuStatus();
+                refreshWumaJuDebounce = null;
+            }, 3000); // 3秒防抖，五码和JU值检测最耗时
         }
 
         // 更新虚拟机统计信息
@@ -1466,19 +1503,8 @@
                 loadWumaAndJuStatus();
             }, 200);
             
-            // 设置定时器，每10分钟自动刷新五码信息和JU值信息状态
-            setInterval(() => {
-                if (totalVMs.length > 0) {
-                    loadWumaAndJuStatus();
-                }
-            }, 600000); // 10分钟刷新一次
-            
-            // 设置定时器，每10分钟自动刷新在线状态
-            setInterval(() => {
-                if (totalVMs.length > 0) {
-                    loadRunningVMOnlineStatus();
-                }
-            }, 600000); // 10分钟刷新一次
+            // 智能刷新策略：根据虚拟机数量和状态动态调整刷新频率
+            startSmartRefreshStrategy();
         }
 
         // 更新分页控件
@@ -1939,6 +1965,7 @@
         }
 
         // 异步获取五码信息和JU值信息状态
+        // 优化后的五码和JU值状态获取函数，添加并发控制和批处理
         function loadWumaAndJuStatus() {
             // 获取所有运行中的虚拟机
             const runningVMs = totalVMs.filter(vm => vm.status === 'running');
@@ -1949,53 +1976,82 @@
             }
             
             const vmNames = runningVMs.map(vm => vm.name);
-            console.log(`开始异步获取 ${vmNames.length} 个运行中虚拟机的五码信息和JU值信息状态`);
+            console.log(`开始批量获取 ${vmNames.length} 个运行中虚拟机的五码信息和JU值信息状态`);
             
-            // 为每个运行中的虚拟机异步获取五码信息和JU值信息
-            vmNames.forEach(vmName => {
-                // 获取五码信息
-                fetch('/api/get_10_12_wuma_info', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        vm_name: vmName
-                    })
+            // 使用批量API接口获取五码信息
+            fetch('/api/batch_get_10_12_wuma_info', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    vm_names: vmNames
                 })
-                .then(response => response.json())
-                .then(data => {
-                    console.log(`虚拟机 ${vmName} 五码信息获取结果:`, data.success);
-                    updateWumaStatusIcon(vmName, data.success);
-                })
-                .catch(error => {
-                    console.error(`获取虚拟机 ${vmName} 五码信息失败:`, error);
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('批量获取五码信息结果:', data);
+                if (data.success && data.results) {
+                    // 更新每个虚拟机的五码状态
+                    Object.keys(data.results).forEach(vmName => {
+                        const result = data.results[vmName];
+                        updateWumaStatusIcon(vmName, result.success);
+                    });
+                } else {
+                    console.error('批量获取五码信息失败:', data.message);
+                    // 如果批量请求失败，将所有虚拟机标记为未获取
+                    vmNames.forEach(vmName => {
+                        updateWumaStatusIcon(vmName, false);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('批量获取五码信息请求失败:', error);
+                // 如果请求失败，将所有虚拟机标记为未获取
+                vmNames.forEach(vmName => {
                     updateWumaStatusIcon(vmName, false);
                 });
-                
-                // 获取JU值信息
-                fetch('/api/get_10_12_ju_info', {
+            });
+            
+            // 延迟1秒后获取JU值信息，避免与五码信息请求冲突
+            setTimeout(() => {
+                fetch('/api/batch_get_10_12_ju_info', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        vm_name: vmName
+                        vm_names: vmNames
                     })
                 })
                 .then(response => response.json())
                 .then(data => {
-                    console.log(`虚拟机 ${vmName} JU值信息获取结果:`, data.success);
-                    updateJuStatusIcon(vmName, data.success);
+                    console.log('批量获取JU值信息结果:', data);
+                    if (data.success && data.results) {
+                        // 更新每个虚拟机的JU值状态
+                        Object.keys(data.results).forEach(vmName => {
+                            const result = data.results[vmName];
+                            updateJuStatusIcon(vmName, result.success);
+                        });
+                    } else {
+                        console.error('批量获取JU值信息失败:', data.message);
+                        // 如果批量请求失败，将所有虚拟机标记为未获取
+                        vmNames.forEach(vmName => {
+                            updateJuStatusIcon(vmName, false);
+                        });
+                    }
                 })
                 .catch(error => {
-                    console.error(`获取虚拟机 ${vmName} JU值信息失败:`, error);
-                    updateJuStatusIcon(vmName, false);
+                    console.error('批量获取JU值信息请求失败:', error);
+                    // 如果请求失败，将所有虚拟机标记为未获取
+                    vmNames.forEach(vmName => {
+                        updateJuStatusIcon(vmName, false);
+                    });
                 });
-            });
+            }, 1000);
         }
 
-        // 异步获取运行中虚拟机的在线状态
+        // 优化后的在线状态检测函数，添加智能检测逻辑
         function loadRunningVMOnlineStatus() {
             // 获取所有运行中的虚拟机
             const runningVMs = totalVMs.filter(vm => vm.status === 'running');
@@ -2024,8 +2080,15 @@
                 return;
             }
             
-            const vmNames = runningVMs.map(vm => vm.name);
-            console.log(`开始异步获取 ${vmNames.length} 个运行中虚拟机的在线状态`);
+            // 限制批量检测的虚拟机数量，避免一次性检测过多虚拟机
+            const maxBatchSize = 10;
+            const vmNames = runningVMs.slice(0, maxBatchSize).map(vm => vm.name);
+            
+            if (runningVMs.length > maxBatchSize) {
+                console.log(`运行中虚拟机数量 ${runningVMs.length} 超过批量限制 ${maxBatchSize}，本次仅检测前 ${maxBatchSize} 个`);
+            }
+            
+            console.log(`开始批量获取 ${vmNames.length} 个运行中虚拟机的在线状态`);
             
             // 显示加载状态
             vmNames.forEach(vmName => {
@@ -5959,6 +6022,118 @@
         window.alert = function(message) {
             showStaticMessage(message, 'warning');
         };
+        
+        // 智能刷新策略变量
+        let onlineStatusTimer = null;
+        let wumaJuStatusTimer = null;
+        let lastVMCount = 0;
+        let lastRunningVMCount = 0;
+        
+        // 启动智能刷新策略
+        function startSmartRefreshStrategy() {
+            console.log('启动智能刷新策略');
+            
+            // 初始化刷新策略
+            updateRefreshStrategy();
+            
+            // 每5分钟检查一次是否需要调整刷新策略
+            setInterval(() => {
+                updateRefreshStrategy();
+            }, 300000); // 5分钟检查一次
+        }
+        
+        // 更新刷新策略
+        function updateRefreshStrategy() {
+            const currentVMCount = totalVMs.length;
+            const runningVMs = totalVMs.filter(vm => vm.status === 'running');
+            const currentRunningVMCount = runningVMs.length;
+            
+            console.log(`智能刷新策略检查: 总虚拟机=${currentVMCount}, 运行中=${currentRunningVMCount}`);
+            
+            // 如果虚拟机数量或运行状态发生变化，重新计算刷新间隔
+            if (currentVMCount !== lastVMCount || currentRunningVMCount !== lastRunningVMCount) {
+                console.log(`虚拟机状态变化，重新计算刷新策略`);
+                
+                // 清除现有定时器
+                if (onlineStatusTimer) {
+                    clearInterval(onlineStatusTimer);
+                    onlineStatusTimer = null;
+                }
+                if (wumaJuStatusTimer) {
+                    clearInterval(wumaJuStatusTimer);
+                    wumaJuStatusTimer = null;
+                }
+                
+                // 根据虚拟机数量动态计算刷新间隔
+                const onlineRefreshInterval = calculateOnlineRefreshInterval(currentRunningVMCount);
+                const wumaJuRefreshInterval = calculateWumaJuRefreshInterval(currentRunningVMCount);
+                
+                console.log(`新的刷新间隔: 在线状态=${onlineRefreshInterval/60000}分钟, 五码JU=${wumaJuRefreshInterval/60000}分钟`);
+                
+                // 设置在线状态刷新定时器
+                if (currentRunningVMCount > 0) {
+                    onlineStatusTimer = setInterval(() => {
+                        console.log('智能刷新: 检测在线状态');
+                        loadRunningVMOnlineStatus();
+                    }, onlineRefreshInterval);
+                    
+                    // 延迟启动五码JU状态刷新，避免并发
+                    setTimeout(() => {
+                        wumaJuStatusTimer = setInterval(() => {
+                            console.log('智能刷新: 检测五码JU状态');
+                            loadWumaAndJuStatus();
+                        }, wumaJuRefreshInterval);
+                    }, 120000); // 延迟2分钟启动
+                }
+                
+                lastVMCount = currentVMCount;
+                lastRunningVMCount = currentRunningVMCount;
+            }
+        }
+        
+        // 计算在线状态刷新间隔
+        function calculateOnlineRefreshInterval(runningVMCount) {
+            if (runningVMCount === 0) return 0;
+            
+            // 基础间隔：10分钟
+            let baseInterval = 600000;
+            
+            if (runningVMCount <= 5) {
+                // 少量虚拟机：10分钟
+                return baseInterval;
+            } else if (runningVMCount <= 15) {
+                // 中等数量：15分钟
+                return baseInterval * 1.5;
+            } else if (runningVMCount <= 30) {
+                // 较多虚拟机：20分钟
+                return baseInterval * 2;
+            } else {
+                // 大量虚拟机：30分钟
+                return baseInterval * 3;
+            }
+        }
+        
+        // 计算五码JU状态刷新间隔
+        function calculateWumaJuRefreshInterval(runningVMCount) {
+            if (runningVMCount === 0) return 0;
+            
+            // 基础间隔：15分钟（五码JU检测更耗时）
+            let baseInterval = 900000;
+            
+            if (runningVMCount <= 5) {
+                // 少量虚拟机：15分钟
+                return baseInterval;
+            } else if (runningVMCount <= 15) {
+                // 中等数量：25分钟
+                return baseInterval * 1.67;
+            } else if (runningVMCount <= 30) {
+                // 较多虚拟机：35分钟
+                return baseInterval * 2.33;
+            } else {
+                // 大量虚拟机：45分钟
+                return baseInterval * 3;
+            }
+        }
 
     </script>
 

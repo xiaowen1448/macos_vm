@@ -16,6 +16,93 @@ import socket
 
 from config import *
 
+# 虚拟机状态缓存机制
+class VMStatusCache:
+    def __init__(self):
+        self.cache = {}
+        self.cache_lock = threading.Lock()
+        self.cache_timeout = 300  # 5分钟缓存过期时间
+        self.wuma_cache_timeout = 600  # 五码信息10分钟缓存
+        self.ju_cache_timeout = 600  # JU值信息10分钟缓存
+    
+    def get_cache_key(self, vm_name, cache_type):
+        return f"{vm_name}_{cache_type}"
+    
+    def is_cache_valid(self, cache_entry):
+        if not cache_entry:
+            return False
+        return time.time() - cache_entry['timestamp'] < cache_entry['timeout']
+    
+    def get_cached_status(self, vm_name, cache_type='online_status'):
+        with self.cache_lock:
+            cache_key = self.get_cache_key(vm_name, cache_type)
+            cache_entry = self.cache.get(cache_key)
+            if self.is_cache_valid(cache_entry):
+                logger.debug(f"使用缓存的{cache_type}数据: {vm_name}")
+                return cache_entry['data']
+            return None
+    
+    def set_cached_status(self, vm_name, data, cache_type='online_status'):
+        with self.cache_lock:
+            cache_key = self.get_cache_key(vm_name, cache_type)
+            timeout = self.cache_timeout
+            if cache_type == 'wuma_info':
+                timeout = self.wuma_cache_timeout
+            elif cache_type == 'ju_info':
+                timeout = self.ju_cache_timeout
+            
+            self.cache[cache_key] = {
+                'data': data,
+                'timestamp': time.time(),
+                'timeout': timeout
+            }
+            logger.debug(f"缓存{cache_type}数据: {vm_name}")
+    
+    def clear_cache(self, vm_name=None, cache_type=None):
+        with self.cache_lock:
+            if vm_name and cache_type:
+                cache_key = self.get_cache_key(vm_name, cache_type)
+                self.cache.pop(cache_key, None)
+            elif vm_name:
+                # 清除指定虚拟机的所有缓存
+                keys_to_remove = [k for k in self.cache.keys() if k.startswith(f"{vm_name}_")]
+                for key in keys_to_remove:
+                    self.cache.pop(key, None)
+            else:
+                # 清除所有缓存
+                self.cache.clear()
+    
+    def cleanup_expired_cache(self):
+        """清理过期的缓存条目"""
+        with self.cache_lock:
+            expired_keys = []
+            for key, entry in self.cache.items():
+                if not self.is_cache_valid(entry):
+                    expired_keys.append(key)
+            
+            for key in expired_keys:
+                self.cache.pop(key, None)
+            
+            if expired_keys:
+                logger.debug(f"清理了 {len(expired_keys)} 个过期缓存条目")
+
+# 全局缓存实例
+vm_cache = VMStatusCache()
+
+# 定期清理过期缓存的后台任务
+def cache_cleanup_task():
+    while True:
+        time.sleep(600)  # 每10分钟清理一次
+        vm_cache.cleanup_expired_cache()
+
+# 启动缓存清理线程
+cache_cleanup_thread = threading.Thread(target=cache_cleanup_task, daemon=True)
+cache_cleanup_thread.start()
+
+# 禁用paramiko的debug日志输出
+logging.getLogger('paramiko').setLevel(logging.WARNING)
+logging.getLogger('paramiko.transport').setLevel(logging.WARNING)
+
 # 配置日志
 from config import logs_dir
 
@@ -166,7 +253,7 @@ def check_and_complete_task(task_id):
         import sys
         sys.stdout.flush()
 
-def monitor_vm_and_configure(task_id, vm_name, vm_path, wuma_config_file, max_wait_time=300):
+def monitor_vm_and_configure(task_id, vm_name, vm_path, wuma_config_file, max_wait_time=600):
     """监控虚拟机IP和SSH状态，连通后自动配置五码"""
     start_time = time.time()
     add_task_log(task_id, 'info', f'开始监控虚拟机 {vm_name} 的网络状态...')
@@ -217,7 +304,7 @@ def monitor_vm_and_configure(task_id, vm_name, vm_path, wuma_config_file, max_wa
                 # 获取虚拟机IP（已集成强制重启逻辑）
                 vm_ip = get_vm_ip(vm_name)
                 if not vm_ip:
-                    add_task_log(task_id, 'debug', f'虚拟机 {vm_name} IP获取失败，等待5秒后重试...')
+                    # add_task_log(task_id, 'debug', f'虚拟机 {vm_name} IP获取失败，等待5秒后重试...')
                     time.sleep(5)
                     continue
                 
@@ -225,7 +312,7 @@ def monitor_vm_and_configure(task_id, vm_name, vm_path, wuma_config_file, max_wa
                 
                 # 检测IP存活
                 if not ping_vm_ip(vm_ip):
-                    add_task_log(task_id, 'debug', f'虚拟机 {vm_name} ({vm_ip}) ping不通，等待5秒后重试...')
+                    # add_task_log(task_id, 'debug', f'虚拟机 {vm_name} ({vm_ip}) ping不通，等待5秒后重试...')
                     time.sleep(5)
                     continue
                 
@@ -233,7 +320,7 @@ def monitor_vm_and_configure(task_id, vm_name, vm_path, wuma_config_file, max_wa
                 
                 # 检测SSH连通性
                 if not check_ssh_connectivity(vm_ip, vm_username):
-                    add_task_log(task_id, 'debug', f'虚拟机 {vm_name} ({vm_ip}) SSH未就绪，等待10秒后重试...')
+                    # add_task_log(task_id, 'debug', f'虚拟机 {vm_name} ({vm_ip}) SSH未就绪，等待10秒后重试...')
                     time.sleep(10)
                     continue
                 
@@ -255,17 +342,23 @@ def monitor_vm_and_configure(task_id, vm_name, vm_path, wuma_config_file, max_wa
                         add_task_log(task_id, 'info', f'开始为虚拟机 {vm_name} 执行JU值更改...')
                         print(f"[DEBUG] 开始为虚拟机 {vm_name} 执行JU值更改")
                         
-                        # 更新五码进度
+                        # 更新五码进度 - 使用线程锁确保线程安全
                         if task_id in clone_tasks and 'monitoring' in clone_tasks[task_id]:
-                            monitoring = clone_tasks[task_id]['monitoring']
-                            # 使用线程安全的方式更新进度
-                            monitoring['wuma_progress']['current'] = min(
-                                monitoring['wuma_progress']['current'] + 1,
-                                monitoring['wuma_progress']['total']
-                            )
-                            current_wuma = monitoring['wuma_progress']['current']
-                            total_wuma = monitoring['wuma_progress']['total']
-                            update_monitoring_progress(wuma_progress={'current': current_wuma, 'total': total_wuma})
+                            import threading
+                            # 获取或创建任务锁
+                            if not hasattr(clone_tasks[task_id], '_lock'):
+                                clone_tasks[task_id]['_lock'] = threading.Lock()
+                            
+                            with clone_tasks[task_id]['_lock']:
+                                monitoring = clone_tasks[task_id]['monitoring']
+                                # 使用线程安全的方式更新进度
+                                monitoring['wuma_progress']['current'] = min(
+                                    monitoring['wuma_progress']['current'] + 1,
+                                    monitoring['wuma_progress']['total']
+                                )
+                                current_wuma = monitoring['wuma_progress']['current']
+                                total_wuma = monitoring['wuma_progress']['total']
+                                update_monitoring_progress(wuma_progress={'current': current_wuma, 'total': total_wuma})
                         
                         try:
                             # 执行test.sh脚本更改JU值
@@ -283,17 +376,23 @@ def monitor_vm_and_configure(task_id, vm_name, vm_path, wuma_config_file, max_wa
                                 add_task_log(task_id, 'info', f'开始重启虚拟机 {vm_name}...')
                                 print(f"[DEBUG] 开始重启虚拟机 {vm_name}")
                                 
-                                # 更新重启进度
+                                # 更新重启进度 - 使用线程锁确保线程安全
                                 if task_id in clone_tasks and 'monitoring' in clone_tasks[task_id]:
-                                    monitoring = clone_tasks[task_id]['monitoring']
-                                    # 使用线程安全的方式更新进度
-                                    monitoring['restart_progress']['current'] = min(
-                                        monitoring['restart_progress']['current'] + 1,
-                                        monitoring['restart_progress']['total']
-                                    )
-                                    current_restart = monitoring['restart_progress']['current']
-                                    total_restart = monitoring['restart_progress']['total']
-                                    update_monitoring_progress(restart_progress={'current': current_restart, 'total': total_restart})
+                                    import threading
+                                    # 获取或创建任务锁
+                                    if not hasattr(clone_tasks[task_id], '_lock'):
+                                        clone_tasks[task_id]['_lock'] = threading.Lock()
+                                    
+                                    with clone_tasks[task_id]['_lock']:
+                                        monitoring = clone_tasks[task_id]['monitoring']
+                                        # 使用线程安全的方式更新进度
+                                        monitoring['restart_progress']['current'] = min(
+                                            monitoring['restart_progress']['current'] + 1,
+                                            monitoring['restart_progress']['total']
+                                        )
+                                        current_restart = monitoring['restart_progress']['current']
+                                        total_restart = monitoring['restart_progress']['total']
+                                        update_monitoring_progress(restart_progress={'current': current_restart, 'total': total_restart})
                                 
                                 vmrun_path = get_vmrun_path()
                                 
@@ -451,7 +550,7 @@ def scan_scripts_from_directories():
 # 通用函数 - 获取虚拟机列表
 def get_vm_list_from_directory(vm_dir, vm_type_name):
     """从指定目录获取虚拟机列表"""
-    logger.info(f"收到获取{vm_type_name}虚拟机列表API请求")
+   # logger.info(f"收到获取{vm_type_name}虚拟机列表API请求")
     try:
         # 获取分页参数
         page = request.args.get('page', 1, type=int)
@@ -501,7 +600,7 @@ def get_vm_list_from_directory(vm_dir, vm_type_name):
                             if vmss_files:
                                 vm_status = 'suspended'
                         
-                        logger.debug(f"找到{vm_type_name}虚拟机: {vm_name}, 状态: {vm_status}")
+                      #  logger.debug(f"找到{vm_type_name}虚拟机: {vm_name}, 状态: {vm_status}")
                         
                         # 构建虚拟机基本信息
                         vm_info = {
@@ -579,6 +678,12 @@ def get_wuma_info_generic(vm_type_name):
                 'message': '缺少虚拟机名称参数'
             })
         
+        # 首先检查缓存
+        cached_result = vm_cache.get_cached_status(vm_name, 'wuma_info')
+        if cached_result:
+            logger.debug(f"使用缓存的五码信息: {vm_name}")
+            return jsonify(cached_result)
+        
         # 获取虚拟机IP（不执行强制重启）
         vm_ip = get_vm_ip(vm_name)
         if not vm_ip:
@@ -597,15 +702,20 @@ def get_wuma_info_generic(vm_type_name):
             success, output = False, "未知错误"
         
         if success:
-            return jsonify({
+            result_data = {
                 'success': True,
                 'output': output
-            })
+            }
+            # 缓存成功结果
+            vm_cache.set_cached_status(vm_name, result_data, 'wuma_info')
+            return jsonify(result_data)
         else:
-            return jsonify({
+            result_data = {
                 'success': False,
                 'error': output
-            })
+            }
+            # 失败结果不缓存或使用较短缓存时间
+            return jsonify(result_data)
     except Exception as e:
         logger.error(f"获取{vm_type_name}虚拟机五码信息失败: {str(e)}")
         return jsonify({
@@ -627,6 +737,12 @@ def get_ju_info_generic(vm_type_name):
                 'message': '缺少虚拟机名称参数'
             })
         
+        # 首先检查缓存
+        cached_result = vm_cache.get_cached_status(vm_name, 'ju_info')
+        if cached_result:
+            logger.debug(f"使用缓存的JU值信息: {vm_name}")
+            return jsonify(cached_result)
+        
         # 获取虚拟机IP（不执行强制重启）
         vm_ip = get_vm_ip(vm_name)
         if not vm_ip:
@@ -645,15 +761,20 @@ def get_ju_info_generic(vm_type_name):
             success, output = False, "未知错误"
         
         if success:
-            return jsonify({
+            result_data = {
                 'success': True,
                 'output': output
-            })
+            }
+            # 缓存成功结果
+            vm_cache.set_cached_status(vm_name, result_data, 'ju_info')
+            return jsonify(result_data)
         else:
-            return jsonify({
+            result_data = {
                 'success': False,
                 'error': output
-            })
+            }
+            # 失败结果不缓存或使用较短缓存时间
+            return jsonify(result_data)
     except Exception as e:
         logger.error(f"获取{vm_type_name}虚拟机JU值信息失败: {str(e)}")
         return jsonify({
@@ -3716,60 +3837,60 @@ def get_vm_suspend_time(vm_path):
 
 def get_vm_ip(vm_name):
     """获取虚拟机IP地址，优先用vmrun getGuestIPAddress"""
-    logger.debug(f"开始获取虚拟机 {vm_name} 的IP地址")
+    #logger.debug(f"开始获取虚拟机 {vm_name} 的IP地址")
     try:
         # 1. 通过vmrun getGuestIPAddress
         vm_file = find_vm_file(vm_name)
         if vm_file:
-            logger.debug(f"找到虚拟机文件: {vm_file}")
+           # logger.debug(f"找到虚拟机文件: {vm_file}")
             vmrun_path = get_vmrun_path()
-            logger.debug(f"使用备用vmrun路径: {vmrun_path}")
+           # logger.debug(f"使用备用vmrun路径: {vmrun_path}")
             
             if os.path.exists(vmrun_path):
                 try:
                     cmd = [vmrun_path, 'getGuestIPAddress', vm_file, '-wait']
-                    logger.debug(f"执行vmrun命令: {cmd}")
-                    print(f"[DEBUG] 执行vmrun getGuestIPAddress命令: {' '.join(cmd)}")
+                  #  logger.debug(f"执行vmrun命令: {cmd}")
+                   # print(f"[DEBUG] 执行vmrun getGuestIPAddress命令: {' '.join(cmd)}")
                     
                     # 记录命令开始时间
                     start_time = datetime.now()
-                    print(f"[DEBUG] getGuestIPAddress命令开始时间: {start_time}")
+                   # print(f"[DEBUG] getGuestIPAddress命令开始时间: {start_time}")
                     
                     result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
                     
                     # 记录命令结束时间
                     end_time = datetime.now()
                     duration = (end_time - start_time).total_seconds()
-                    print(f"[DEBUG] getGuestIPAddress命令结束时间: {end_time}")
-                    print(f"[DEBUG] getGuestIPAddress命令执行时长: {duration} 秒")
-                    print(f"[DEBUG] getGuestIPAddress命令返回码: {result.returncode}")
-                    print(f"[DEBUG] getGuestIPAddress命令输出: {result.stdout}")
+                   # print(f"[DEBUG] getGuestIPAddress命令结束时间: {end_time}")
+                   # print(f"[DEBUG] getGuestIPAddress命令执行时长: {duration} 秒")
+                   # print(f"[DEBUG] getGuestIPAddress命令返回码: {result.returncode}")
+                   # print(f"[DEBUG] getGuestIPAddress命令输出: {result.stdout}")
                     if result.stderr:
                         print(f"[DEBUG] getGuestIPAddress命令错误: {result.stderr}")
                     
                     # 检查特定的错误码4294967295，但不执行强制重启
                     if result.returncode == 4294967295:
-                        logger.warning(f"检测到虚拟机 {vm_name} 卡死（返回码: 4294967295），但不执行强制重启")
-                        print(f"[DEBUG] 检测到虚拟机卡死，返回码: 4294967295，但不执行强制重启")
+                      #  logger.warning(f"检测到虚拟机 {vm_name} 卡死（返回码: 4294967295），但不执行强制重启")
+                     #   print(f"[DEBUG] 检测到虚拟机卡死，返回码: 4294967295，但不执行强制重启")
                         return None
                     
                     if result.returncode == 0:
                         ip = result.stdout.strip()
-                        logger.debug(f"vmrun返回IP: {ip}")
-                        print(f"[DEBUG] vmrun返回IP: {ip}")
+                       # logger.debug(f"vmrun返回IP: {ip}")
+                      #  print(f"[DEBUG] vmrun返回IP: {ip}")
                         if is_valid_ip(ip):
-                            logger.info(f"通过vmrun成功获取IP: {ip}")
-                            print(f"[DEBUG] IP格式有效: {ip}")
+                           # logger.info(f"通过vmrun成功获取IP: {ip}")
+                         #   print(f"[DEBUG] IP格式有效: {ip}")
                             return ip
                         else:
                             logger.warning(f"vmrun返回的IP格式无效: {ip}")
-                            print(f"[DEBUG] IP格式无效: {ip}")
+                         #   print(f"[DEBUG] IP格式无效: {ip}")
                     else:
                         logger.warning(f"vmrun命令执行失败，返回码: {result.returncode}, 错误: {result.stderr}")
-                        print(f"[DEBUG] vmrun命令执行失败，返回码: {result.returncode}, 错误: {result.stderr}")
+                        #print(f"[DEBUG] vmrun命令执行失败，返回码: {result.returncode}, 错误: {result.stderr}")
                 except Exception as e:
                     logger.error(f"vmrun getGuestIPAddress 获取IP失败: {str(e)}")
-                    print(f"[DEBUG] vmrun getGuestIPAddress 获取IP失败: {str(e)}")
+                    #print(f"[DEBUG] vmrun getGuestIPAddress 获取IP失败: {str(e)}")
             else:
                 logger.warning(f"vmrun路径不存在: {vmrun_path}")
         else:
@@ -3785,9 +3906,9 @@ def get_vm_ip(vm_name):
                     for line in lines:
                         if 'ip=' in line.lower() or 'ipaddress=' in line.lower():
                             ip = line.split('=')[1].strip().strip('"')
-                            logger.debug(f"从VMX文件找到IP配置: {ip}")
+                           # logger.debug(f"从VMX文件找到IP配置: {ip}")
                             if is_valid_ip(ip):
-                                logger.info(f"从VMX文件成功获取IP: {ip}")
+                               # logger.info(f"从VMX文件成功获取IP: {ip}")
                                 return ip
                             else:
                                 logger.warning(f"VMX文件中的IP格式无效: {ip}")
@@ -3824,24 +3945,24 @@ def is_valid_ip(ip):
 
 def get_vm_ip_status(vm_name):
     """获取虚拟机IP状态信息"""
-    logger.debug(f"开始获取虚拟机 {vm_name} 的IP状态")
+    #logger.debug(f"开始获取虚拟机 {vm_name} 的IP状态")
     try:
         ip = get_vm_ip(vm_name)
         if not ip:
-            logger.warning(f"虚拟机 {vm_name} 未获取到IP地址")
+           # logger.warning(f"虚拟机 {vm_name} 未获取到IP地址")
             return {
                 'ip': None,
                 'status': 'no_ip',
                 'message': '未获取到IP地址'
             }
         
-        logger.debug(f"虚拟机 {vm_name} IP地址: {ip}")
+       # logger.debug(f"虚拟机 {vm_name} IP地址: {ip}")
         
         # 检查IP连通性
         ping_result = check_ip_connectivity(ip)
         
         if ping_result['success']:
-            logger.info(f"虚拟机 {vm_name} IP {ip} 可达")
+          #  logger.info(f"虚拟机 {vm_name} IP {ip} 可达")
             return {
                 'ip': ip,
                 'status': 'online',
@@ -3849,7 +3970,7 @@ def get_vm_ip_status(vm_name):
                 'response_time': ping_result.get('response_time')
             }
         else:
-            logger.warning(f"虚拟机 {vm_name} IP {ip} 不可达: {ping_result.get('error')}")
+           # logger.warning(f"虚拟机 {vm_name} IP {ip} 不可达: {ping_result.get('error')}")
             return {
                 'ip': ip,
                 'status': 'offline',
@@ -3867,11 +3988,11 @@ def get_vm_ip_status(vm_name):
 
 def check_ip_connectivity(ip):
     """检查IP地址连通性"""
-    logger.debug(f"开始检查IP连通性: {ip}")
+   # logger.debug(f"开始检查IP连通性: {ip}")
     try:
         # 使用ping命令检查连通性
         ping_cmd = ['ping', '-n', '1', '-w', '3000', ip]
-        logger.debug(f"执行ping命令: {ping_cmd}")
+       # logger.debug(f"执行ping命令: {ping_cmd}")
         result = subprocess.run(ping_cmd, capture_output=True, text=True, timeout=10)
         
         if result.returncode == 0:
@@ -3882,32 +4003,32 @@ def check_ip_connectivity(ip):
                     try:
                         time_str = line.split('时间=')[1].split('ms')[0].strip()
                         response_time = int(time_str)
-                        logger.debug(f"解析到响应时间: {response_time}ms")
+                      #  logger.debug(f"解析到响应时间: {response_time}ms")
                     except:
-                        logger.debug("响应时间解析失败")
+                       # logger.debug("响应时间解析失败")
                         pass
                     break
             
-            logger.debug(f"IP {ip} 连通性检查成功，响应时间: {response_time}ms")
+           # logger.debug(f"IP {ip} 连通性检查成功，响应时间: {response_time}ms")
             return {
                 'success': True,
                 'response_time': response_time
             }
         else:
-            logger.warning(f"IP {ip} ping失败，返回码: {result.returncode}")
+           # logger.warning(f"IP {ip} ping失败，返回码: {result.returncode}")
             return {
                 'success': False,
                 'error': 'ping失败'
             }
             
     except subprocess.TimeoutExpired:
-        logger.error(f"IP {ip} 连接超时")
+       # logger.error(f"IP {ip} 连接超时")
         return {
             'success': False,
             'error': '连接超时'
         }
     except Exception as e:
-        logger.error(f"IP {ip} 连通性检查异常: {str(e)}")
+       #logger.error(f"IP {ip} 连通性检查异常: {str(e)}")
         return {
             'success': False,
             'error': str(e)
@@ -3970,7 +4091,7 @@ def check_ssh_port_open(ip, port=22):
         sock.close()
         
         if result == 0:
-            logger.debug(f"SSH端口 {port} 开放: {ip}")
+           # logger.debug(f"SSH端口 {port} 开放: {ip}")
             return True
         else:
             logger.debug(f"SSH端口 {port} 未开放: {ip}")
@@ -4003,14 +4124,20 @@ def check_ssh_trust_status(ip, username=vm_username):
 
 def get_vm_online_status(vm_name):
     """获取虚拟机在线状态（新逻辑：根据虚拟机状态和网络连接情况综合判断）"""
-    logger.debug(f"检查虚拟机 {vm_name} 的在线状态（新逻辑）")
+   # logger.debug(f"检查虚拟机 {vm_name} 的在线状态（新逻辑）")
+    
+    # 首先检查缓存
+    cached_status = vm_cache.get_cached_status(vm_name, 'online_status')
+    if cached_status:
+       # logger.debug(f"使用缓存的在线状态数据: {vm_name}")
+        return cached_status
     
     try:
         # 1. 检查虚拟机是否运行
         vm_file = find_vm_file(vm_name)
         if not vm_file:
-            logger.warning(f"未找到虚拟机文件: {vm_name}")
-            return {
+           # logger.warning(f"未找到虚拟机文件: {vm_name}")
+            result = {
                 'status': 'offline',
                 'reason': '虚拟机文件不存在',
                 'ip': None,
@@ -4018,6 +4145,9 @@ def get_vm_online_status(vm_name):
                 'ssh_port_open': False,
                 'vm_status': 'unknown'
             }
+            # 缓存结果（较短时间，因为文件可能会被创建）
+            vm_cache.set_cached_status(vm_name, result, 'online_status')
+            return result
         
         vm_status = get_vm_status(vm_file)
         logger.debug(f"虚拟机 {vm_name} 状态: {vm_status}")
@@ -4026,7 +4156,7 @@ def get_vm_online_status(vm_name):
         # 2. 根据虚拟机状态进行初步判断
         if vm_status == 'stopped':
             logger.debug(f"虚拟机 {vm_name} 已关机")
-            return {
+            result = {
                 'status': 'offline',
                 'reason': '虚拟机关机',
                 'ip': None,
@@ -4034,9 +4164,12 @@ def get_vm_online_status(vm_name):
                 'ssh_port_open': False,
                 'vm_status': vm_status
             }
+            # 缓存结果
+            vm_cache.set_cached_status(vm_name, result, 'online_status')
+            return result
         elif vm_status in ['suspended', 'paused']:
             logger.debug(f"虚拟机 {vm_name} 处于挂起状态")
-            return {
+            result = {
                 'status': 'unknown',
                 'reason': f'虚拟机{vm_status}状态',
                 'ip': None,
@@ -4044,12 +4177,15 @@ def get_vm_online_status(vm_name):
                 'ssh_port_open': False,
                 'vm_status': vm_status
             }
+            # 缓存结果
+            vm_cache.set_cached_status(vm_name, result, 'online_status')
+            return result
         elif vm_status == 'unknown':
             logger.debug(f"虚拟机 {vm_name} 状态未知，继续检查网络连接")
             # 状态未知时，继续检查网络连接情况
         elif vm_status != 'running':
             logger.debug(f"虚拟机 {vm_name} 状态异常: {vm_status}")
-            return {
+            result = {
                 'status': 'unknown',
                 'reason': f'虚拟机状态异常: {vm_status}',
                 'ip': None,
@@ -4057,13 +4193,16 @@ def get_vm_online_status(vm_name):
                 'ssh_port_open': False,
                 'vm_status': vm_status
             }
+            # 缓存结果
+            vm_cache.set_cached_status(vm_name, result, 'online_status')
+            return result
         
         # 3. 虚拟机运行中或状态未知，检查网络连接情况
         vm_ip = get_vm_ip(vm_name)
         if not vm_ip:
             logger.debug(f"虚拟机 {vm_name} 无法获取IP地址")
             print(f"[DEBUG] 虚拟机 {vm_name} IP地址获取失败")
-            return {
+            result = {
                 'status': 'unknown',
                 'reason': '无法获取IP地址',
                 'ip': None,
@@ -4071,6 +4210,9 @@ def get_vm_online_status(vm_name):
                 'ssh_port_open': False,
                 'vm_status': vm_status
             }
+            # 缓存结果（较短时间，因为IP可能很快就能获取到）
+            vm_cache.set_cached_status(vm_name, result, 'online_status')
+            return result
         
         logger.debug(f"虚拟机 {vm_name} IP地址获取成功: {vm_ip}")
         print(f"[DEBUG] 虚拟机 {vm_name} IP地址获取成功: {vm_ip}")
@@ -4081,7 +4223,7 @@ def get_vm_online_status(vm_name):
         if not ip_status['success']:
             logger.debug(f"虚拟机 {vm_name} IP {vm_ip} 不可达")
             print(f"[DEBUG] 虚拟机 {vm_name} IP {vm_ip} 不可达: {ip_status.get('error', '未知错误')}")
-            return {
+            result = {
                 'status': 'offline',
                 'reason': f'IP不可达: {ip_status.get("error", "未知错误")}',
                 'ip': vm_ip,
@@ -4089,6 +4231,9 @@ def get_vm_online_status(vm_name):
                 'ssh_port_open': False,
                 'vm_status': vm_status
             }
+            # 缓存结果
+            vm_cache.set_cached_status(vm_name, result, 'online_status')
+            return result
         
         # 5. 检查SSH端口是否开放
         ssh_port_open = check_ssh_port_open(vm_ip)
@@ -4122,7 +4267,7 @@ def get_vm_online_status(vm_name):
             
             logger.info(f"虚拟机 {vm_name} {status_text}：{reason_text}")
             print(f"[DEBUG] 虚拟机 {vm_name} 三个条件都满足，返回online状态")
-            return {
+            result = {
                 'status': 'online',
                 'reason': reason_text,
                 'ip': vm_ip,
@@ -4130,6 +4275,9 @@ def get_vm_online_status(vm_name):
                 'ssh_port_open': True,
                 'vm_status': vm_status
             }
+            # 缓存结果
+            vm_cache.set_cached_status(vm_name, result, 'online_status')
+            return result
         elif conditions_met > 0:
             # 部分条件满足：部分在线
             missing_conditions = []
@@ -4147,7 +4295,7 @@ def get_vm_online_status(vm_name):
                 reason = f'部分在线（缺少: {", ".join(missing_conditions)}，虚拟机状态未知）'
             
             logger.debug(f"虚拟机 {vm_name} {reason}")
-            return {
+            result = {
                 'status': 'partial',
                 'reason': reason,
                 'ip': vm_ip,
@@ -4155,6 +4303,9 @@ def get_vm_online_status(vm_name):
                 'ssh_port_open': ssh_port_open,
                 'vm_status': vm_status
             }
+            # 缓存结果
+            vm_cache.set_cached_status(vm_name, result, 'online_status')
+            return result
         else:
             # 没有条件满足：未在线
             status_text = '未在线'
@@ -4164,7 +4315,7 @@ def get_vm_online_status(vm_name):
                 reason_text = '所有网络条件都不满足（虚拟机状态未知）'
             
             logger.debug(f"虚拟机 {vm_name} {status_text}：{reason_text}")
-            return {
+            result = {
                 'status': 'offline',
                 'reason': reason_text,
                 'ip': vm_ip,
@@ -4172,6 +4323,9 @@ def get_vm_online_status(vm_name):
                 'ssh_port_open': False,
                 'vm_status': vm_status
             }
+            # 缓存结果
+            vm_cache.set_cached_status(vm_name, result, 'online_status')
+            return result
             
     except Exception as e:
         logger.error(f"检查虚拟机 {vm_name} 在线状态时出错: {str(e)}")
@@ -5880,7 +6034,7 @@ def api_wuma_list():
         config_name = request.args.get('config', 'config')  # 默认使用config.txt
         list_type = request.args.get('type', 'available')  # available 或 used
         
-        logger.debug(f"请求参数 - page: {page}, page_size: {page_size}, config: {config_name}, type: {list_type}")
+      #  logger.debug(f"请求参数 - page: {page}, page_size: {page_size}, config: {config_name}, type: {list_type}")
         
         # 根据类型选择配置文件路径
         if list_type == 'used':
@@ -5898,10 +6052,10 @@ def api_wuma_list():
         wuma_data = []
         
         if os.path.exists(config_file_path):
-            logger.debug(f"配置文件存在，开始读取")
+          #  logger.debug(f"配置文件存在，开始读取")
             with open(config_file_path, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
-                logger.debug(f"读取到 {len(lines)} 行数据")
+               # logger.debug(f"读取到 {len(lines)} 行数据")
                 
                 for i, line in enumerate(lines, 1):
                     line = line.strip()
@@ -5920,7 +6074,7 @@ def api_wuma_list():
                                 'status': 'used' if list_type == 'used' else 'valid'
                             }
                             wuma_data.append(wuma_item)
-                            logger.debug(f"解析第 {i} 行数据: {wuma_item}")
+                          #  logger.debug(f"解析第 {i} 行数据: {wuma_item}")
                         else:
                             logger.warning(f"第 {i} 行数据格式不正确，跳过: {line}")
                     else:
@@ -5936,11 +6090,11 @@ def api_wuma_list():
         start_index = (page - 1) * page_size
         end_index = min(start_index + page_size, total_count)
         
-        logger.debug(f"分页信息 - 总数: {total_count}, 总页数: {total_pages}, 当前页: {page}, 起始索引: {start_index}, 结束索引: {end_index}")
+     #   logger.debug(f"分页信息 - 总数: {total_count}, 总页数: {total_pages}, 当前页: {page}, 起始索引: {start_index}, 结束索引: {end_index}")
         
         # 获取当前页的数据
         current_page_data = wuma_data[start_index:end_index]
-        logger.debug(f"当前页数据条数: {len(current_page_data)}")
+       # logger.debug(f"当前页数据条数: {len(current_page_data)}")
         
         # 计算统计信息
         stats = {
@@ -5958,7 +6112,7 @@ def api_wuma_list():
             'end_index': end_index
         }
         
-        logger.info(f"成功返回五码列表 - 总数: {total_count}, 当前页: {page}/{total_pages}, 类型: {list_type}")
+      #  logger.info(f"成功返回五码列表 - 总数: {total_count}, 当前页: {page}/{total_pages}, 类型: {list_type}")
         
         return jsonify({
             'success': True,
@@ -6494,27 +6648,7 @@ def batch_change_wuma_core(selected_vms, config_file_path, task_id=None):
                     })
                     continue
                 
-                # 更新重启进度 - 开始重启虚拟机
-                if task_id and task_id in clone_tasks:
-                    task = clone_tasks[task_id]
-                    if 'monitoring' in task:
-                        task['monitoring']['restart_progress']['current'] += 1
-                        restart_progress = {
-                            'current': task['monitoring']['restart_progress']['current'],
-                            'total': task['monitoring']['restart_progress']['total']
-                        }
-                        # 发送重启进度更新
-                        progress_data = {
-                            'type': 'monitoring_progress',
-                            'vm_name': vm_name,
-                            'restart_progress': restart_progress
-                        }
-                        task['logs'].append(progress_data)
-                        log_message('info', f'虚拟机 {vm_name} 重启进度: {restart_progress["current"]}/{restart_progress["total"]}')
-                        
-                        # 强制刷新，确保前端能立即收到更新
-                        import sys
-                        sys.stdout.flush()
+                # 注意：重启进度在monitor_vm_and_configure函数中更新，这里不需要重复更新
                 
                 # 执行mount_efi.sh脚本
                 mount_cmd = f'ssh -o StrictHostKeyChecking=no {vm_username}@{vm_ip} "{script_remote_path}/mount_efi.sh"'
@@ -6553,27 +6687,7 @@ def batch_change_wuma_core(selected_vms, config_file_path, task_id=None):
                 
                 used_wuma_lines.append(wuma_line)
                 
-                # 更新更改五码进度 - 五码配置完成
-                if task_id and task_id in clone_tasks:
-                    task = clone_tasks[task_id]
-                    if 'monitoring' in task:
-                        task['monitoring']['wuma_progress']['current'] += 1
-                        wuma_progress = {
-                            'current': task['monitoring']['wuma_progress']['current'],
-                            'total': task['monitoring']['wuma_progress']['total']
-                        }
-                        # 发送更改五码进度更新
-                        progress_data = {
-                            'type': 'monitoring_progress',
-                            'vm_name': vm_name,
-                            'wuma_progress': wuma_progress
-                        }
-                        task['logs'].append(progress_data)
-                        log_message('info', f'虚拟机 {vm_name} 更改五码进度: {wuma_progress["current"]}/{wuma_progress["total"]}')
-                        
-                        # 强制刷新，确保前端能立即收到更新
-                        import sys
-                        sys.stdout.flush()                
+                # 注意：五码进度在monitor_vm_and_configure函数中更新，这里不需要重复更新                
                 results.append({
                     'vm_name': vm_name,
                     'success': True,
@@ -8414,7 +8528,7 @@ def api_scan_clients():
                                     'vm_name': vm_name,
                                     'vm_path': vm_path
                                 })
-                                logger.debug(f"获取到运行中虚拟机IP: {ip} ({vm_name})")
+                               # logger.debug(f"获取到运行中虚拟机IP: {ip} ({vm_name})")
                             except ValueError:
                                 logger.debug(f"虚拟机 {vm_name} 返回无效IP地址: {ip}")
                         else:
@@ -9253,6 +9367,95 @@ def signal_handler(signum, frame):
 
 # 注册信号处理器
 signal.signal(signal.SIGINT, signal_handler)  # Ctrl+C
+# 批量获取五码和JU值信息的API接口
+@app.route('/api/batch_get_10_12_wuma_info', methods=['POST'])
+@login_required
+def api_batch_get_10_12_wuma_info():
+    """批量获取10.12目录虚拟机五码信息"""
+    logger.info("收到批量获取10.12目录虚拟机五码信息请求")
+    try:
+        data = request.get_json()
+        vm_names = data.get('vm_names', [])
+        
+        if not vm_names:
+            return jsonify({
+                'success': False,
+                'message': '缺少虚拟机名称列表'
+            })
+        
+        results = {}
+        for vm_name in vm_names:
+            try:
+                # 模拟单个虚拟机的五码信息获取请求
+                with app.test_request_context('/api/get_10_12_wuma_info', 
+                                            method='POST', 
+                                            json={'vm_name': vm_name}):
+                    response = get_wuma_info_generic('10.12目录')
+                    response_data = response.get_json()
+                    results[vm_name] = response_data
+                    logger.info(f"虚拟机 {vm_name} 五码信息获取结果: {response_data.get('success', False)}")
+            except Exception as e:
+                logger.error(f"获取虚拟机 {vm_name} 五码信息失败: {str(e)}")
+                results[vm_name] = {
+                    'success': False,
+                    'message': f'获取五码信息失败: {str(e)}'
+                }
+        
+        return jsonify({
+            'success': True,
+            'results': results
+        })
+    except Exception as e:
+        logger.error(f"批量获取10.12目录虚拟机五码信息失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'批量获取五码信息失败: {str(e)}'
+        })
+
+@app.route('/api/batch_get_10_12_ju_info', methods=['POST'])
+@login_required
+def api_batch_get_10_12_ju_info():
+    """批量获取10.12目录虚拟机JU值信息"""
+    logger.info("收到批量获取10.12目录虚拟机JU值信息请求")
+    try:
+        data = request.get_json()
+        vm_names = data.get('vm_names', [])
+        
+        if not vm_names:
+            return jsonify({
+                'success': False,
+                'message': '缺少虚拟机名称列表'
+            })
+        
+        results = {}
+        for vm_name in vm_names:
+            try:
+                # 模拟单个虚拟机的JU值信息获取请求
+                with app.test_request_context('/api/get_10_12_ju_info', 
+                                            method='POST', 
+                                            json={'vm_name': vm_name}):
+                    response = get_ju_info_generic('10.12目录')
+                    response_data = response.get_json()
+                    results[vm_name] = response_data
+                    logger.info(f"虚拟机 {vm_name} JU值信息获取结果: {response_data.get('success', False)}")
+            except Exception as e:
+                logger.error(f"获取虚拟机 {vm_name} JU值信息失败: {str(e)}")
+                results[vm_name] = {
+                    'success': False,
+                    'message': f'获取JU值信息失败: {str(e)}'
+                }
+        
+        return jsonify({
+            'success': True,
+            'results': results
+        })
+    except Exception as e:
+        logger.error(f"批量获取10.12目录虚拟机JU值信息失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'批量获取JU值信息失败: {str(e)}'
+        })
+
 signal.signal(signal.SIGTERM, signal_handler)  # 终止信号
 
 if __name__ == '__main__':
