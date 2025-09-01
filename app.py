@@ -13,6 +13,14 @@ import paramiko
 import base64
 import sys
 import socket
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
+try:
+    import msvcrt
+except ImportError:
+    msvcrt = None
 
 from config import *
 
@@ -402,21 +410,45 @@ def monitor_vm_and_configure(task_id, vm_name, vm_path, wuma_config_file, max_wa
                                 
                                 # 重启虚拟机
                                 reset_cmd = [vmrun_path, 'reset', vm_path]
+                                print(f"[DEBUG] 开始重启虚拟机 {vm_name}")
                                 print(f"[DEBUG] 重启虚拟机命令: {' '.join(reset_cmd)}")
-                                reset_result = subprocess.run(reset_cmd, capture_output=True, timeout=30)
                                 
-                                if reset_result.returncode == 0:
-                                    add_task_log(task_id, 'success', f'虚拟机 {vm_name} 重启完成，五码和JU值配置全部完成')
-                                    print(f"[DEBUG] 虚拟机 {vm_name} 重启完成，五码和JU值配置全部完成")
+                                try:
+                                    # 增加超时时间到120秒，因为虚拟机重启可能需要较长时间
+                                    reset_result = subprocess.run(reset_cmd, capture_output=True, timeout=120)
+                                    
+                                    if reset_result.returncode == 0:
+                                        add_task_log(task_id, 'success', f'虚拟机 {vm_name} 重启完成，五码和JU值配置全部完成')
+                                        print(f"[DEBUG] 虚拟机 {vm_name} 重启完成，五码和JU值配置全部完成")
+                                        
+                                        update_monitoring_progress(success=True)
+                                        
+                                        # 检查是否所有虚拟机都已完成监控
+                                        check_and_complete_task(task_id)
+                                        return True
+                                    else:
+                                        add_task_log(task_id, 'error', f'虚拟机 {vm_name} 重启失败: {reset_result.stderr.decode("utf-8", errors="ignore")}')
+                                        print(f"[DEBUG] 虚拟机 {vm_name} 重启失败: {reset_result.stderr.decode('utf-8', errors='ignore')}")
+                                        update_monitoring_progress(failed=True)
+                                        
+                                        # 检查是否所有虚拟机都已完成监控
+                                        check_and_complete_task(task_id)
+                                        return False
+                                        
+                                except subprocess.TimeoutExpired:
+                                    # 重启超时，但仍然标记为成功，因为reset命令已经发出
+                                    add_task_log(task_id, 'warning', f'虚拟机 {vm_name} 重启命令超时，但reset命令已执行')
+                                    print(f"[DEBUG] 虚拟机 {vm_name} 重启命令超时，但reset命令已执行")
                                     
                                     update_monitoring_progress(success=True)
                                     
                                     # 检查是否所有虚拟机都已完成监控
                                     check_and_complete_task(task_id)
                                     return True
-                                else:
-                                    add_task_log(task_id, 'error', f'虚拟机 {vm_name} 重启失败: {reset_result.stderr}')
-                                    print(f"[DEBUG] 虚拟机 {vm_name} 重启失败: {reset_result.stderr}")
+                                    
+                                except Exception as reset_e:
+                                    add_task_log(task_id, 'error', f'虚拟机 {vm_name} 重启异常: {str(reset_e)}')
+                                    print(f"[DEBUG] 虚拟机 {vm_name} 重启异常: {str(reset_e)}")
                                     update_monitoring_progress(failed=True)
                                     
                                     # 检查是否所有虚拟机都已完成监控
@@ -6462,6 +6494,9 @@ def batch_change_wuma_core(selected_vms, config_file_path, task_id=None):
         if task_id:
             add_task_log(task_id, level, message)
     
+    # 五码分配锁文件路径
+    lock_file_path = config_file_path + '.lock'
+    
     try:
         if not selected_vms:
             return {
@@ -6475,25 +6510,79 @@ def batch_change_wuma_core(selected_vms, config_file_path, task_id=None):
                 'message': f'配置文件 {config_file_path} 不存在'
             }
         
-        # 读取五码配置文件
-        with open(config_file_path, 'r', encoding='utf-8') as f:
-            wuma_lines = f.readlines()
-        
-        # 过滤有效行
-        valid_wuma_lines = [line.strip() for line in wuma_lines if line.strip() and is_valid_wuma_file_line(line.strip())]
-        
-        if not valid_wuma_lines:
-            return {
-                'status': 'error',
-                'message': '配置文件中没有有效的五码数据'
-            }
-        
-        # 检查五码数据是否足够
-        if len(valid_wuma_lines) < len(selected_vms):
-            return {
-                'status': 'error',
-                'message': f'五码数据不足，需要 {len(selected_vms)} 个，但只有 {len(valid_wuma_lines)} 个'
-            }
+        # 使用文件锁确保五码分配的原子性
+        logger.debug(f"尝试获取五码配置文件锁: {lock_file_path}")
+        with open(lock_file_path, 'w') as lock_file:
+            # 获取文件锁，最多等待30秒
+            max_wait_time = 30
+            start_time = time.time()
+            while True:
+                 try:
+                     if os.name == 'nt' and msvcrt:  # Windows系统
+                         msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+                     elif fcntl:  # Unix/Linux系统
+                         fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                     else:
+                         # 如果没有可用的文件锁机制，使用简单的文件存在检查
+                         if os.path.exists(lock_file_path + '.busy'):
+                             raise IOError("Lock file exists")
+                         with open(lock_file_path + '.busy', 'w') as busy_file:
+                             busy_file.write(str(os.getpid()))
+                     logger.debug("成功获取五码配置文件锁")
+                     break
+                 except (IOError, OSError):
+                     if time.time() - start_time > max_wait_time:
+                         logger.error("获取五码配置文件锁超时")
+                         return {
+                             'status': 'error',
+                             'message': '五码配置文件被其他进程占用，请稍后重试'
+                         }
+                     time.sleep(0.1)
+            
+            # 在锁保护下读取和分配五码
+            with open(config_file_path, 'r', encoding='utf-8') as f:
+                wuma_lines = f.readlines()
+            
+            # 过滤有效行
+            valid_wuma_lines = [line.strip() for line in wuma_lines if line.strip() and is_valid_wuma_file_line(line.strip())]
+            
+            if not valid_wuma_lines:
+                return {
+                    'status': 'error',
+                    'message': '配置文件中没有有效的五码数据'
+                }
+            
+            # 检查五码数据是否足够
+            if len(valid_wuma_lines) < len(selected_vms):
+                return {
+                    'status': 'error',
+                    'message': f'五码数据不足，需要 {len(selected_vms)} 个，但只有 {len(valid_wuma_lines)} 个'
+                }
+            
+            # 为当前批次分配五码（取前N个）
+            allocated_wuma_lines = valid_wuma_lines[:len(selected_vms)]
+            remaining_wuma_lines = valid_wuma_lines[len(selected_vms):]
+            
+            # 立即更新配置文件，移除已分配的五码
+            with open(config_file_path, 'w', encoding='utf-8') as f:
+                for line in remaining_wuma_lines:
+                    f.write(line + '\n')
+            
+            logger.info(f"已分配 {len(allocated_wuma_lines)} 个五码，剩余 {len(remaining_wuma_lines)} 个")
+            
+            # 释放文件锁后继续处理
+            try:
+                 if os.name == 'nt' and msvcrt:
+                     msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+                 elif fcntl:
+                     fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+                 else:
+                     # 删除简单锁文件
+                     busy_lock_path = lock_file_path + '.busy'
+                     if os.path.exists(busy_lock_path):
+                         os.remove(busy_lock_path)
+            except Exception as lock_error:
+                 logger.warning(f"释放文件锁时出错: {lock_error}")
         
         # 验证选中的虚拟机是否都在运行
         vmrun_path = get_vmrun_path()
@@ -6551,7 +6640,7 @@ def batch_change_wuma_core(selected_vms, config_file_path, task_id=None):
         
         # 为每个选中的虚拟机生成plist文件
         for i, vm_name in enumerate(selected_vms):
-            if i >= len(valid_wuma_lines):
+            if i >= len(allocated_wuma_lines):
                 log_message('warning', f'五码数据不足，跳过虚拟机: {vm_name}')
                 results.append({
                     'vm_name': vm_name,
@@ -6579,7 +6668,7 @@ def batch_change_wuma_core(selected_vms, config_file_path, task_id=None):
             
             try:
                 # 解析五码数据
-                wuma_line = valid_wuma_lines[i]
+                wuma_line = allocated_wuma_lines[i]
                 wuma_parts = wuma_line.split(':')
                 if len(wuma_parts) != 7:
                     log_message('error', f'五码格式错误: {wuma_line}')
@@ -6710,13 +6799,8 @@ def batch_change_wuma_core(selected_vms, config_file_path, task_id=None):
                     'message': f'处理失败: {str(e)}'
                 })
         
-        # 从原配置文件中移除已使用的五码
-        remaining_lines = [line.strip() for line in wuma_lines if line.strip() and line.strip() not in used_wuma_lines]
-        
-        with open(config_file_path, 'w', encoding='utf-8') as f:
-            f.write('\n'.join(remaining_lines) + '\n')
-        
-        logger.info(f"已从原配置文件移除 {len(used_wuma_lines)} 个已使用的五码，剩余 {len(remaining_lines)} 个")
+        # 五码已在分配时从配置文件中移除，这里只记录使用情况
+        logger.info(f"本次使用了 {len(used_wuma_lines)} 个五码，剩余五码数量请查看配置文件")
         
         success_count = sum(1 for r in results if r['success'])
         total_count = len(results)
@@ -6740,6 +6824,15 @@ def batch_change_wuma_core(selected_vms, config_file_path, task_id=None):
             'status': 'error',
             'message': error_msg
         }
+    finally:
+        # 确保清理锁文件
+        try:
+            busy_lock_path = lock_file_path + '.busy'
+            if os.path.exists(busy_lock_path):
+                os.remove(busy_lock_path)
+                logger.debug(f"清理锁文件: {busy_lock_path}")
+        except Exception as cleanup_error:
+            logger.warning(f"清理锁文件时出错: {cleanup_error}")
 
 @app.route('/api/batch_change_wuma', methods=['POST'])
 @login_required
