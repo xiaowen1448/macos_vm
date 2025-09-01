@@ -1057,15 +1057,8 @@
                 // 清除localStorage中的任务ID，避免页面刷新后重连
                 localStorage.removeItem('currentCloneTaskId');
                 console.log('保存任务完成信息到localStorage，并清除任务ID');
-                
-                if (data.success) {
-                    updateStatus('success', '准备就绪');
-                    addLog('success', '克隆任务完成！');
-                } else {
-                    updateStatus('error', '克隆失败');
-                    addLog('error', '克隆任务失败');
-                }
-                
+                addLog('success', '克隆任务完成！');
+              
                 // 重置表单但保留日志
                 resetFormKeepLogs();
             } catch (error) {
