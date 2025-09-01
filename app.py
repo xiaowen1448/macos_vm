@@ -48,6 +48,12 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 # 设置Flask应用的日志级别
 app.logger.setLevel(logging.DEBUG)
 
+# 禁用Werkzeug的HTTP请求日志（静态文件请求日志）
+logging.getLogger('werkzeug').setLevel(logging.ERROR)
+# 禁用Flask内置的HTTP访问日志
+app.logger.disabled = False
+logging.getLogger('werkzeug').disabled = True
+
 # 注册蓝图
 from app.routes.mass_messaging import mass_messaging_bp
 app.register_blueprint(mass_messaging_bp)
@@ -70,19 +76,6 @@ def clear_sessions_on_startup():
 
 # 在应用启动时执行
 clear_sessions_on_startup()
-
-# 添加请求日志中间件
-@app.before_request
-def log_request_info():
-    logger.info(f"收到请求: {request.method} {request.url}")
-    logger.debug(f"请求头: {dict(request.headers)}")
-   # if request.method == 'POST':
-     #   logger.debug(f"POST数据: {request.get_data(as_text=True)}")
-
-@app.after_request
-def log_response_info(response):
-    logger.info(f"响应状态: {response.status_code}")
-    return response
 
 # 使用全局配置文件中的认证信息
 # USERNAME and PASSWORD are imported from config.py
@@ -163,11 +156,11 @@ def check_and_complete_task(task_id):
         if failed_vms == 0:
             task['status'] = 'completed'
             add_task_log(task_id, 'success', f'所有虚拟机监控和配置完成！成功: {success_vms}, 失败: {failed_vms}')
-            print(f"[DEBUG] 所有虚拟机监控和配置完成！成功: {success_vms}, 失败: {failed_vms}")
+            # print(f"[DEBUG] 所有虚拟机监控和配置完成！成功: {success_vms}, 失败: {failed_vms}")
         else:
             task['status'] = 'completed_with_errors'
             add_task_log(task_id, 'warning', f'虚拟机监控和配置完成，但有错误。成功: {success_vms}, 失败: {failed_vms}')
-            print(f"[DEBUG] 虚拟机监控和配置完成，但有错误。成功: {success_vms}, 失败: {failed_vms}")
+            # print(f"[DEBUG] 虚拟机监控和配置完成，但有错误。成功: {success_vms}, 失败: {failed_vms}")
         
         # 强制刷新，确保前端能立即收到更新
         import sys
@@ -212,7 +205,7 @@ def monitor_vm_and_configure(task_id, vm_name, vm_path, wuma_config_file, max_wa
                     progress_data['wuma_progress'] = task['monitoring']['wuma_progress']
                     
                 task['logs'].append(progress_data)
-                print(f"[DEBUG] 发送监控进度更新: {progress_data}")
+                # print(f"[DEBUG] 发送监控进度更新: {progress_data}")
                 
                 # 强制刷新，确保前端能立即收到更新
                 import sys
@@ -249,10 +242,10 @@ def monitor_vm_and_configure(task_id, vm_name, vm_path, wuma_config_file, max_wa
                 # SSH连通后，执行五码配置和JU值更改流程
                 try:
                     add_task_log(task_id, 'info', f'开始为虚拟机 {vm_name} 执行五码配置...')
-                    print(f"[DEBUG] 开始为虚拟机 {vm_name} 执行五码配置，配置文件: {wuma_config_file}")
+                    # print(f"[DEBUG] 开始为虚拟机 {vm_name} 执行五码配置，配置文件: {wuma_config_file}")
                     
                     result = batch_change_wuma_core([vm_name], wuma_config_file, task_id)
-                    print(f"[DEBUG] 五码配置结果: {result}")
+                    # print(f"[DEBUG] 五码配置结果: {result}")
                     
                     if isinstance(result, dict) and result.get('status') == 'success':
                         add_task_log(task_id, 'success', f'虚拟机 {vm_name} 五码配置成功')
@@ -1512,26 +1505,46 @@ def api_vnc_connect():
         if not client_ip:
             return jsonify({'success': False, 'message': '客户端IP不能为空'})
         
-        logger.info(f"尝试为客户端IP {client_ip} 建立VNC连接")
+        logger.info(f"=== VNC连接请求开始 ===")
+        logger.info(f"请求连接的客户端IP: {client_ip}")
         
         # 查找对应的VMX文件
         vmx_file = find_vmx_file_by_ip(client_ip)
         if not vmx_file:
             logger.warning(f"未找到客户端IP {client_ip} 对应的VMX文件")
+            logger.info(f"=== VNC连接请求结束 (失败: 未找到VMX文件) ===")
             return jsonify({'success': False, 'message': f'未找到客户端IP {client_ip} 对应的虚拟机配置文件'})
+        
+        # 提取虚拟机名称
+        vm_name = os.path.basename(os.path.dirname(vmx_file))
+        logger.info(f"找到匹配的虚拟机: {vm_name}")
+        logger.info(f"VMX配置文件路径: {vmx_file}")
         
         # 读取VNC配置
         vnc_config = read_vnc_config_from_vmx(vmx_file)
         if not vnc_config:
             logger.warning(f"VMX文件 {vmx_file} 中未找到VNC配置")
+            logger.info(f"=== VNC连接请求结束 (失败: 无VNC配置) ===")
             return jsonify({'success': False, 'message': '虚拟机未启用VNC或配置不完整'})
+        
+        logger.info(f"VNC配置信息:")
+        logger.info(f"  - VNC端口: {vnc_config['port']}")
+        logger.info(f"  - VNC密码: {'已设置' if vnc_config['password'] else '未设置'}")
         
         # 启动websockify进程
         websocket_port = start_websockify(client_ip, vnc_config['port'])
         if not websocket_port:
+            logger.error(f"websockify启动失败")
+            logger.info(f"=== VNC连接请求结束 (失败: websockify启动失败) ===")
             return jsonify({'success': False, 'message': 'websockify启动失败'})
         
-        logger.info(f"成功启动websockify: VNC端口={vnc_config['port']}, WebSocket端口={websocket_port}")
+        logger.info(f"websockify启动成功:")
+        logger.info(f"  - 客户端IP: {client_ip}")
+        logger.info(f"  - 虚拟机名称: {vm_name}")
+        logger.info(f"  - VMX文件: {vmx_file}")
+        logger.info(f"  - VNC端口: {vnc_config['port']}")
+        logger.info(f"  - WebSocket端口: {websocket_port}")
+        logger.info(f"=== VNC连接请求结束 (成功) ===")
         
         return jsonify({
             'success': True,
