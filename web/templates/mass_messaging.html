@@ -35,15 +35,10 @@
             color: white;
         }
         
-        /* 调整顶部导航栏 */
-        .navbar {
-            position: fixed;
-            top: 0;
-            left: 280px;
-            right: 0;
-            z-index: 999;
+       .navbar {
             background: white;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
         }
         
         .accordion-button:not(.collapsed) {
@@ -116,10 +111,23 @@
         .table-responsive {
             width: 100%;
         }
-        .card {
-            width: 100%;
+       .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
         }
-        
+        .card-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px 15px 0 0 !important;
+            border: none;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 8px;
+        }
         /* 响应式设计 */
         @media (max-width: 768px) {
             .sidebar {
@@ -245,7 +253,7 @@
         
         /* 卡片头部样式 */
         .card-header {
-            padding: 4rem 4.5rem;
+            padding: 1rem 1.5rem;
             border-bottom: 1px solid #dee2e6;
         }
         
@@ -587,7 +595,7 @@
                         </div>
                             
                             <!-- 分页控件 -->
-                            <div class="d-flex justify-content-between align-items-center mt-3" id="paginationContainer">
+                            <div class="d-flex justify-content-between align-items-center mt-3" id="paginationContainer" style="display: none;">
                                 <div class="d-flex align-items-center">
                                     <div class="text-muted me-3">
                                         <i class="fas fa-info-circle me-1"></i>
@@ -605,19 +613,7 @@
                                 </div>
                                 <nav aria-label="任务列表分页">
                                     <ul class="pagination pagination-sm mb-0" id="taskPagination">
-                                        <li class="page-item disabled">
-                                            <a class="page-link" href="#" onclick="previousPage()">
-                                                <i class="fas fa-chevron-left"></i> 上一页
-                                            </a>
-                                        </li>
-                                        <li class="page-item active">
-                                            <a class="page-link" href="#" onclick="goToPage(1)">1</a>
-                                        </li>
-                                        <li class="page-item">
-                                            <a class="page-link" href="#" onclick="nextPage()">
-                                                下一页 <i class="fas fa-chevron-right"></i>
-                                            </a>
-                                        </li>
+                                        <!-- 分页将通过JavaScript动态生成 -->
                                     </ul>
                                 </nav>
                             </div>
@@ -1428,6 +1424,12 @@
         // 扫描客户端
         async function scanClients() {
             const tbody = document.querySelector('#clientList');
+            const paginationContainer = document.getElementById('paginationContainer');
+            
+            // 隐藏分页容器并显示加载状态
+            if (paginationContainer) {
+                paginationContainer.style.display = 'none';
+            }
             tbody.innerHTML = '<tr><td colspan="6" class="text-center"><i class="fas fa-spinner fa-spin me-2"></i>正在扫描客户端...</td></tr>';
             
             try {
@@ -1436,49 +1438,104 @@
                 if (data && data.clients) {
                     displayClients(data.clients);
                     updateClientStats(data.clients);
+                    
+                    // 显示分页容器（如果有数据）
+                    if (paginationContainer && data.clients.length > 0) {
+                        paginationContainer.style.display = 'block';
+                    }
                 } else {
                     tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">扫描失败: ' + (data?.message || '未知错误') + '</td></tr>';
+                    if (paginationContainer) {
+                        paginationContainer.style.display = 'none';
+                    }
                 }
             } catch (error) {
                 console.error('扫描客户端失败:', error);
                 tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">扫描失败: 网络错误</td></tr>';
+                if (paginationContainer) {
+                    paginationContainer.style.display = 'none';
+                }
             }
         }
 
         // 显示客户端列表
         function displayClients(clients) {
-            const tbody = document.querySelector('#clientList');
+            // 存储所有客户端数据用于分页
+            allTasks = clients.map((client, index) => ({
+                id: client.ip,
+                name: `客户端 ${index + 1}`,
+                version: client.version || '未知版本',
+                ip: client.ip,
+                status: client.status === 'online' ? '在线' : '离线',
+                statusClass: client.status === 'online' ? 'bg-success' : 'bg-secondary',
+                vm_name: client.vm_name || client.ip,
+                client: client
+            }));
             
-            if (clients.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">未发现任何客户端</td></tr>';
+            totalTasks = allTasks.length;
+            currentPage = 1;
+            
+            // 渲染表格和分页
+            renderClientTable();
+            updateTaskRecordInfo();
+        }
+        
+        // 渲染客户端表格
+        function renderClientTable() {
+            const tbody = document.querySelector('#clientList');
+            if (!tbody) return;
+            
+            // 计算当前页显示的数据
+            const startIndex = (currentPage - 1) * pageSize;
+            const endIndex = startIndex + pageSize;
+            const currentClients = allTasks.slice(startIndex, endIndex);
+            
+            // 清空表格
+            tbody.innerHTML = '';
+            
+            if (currentClients.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">
+                            <i class="fas fa-search me-2"></i>未发现任何客户端
+                        </td>
+                    </tr>
+                `;
                 return;
             }
             
-            tbody.innerHTML = clients.map((client, index) => `
-                <tr>
-                    <td>
-                        <input type="checkbox" class="form-check-input client-checkbox" 
-                               value="${client.ip}" data-client='${JSON.stringify(client)}' 
-                               onchange="updateBatchSendButton()">
-                    </td>
-                    <td>${index + 1}</td>
-                    <td>${client.version || '未知版本'}</td>
-                    <td>${client.ip}</td>
-                    <td>
-                        <span class="badge ${client.status === 'online' ? 'bg-success' : 'bg-secondary'}">
-                            ${client.status === 'online' ? '在线' : '离线'}
-                        </span>
-                    </td>
-                    <td>
-                        <button class="btn btn-sm btn-outline-success me-1" onclick="connectVNC('${client.ip}')" title="VNC登录">
-                            <i class="fas fa-desktop"></i> VNC
-                        </button>
-                        <button class="btn btn-sm btn-outline-primary" onclick="viewMessageRecords('${client.ip}', '${client.vm_name || client.ip}')" title="查看发信记录">
-                            <i class="fas fa-history"></i> 记录
-                        </button>
-                    </td>
-                </tr>
-            `).join('');
+            // 渲染客户端数据
+            tbody.innerHTML = currentClients.map((clientData, index) => {
+                const globalIndex = startIndex + index + 1;
+                return `
+                    <tr>
+                        <td>
+                            <input type="checkbox" class="form-check-input client-checkbox" 
+                                   value="${clientData.ip}" data-client='${JSON.stringify(clientData.client)}' 
+                                   onchange="updateBatchSendButton()">
+                        </td>
+                        <td>${globalIndex}</td>
+                        <td>${clientData.version}</td>
+                        <td>${clientData.ip}</td>
+                        <td>
+                            <span class="badge ${clientData.statusClass}">
+                                ${clientData.status}
+                            </span>
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-success me-1" onclick="connectVNC('${clientData.ip}')" title="VNC登录">
+                                <i class="fas fa-desktop"></i> VNC
+                            </button>
+                            <button class="btn btn-sm btn-outline-primary" onclick="viewMessageRecords('${clientData.ip}', '${clientData.vm_name}')" title="查看发信记录">
+                                <i class="fas fa-history"></i> 记录
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+            
+            // 更新分页控件
+            renderTaskPagination(totalTasks, currentPage, pageSize);
         }
 
         // 更新客户端统计信息
@@ -2269,27 +2326,190 @@
             });
         }
 
-        // 分页功能
-        function previousPage() {
-            console.log('上一页');
-            // 这里添加上一页逻辑
+        // 分页相关变量
+        let totalTasks = 0;
+        let allTasks = [];
+        
+        // 渲染分页控件
+        function renderTaskPagination(total, page, size) {
+            const totalPages = Math.ceil(total / size);
+            const pagination = document.getElementById('taskPagination');
+            pagination.innerHTML = '';
+            
+            if (totalPages <= 1) {
+                document.getElementById('paginationContainer').style.display = 'none';
+                return;
+            }
+            
+            document.getElementById('paginationContainer').style.display = 'flex';
+            
+            // 首页
+            const firstLi = document.createElement('li');
+            firstLi.className = `page-item ${page <= 1 ? 'disabled' : ''}`;
+            firstLi.innerHTML = `
+                <a class="page-link" href="#" onclick="changePage(1)" title="首页">
+                    <i class="fas fa-angle-double-left"></i>
+                </a>
+            `;
+            pagination.appendChild(firstLi);
+            
+            // 上一页
+            const prevLi = document.createElement('li');
+            prevLi.className = `page-item ${page <= 1 ? 'disabled' : ''}`;
+            prevLi.innerHTML = `
+                <a class="page-link" href="#" onclick="changePage(${page - 1})" title="上一页">
+                    <i class="fas fa-angle-left"></i>
+                </a>
+            `;
+            pagination.appendChild(prevLi);
+            
+            // 计算显示的页码范围
+            let startPage = Math.max(1, page - 2);
+            let endPage = Math.min(totalPages, page + 2);
+            
+            // 确保显示5个页码（如果可能）
+            if (endPage - startPage < 4) {
+                if (startPage === 1) {
+                    endPage = Math.min(totalPages, startPage + 4);
+                } else if (endPage === totalPages) {
+                    startPage = Math.max(1, endPage - 4);
+                }
+            }
+            
+            // 如果起始页不是1，显示省略号
+            if (startPage > 1) {
+                if (startPage > 2) {
+                    const ellipsisLi = document.createElement('li');
+                    ellipsisLi.className = 'page-item disabled';
+                    ellipsisLi.innerHTML = '<span class="page-link">...</span>';
+                    pagination.appendChild(ellipsisLi);
+                }
+            }
+            
+            // 页码
+            for (let i = startPage; i <= endPage; i++) {
+                const li = document.createElement('li');
+                li.className = `page-item ${i === page ? 'active' : ''}`;
+                li.innerHTML = `<a class="page-link" href="#" onclick="changePage(${i})">${i}</a>`;
+                pagination.appendChild(li);
+            }
+            
+            // 如果结束页不是最后一页，显示省略号
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) {
+                    const ellipsisLi = document.createElement('li');
+                    ellipsisLi.className = 'page-item disabled';
+                    ellipsisLi.innerHTML = '<span class="page-link">...</span>';
+                    pagination.appendChild(ellipsisLi);
+                }
+            }
+            
+            // 下一页
+            const nextLi = document.createElement('li');
+            nextLi.className = `page-item ${page >= totalPages ? 'disabled' : ''}`;
+            nextLi.innerHTML = `
+                <a class="page-link" href="#" onclick="changePage(${page + 1})" title="下一页">
+                    <i class="fas fa-angle-right"></i>
+                </a>
+            `;
+            pagination.appendChild(nextLi);
+            
+            // 尾页
+            const lastLi = document.createElement('li');
+            lastLi.className = `page-item ${page >= totalPages ? 'disabled' : ''}`;
+            lastLi.innerHTML = `
+                <a class="page-link" href="#" onclick="changePage(${totalPages})" title="尾页">
+                    <i class="fas fa-angle-double-right"></i>
+                </a>
+            `;
+            pagination.appendChild(lastLi);
         }
-
-        function nextPage() {
-            console.log('下一页');
-            // 这里添加下一页逻辑
-        }
-
-        function goToPage(page) {
-            console.log('跳转到第', page, '页');
-            // 这里添加跳转页面逻辑
+        
+        // 切换页面
+        function changePage(page) {
+            if (page < 1) return;
+            const totalPages = Math.ceil(totalTasks / pageSize);
+            if (page > totalPages) return;
+            
+            currentPage = page;
+            
+            // 根据当前显示的内容类型渲染对应的表格
+            if (document.querySelector('#clientList')) {
+                renderClientTable();
+            } else {
+                renderTaskTable();
+            }
+            updateTaskRecordInfo();
         }
         
         // 改变每页显示数量
         function changePageSize() {
-            const pageSize = document.getElementById('pageSizeSelect').value;
-            console.log('改变每页显示数量为:', pageSize);
-            // 这里添加改变页面大小的逻辑
+            pageSize = parseInt(document.getElementById('pageSizeSelect').value);
+            currentPage = 1;
+            
+            // 根据当前显示的内容类型渲染对应的表格
+            if (document.querySelector('#clientList')) {
+                renderClientTable();
+            } else {
+                renderTaskTable();
+            }
+            updateTaskRecordInfo();
+        }
+        
+        // 更新记录信息显示
+        function updateTaskRecordInfo() {
+            const start = (currentPage - 1) * pageSize + 1;
+            const end = Math.min(currentPage * pageSize, totalTasks);
+            
+            document.getElementById('startRecord').textContent = totalTasks > 0 ? start : 0;
+            document.getElementById('endRecord').textContent = totalTasks > 0 ? end : 0;
+            document.getElementById('totalRecords').textContent = totalTasks;
+        }
+        
+        // 渲染任务表格
+        function renderTaskTable() {
+            const tbody = document.querySelector('#clientTable tbody');
+            if (!tbody) return;
+            
+            // 计算当前页显示的数据
+            const startIndex = (currentPage - 1) * pageSize;
+            const endIndex = startIndex + pageSize;
+            const currentTasks = allTasks.slice(startIndex, endIndex);
+            
+            // 清空表格
+            tbody.innerHTML = '';
+            
+            if (currentTasks.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="100%" class="text-center text-muted py-4">
+                            <i class="fas fa-search me-2"></i>暂无任务数据
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            // 渲染任务数据
+            currentTasks.forEach(task => {
+                const row = document.createElement('tr');
+                // 这里需要根据实际的任务数据结构来渲染
+                // 暂时使用占位符
+                row.innerHTML = `
+                    <td>${task.name || '未知任务'}</td>
+                    <td>${task.status || '未知状态'}</td>
+                    <td>${task.created_at || '未知时间'}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" onclick="viewTaskDetail('${task.id}')">
+                            <i class="fas fa-eye"></i> 查看
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+            
+            // 更新分页控件
+            renderTaskPagination(totalTasks, currentPage, pageSize);
         }
 
         // 自动扫描定时器

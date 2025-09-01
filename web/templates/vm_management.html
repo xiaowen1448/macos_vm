@@ -373,12 +373,10 @@
         overflow: hidden;
     }
     
-    /* 确保表格头部固定在顶部 */
+    /* 外部滚动条模式：表格头部不需要固定定位 */
     .table-responsive thead th {
-        position: sticky;
-        top: 0;
         background-color: #f8f9fa;
-        z-index: 1;
+        border-bottom: 2px solid #dee2e6;
     }
     
     /* 表格行样式优化 */
@@ -930,14 +928,11 @@
             pageSizeSelect.value = selectedSize.toString();
             pageSize = selectedSize;
             
-            // 使用智能判断是否需要滚动条
-            const needsScrollbar = shouldEnableScrollbar(selectedSize);
-            setScrollbarState(needsScrollbar, `页面初始化，分页大小: ${selectedSize}`);
+            console.log(`页面初始化，分页大小: ${selectedSize}`);
+            console.log('使用外部滚动条模式');
             
-            // 页面加载完成后调整表格容器高度
-            setTimeout(() => {
-                adjustTableContainerHeight();
-            }, 100);
+            // 确保使用外部滚动条模式
+            setScrollbarState(false, `页面初始化，外部滚动条模式，分页大小: ${selectedSize}`);
             
             loadVMData(1);
             
@@ -954,14 +949,11 @@
                             pageSize = newPageSize;
                             currentPage = 1; // 重置到第一页
                             
-                            // 使用智能判断是否需要滚动条
-                            const needsScrollbar = shouldEnableScrollbar(newPageSize);
-                            setScrollbarState(needsScrollbar, `窗口大小变化，分页大小: ${newPageSize}`);
+                            console.log(`窗口大小变化，分页大小: ${newPageSize}`);
+                            console.log('使用外部滚动条模式');
                             
-                            // 监控表格容量变化
-                            setTimeout(() => {
-                                monitorTableCapacity();
-                            }, 100);
+                            // 确保使用外部滚动条模式
+                            setScrollbarState(false, `窗口大小变化，外部滚动条模式，分页大小: ${newPageSize}`);
                             
                             loadVMData(1);
                         }
@@ -1148,52 +1140,29 @@
             return needsScrollbar;
         }
         
-        // 统一设置滚动条状态
+        // 统一设置滚动条状态 - 外部滚动条模式
         function setScrollbarState(needsScrollbar, context = '') {
             const tableContainer = document.querySelector('.table-responsive');
             const mainContent = document.querySelector('.col-md-9.col-lg-10');
             
-            if (needsScrollbar) {
-                // 需要滚动条时，启用滚动 - 滚动条显示在表格数据区域内部
-                tableContainer.style.overflow = 'auto';
-                
-                // 调整表格容器高度以优化滚动条显示
-                adjustTableContainerHeight();
-                
-                // 确保外层容器不显示滚动条，让滚动条只显示在表格区域
-                if (mainContent) {
-                    mainContent.style.overflow = 'hidden';
-                }
-                
-                // 确保表格头部固定在顶部
-                const thead = tableContainer.querySelector('thead');
-                if (thead) {
-                    thead.style.position = 'sticky';
-                    thead.style.top = '0';
-                    thead.style.zIndex = '1';
-                }
-                
-                console.log(`启用滚动条 (${context}) - 滚动条显示在表格数据区域内部`);
-            } else {
-                // 不需要滚动条时，禁用滚动
-                tableContainer.style.overflow = 'visible';
-                tableContainer.style.maxHeight = 'none';
-                tableContainer.style.height = 'auto';
-                
-                if (mainContent) {
-                    mainContent.style.overflow = 'visible';
-                }
-                
-                // 恢复表格头部样式
-                const thead = tableContainer.querySelector('thead');
-                if (thead) {
-                    thead.style.position = '';
-                    thead.style.top = '';
-                    thead.style.zIndex = '';
-                }
-                
-                console.log(`禁用滚动条 (${context})`);
+            // 外部滚动条模式 - 始终使用页面级滚动条
+            tableContainer.style.overflow = 'visible';
+            tableContainer.style.maxHeight = 'none';
+            tableContainer.style.height = 'auto';
+            
+            if (mainContent) {
+                mainContent.style.overflow = 'visible';
             }
+            
+            // 移除表格头部固定样式，使用标准表格头部
+            const thead = tableContainer.querySelector('thead');
+            if (thead) {
+                thead.style.position = '';
+                thead.style.top = '';
+                thead.style.zIndex = '';
+            }
+            
+            console.log(`外部滚动条模式 (${context}) - 使用页面级滚动条`);
         }
         
         // 调整表格容器高度以优化滚动条显示
@@ -1203,19 +1172,13 @@
             
             if (!tableContainer || !tableContainerWrapper) return;
             
-            // 计算最佳高度
-            const windowHeight = window.innerHeight;
-            const containerTop = tableContainer.getBoundingClientRect().top;
-            const optimalHeight = windowHeight - containerTop - 200; // 预留空间给分页控件等
+            // 外部滚动条模式 - 移除固定高度限制
+            tableContainer.style.maxHeight = 'none';
+            tableContainer.style.height = 'auto';
             
-            // 设置表格容器高度
-            tableContainer.style.maxHeight = `${Math.max(300, optimalHeight)}px`;
-            
-            console.log('调整表格容器高度:', {
-                windowHeight: windowHeight,
-                containerTop: containerTop,
-                optimalHeight: optimalHeight,
-                maxHeight: tableContainer.style.maxHeight
+            console.log('表格容器设置为外部滚动条模式:', {
+                maxHeight: tableContainer.style.maxHeight,
+                height: tableContainer.style.height
             });
         }
         
@@ -1231,11 +1194,8 @@
                 remainingSpace: Math.max(0, tableCapacity.maxRows - currentPageSize)
             });
             
-            // 如果容量发生变化，重新评估滚动条状态
-            if (currentPageSize > tableCapacity.maxRows) {
-                const needsScrollbar = shouldEnableScrollbar(currentPageSize);
-                setScrollbarState(needsScrollbar, '容量监控触发');
-            }
+            // 外部滚动条模式：无需容量监控触发滚动条变化
+            console.log('容量监控：使用外部滚动条模式，无需调整滚动条状态');
         }
         
         // 重置为自动分页
@@ -1246,9 +1206,11 @@
             pageSize = autoPageSize;
             currentPage = 1;
             
-            // 使用智能判断是否需要滚动条
-            const needsScrollbar = shouldEnableScrollbar(autoPageSize);
-            setScrollbarState(needsScrollbar, `重置为自动分页，分页大小: ${autoPageSize}`);
+            console.log(`重置为自动分页，分页大小: ${autoPageSize}`);
+            console.log('使用外部滚动条模式');
+            
+            // 确保使用外部滚动条模式
+            setScrollbarState(false, `重置为自动分页，外部滚动条模式，分页大小: ${autoPageSize}`);
             
             loadVMData(1);
         }
@@ -1284,22 +1246,13 @@
                         updateVMTableWithPagination(page, data.pagination);
                         updatePagination(page);
                         
-                        // 数据加载完成后，重新检查滚动条状态
+                        // 数据加载完成后，确保使用外部滚动条模式
                         setTimeout(() => {
-                            // 获取当前表格数据展示区域的容量
-                            const tableCapacity = getTableDisplayCapacity();
-                            console.log('数据加载完成后的表格容量分析:', tableCapacity);
+                            console.log(`数据加载完成，分页大小: ${pageSize} 条`);
+                            console.log('使用外部滚动条模式，表格高度自适应');
                             
-                            const needsScrollbar = shouldEnableScrollbar(pageSize);
-                            setScrollbarState(needsScrollbar, '数据加载完成后');
-                            
-                            // 显示容量分析结果
-                            console.log(`当前表格最多可显示 ${tableCapacity.maxRows} 条数据，分页大小为 ${pageSize} 条`);
-                            if (pageSize > tableCapacity.maxRows) {
-                                console.log(`数据超出显示区域，启用内部滚动条`);
-                            } else {
-                                console.log(`数据在显示区域内，无需滚动条`);
-                            }
+                            // 确保表格容器使用外部滚动条模式
+                            setScrollbarState(false, '数据加载完成，使用外部滚动条模式');
                         }, 100);
                     } else {
                         showError(data.message || '获取虚拟机信息失败');
@@ -1555,35 +1508,13 @@
             currentPage = 1; // 重置到第一页
             isAutoCalculated = false; // 标记为手动选择
             
-            // 获取当前表格数据展示区域的容量
-            const tableCapacity = getTableDisplayCapacity();
-            console.log('分页大小改变时的表格容量分析:', tableCapacity);
+            console.log(`=== 分页大小改变 ===`);
+            console.log(`选择的分页大小: ${newPageSize} 条`);
+            console.log(`使用外部滚动条模式，无需内部滚动条判断`);
+            console.log(`========================`);
             
-            // 显示智能建议
-            const optimalDisplay = calculateOptimalDataDisplay();
-            
-            console.log(`=== 分页大小改变分析 ===`);
-            console.log(`当前表格数据展示区域容量: ${tableCapacity.maxRows} 条`);
-            console.log(`当前界面最佳显示量: ${optimalDisplay} 条`);
-            console.log(`您选择的分页大小: ${newPageSize} 条`);
-            
-            if (newPageSize > tableCapacity.maxRows) {
-                console.log(`⚠️ 数据将超出显示区域，将启用内部滚动条`);
-                console.log(`超出数量: ${newPageSize - tableCapacity.maxRows} 条`);
-            } else {
-                console.log(`✅ 数据在显示区域内，无需滚动条`);
-                console.log(`剩余空间: ${tableCapacity.maxRows - newPageSize} 条`);
-            }
-            console.log(`================================`);
-            
-            // 使用智能判断是否需要滚动条
-            const needsScrollbar = shouldEnableScrollbar(newPageSize);
-            setScrollbarState(needsScrollbar, `分页大小改变，分页大小: ${newPageSize}`);
-            
-            // 监控表格容量变化
-            setTimeout(() => {
-                monitorTableCapacity();
-            }, 100);
+            // 外部滚动条模式：确保表格容器样式正确
+            setScrollbarState(false, `分页大小改变为外部滚动条模式，分页大小: ${newPageSize}`);
             
             loadVMData(1);
         }

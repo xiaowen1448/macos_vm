@@ -240,14 +240,18 @@ def check_and_complete_task(task_id):
         success_vms = monitoring.get('success_vms', 0)
         failed_vms = monitoring.get('failed_vms', 0)
         
-        if failed_vms == 0:
+        if success_vms > 0 and failed_vms == 0:
             task['status'] = 'completed'
-            add_task_log(task_id, 'success', f'所有虚拟机监控和配置完成！成功: {success_vms}, 失败: {failed_vms}')
-            # print(f"[DEBUG] 所有虚拟机监控和配置完成！成功: {success_vms}, 失败: {failed_vms}")
-        else:
+            add_task_log(task_id, 'success', f'虚拟机克隆成功！所有虚拟机监控和配置完成！成功: {success_vms}, 失败: {failed_vms}')
+            print(f"[DEBUG] 虚拟机克隆成功！所有虚拟机监控和配置完成！成功: {success_vms}, 失败: {failed_vms}")
+        elif success_vms > 0 and failed_vms > 0:
             task['status'] = 'completed_with_errors'
-            add_task_log(task_id, 'warning', f'虚拟机监控和配置完成，但有错误。成功: {success_vms}, 失败: {failed_vms}')
-            # print(f"[DEBUG] 虚拟机监控和配置完成，但有错误。成功: {success_vms}, 失败: {failed_vms}")
+            add_task_log(task_id, 'warning', f'虚拟机克隆部分成功。成功: {success_vms}, 失败: {failed_vms}')
+            print(f"[DEBUG] 虚拟机克隆部分成功。成功: {success_vms}, 失败: {failed_vms}")
+        else:
+            task['status'] = 'failed'
+            add_task_log(task_id, 'error', f'虚拟机克隆失败。成功: {success_vms}, 失败: {failed_vms}')
+            print(f"[DEBUG] 虚拟机克隆失败。成功: {success_vms}, 失败: {failed_vms}")
         
         # 强制刷新，确保前端能立即收到更新
         import sys
@@ -396,26 +400,28 @@ def monitor_vm_and_configure(task_id, vm_name, vm_path, wuma_config_file, max_wa
                                 
                                 vmrun_path = get_vmrun_path()
                                 
-                                # 停止虚拟机
-                                stop_cmd = [vmrun_path, 'stop', vm_path]
-                                print(f"[DEBUG] 停止虚拟机命令: {' '.join(stop_cmd)}")
-                                subprocess.run(stop_cmd, capture_output=True, timeout=30)
+                                # 重启虚拟机
+                                reset_cmd = [vmrun_path, 'reset', vm_path]
+                                print(f"[DEBUG] 重启虚拟机命令: {' '.join(reset_cmd)}")
+                                reset_result = subprocess.run(reset_cmd, capture_output=True, timeout=30)
                                 
-                                time.sleep(5)  # 等待虚拟机完全停止
-                                
-                                # 启动虚拟机
-                                start_cmd = [vmrun_path, 'start', vm_path, 'nogui']
-                                print(f"[DEBUG] 启动虚拟机命令: {' '.join(start_cmd)}")
-                                subprocess.run(start_cmd, capture_output=True, timeout=30)
-                                
-                                add_task_log(task_id, 'success', f'虚拟机 {vm_name} 重启完成，五码和JU值配置全部完成')
-                                print(f"[DEBUG] 虚拟机 {vm_name} 重启完成，五码和JU值配置全部完成")
-                                
-                                update_monitoring_progress(success=True)
-                                
-                                # 检查是否所有虚拟机都已完成监控
-                                check_and_complete_task(task_id)
-                                return True
+                                if reset_result.returncode == 0:
+                                    add_task_log(task_id, 'success', f'虚拟机 {vm_name} 重启完成，五码和JU值配置全部完成')
+                                    print(f"[DEBUG] 虚拟机 {vm_name} 重启完成，五码和JU值配置全部完成")
+                                    
+                                    update_monitoring_progress(success=True)
+                                    
+                                    # 检查是否所有虚拟机都已完成监控
+                                    check_and_complete_task(task_id)
+                                    return True
+                                else:
+                                    add_task_log(task_id, 'error', f'虚拟机 {vm_name} 重启失败: {reset_result.stderr}')
+                                    print(f"[DEBUG] 虚拟机 {vm_name} 重启失败: {reset_result.stderr}")
+                                    update_monitoring_progress(failed=True)
+                                    
+                                    # 检查是否所有虚拟机都已完成监控
+                                    check_and_complete_task(task_id)
+                                    return False
                             else:
                                 add_task_log(task_id, 'error', f'虚拟机 {vm_name} JU值更改失败: {test_result.stderr}')
                                 print(f"[DEBUG] 虚拟机 {vm_name} JU值更改失败: {test_result.stderr}")
@@ -6628,7 +6634,7 @@ def batch_change_wuma_core(selected_vms, config_file_path, task_id=None):
                 
                 # 生成plist文件
                 plist_filename = f"{vm_name}.plist"
-                plist_file_path = os.path.join(wuma_config_install_dir, plist_filename)
+                plist_file_path = os.path.join(plist_chengpin_template_dir, plist_filename)
                 os.makedirs(os.path.dirname(plist_file_path), exist_ok=True)
                 
                 with open(plist_file_path, 'w', encoding='utf-8') as f:
@@ -6994,16 +7000,9 @@ def batch_change_ju_worker(task_id, selected_vms):
                 
                 # 重启虚拟机
                 add_task_log(task_id, 'INFO', f'开始重启虚拟机: {vm_name}')
-                restart_cmd = [vmrun_path, 'stop', vm_path]
-                logger.info(f"停止虚拟机: {restart_cmd}")
+                restart_cmd = [vmrun_path, 'reset', vm_path]
+                logger.info(f"重启虚拟机: {restart_cmd}")
                 subprocess.run(restart_cmd, capture_output=True, timeout=30)
-                
-                time.sleep(5)  # 等待虚拟机完全停止
-                
-                restart_cmd = [vmrun_path, 'start', vm_path, 'nogui'] 
-                logger.info(f"启动虚拟机: {restart_cmd}")
-                subprocess.run(restart_cmd, capture_output=True, timeout=30)
-                
                 add_task_log(task_id, 'INFO', f'虚拟机 {vm_name} 重启完成')
                 
                 tasks[task_id]['results'].append({

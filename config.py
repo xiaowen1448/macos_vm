@@ -20,6 +20,9 @@ vmrun_path = r'C:\Program Files (x86)\VMware\VMware Workstation\vmrun.exe'
 # plist模板配置文件目录
 plist_template_dir = r'web\config\plist'
 
+# plist成品模板配置文件目录
+plist_chengpin_template_dir = r'web\config\chengpin_plist'
+
 # 五码配置文件目录
 wuma_config_dir = r'web\config\config_unused'
 
