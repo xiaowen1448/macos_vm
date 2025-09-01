@@ -6469,10 +6469,14 @@
                     // 在新窗口中打开VNC连接，使用127.0.0.1作为服务器地址
                     const vncUrl = `http://127.0.0.1:5000/vnc_viewer?params=${encryptedParams}`;
                     
+                    // 生成唯一的窗口名称，包含时间戳确保每次都是新窗口
+                    const timestamp = Date.now();
+                    const windowName = `vnc_${vmName.replace(/[^a-zA-Z0-9]/g, '_')}_${timestamp}`;
+                    
                     // 打开新窗口，设置合适的尺寸
                     const vncWindow = window.open(
                         vncUrl,
-                        `vnc_${vmName.replace(/[^a-zA-Z0-9]/g, '_')}`,
+                        windowName,
                         'width=1024,height=768,resizable=yes,scrollbars=no,toolbar=no,menubar=no,location=no,status=no'
                     );
                     

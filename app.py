@@ -1491,8 +1491,7 @@ def phone_management_page():
     
 # 批量发信核心API和其他相关路由已移动到 app/routes/mass_messaging.py
 
-# websockify进程管理
-websockify_processes = {}
+# websockify进程管理 - 使用全局定义，避免重复定义
 
 @app.route('/api/vnc/connect', methods=['POST'])
 @login_required
@@ -1763,20 +1762,29 @@ def stop_websockify(client_ip):
         if client_ip in websockify_processes:
             process_info = websockify_processes[client_ip]
             process = process_info['process']
+            websocket_port = process_info.get('websocket_port', 'unknown')
+            
+            logger.info(f"准备停止客户端 {client_ip} 的websockify进程: PID={process.pid}, WebSocket端口={websocket_port}")
             
             if process.poll() is None:  # 进程仍在运行
-                logger.info(f"停止websockify进程: PID={process.pid}")
+                logger.info(f"终止websockify进程: PID={process.pid}")
                 process.terminate()
                 
                 # 等待进程结束
                 try:
                     process.wait(timeout=5)
+                    logger.info(f"websockify进程已正常结束: PID={process.pid}")
                 except subprocess.TimeoutExpired:
                     logger.warning(f"websockify进程未能正常结束，强制终止: PID={process.pid}")
                     process.kill()
+                    logger.info(f"websockify进程已强制终止: PID={process.pid}")
+            else:
+                logger.info(f"websockify进程已经结束: PID={process.pid}")
             
             del websockify_processes[client_ip]
-            logger.info(f"websockify进程已停止: {client_ip}")
+            logger.info(f"websockify进程信息已清理: {client_ip}, 释放WebSocket端口={websocket_port}")
+        else:
+            logger.info(f"客户端 {client_ip} 没有运行中的websockify进程")
             
     except Exception as e:
         logger.error(f"停止websockify进程失败: {str(e)}")
@@ -1889,12 +1897,24 @@ def get_available_websocket_port():
     start_port = 6080
     max_attempts = 100
     
+    # 获取已被websockify进程占用的端口
+    used_ports = set()
+    for client_ip, process_info in websockify_processes.items():
+        if 'websocket_port' in process_info:
+            used_ports.add(process_info['websocket_port'])
+    
     for i in range(max_attempts):
         port = start_port + i
+        
+        # 跳过已被websockify进程占用的端口
+        if port in used_ports:
+            continue
+            
         try:
             # 检查端口是否被占用
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.bind(('localhost', port))
+                logger.info(f"分配WebSocket端口: {port}")
                 return port
         except OSError:
             continue
