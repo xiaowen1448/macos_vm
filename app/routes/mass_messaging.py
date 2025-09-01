@@ -101,6 +101,34 @@ def api_get_templates():
         logger.error(f"获取模板列表失败: {str(e)}")
         return jsonify({'success': False, 'message': str(e)})
 
+@mass_messaging_bp.route('/api/get_emoji_list')
+@login_required
+def api_get_emoji_list():
+    """获取表情包列表"""
+    try:
+        emoji_file_path = os.path.join(project_root, 'app', 'emoji_wrapped.txt')
+        
+        if not os.path.exists(emoji_file_path):
+            return jsonify({
+                'success': False,
+                'message': '表情包文件不存在'
+            })
+        
+        with open(emoji_file_path, 'r', encoding='utf-8') as f:
+            emoji_list = [line.strip() for line in f.readlines() if line.strip()]
+        
+        return jsonify({
+            'success': True,
+            'emojis': emoji_list
+        })
+        
+    except Exception as e:
+        logger.error(f"获取表情包列表失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取表情包列表失败: {str(e)}'
+        })
+
 @mass_messaging_bp.route('/api/mass_messaging/download_chat_db', methods=['POST'])
 @login_required
 def api_download_chat_db():
@@ -1254,3 +1282,7 @@ def api_get_phone_numbers():
     except Exception as e:
         logger.error(f"获取手机号码列表失败: {str(e)}")
         return jsonify({'success': False, 'message': str(e)})
+
+
+
+        

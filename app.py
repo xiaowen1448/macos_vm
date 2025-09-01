@@ -76,8 +76,8 @@ clear_sessions_on_startup()
 def log_request_info():
     logger.info(f"收到请求: {request.method} {request.url}")
     logger.debug(f"请求头: {dict(request.headers)}")
-    if request.method == 'POST':
-        logger.debug(f"POST数据: {request.get_data(as_text=True)}")
+   # if request.method == 'POST':
+     #   logger.debug(f"POST数据: {request.get_data(as_text=True)}")
 
 @app.after_request
 def log_response_info(response):
@@ -9225,7 +9225,7 @@ signal.signal(signal.SIGTERM, signal_handler)  # 终止信号
 if __name__ == '__main__':
     try:
         logger.info("启动Flask应用...")
-        socketio.run(app, debug=True, host='0.0.0.0', port=5000)
+        socketio.run(app, debug=False, host='0.0.0.0', port=5000)
     except KeyboardInterrupt:
         logger.info("收到键盘中断信号")
     except Exception as e:
