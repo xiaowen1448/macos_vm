@@ -6441,7 +6441,7 @@ def batch_change_wuma_core(selected_vms, config_file_path, task_id=None):
                 
                 # 生成plist文件
                 plist_filename = f"{vm_name}.plist"
-                plist_file_path = os.path.join(os.path.dirname(__file__), 'config', 'chengpin_plist', plist_filename)
+                plist_file_path = os.path.join(wuma_config_install_dir, plist_filename)
                 os.makedirs(os.path.dirname(plist_file_path), exist_ok=True)
                 
                 with open(plist_file_path, 'w', encoding='utf-8') as f:

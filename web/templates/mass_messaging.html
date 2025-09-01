@@ -664,11 +664,7 @@
                         </div>
                         <div class="mb-3">
                             <label for="taskMessage" class="form-label">消息内容</label>
-                            <div style="position: relative;">
-                                <textarea class="form-control" id="taskMessage" rows="4" placeholder="请输入消息内容"></textarea>
-                              
-                            </div>
-                            </div>
+                            <textarea class="form-control" id="taskMessage" rows="4" placeholder="请输入消息内容"></textarea>
                         </div>
                         <div class="mb-3">
                             <label for="taskSchedule" class="form-label">执行时间</label>
@@ -700,12 +696,7 @@
                         </div>
                         <div class="mb-3">
                             <label for="templateContent" class="form-label">模版内容</label>
-                              <div class="d-flex flex-column gap-2">
-                               <button type="button" class="btn btn-outline-success" onclick="addAutoEmoji()" title="为每行文本首尾添加随机表情包" style="position: absolute; top: 8px; right: 8px; font-size: 12px; padding: 2px 6px; border-radius: 4px; z-index: 10;">
-                                    <i class="fas fa-smile me-1" style="font-size: 12px;"></i>自动表情包
-                                </button>
                             <textarea class="form-control" id="templateContent" rows="6" placeholder="请输入模版内容"></textarea>
-                           
                         </div>
 
                         <div class="mb-3">
@@ -958,54 +949,6 @@
                         'Content-Type': 'application/json',
                     }
                 });
-        
-        // 自动表情包功能
-        async function addAutoEmoji() {
-            const textarea = document.getElementById('taskMessage');
-            
-            if (!textarea.value.trim()) {
-                alert('请先输入消息内容');
-                return;
-            }
-            
-            try {
-                // 获取表情包列表
-                const response = await fetch('/api/get_emoji_list');
-                if (!response.ok) {
-                    throw new Error('获取表情包列表失败');
-                }
-                const emojiList = await response.json();
-                
-                if (!emojiList || emojiList.length === 0) {
-                    alert('表情包列表为空');
-                    return;
-                }
-                
-                // 处理文本
-                const lines = textarea.value.split('\n');
-                const processedLines = lines.map(line => {
-                    if (line.trim()) {
-                        // 随机选择两个不同的表情包
-                        const startEmoji = emojiList[Math.floor(Math.random() * emojiList.length)];
-                        let endEmoji = emojiList[Math.floor(Math.random() * emojiList.length)];
-                        // 确保首尾表情包不同
-                        while (endEmoji === startEmoji && emojiList.length > 1) {
-                            endEmoji = emojiList[Math.floor(Math.random() * emojiList.length)];
-                        }
-                        return startEmoji + line + endEmoji;
-                    }
-                    return line;
-                });
-                
-                textarea.value = processedLines.join('\n');
-                
-                showStaticMessage('已为文本添加表情包！', 'success');
-                
-            } catch (error) {
-                console.error('添加表情包失败:', error);
-                alert('添加表情包失败: ' + error.message);
-            }
-        }
                 
                 const data = await response.json();
                 
@@ -2583,7 +2526,7 @@
                     bytes[i] = binaryData.charCodeAt(i);
                 }
                 
-                // console.log('收到VNC数据，长度:', bytes.length, '前几个字节:', Array.from(bytes.slice(0, 10)));
+                console.log('收到VNC数据，长度:', bytes.length, '前几个字节:', Array.from(bytes.slice(0, 10)));
                 
                 // 处理RFB协议数据
                 this.processRFBData(bytes);
@@ -2606,9 +2549,9 @@
             newBuffer.set(bytes, this.rfbBuffer.length);
             this.rfbBuffer = newBuffer;
             
-            // console.log('RFB状态:', this.rfbState, '缓冲区长度:', this.rfbBuffer.length);
-            // console.log('接收到的数据:', Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(' '));
-            // console.log('当前缓冲区内容:', Array.from(this.rfbBuffer.slice(0, Math.min(32, this.rfbBuffer.length))).map(b => b.toString(16).padStart(2, '0')).join(' '));
+            console.log('RFB状态:', this.rfbState, '缓冲区长度:', this.rfbBuffer.length);
+            console.log('接收到的数据:', Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(' '));
+            console.log('当前缓冲区内容:', Array.from(this.rfbBuffer.slice(0, Math.min(32, this.rfbBuffer.length))).map(b => b.toString(16).padStart(2, '0')).join(' '));
             
             // 循环处理缓冲区中的数据，直到无法继续处理
             let processed = true;
@@ -2617,21 +2560,21 @@
                 
                 switch (this.rfbState) {
                     case 'version':
-                        // console.log('处理version状态，缓冲区长度:', this.rfbBuffer.length);
+                        console.log('处理version状态，缓冲区长度:', this.rfbBuffer.length);
                         if (this.rfbBuffer.length >= 12) {
                             const version = new TextDecoder().decode(this.rfbBuffer.slice(0, 12));
-                            // console.log('服务器RFB版本:', version);
+                            console.log('服务器RFB版本:', version);
                             this.rfbBuffer = this.rfbBuffer.slice(12);
-                            // console.log('状态转换: version -> security');
+                            console.log('状态转换: version -> security');
                             this.rfbState = 'security';
                             
                             // 发送客户端版本
                             const clientVersion = 'RFB 003.008\n';
-                            // console.log('发送客户端版本:', clientVersion.trim());
+                            console.log('发送客户端版本:', clientVersion.trim());
                             this.sendRFBMessage(new TextEncoder().encode(clientVersion));
                             processed = true;
                         } else {
-                            // console.log('version状态：数据不足，需要12字节，当前有', this.rfbBuffer.length, '字节');
+                            console.log('version状态：数据不足，需要12字节，当前有', this.rfbBuffer.length, '字节');
                         }
                         break;
                     
@@ -2640,16 +2583,16 @@
                             const numTypes = this.rfbBuffer[0];
                             if (this.rfbBuffer.length >= 1 + numTypes) {
                                 const securityTypes = Array.from(this.rfbBuffer.slice(1, 1 + numTypes));
-                                // console.log('安全类型:', securityTypes);
+                                console.log('安全类型:', securityTypes);
                                 this.rfbBuffer = this.rfbBuffer.slice(1 + numTypes);
                                 
                                 // 优先选择无认证(类型1)，如果不支持则使用VNC认证(类型2)
                                 if (securityTypes.includes(1)) {
-                                    // console.log('选择无认证模式');
+                                    console.log('选择无认证模式');
                                     this.sendRFBMessage(new Uint8Array([1]));
                                     this.rfbState = 'auth_result';
                                 } else if (securityTypes.includes(2)) {
-                                    // console.log('选择VNC认证模式');
+                                    console.log('选择VNC认证模式');
                                     this.sendRFBMessage(new Uint8Array([2]));
                                     this.rfbState = 'auth';
                                 } else {
@@ -2657,7 +2600,7 @@
                                     // 尝试使用第一个可用的安全类型
                                     if (securityTypes.length > 0) {
                                         const firstType = securityTypes[0];
-                                        // console.log('尝试使用安全类型:', firstType);
+                                        console.log('尝试使用安全类型:', firstType);
                                         this.sendRFBMessage(new Uint8Array([firstType]));
                                         if (firstType === 1) {
                                             this.rfbState = 'auth_result';
@@ -2677,12 +2620,12 @@
                 case 'auth':
                     if (this.rfbBuffer.length >= 16) {
                         const challenge = this.rfbBuffer.slice(0, 16);
-                        // console.log('收到认证挑战');
+                        console.log('收到认证挑战');
                         this.rfbBuffer = this.rfbBuffer.slice(16);
                         
                         // VNC DES认证响应
                         const response = this.vncDesEncrypt(challenge, this.config.password || '');
-                        // console.log('发送认证响应');
+                        console.log('发送认证响应');
                         this.sendRFBMessage(response);
                         this.rfbState = 'auth_result';
                         processed = true;
@@ -2694,12 +2637,12 @@
                     if (this.rfbBuffer.length >= 4) {
                         const view = new DataView(this.rfbBuffer.buffer, this.rfbBuffer.byteOffset);
                         const result = view.getUint32(0);
-                        // console.log('认证结果:', result);
+                        console.log('认证结果:', result);
                         this.rfbBuffer = this.rfbBuffer.slice(4);
                         
                         if (result === 0) {
                             // 认证成功，发送客户端初始化
-                            // console.log('VNC认证成功');
+                            console.log('VNC认证成功');
                             this.sendRFBMessage(new Uint8Array([1])); // shared flag
                             this.rfbState = 'init';
                             processed = true;
@@ -2710,7 +2653,7 @@
                         }
                     } else {
                         // 对于无认证模式，可能没有认证结果消息，直接发送客户端初始化
-                        // console.log('无认证结果数据，直接发送客户端初始化');
+                        console.log('无认证结果数据，直接发送客户端初始化');
                         this.sendRFBMessage(new Uint8Array([1])); // shared flag
                         this.rfbState = 'init';
                         processed = true;
@@ -2784,7 +2727,7 @@
         };
         
         VNCSocketClient.prototype.sendRFBMessage = function(data) {
-            // console.log('发送RFB消息:', Array.from(data).map(b => b.toString(16).padStart(2, '0')).join(' '), '长度:', data.length);
+            console.log('发送RFB消息:', Array.from(data).map(b => b.toString(16).padStart(2, '0')).join(' '), '长度:', data.length);
             const base64Data = btoa(String.fromCharCode.apply(null, data));
             this.socket.emit('vnc_data', { data: base64Data });
         };
