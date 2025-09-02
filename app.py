@@ -13,6 +13,8 @@ import paramiko
 import base64
 import sys
 import socket
+from pathlib import Path
+
 try:
     import fcntl
 except ImportError:
@@ -248,59 +250,18 @@ def check_and_complete_task(task_id):
         success_vms = monitoring.get('success_vms', 0)
         failed_vms = monitoring.get('failed_vms', 0)
         
-        # 获取克隆阶段的统计信息
-        clone_success = task['stats'].get('success', 0)
-        clone_failed = task['stats'].get('error', 0)
-        clone_total = task['stats'].get('total', 0)
-        
-        # 获取重启和五码配置的进度信息
-        restart_progress = monitoring.get('restart_progress', {'current': 0, 'total': 0})
-        wuma_progress = monitoring.get('wuma_progress', {'current': 0, 'total': 0})
-        
-        # 准备完成信号数据
-        complete_data = {
-            'type': 'complete',
-            'clone_stats': {
-                'total': clone_total,
-                'success': clone_success,
-                'failed': clone_failed
-            },
-            'monitoring_stats': {
-                'total': total_vms,
-                'success': success_vms,
-                'failed': failed_vms
-            },
-            'restart_stats': {
-                'total': restart_progress['total'],
-                'success': restart_progress['current']
-            },
-            'wuma_stats': {
-                'total': wuma_progress['total'],
-                'success': wuma_progress['current']
-            }
-        }
-        
         if success_vms > 0 and failed_vms == 0:
             task['status'] = 'completed'
-            complete_data['success'] = True
-            complete_data['message'] = f'虚拟机克隆成功！所有虚拟机监控和配置完成！成功: {success_vms}, 失败: {failed_vms}'
-            add_task_log(task_id, 'success', complete_data['message'])
+            add_task_log(task_id, 'success', f'虚拟机克隆成功！所有虚拟机监控和配置完成！成功: {success_vms}, 失败: {failed_vms}')
             print(f"[DEBUG] 虚拟机克隆成功！所有虚拟机监控和配置完成！成功: {success_vms}, 失败: {failed_vms}")
         elif success_vms > 0 and failed_vms > 0:
             task['status'] = 'completed_with_errors'
-            complete_data['success'] = False
-            complete_data['message'] = f'虚拟机克隆部分成功。成功: {success_vms}, 失败: {failed_vms}'
-            add_task_log(task_id, 'warning', complete_data['message'])
+            add_task_log(task_id, 'warning', f'虚拟机克隆部分成功。成功: {success_vms}, 失败: {failed_vms}')
             print(f"[DEBUG] 虚拟机克隆部分成功。成功: {success_vms}, 失败: {failed_vms}")
         else:
             task['status'] = 'failed'
-            complete_data['success'] = False
-            complete_data['message'] = f'虚拟机克隆失败。成功: {success_vms}, 失败: {failed_vms}'
-            add_task_log(task_id, 'error', complete_data['message'])
+            add_task_log(task_id, 'error', f'虚拟机克隆失败。成功: {success_vms}, 失败: {failed_vms}')
             print(f"[DEBUG] 虚拟机克隆失败。成功: {success_vms}, 失败: {failed_vms}")
-        
-        # 发送完成信号到前端
-        task['logs'].append(complete_data)
         
         # 强制刷新，确保前端能立即收到更新
         import sys
@@ -6815,6 +6776,7 @@ def batch_change_wuma_core(selected_vms, config_file_path, task_id=None):
                 
                 # 备份已使用的五码
                 config_filename = os.path.basename(config_file_path)
+                config_filename=Path(config_filename).stem
                 backup_config_file = os.path.join(backup_dir, f'{config_filename}_install.bak')
                 
                 # 追加到备份配置文件
