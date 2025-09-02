@@ -1289,8 +1289,7 @@ def dashboard():
     current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     
     #获取虚拟机名称
-    vm_temp_dir = r'D:\macos_vm\NewVM\10.12'
-    vm_chengpin_dir = r'D:\macos_vm\NewVM\chengpin_vm'
+    from config import vm_temp_dir, vm_chengpin_dir
     vms = []
     vm_data=[]
     
@@ -1417,7 +1416,8 @@ def api_vm_info_list():
     """获取虚拟机信息列表"""
     try:
         # 扫描虚拟机目录
-        vm_dir = r'D:\macos_vm\NewVM'
+        from config import vm_base_dir
+        vm_dir = vm_base_dir
         vms = []
         
         # 批量获取运行中的虚拟机列表（只执行一次vmrun命令）
@@ -3278,7 +3278,8 @@ def api_vm_list():
         logger.debug(f"分页参数 - 页码: {page}, 每页大小: {page_size}")
         
         # 扫描虚拟机目录
-        vm_dir = r'D:\macos_vm\NewVM'
+        from config import vm_base_dir
+        vm_dir = vm_base_dir
         vms = []
         stats = {'total': 0, 'running': 0, 'stopped': 0, 'online': 0}
         
@@ -4392,7 +4393,8 @@ def find_vm_file(vm_name):
             return None
         
         # 如果是简单名称，则在目录中搜索
-        vm_dir = r'D:\macos_vm\NewVM'
+        from config import vm_base_dir
+        vm_dir = vm_base_dir
         if os.path.exists(vm_dir):
             for root, dirs, files in os.walk(vm_dir):
                 for file in files:

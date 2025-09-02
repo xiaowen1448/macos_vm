@@ -11,6 +11,11 @@ template_dir = r'D:\macos_vm\TemplateVM'
 # 虚拟机克隆目录
 clone_dir = r'D:\macos_vm\NewVM\10.12_clone'
 
+# 临时虚拟机目录
+vm_temp_dir = r'D:\macos_vm\NewVM\10.12_clone'
+
+vm_base_dir= r'D:\macos_vm\NewVM'
+
 # 克隆后成品虚拟机路径
 vm_chengpin_dir = r'D:\macos_vm\NewVM\chengpin_vm'
 
