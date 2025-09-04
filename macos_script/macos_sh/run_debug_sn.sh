@@ -1,1 +1,0 @@
-yes | ~/Desktop/iMessageDebug | grep -i -w SerialNumber | awk '{print $2}'

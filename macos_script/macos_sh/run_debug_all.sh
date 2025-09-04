@@ -1,1 +1,0 @@
-yes | ~/Desktop/iMessageDebug 
