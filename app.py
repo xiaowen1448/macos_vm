@@ -575,7 +575,7 @@ def scan_scripts_from_directories():
                             'directory': scripts_dir
                         })
                         
-                        logger.debug(f"找到脚本文件: {filename}, 类型: {script_type}, 大小: {size_str}")
+                      #  logger.debug(f"找到脚本文件: {filename}, 类型: {script_type}, 大小: {size_str}")
                         
                     except Exception as e:
                         logger.error(f"处理脚本文件 {filename} 时出错: {str(e)}")
@@ -608,7 +608,7 @@ def get_vm_list_from_directory(vm_dir, vm_type_name):
             vmrun_path = get_vmrun_path()
             
             list_cmd = [vmrun_path, 'list']
-            logger.debug(f"执行vmrun命令: {list_cmd}")
+ 
             result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30)
             
             if result.returncode == 0:
@@ -868,7 +868,7 @@ def vm_operation_generic(operation, vm_type_name, vm_dir):
                 'message': f'不支持的操作: {operation}'
             })
         
-        logger.info(f"执行{operation}命令: {cmd}")
+        #logger.info(f"执行{operation}命令: {cmd}")
         
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
         
@@ -1285,7 +1285,7 @@ def login():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    logger.debug("访问dashboard页面")
+    #logger.info("访问dashboard页面")
     current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     
     #获取虚拟机名称
@@ -1317,7 +1317,7 @@ def dashboard():
                     'cl_status': '未执行',
                     'sh_status': '未执行'
                 })
-                logger.debug(f"找到临时虚拟机: {fname2}")
+                #logger.debug(f"找到临时虚拟机: {fname2}")
 
     #成品vm路径：D:\macos_vm\NewVM\10.12
     vm_list=vms
@@ -1341,7 +1341,7 @@ def dashboard():
                 mtime = datetime.fromtimestamp(stat.st_mtime).strftime('%Y/%m/%d %H:%M')
                 size = stat.st_size
                 script_list.append({'name': fname, 'mtime': mtime, 'size': size})
-                logger.debug(f"找到脚本文件: {fname}, 大小: {size} bytes")
+                #logger.debug(f"找到脚本文件: {fname}, 大小: {size} bytes")
     script_list.sort(key=lambda x: x['name'])
     
     logger.info(f"Dashboard数据准备完成 - 成品VM: {len(vm_list)}, 临时VM: {len(vm_data)}, 脚本: {len(script_list)}")
@@ -2799,23 +2799,17 @@ def clone_vm_worker(task_id):
                     if should_start:
                         start_reason = "用户勾选自动启动" if params.get('autoStart') == 'true' else "需要进行五码配置"
                         start_cmd = [vmrun_path, 'start', vm_file_path, 'nogui']
-                        print(f"[DEBUG] 启动虚拟机原因: {start_reason}")
-                        print(f"[DEBUG] 启动命令: {' '.join(start_cmd)}")
                         add_task_log(task_id, 'info', f'启动虚拟机 ({start_reason}): vmrun start {vm_file_path}')
                         
                         # 记录启动命令开始时间
                         start_time = datetime.now()
-                        print(f"[DEBUG] 启动命令开始时间: {start_time}")
+                       # print(f"[DEBUG] 启动命令开始时间: {start_time}")
                         
                         result = subprocess.run(start_cmd, capture_output=True, text=True, timeout=60)
                         
                         # 记录启动命令结束时间
                         end_time = datetime.now()
                         duration = (end_time - start_time).total_seconds()
-                        print(f"[DEBUG] 启动命令结束时间: {end_time}")
-                        print(f"[DEBUG] 启动命令执行时长: {duration} 秒")
-                        print(f"[DEBUG] 启动命令返回码: {result.returncode}")
-                        print(f"[DEBUG] 启动命令输出: {result.stdout}")
                         if result.stderr:
                             print(f"[DEBUG] 启动命令错误: {result.stderr}")
                         
@@ -3291,7 +3285,6 @@ def api_vm_list():
             vmrun_path = get_vmrun_path()
             
             list_cmd = [vmrun_path, 'list']
-            logger.debug(f"执行vmrun命令: {list_cmd}")
             result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30)
             
             if result.returncode == 0:
@@ -3533,25 +3526,19 @@ def api_vm_start():
         vmrun_path = get_vmrun_path()
         
         print(f"[DEBUG] 启动虚拟机 {vm_name}")
-        print(f"[DEBUG] 虚拟机文件路径: {vm_file}")
-        print(f"[DEBUG] vmrun路径: {vmrun_path}")
         
         start_cmd = [vmrun_path, 'start', vm_file, 'nogui']
-        print(f"[DEBUG] 启动命令: {' '.join(start_cmd)}")
+       # print(f"[DEBUG] 启动命令: {' '.join(start_cmd)}")
         
         # 记录命令开始时间
         start_time = datetime.now()
-        print(f"[DEBUG] 启动命令开始时间: {start_time}")
+
         
         result = subprocess.run(start_cmd, capture_output=True, text=True, timeout=60)
         
         # 记录命令结束时间
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
-        print(f"[DEBUG] 启动命令结束时间: {end_time}")
-        print(f"[DEBUG] 启动命令执行时长: {duration} 秒")
-        print(f"[DEBUG] 启动命令返回码: {result.returncode}")
-        print(f"[DEBUG] 启动命令输出: {result.stdout}")
         if result.stderr:
             print(f"[DEBUG] 启动命令错误: {result.stderr}")
         
@@ -3667,26 +3654,22 @@ def api_vm_restart():
         
         # 启动虚拟机
         start_cmd = [vmrun_path, 'start', vm_file, 'nogui']
-        print(f"[DEBUG] 重启-启动命令: {' '.join(start_cmd)}")
+      #  print(f"[DEBUG] 重启-启动命令: {' '.join(start_cmd)}")
         
         # 记录启动命令开始时间
         start_start_time = datetime.now()
-        print(f"[DEBUG] 重启-启动命令开始时间: {start_start_time}")
+        #print(f"[DEBUG] 重启-启动命令开始时间: {start_start_time}")
         
         start_result = subprocess.run(start_cmd, capture_output=True, text=True, timeout=60)
         
         # 记录启动命令结束时间
         start_end_time = datetime.now()
         start_duration = (start_end_time - start_start_time).total_seconds()
-        print(f"[DEBUG] 重启-启动命令结束时间: {start_end_time}")
-        print(f"[DEBUG] 重启-启动命令执行时长: {start_duration} 秒")
-        print(f"[DEBUG] 重启-启动命令返回码: {start_result.returncode}")
-        print(f"[DEBUG] 重启-启动命令输出: {start_result.stdout}")
         if start_result.stderr:
             print(f"[DEBUG] 重启-启动命令错误: {start_result.stderr}")
         
         if start_result.returncode == 0:
-            print(f"[DEBUG] 虚拟机 {vm_name} 重启成功")
+          #  print(f"[DEBUG] 虚拟机 {vm_name} 重启成功")
             return jsonify({'success': True, 'message': '虚拟机重启成功'})
         else:
             print(f"[DEBUG] 虚拟机 {vm_name} 重启失败: {start_result.stderr}")
@@ -4920,9 +4903,6 @@ def api_vm_add_permissions():
         vm_name = data.get('vm_name')
         script_names = data.get('script_names', [])
         username = data.get('username', vm_username)
-        
-        logger.debug(f"添加执行权限参数 - 虚拟机: {vm_name}, 脚本: {script_names}, 用户: {username}")
-        
         if not vm_name:
             logger.warning("虚拟机名称不能为空")
             return jsonify({'success': False, 'message': '虚拟机名称不能为空'})
@@ -5035,26 +5015,26 @@ def setup_ssh_trust(ip, username, password):
             logger.debug(f"创建SSH目录: {ssh_dir}")
         
         if not os.path.exists(ssh_key_path):
-            logger.info("生成SSH密钥对")
+          #  logger.info("生成SSH密钥对")
             # 生成SSH密钥对
             keygen_cmd = ['ssh-keygen', '-t', 'rsa', '-b', '2048', '-f', ssh_key_path, '-N', '']
             logger.debug(f"执行ssh-keygen命令: {keygen_cmd}")
             result = subprocess.run(keygen_cmd, capture_output=True, text=True, timeout=30)
             if result.returncode != 0:
-                logger.error(f"生成SSH密钥失败: {result.stderr}")
+            #    logger.error(f"生成SSH密钥失败: {result.stderr}")
                 return False, f"生成SSH密钥失败: {result.stderr}"
             else:
                 logger.debug("SSH密钥生成成功")
         
         # 2. 读取公钥
         if not os.path.exists(ssh_pub_key_path):
-            logger.error("SSH公钥文件不存在")
+           # logger.error("SSH公钥文件不存在")
             return False, "SSH公钥文件不存在"
         
         with open(ssh_pub_key_path, 'r') as f:
             public_key = f.read().strip()
         
-        logger.debug("读取公钥成功")
+      #  logger.debug("读取公钥成功")
         
         # 3. 使用paramiko库设置SSH互信（推荐方法）
         try:
@@ -5065,7 +5045,7 @@ def setup_ssh_trust(ip, username, password):
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             
             # 连接到远程主机
-            logger.debug(f"尝试连接到 {ip}")
+          #  logger.debug(f"尝试连接到 {ip}")
             ssh.connect(ip, username=username, password=password, timeout=10)
             logger.debug("SSH连接成功")
             
@@ -5118,9 +5098,7 @@ def api_vm_chmod_scripts():
         vm_name = data.get('vm_name')
         script_names = data.get('script_names', [])  # 可以传入单个脚本名或脚本名列表
         username = data.get('username', vm_username)
-        
-        logger.debug(f"添加执行权限参数 - 虚拟机: {vm_name}, 脚本: {script_names}, 用户: {username}")
-        
+
         if not vm_name:
             logger.warning("虚拟机名称不能为空")
             return jsonify({'success': False, 'message': '虚拟机名称不能为空'})
@@ -5369,7 +5347,7 @@ def execute_remote_script(ip, username, script_name):
         
         # 检查脚本是否存在
         check_command = f"ls -la {script_name}"
-        ssh_log.append(f"[SSH] 检查脚本是否存在: {check_command}")
+      #  ssh_log.append(f"[SSH] 检查脚本是否存在: {check_command}")
         stdin, stdout, stderr = ssh.exec_command(check_command)
         check_output = stdout.read().decode().strip()
         check_error = stderr.read().decode().strip()
@@ -6591,8 +6569,7 @@ def batch_change_wuma_core(selected_vms, config_file_path, task_id=None):
         # 验证选中的虚拟机是否都在运行
         vmrun_path = get_vmrun_path()
         
-        list_cmd = [vmrun_path, 'list']
-        logger.debug(f"执行vmrun命令: {list_cmd}")
+        list_cmd = [vmrun_path, 'list'] 
         result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30)
         
         if result.returncode != 0:
@@ -7019,7 +6996,7 @@ def batch_change_ju_worker(task_id, selected_vms):
         vmrun_path = get_vmrun_path()
         
         list_cmd = [vmrun_path, 'list']
-        logger.debug(f"执行vmrun命令: {list_cmd}")
+ 
         result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30)
         
         if result.returncode != 0:
@@ -7182,7 +7159,7 @@ def api_batch_delete_vm():
         vmrun_path = get_vmrun_path()
         
         list_cmd = [vmrun_path, 'list']
-        logger.debug(f"执行vmrun命令: {list_cmd}")
+ 
         result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30)
         
         if result.returncode != 0:
@@ -9513,7 +9490,7 @@ def api_batch_get_10_12_wuma_info():
 @login_required
 def api_batch_get_10_12_ju_info():
     """批量获取10.12目录虚拟机JU值信息"""
-    logger.info("收到批量获取10.12目录虚拟机JU值信息请求")
+  
     try:
         data = request.get_json()
         vm_names = data.get('vm_names', [])
@@ -9534,9 +9511,9 @@ def api_batch_get_10_12_ju_info():
                     response = get_ju_info_generic('10.12目录')
                     response_data = response.get_json()
                     results[vm_name] = response_data
-                    logger.info(f"虚拟机 {vm_name} JU值信息获取结果: {response_data.get('success', False)}")
+             
             except Exception as e:
-                logger.error(f"获取虚拟机 {vm_name} JU值信息失败: {str(e)}")
+               #
                 results[vm_name] = {
                     'success': False,
                     'message': f'获取JU值信息失败: {str(e)}'
