@@ -1,56 +1,20 @@
 # macOS 虚拟机管理系统
 
-<div align="center">
+<img width="1839" height="970" alt="wechat_2025-09-05_094920_482" src="https://github.com/user-attachments/assets/d584267c-91ba-4853-9c27-7744a806b6e4" />
 
-![macOS VM Manager](https://img.shields.io/badge/macOS-VM%20Manager-blue?style=for-the-badge&logo=apple)
-![Python](https://img.shields.io/badge/Python-3.7+-green?style=for-the-badge&logo=python)
-![Flask](https://img.shields.io/badge/Flask-Web%20Framework-red?style=for-the-badge&logo=flask)
-![PyQt5](https://img.shields.io/badge/PyQt5-Desktop%20App-orange?style=for-the-badge&logo=qt)
+<img width="1839" height="970" alt="wechat_2025-09-05_094604_450" src="https://github.com/user-attachments/assets/976952d0-85ae-4556-9b32-334a5defa536" />
 
-**一个功能强大的 macOS 虚拟机管理和自动化系统**
+<img width="1839" height="970" alt="wechat_2025-09-05_094051_178" src="https://github.com/user-attachments/assets/0ac4ed47-86ad-4626-921a-65823beb30b9" />
 
-支持虚拟机批量管理、iMessage 自动化、AppleID 管理等功能
+<img width="1839" height="970" alt="wechat_2025-09-05_094043_826" src="https://github.com/user-attachments/assets/60a83a75-27c8-4fc7-8174-0a320c4a61b7" />
 
-</div>
+<img width="1839" height="970" alt="wechat_2025-09-05_093847_294" src="https://github.com/user-attachments/assets/5d8cd7a8-f473-4c17-9b41-891c2054cc66" />
 
-## 📋 目录
+<img width="1839" height="970" alt="wechat_2025-09-05_093800_885" src="https://github.com/user-attachments/assets/5ad2a32a-4394-487e-9799-1b9a3a0f9751" />
 
-- [功能特性](#-功能特性)
-- [系统架构](#-系统架构)
-- [环境要求](#-环境要求)
-- [快速开始](#-快速开始)
-- [部署方式](#-部署方式)
-- [配置说明](#-配置说明)
-- [使用指南](#-使用指南)
-- [API 文档](#-api-文档)
-- [故障排除](#-故障排除)
-- [开发指南](#-开发指南)
-- [更新日志](#-更新日志)
-- [许可证](#-许可证)
-
-## 🚀 功能特性
-
-### 核心功能
-- **🖥️ 虚拟机管理**: 批量创建、启动、停止、克隆 macOS 虚拟机
-- **📱 iMessage 自动化**: 自动登录、消息发送、蓝号检测
-- **🆔 AppleID 管理**: 批量管理 AppleID 账户和验证
-- **📞 号码管理**: 手机号码批量导入和状态管理
-- **🔄 自动化脚本**: 支持 AppleScript 和 Shell 脚本执行
-- **📊 实时监控**: 虚拟机状态监控和日志查看
-
-### 界面支持
-- **🌐 Web 管理界面**: 基于 Flask 的现代化 Web 界面
-- **🖥️ 桌面应用**: 基于 PyQt5 的原生桌面应用
-- **⚙️ Windows 服务**: 支持后台服务模式运行
-
-### 高级特性
-- **🔧 批量操作**: 支持虚拟机批量克隆和配置
-- **📝 日志系统**: 完整的操作日志和错误追踪
-- **🔒 安全认证**: 用户登录和权限管理
-- **📦 一键打包**: 支持打包为 Windows 可执行
+<img width="1839" height="970" alt="wechat_2025-09-05_094604_450" src="https://github.com/user-attachments/assets/fa854330-f2a8-4bbd-94e9-125680e7472a" />
 
 
-
-合作联系
+合作联系：
 telegram：https://t.me/xiaowen_1448
 wechat：w8686512
