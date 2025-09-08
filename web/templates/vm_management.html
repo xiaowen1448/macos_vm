@@ -1351,10 +1351,14 @@
             document.getElementById('endRecord').textContent = endIndex;
             document.getElementById('totalRecords').textContent = pagination ? pagination.total_count : totalVMs.length;
             
-            totalVMs.forEach(vm => {
-                const row = document.createElement('tr');
-                const isSelected = selectedVMs.has(vm.name);
-                row.setAttribute('data-vm-name', vm.name);
+            // 获取当前页面显示的虚拟机
+            const currentPageVMs = [];
+            totalVMs.forEach((vm, index) => {
+                if (index >= startIndex && index < endIndex) {
+                    currentPageVMs.push(vm);
+                    const row = document.createElement('tr');
+                    const isSelected = selectedVMs.has(vm.name);
+                    row.setAttribute('data-vm-name', vm.name);
                 row.innerHTML = `
                     <td>
                         <input type="checkbox" class="vm-checkbox" value="${vm.name}" onchange="toggleVMSelection('${vm.name}')" ${isSelected ? 'checked' : ''}>
@@ -1375,7 +1379,20 @@
                         </div>
                     </td>
                     <td id="ip-${vm.name}">
-                        ${vm.ip && vm.ip !== '获取中...' ? vm.ip : (vm.status === 'running' || vm.status === 'starting' ? '<span id="ip-status-${vm.name}">获取中...</span>' : '<span class="text-muted">-</span>')}
+                        <div class="ip-container">
+                            <div class="local-ip">
+                                <small class="text-muted">局域网:</small>
+                                <span id="local-ip-${vm.name}">
+                                  
+                                </span>
+                            </div>
+                            <div class="public-ip mt-1">
+                                <small class="text-muted">公网IP:</small>
+                                <span id="public-ip-${vm.name}" class="text-info">
+                                 
+                                </span>
+                            </div>
+                        </div>
                     </td>
                     <td id="wuma-view-${vm.name}">
                         <div class="d-flex align-items-center">
@@ -1435,7 +1452,8 @@
                         </div>
                     </td>
                 `;
-                tbody.appendChild(row);
+                    tbody.appendChild(row);
+                }
             });
             
             // 更新全选状态
@@ -1455,6 +1473,11 @@
             setTimeout(() => {
                 loadWumaAndJuStatus();
             }, 200);
+            
+            // 异步获取运行中虚拟机的IP地址（局域网IP和公网IP）
+            setTimeout(() => {
+                fetchAllRunningVMIPs(currentPageVMs);
+            }, 300);
             
             // 智能刷新策略：根据虚拟机数量和状态动态调整刷新频率
             startSmartRefreshStrategy();
@@ -2024,9 +2047,7 @@
             // 显示加载状态
             vmNames.forEach(vmName => {
                 const ipCell = document.getElementById(`ip-${vmName}`);
-                if (ipCell) {
-                    ipCell.innerHTML = '<span class="text-info"><i class="fas fa-spinner fa-spin"></i> 获取中...</span>';
-                }
+                
                 
                 const statusCell = document.querySelector(`tr[data-vm-name="${vmName}"] td:nth-child(3)`);
                 if (statusCell) {
@@ -2070,7 +2091,7 @@
                             // 更新IP显示
                             const ipCell = document.getElementById(`ip-${vmName}`);
                             if (ipCell) {
-                                ipCell.innerHTML = result.ip || '<span class="text-muted">-</span>';
+                                //ipCell.innerHTML = result.ip || '<span class="text-muted">-</span>';
                             }
                             
                             // 更新状态显示
@@ -4315,20 +4336,53 @@
         function fetchAllRunningVMIPs(vmList) {
             vmList.forEach(vm => {
                 if (vm.status === 'running') {
+                    // 获取局域网IP
                     fetch(`/api/vm_10_12_ip_status/${encodeURIComponent(vm.name)}`)
                         .then(response => response.json())
                         .then(data => {
                             if (data.success && data.ip_status && data.ip_status.ip) {
-                                document.getElementById('ip-' + vm.name).textContent = data.ip_status.ip;
+                                document.getElementById('local-ip-' + vm.name).textContent = data.ip_status.ip;
                             } else {
-                                document.getElementById('ip-' + vm.name).textContent = '未获取到';
+                                document.getElementById('local-ip-' + vm.name).textContent = '未获取到'; 
                             }
                         })
                         .catch(() => {
-                            document.getElementById('ip-' + vm.name).textContent = '获取失败';
+                            document.getElementById('local-ip-' + vm.name).textContent = '获取失败';
                         });
+                    
+                    // 获取公网IP
+                    fetchPublicIP(vm.name);
                 }
             });
+        }
+        
+        // 获取虚拟机公网IP
+        function fetchPublicIP(vmName) {
+            const publicIpElement = document.getElementById('public-ip-' + vmName);
+            if (!publicIpElement) {
+                console.error('找不到公网IP元素:', 'public-ip-' + vmName);
+                return;
+            }
+            
+            //publicIpElement.textContent = '获取中...';
+            
+            fetch(`/api/vm/public_ip/${encodeURIComponent(vmName)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.public_ip) {
+                        publicIpElement.textContent = data.public_ip;
+                        publicIpElement.className = 'text-success';
+                    } else {
+                        publicIpElement.textContent = '获取失败';
+                        publicIpElement.className = 'text-danger';
+                        publicIpElement.title = data.message || '获取公网IP失败';
+                    }
+                })
+                .catch(error => {
+                    publicIpElement.textContent = '网络错误';
+                    publicIpElement.className = 'text-danger';
+                    publicIpElement.title = '网络请求失败: ' + error.message;
+                });
         }
 
         // 执行脚本相关的函数
@@ -4951,7 +5005,6 @@
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
                                 <h6 class="mb-1">${vm.name}</h6>
-                                <small class="text-muted">IP: ${vm.ip || '获取中...'}</small>
                                 <br>
                                 <small class="text-muted">状态: ${vm.status}</small>
                             </div>
@@ -5026,8 +5079,7 @@
                     <div class="list-group-item">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
-                                <h6 class="mb-1">${vm.name}</h6>
-                                <small class="text-muted">IP: ${vm.ip || '获取中...'}</small>
+                                <h6 class="mb-1">${vm.name}</h6> 
                                 <br>
                                 <small class="text-muted">状态: ${vm.status}</small>
                             </div>

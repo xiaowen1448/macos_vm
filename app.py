@@ -3421,6 +3421,77 @@ def api_vm_ip_status(vm_name):
             'message': f'获取虚拟机IP状态失败: {str(e)}'
         })
 
+@app.route('/api/vm/public_ip/<vm_name>')
+@login_required
+def api_vm_public_ip(vm_name):
+    """获取虚拟机公网IP地址"""
+    logger.info(f"收到获取虚拟机 {vm_name} 公网IP的请求")
+    try:
+        # 获取虚拟机IP地址
+        logger.debug(f"开始获取虚拟机 {vm_name} 的IP地址")
+        vm_ip = get_vm_ip(vm_name)
+        if not vm_ip:
+            logger.warning(f"无法获取虚拟机 {vm_name} 的IP地址")
+            return jsonify({
+                'success': False,
+                'message': '无法获取虚拟机IP地址'
+            })
+        
+        logger.info(f"虚拟机 {vm_name} 的IP地址: {vm_ip}")
+        
+        # 检查SSH连接
+        logger.debug(f"检查虚拟机 {vm_name} 的SSH连接")
+        if not check_ssh_connectivity(vm_ip, vm_username):
+            logger.warning(f"虚拟机 {vm_name} SSH连接失败")
+            return jsonify({
+                'success': False,
+                'message': 'SSH连接失败，无法获取公网IP'
+            })
+        
+        logger.info(f"虚拟机 {vm_name} SSH连接成功")
+        
+        # 构建脚本路径
+        script_path = f"{script_remote_path}getipaddress.sh"
+        logger.debug(f"执行脚本路径: {script_path}")
+        
+        # 通过SSH执行脚本获取公网IP
+        logger.info(f"开始执行获取公网IP脚本: {vm_name}")
+        success, output, log = execute_remote_script(vm_ip, vm_username, script_path)
+        
+        logger.info(f"脚本执行结果 - 成功: {success}, 输出: {output}")
+        
+        if success:
+            # 解析输出，提取IP地址
+            public_ip = output.strip()
+            logger.info(f"获取到的公网IP: {public_ip}")
+            # 简单验证IP格式
+            if is_valid_ip(public_ip):
+                logger.info(f"虚拟机 {vm_name} 公网IP获取成功: {public_ip}")
+                return jsonify({
+                    'success': True,
+                    'vm_name': vm_name,
+                    'public_ip': public_ip
+                })
+            else:
+                logger.warning(f"获取到的公网IP格式无效: {public_ip}")
+                return jsonify({
+                    'success': False,
+                    'message': f'获取到的公网IP格式无效: {public_ip}'
+                })
+        else:
+            logger.error(f"执行脚本失败: {output}")
+            return jsonify({
+                'success': False,
+                'message': f'执行脚本失败: {output}'
+            })
+            
+    except Exception as e:
+        logger.error(f"获取虚拟机公网IP失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取虚拟机公网IP失败: {str(e)}'
+        })
+
 @app.route('/api/vm_online_status', methods=['POST'])
 @login_required
 def api_vm_online_status():
