@@ -1364,7 +1364,7 @@
                         <input type="checkbox" class="vm-checkbox" value="${vm.name}" onchange="toggleVMSelection('${vm.name}')" ${isSelected ? 'checked' : ''}>
                     </td>
                     <td>
-                        <strong>${vm.name}</strong>
+                        <small>${vm.name}</small>
                     </td>
                     <td>
                         <div class="d-flex align-items-center">
@@ -2211,7 +2211,7 @@
             modal.hide();
             
             // 显示执行中的静态文本框
-            showStaticMessage(`正在为虚拟机 "${vmName}" 设置SSH互信...\n\n用户名: wx\n密码: 123456\n\n请稍候...`, 'info', 10000);
+           // showStaticMessage(`正在为虚拟机 "${vmName}" 设置SSH互信...\n\n用户名: wx\n密码: 123456\n\n请稍候...`, 'info', 10000);
             
             // 调用API
             fetch('/api/ssh_10_12_trust', {
@@ -6340,10 +6340,6 @@
                         <strong>提示：</strong>SSH互信设置将允许无密码登录到虚拟机。
                     </div>
                     <p class="mb-2">确定要为虚拟机 "<span id="sshTrustVMNameDisplay"></span>" 设置SSH互信吗？</p>
-                    <div class="bg-light p-3 rounded">
-                        <p class="mb-1"><strong>用户名:</strong> wx</p>
-                        <p class="mb-0"><strong>密码:</strong> 123456</p>
-                    </div>
                     <input type="hidden" id="sshTrustVMName" value="">
                 </div>
                 <div class="modal-footer">
