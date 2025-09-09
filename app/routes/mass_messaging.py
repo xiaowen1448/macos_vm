@@ -235,10 +235,10 @@ def api_download_chat_db():
             else:
                 continue
             
-            if os.path.exists(file_path):
-                logger.info(f"文件存在确认: {file_path}, 大小: {os.path.getsize(file_path)} bytes")
-            else:
-                logger.warning(f"文件不存在: {file_path}")
+            # if os.path.exists(file_path):
+            #     logger.info(f"文件存在确认: {file_path}, 大小: {os.path.getsize(file_path)} bytes")
+            # else:
+            #     logger.warning(f"文件不存在: {file_path}")
         
         # 如果存在WAL文件，进行数据库合并
         if 'chat.db-wal' in downloaded_files:
@@ -267,12 +267,12 @@ def api_download_chat_db():
                 logger.info(f"数据库WAL合并完成: {vm_name}")
                 
                 # 检查合并后的文件状态
-                logger.info(f"合并后文件状态:")
-                for file_path in [local_chat_db, local_chat_shm, local_chat_wal]:
-                    if os.path.exists(file_path):
-                        logger.info(f"文件存在: {file_path}, 大小: {os.path.getsize(file_path)} bytes")
-                    else:
-                        logger.info(f"文件不存在: {file_path}")
+               # logger.info(f"合并后文件状态:")
+                # for file_path in [local_chat_db, local_chat_shm, local_chat_wal]:
+                #     if os.path.exists(file_path):
+                #         logger.info(f"文件存在: {file_path}, 大小: {os.path.getsize(file_path)} bytes")
+                #     else:
+                #         logger.info(f"文件不存在: {file_path}")
                         
             except Exception as e:
                 logger.error(f"数据库合并失败: {str(e)}")
