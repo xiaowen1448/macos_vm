@@ -1666,11 +1666,11 @@
                     updateTemplateSelect();
                 } else {
                     console.error('加载模板失败:', data?.message);
-                    alert('加载模板失败: ' + (data?.message || '未知错误'));
+                   // alert('加载模板失败: ' + (data?.message || '未知错误'));
                 }
             } catch (error) {
                 console.error('加载模板失败:', error);
-                alert('加载模板失败: ' + error.message);
+                //alert('加载模板失败: ' + error.message);
             }
         }
         
@@ -1678,21 +1678,20 @@
         async function loadPhoneTemplates() {
             console.log('开始加载手机号模板...');
             try {
-                const response = await fetch('/api/phone_templates');
-                console.log('手机号模板API响应状态:', response.status);
-                const data = await response.json();
-                console.log('手机号模板API响应数据:', data);
+                const result = await fetchJsonData('/api/phone_templates');
+                console.log('手机号模板API响应:', result);
                 
-                if (data.success) {
-                    globalPhoneTemplates = data.data;
+                if (result.success && result.data.success) {
+                    globalPhoneTemplates = result.data.data;
                     console.log('成功加载手机号模板:', globalPhoneTemplates.length, '个');
                     updatePhoneTemplateSelect();
                 } else {
-                    console.error('加载手机号模板失败:', data?.message);
+                    const errorMsg = result.data?.message || result.error || '未知错误';
+                    console.error('加载手机号模板失败:', errorMsg);
                     // 显示错误信息到页面
                     const phoneSelect = document.getElementById('phoneTemplate');
                     if (phoneSelect) {
-                        phoneSelect.innerHTML = '<option value="" disabled>加载失败: ' + (data?.message || '未知错误') + '</option>';
+                        phoneSelect.innerHTML = '<option value="" disabled>加载失败: ' + errorMsg + '</option>';
                     }
                 }
             } catch (error) {
@@ -2616,6 +2615,13 @@
                 
                 const response = await fetch(url, finalOptions);
                 
+                // 检查认证错误
+                if (response.status === 401 || response.status === 403) {
+                    console.warn('认证失败，重定向到登录页面');
+                    window.location.href = '/login';
+                    return { success: false, error: '认证失败，请重新登录' };
+                }
+                
                 if (!response.ok) {
                     throw new Error(`HTTP错误: ${response.status} ${response.statusText}`);
                 }
@@ -2625,6 +2631,12 @@
                 
             } catch (error) {
                 console.error(`获取数据失败 (${url}):`, error);
+                // 如果是网络错误或其他错误，也检查是否可能是认证问题
+                if (error.message.includes('401') || error.message.includes('403') || error.message.includes('Unauthorized')) {
+                    console.warn('可能的认证错误，重定向到登录页面');
+                    window.location.href = '/login';
+                    return { success: false, error: '认证失败，请重新登录' };
+                }
                 return { success: false, error: error.message };
             }
         }
@@ -3735,6 +3747,17 @@
             document.removeEventListener('mouseup', stopResize);
             document.body.style.userSelect = '';
         }
+        
+        // 全局错误处理
+        window.addEventListener('unhandledrejection', function(event) {
+            console.error('未处理的Promise拒绝:', event.reason);
+            if (event.reason && (event.reason.message || '').includes('401') || 
+                (event.reason.message || '').includes('403') || 
+                (event.reason.message || '').includes('Unauthorized')) {
+                console.warn('检测到认证错误，重定向到登录页面');
+                window.location.href = '/login';
+            }
+        });
         
         // 当VNC模态框显示时初始化拖拽功能
         document.addEventListener('DOMContentLoaded', function() {
