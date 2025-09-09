@@ -1336,29 +1336,26 @@
                 return;
             }
             
-            // 使用后端分页信息或前端计算
-            let startIndex, endIndex;
+            // 更新记录显示信息
             if (pagination) {
-                startIndex = pagination.start_index;
-                endIndex = pagination.end_index;
+                document.getElementById('startRecord').textContent = pagination.start_index + 1;
+                document.getElementById('endRecord').textContent = pagination.end_index;
+                document.getElementById('totalRecords').textContent = pagination.total_count;
             } else {
-                startIndex = (page - 1) * pageSize;
-                endIndex = Math.min(startIndex + pageSize, totalVMs.length);
+                const startIndex = (page - 1) * pageSize;
+                const endIndex = Math.min(startIndex + pageSize, totalVMs.length);
+                document.getElementById('startRecord').textContent = totalVMs.length > 0 ? startIndex + 1 : 0;
+                document.getElementById('endRecord').textContent = endIndex;
+                document.getElementById('totalRecords').textContent = totalVMs.length;
             }
             
-            // 更新记录显示信息
-            document.getElementById('startRecord').textContent = totalVMs.length > 0 ? startIndex + 1 : 0;
-            document.getElementById('endRecord').textContent = endIndex;
-            document.getElementById('totalRecords').textContent = pagination ? pagination.total_count : totalVMs.length;
-            
-            // 获取当前页面显示的虚拟机
+            // 直接渲染当前页的虚拟机数据（totalVMs已经是当前页的数据）
             const currentPageVMs = [];
             totalVMs.forEach((vm, index) => {
-                if (index >= startIndex && index < endIndex) {
-                    currentPageVMs.push(vm);
-                    const row = document.createElement('tr');
-                    const isSelected = selectedVMs.has(vm.name);
-                    row.setAttribute('data-vm-name', vm.name);
+                currentPageVMs.push(vm);
+                const row = document.createElement('tr');
+                const isSelected = selectedVMs.has(vm.name);
+                row.setAttribute('data-vm-name', vm.name);
                 row.innerHTML = `
                     <td>
                         <input type="checkbox" class="vm-checkbox" value="${vm.name}" onchange="toggleVMSelection('${vm.name}')" ${isSelected ? 'checked' : ''}>
@@ -1454,7 +1451,7 @@
                 `;
                     tbody.appendChild(row);
                 }
-            });
+            );
             
             // 更新全选状态
             updateSelectAllState();

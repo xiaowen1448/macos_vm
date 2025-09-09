@@ -1039,7 +1039,7 @@
         function displayMessageRecords(records) {
             globalMessageRecords = records || [];
             currentPage = 1;
-            pageSize = parseInt(document.getElementById('pageSizeSelect').value) || 20;
+            pageSize = parseInt(document.getElementById('recordsPageSizeSelect').value) || 20;
             
             if (globalMessageRecords.length === 0) {
                 const modalBody = document.querySelector('#messageRecordsModal .modal-body');
@@ -1118,6 +1118,9 @@
             modalBody.innerHTML = tableHtml;
             updateRecordsInfo(globalMessageRecords.length, startIndex + 1, endIndex);
             updatePagination(globalMessageRecords.length);
+            
+            // 重新绑定分页事件（因为分页HTML被重新生成）
+            setupPaginationEvents();
         }
         
         // 更新记录信息
@@ -1191,15 +1194,26 @@
         
         // 设置分页事件
         function setupPaginationEvents() {
+            // 移除已有的事件监听器
+            const pageSizeSelect = document.getElementById('recordsPageSizeSelect');
+            const pagination = document.getElementById('recordsPagination');
+            
+            // 克隆元素来移除所有事件监听器
+            const newPageSizeSelect = pageSizeSelect.cloneNode(true);
+            const newPagination = pagination.cloneNode(true);
+            
+            pageSizeSelect.parentNode.replaceChild(newPageSizeSelect, pageSizeSelect);
+            pagination.parentNode.replaceChild(newPagination, pagination);
+            
             // 分页大小改变事件
-            document.getElementById('recordsPageSizeSelect').addEventListener('change', function() {
+            newPageSizeSelect.addEventListener('change', function() {
                 pageSize = parseInt(this.value);
                 currentPage = 1;
                 renderRecordsPage();
             });
             
             // 分页点击事件
-            document.getElementById('recordsPagination').addEventListener('click', function(e) {
+            newPagination.addEventListener('click', function(e) {
                 e.preventDefault();
                 if (e.target.tagName === 'A' && e.target.dataset.page) {
                     const newPage = parseInt(e.target.dataset.page);
