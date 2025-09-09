@@ -1033,7 +1033,7 @@
         // 全局变量存储发信记录数据
         let globalMessageRecords = [];
         let currentPage = 1;
-        let pageSize = 20;
+        let pageSize = 5;
         
         // 显示发信记录
         function displayMessageRecords(records) {
@@ -1056,6 +1056,12 @@
         
         // 渲染当前页的记录
         function renderRecordsPage() {
+            // 同步分页大小选择器的值
+            const pageSizeSelect = document.getElementById('recordsPageSizeSelect');
+            if (pageSizeSelect && pageSizeSelect.value != pageSize) {
+                pageSizeSelect.value = pageSize;
+            }
+            
             const modalBody = document.querySelector('#messageRecordsModal .modal-body');
             const startIndex = (currentPage - 1) * pageSize;
             const endIndex = Math.min(startIndex + pageSize, globalMessageRecords.length);
@@ -1146,13 +1152,23 @@
             let paginationHtml = '';
             
             // 上一页按钮
-            paginationHtml += `
-                <li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
-                    <a class="page-link" href="#" data-page="${currentPage - 1}">
-                        <i class="fas fa-chevron-left"></i>
-                    </a>
-                </li>
-            `;
+            if (currentPage === 1) {
+                paginationHtml += `
+                    <li class="page-item disabled">
+                        <a class="page-link">
+                           上一页
+                        </a>
+                    </li>
+                `;
+            } else {
+                paginationHtml += `
+                    <li class="page-item">
+                        <a class="page-link" href="#" data-page="${currentPage - 1}">
+                             上一页
+                        </a>
+                    </li>
+                `;
+            }
             
             // 页码按钮
             const startPage = Math.max(1, currentPage - 2);
@@ -1181,48 +1197,57 @@
             }
             
             // 下一页按钮
-            paginationHtml += `
-                <li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
-                    <a class="page-link" href="#" data-page="${currentPage + 1}">
-                        <i class="fas fa-chevron-right"></i>
-                    </a>
-                </li>
-            `;
+            if (currentPage === totalPages) {
+                paginationHtml += `
+                    <li class="page-item disabled">
+                        <a class="page-link">下一页</a>
+                    </li>
+                `;
+            } else {
+                paginationHtml += `
+                    <li class="page-item">
+                        <a class="page-link" href="#" data-page="${currentPage + 1}"> 下一页 
+                             </a>
+                    </li>
+                `;
+            }
             
             pagination.innerHTML = paginationHtml;
         }
         
         // 设置分页事件
         function setupPaginationEvents() {
-            // 移除已有的事件监听器
-            const pageSizeSelect = document.getElementById('recordsPageSizeSelect');
-            const pagination = document.getElementById('recordsPagination');
-            
-            // 克隆元素来移除所有事件监听器
-            const newPageSizeSelect = pageSizeSelect.cloneNode(true);
-            const newPagination = pagination.cloneNode(true);
-            
-            pageSizeSelect.parentNode.replaceChild(newPageSizeSelect, pageSizeSelect);
-            pagination.parentNode.replaceChild(newPagination, pagination);
-            
             // 分页大小改变事件
-            newPageSizeSelect.addEventListener('change', function() {
-                pageSize = parseInt(this.value);
-                currentPage = 1;
-                renderRecordsPage();
-            });
+            const pageSizeSelect = document.getElementById('recordsPageSizeSelect');
+            if (pageSizeSelect && !pageSizeSelect.hasAttribute('data-event-bound')) {
+                pageSizeSelect.addEventListener('change', function() {
+                    pageSize = parseInt(this.value);
+                    currentPage = 1;
+                    renderRecordsPage();
+                });
+                pageSizeSelect.setAttribute('data-event-bound', 'true');
+            }
             
-            // 分页点击事件
-            newPagination.addEventListener('click', function(e) {
-                e.preventDefault();
-                if (e.target.tagName === 'A' && e.target.dataset.page) {
-                    const newPage = parseInt(e.target.dataset.page);
-                    if (newPage !== currentPage && newPage > 0 && newPage <= Math.ceil(globalMessageRecords.length / pageSize)) {
-                        currentPage = newPage;
-                        renderRecordsPage();
-                    }
+            // 分页点击事件 - 使用事件委托
+            const pagination = document.getElementById('recordsPagination');
+            if (pagination) {
+                // 移除旧的事件监听器
+                pagination.removeEventListener('click', paginationClickHandler);
+                // 添加新的事件监听器
+                pagination.addEventListener('click', paginationClickHandler);
+            }
+        }
+        
+        // 分页点击处理函数
+        function paginationClickHandler(e) {
+            e.preventDefault();
+            if (e.target.tagName === 'A' && e.target.dataset.page) {
+                const newPage = parseInt(e.target.dataset.page);
+                if (newPage !== currentPage && newPage > 0 && newPage <= Math.ceil(globalMessageRecords.length / pageSize)) {
+                    currentPage = newPage;
+                    renderRecordsPage();
                 }
-            });
+            }
         }
         
         // 设置导出事件
