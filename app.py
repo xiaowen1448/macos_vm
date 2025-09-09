@@ -5008,7 +5008,7 @@ def api_vm_add_permissions():
         
         logger.debug("SSH互信检查通过")
         
-        # 执行chmod命令
+        # 执行chmod命令 
         success, message = execute_chmod_scripts(vm_ip, username, script_names)
         
         if success:
@@ -5232,13 +5232,13 @@ def execute_chmod_scripts(ip, username, script_names=None):
         # 根据传入的脚本名决定执行方式
         if script_names and len(script_names) > 0:
             # 为指定脚本添加执行权限
-            commands = ["cd ~"]  # 切换到用户家目录
+            commands = [f"cd {script_remote_path}"]  # 切换到用户脚本上传目录
             
             for script_name in script_names:
                 # 确保脚本名以.sh结尾
                 if not script_name.endswith('.sh'):
                     script_name += '.sh'
-                commands.append(f"chmod +x {script_name}")
+                commands.append(f"chmod +x {script_remote_path}{script_name}")
             
             # 列出指定脚本的权限
             script_list = " ".join([name if name.endswith('.sh') else name + '.sh' for name in script_names])
@@ -5248,9 +5248,9 @@ def execute_chmod_scripts(ip, username, script_names=None):
         else:
             # 为所有sh脚本添加执行权限
             commands = [
-                "cd ~",  # 切换到用户家目录
-                "chmod +x *.sh",  # 为所有sh脚本添加执行权限
-                "ls -la *.sh 2>/dev/null || echo '没有找到.sh文件'"  # 列出所有sh文件及其权限
+                f"cd {script_remote_path}",  # 切换到用户家目录
+                f"chmod +x {script_remote_path}*.sh",  # 为所有sh脚本添加执行权限
+                f"ls -la {script_remote_path}*.sh 2>/dev/null || echo '没有找到.sh文件'"  # 列出所有sh文件及其权限
             ]
             logger.debug("为所有.sh文件添加执行权限")
         
@@ -5289,7 +5289,7 @@ def execute_chmod_scripts(ip, username, script_names=None):
             if script_names and len(script_names) > 0:
                 message = f"成功为指定脚本添加执行权限: {', '.join(script_names)}\n"
             else:
-                message = "成功为家目录下的所有.sh文件添加执行权限\n"
+                message = "成功为目录下的所有.sh文件添加执行权限\n"
             
             if ls_result['output'] and ls_result['output'] != '没有找到.sh文件' and ls_result['output'] != '没有找到指定的脚本文件':
                 message += f"文件列表:\n{ls_result['output']}"
