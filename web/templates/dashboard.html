@@ -495,11 +495,6 @@
 
     <!-- 主内容区域 -->
     <div class="main-container">
-        <!-- 欢迎区域 -->
-        <div class="dashboard-header">
-            <h1 class="welcome-text">欢迎回来！</h1>
-            <p class="subtitle">MacOS VM 虚拟机管理平台 - 您的虚拟化解决方案</p>
-        </div>
 
         <!-- 快速操作 -->
         <div class="quick-actions">
@@ -521,9 +516,22 @@
                     <i class="fab fa-apple"></i>
                     Apple ID管理
                 </a>
+                <a href="{{ url_for('phone_management_page') }}" class="quick-action-btn">
+                    <i class="fas fa-phone"></i>
+                    手机号管理
+                  </a>
+                <a href="{{ url_for('client_management_page') }}" class="quick-action-btn">
+                    <i class="fas fa-desktop"></i>
+                    客户端管理
+                </a>
+                <a href="{{ url_for('mass_messaging.mass_messaging_page') }}" class="quick-action-btn">
+                    <i class="fas fa-broadcast-tower"></i>
+                    发信管理
+                </a>
             </div>
         </div>
 
+       
 
         <!-- 系统状态 -->
         <div class="system-status">
