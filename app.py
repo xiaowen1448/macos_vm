@@ -1,19 +1,33 @@
 import json
 import logging
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, Response
-from flask_socketio import SocketIO, emit
-from functools import wraps
-import os
-from datetime import datetime, timedelta
+import ipaddress
+import atexit
+import signal
+import traceback
 import uuid
-import threading
-import time
+import threading 
 import subprocess
-import paramiko
 import base64
 import sys
-import socket
+import socket  
+import secrets
+import shutil
+import csv
+import io
+import os
+import psutil
+import time 
+import paramiko
+import re
+import requests
 from pathlib import Path
+from urllib.parse import urlparse
+from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, Response
+from flask_socketio import SocketIO, emit
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from functools import wraps
 from config import *
 
 try:
@@ -47,7 +61,7 @@ class VMStatusCache:
             cache_key = self.get_cache_key(vm_name, cache_type)
             cache_entry = self.cache.get(cache_key)
             if self.is_cache_valid(cache_entry):
-                logger.debug(f"使用缓存的{cache_type}数据: {vm_name}")
+                #logger.debug(f"使用缓存的{cache_type}数据: {vm_name}")
                 return cache_entry['data']
             return None
     
@@ -65,7 +79,7 @@ class VMStatusCache:
                 'timestamp': time.time(),
                 'timeout': timeout
             }
-            logger.debug(f"缓存{cache_type}数据: {vm_name}")
+           # logger.debug(f"缓存{cache_type}数据: {vm_name}")
     
     def clear_cache(self, vm_name=None, cache_type=None):
         with self.cache_lock:
@@ -132,7 +146,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__, template_folder='web/templates', static_folder='web/static', static_url_path='/static')
-import secrets
 app.secret_key = secrets.token_hex(32)  # 生成随机session密钥
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)  # 设置session过期时间
 
@@ -159,7 +172,6 @@ def clear_sessions_on_startup():
         # 清除session文件（如果使用文件session）
         session_dir = os.path.join(os.path.dirname(__file__), 'flask_session')
         if os.path.exists(session_dir):
-            import shutil
             shutil.rmtree(session_dir)
             os.makedirs(session_dir, exist_ok=True)
             logger.info("已清除所有session文件")
@@ -170,18 +182,10 @@ def clear_sessions_on_startup():
 
 # 在应用启动时执行
 clear_sessions_on_startup()
-
-# 使用全局配置文件中的认证信息
-# USERNAME and PASSWORD are imported from config.py
 VM_DIRS = {
     '10_12': clone_dir,
     'chengpin': vm_chengpin_dir
 }
-
-# 模板虚拟机路径 - 使用全局配置
-# template_dir is imported from config.py
-
-# 全局任务存储
 clone_tasks = {}
 tasks = {}
 websockify_processes = {}  # 存储websockify进程信息
@@ -247,18 +251,17 @@ def check_and_complete_task(task_id):
         if success_vms > 0 and failed_vms == 0:
             task['status'] = 'completed'
             add_task_log(task_id, 'success', f'虚拟机克隆成功！所有虚拟机监控和配置完成！成功: {success_vms}, 失败: {failed_vms}')
-            print(f"[DEBUG] 虚拟机克隆成功！所有虚拟机监控和配置完成！成功: {success_vms}, 失败: {failed_vms}")
+            logger.info(f"[DEBUG] 虚拟机克隆成功！所有虚拟机监控和配置完成！成功: {success_vms}, 失败: {failed_vms}")
         elif success_vms > 0 and failed_vms > 0:
             task['status'] = 'completed_with_errors'
             add_task_log(task_id, 'warning', f'虚拟机克隆部分成功。成功: {success_vms}, 失败: {failed_vms}')
-            print(f"[DEBUG] 虚拟机克隆部分成功。成功: {success_vms}, 失败: {failed_vms}")
+            logger.info(f"[DEBUG] 虚拟机克隆部分成功。成功: {success_vms}, 失败: {failed_vms}")
         else:
             task['status'] = 'failed'
             add_task_log(task_id, 'error', f'虚拟机克隆失败。成功: {success_vms}, 失败: {failed_vms}')
-            print(f"[DEBUG] 虚拟机克隆失败。成功: {success_vms}, 失败: {failed_vms}")
+            logger.info(f"[DEBUG] 虚拟机克隆失败。成功: {success_vms}, 失败: {failed_vms}")
         
         # 强制刷新，确保前端能立即收到更新
-        import sys
         sys.stdout.flush()
 
 def monitor_vm_and_configure(task_id, vm_name, vm_path, wuma_config_file, max_wait_time=600):
@@ -300,10 +303,7 @@ def monitor_vm_and_configure(task_id, vm_name, vm_path, wuma_config_file, max_wa
                     progress_data['wuma_progress'] = task['monitoring']['wuma_progress']
                     
                 task['logs'].append(progress_data)
-                # print(f"[DEBUG] 发送监控进度更新: {progress_data}")
-                
-                # 强制刷新，确保前端能立即收到更新
-                import sys
+                # logger.info(f"[DEBUG] 发送监控进度更新: {progress_data}")
                 sys.stdout.flush()
     
     try:
@@ -315,44 +315,25 @@ def monitor_vm_and_configure(task_id, vm_name, vm_path, wuma_config_file, max_wa
                     # add_task_log(task_id, 'debug', f'虚拟机 {vm_name} IP获取失败，等待5秒后重试...')
                     time.sleep(5)
                     continue
-                
-                #add_task_log(task_id, 'info', f'虚拟机 {vm_name} IP: {vm_ip}')
-                
+
                 # 检测IP存活
                 if not ping_vm_ip(vm_ip):
                     # add_task_log(task_id, 'debug', f'虚拟机 {vm_name} ({vm_ip}) ping不通，等待5秒后重试...')
                     time.sleep(5)
                     continue
-                
-              #  add_task_log(task_id, 'info', f'虚拟机 {vm_name} ({vm_ip}) 开始检测虚拟机网络...')
-                
-                # 检测SSH连通性
+ 
                 if not check_ssh_connectivity(vm_ip, vm_username):
                     # add_task_log(task_id, 'debug', f'虚拟机 {vm_name} ({vm_ip}) SSH未就绪，等待10秒后重试...')
                     time.sleep(10)
                     continue
-                
-              #  add_task_log(task_id, 'success', f'虚拟机 {vm_name} ({vm_ip}) 开始配置五码...')
-                
-                # SSH连通后，执行五码配置和JU值更改流程
                 try:
-                   # add_task_log(task_id, 'info', f'开始为虚拟机 {vm_name} 执行五码配置...')
-                    # print(f"[DEBUG] 开始为虚拟机 {vm_name} 执行五码配置，配置文件: {wuma_config_file}")
-                    
                     result = batch_change_wuma_core([vm_name], wuma_config_file, task_id)
-                    # print(f"[DEBUG] 五码配置结果: {result}")
-                    
+
                     if isinstance(result, dict) and result.get('status') == 'success':
-                      #  add_task_log(task_id, 'success', f'虚拟机 {vm_name} 五码配置成功')
-                      #  print(f"[DEBUG] 虚拟机 {vm_name} 五码配置成功")
-                        
-                        # 五码配置成功后，自动执行JU值更改
-                      #  add_task_log(task_id, 'info', f'开始为虚拟机 {vm_name} 执行JU值更改...')
-                        print(f"[DEBUG] 开始为虚拟机 {vm_name} 执行JU值更改")
+                        logger.info(f"[DEBUG] 开始为虚拟机 {vm_name} 执行JU值更改")
                         
                         # 更新五码进度 - 使用线程锁确保线程安全
                         if task_id in clone_tasks and 'monitoring' in clone_tasks[task_id]:
-                            import threading
                             # 获取或创建任务锁
                             if not hasattr(clone_tasks[task_id], '_lock'):
                                 clone_tasks[task_id]['_lock'] = threading.Lock()
@@ -370,23 +351,14 @@ def monitor_vm_and_configure(task_id, vm_name, vm_path, wuma_config_file, max_wa
                         
                         try:
                             # 执行test.sh脚本更改JU值
-                            test_cmd = f'ssh -o StrictHostKeyChecking=no {vm_username}@{vm_ip} "{sh_script_remote_path}/test.sh"'
-                            print(f"[DEBUG] 执行JU值更改命令: {test_cmd}")
-                         #   add_task_log(task_id, 'info', f'执行JU值更改脚本: {vm_name}')
-                            
+                            test_cmd = f'ssh -o StrictHostKeyChecking=no {vm_username}@{vm_ip} "{sh_script_remote_path}test.sh"'
                             test_result = subprocess.run(test_cmd, shell=True, capture_output=True, text=True, timeout=60)
-                            
                             if test_result.returncode == 0:
                                 add_task_log(task_id, 'success', f'虚拟机 {vm_name} JU值更改成功')
-                               # print(f"[DEBUG] 虚拟机 {vm_name} JU值更改成功")
-                                
-                                # JU值更改成功后，重启虚拟机
                                 add_task_log(task_id, 'info', f'开始重启虚拟机 {vm_name}...')
-                                #print(f"[DEBUG] 开始重启虚拟机 {vm_name}")
-                                
+                                #logger.info(f"[DEBUG] 开始重启虚拟机 {vm_name}")
                                 # 更新重启进度 - 使用线程锁确保线程安全
                                 if task_id in clone_tasks and 'monitoring' in clone_tasks[task_id]:
-                                    import threading
                                     # 获取或创建任务锁
                                     if not hasattr(clone_tasks[task_id], '_lock'):
                                         clone_tasks[task_id]['_lock'] = threading.Lock()
@@ -406,16 +378,13 @@ def monitor_vm_and_configure(task_id, vm_name, vm_path, wuma_config_file, max_wa
                                 
                                 # 重启虚拟机
                                 reset_cmd = [vmrun_path, 'reset', vm_path]
-                               # print(f"[DEBUG] 开始重启虚拟机 {vm_name}")
-                               # print(f"[DEBUG] 重启虚拟机命令: {' '.join(reset_cmd)}")
-                                
                                 try:
                                     # 增加超时时间到120秒，因为虚拟机重启可能需要较长时间
                                     reset_result = subprocess.run(reset_cmd, capture_output=True, timeout=200)
                                     
                                     if reset_result.returncode == 0:
                                         add_task_log(task_id, 'success', f'虚拟机 {vm_name} 重启完成，五码和JU值配置全部完成')
-                                        print(f"[DEBUG] 虚拟机 {vm_name} 重启完成，五码和JU值配置全部完成")
+                                        logger.info(f"[DEBUG] 虚拟机 {vm_name} 重启完成，五码和JU值配置全部完成")
                                         
                                         update_monitoring_progress(success=True)
                                         
@@ -424,7 +393,7 @@ def monitor_vm_and_configure(task_id, vm_name, vm_path, wuma_config_file, max_wa
                                         return True
                                     else:
                                         add_task_log(task_id, 'error', f'虚拟机 {vm_name} 重启失败: {reset_result.stderr.decode("utf-8", errors="ignore")}')
-                                        print(f"[DEBUG] 虚拟机 {vm_name} 重启失败: {reset_result.stderr.decode('utf-8', errors='ignore')}")
+                                        logger.info(f"[DEBUG] 虚拟机 {vm_name} 重启失败: {reset_result.stderr.decode('utf-8', errors='ignore')}")
                                         update_monitoring_progress(failed=True)
                                         
                                         # 检查是否所有虚拟机都已完成监控
@@ -434,25 +403,20 @@ def monitor_vm_and_configure(task_id, vm_name, vm_path, wuma_config_file, max_wa
                                 except subprocess.TimeoutExpired:
                                     # 重启超时，但仍然标记为成功，因为reset命令已经发出
                                     add_task_log(task_id, 'warning', f'虚拟机 {vm_name} 重启命令超时，但reset命令已执行')
-                                    print(f"[DEBUG] 虚拟机 {vm_name} 重启命令超时，但reset命令已执行")
-                                    
+                                    logger.info(f"[DEBUG] 虚拟机 {vm_name} 重启命令超时，但reset命令已执行")
                                     update_monitoring_progress(success=True)
-                                    
-                                    # 检查是否所有虚拟机都已完成监控
                                     check_and_complete_task(task_id)
                                     return True
                                     
                                 except Exception as reset_e:
                                     add_task_log(task_id, 'error', f'虚拟机 {vm_name} 重启异常: {str(reset_e)}')
-                                    print(f"[DEBUG] 虚拟机 {vm_name} 重启异常: {str(reset_e)}")
+                                    logger.info(f"[DEBUG] 虚拟机 {vm_name} 重启异常: {str(reset_e)}")
                                     update_monitoring_progress(failed=True)
-                                    
-                                    # 检查是否所有虚拟机都已完成监控
                                     check_and_complete_task(task_id)
                                     return False
                             else:
                                 add_task_log(task_id, 'error', f'虚拟机 {vm_name} JU值更改失败: {test_result.stderr}')
-                                print(f"[DEBUG] 虚拟机 {vm_name} JU值更改失败: {test_result.stderr}")
+                                logger.info(f"[DEBUG] 虚拟机 {vm_name} JU值更改失败: {test_result.stderr}")
                                 update_monitoring_progress(failed=True)
                                 
                                 # 检查是否所有虚拟机都已完成监控
@@ -461,16 +425,14 @@ def monitor_vm_and_configure(task_id, vm_name, vm_path, wuma_config_file, max_wa
                                 
                         except Exception as ju_e:
                             add_task_log(task_id, 'error', f'虚拟机 {vm_name} JU值更改异常: {str(ju_e)}')
-                            print(f"[DEBUG] 虚拟机 {vm_name} JU值更改异常: {str(ju_e)}")
+                            logger.info(f"[DEBUG] 虚拟机 {vm_name} JU值更改异常: {str(ju_e)}")
                             update_monitoring_progress(failed=True)
-                            
-                            # 检查是否所有虚拟机都已完成监控
                             check_and_complete_task(task_id)
                             return False
                     else:
                         error_msg = result.get('message', '未知错误') if isinstance(result, dict) else '配置失败'
                         add_task_log(task_id, 'error', f'虚拟机 {vm_name} 五码配置失败: {error_msg}')
-                        print(f"[DEBUG] 虚拟机 {vm_name} 五码配置失败: {error_msg}")
+                        logger.info(f"[DEBUG] 虚拟机 {vm_name} 五码配置失败: {error_msg}")
                         update_monitoring_progress(failed=True)
                         
                         # 检查是否所有虚拟机都已完成监控
@@ -479,10 +441,10 @@ def monitor_vm_and_configure(task_id, vm_name, vm_path, wuma_config_file, max_wa
                 except Exception as e:
                     error_detail = f'虚拟机 {vm_name} 五码配置异常: {str(e)}'
                     add_task_log(task_id, 'error', error_detail)
-                    print(f"[DEBUG] {error_detail}")
-                    print(f"[DEBUG] 异常详情: {type(e).__name__}: {str(e)}")
-                    import traceback
-                    print(f"[DEBUG] 异常堆栈: {traceback.format_exc()}")
+                    logger.info(f"[DEBUG] {error_detail}")
+                    logger.info(f"[DEBUG] 异常详情: {type(e).__name__}: {str(e)}")
+
+                    logger.info(f"[DEBUG] 异常堆栈: {traceback.format_exc()}")
                     update_monitoring_progress(failed=True)
                     
                     # 检查是否所有虚拟机都已完成监控
@@ -503,8 +465,6 @@ def monitor_vm_and_configure(task_id, vm_name, vm_path, wuma_config_file, max_wa
     except Exception as e:
         add_task_log(task_id, 'error', f'虚拟机 {vm_name} 监控线程异常: {str(e)}')
         update_monitoring_progress(failed=True)
-        
-        # 检查是否所有虚拟机都已完成监控
         check_and_complete_task(task_id)
         return False
 
@@ -568,9 +528,6 @@ def scan_scripts_from_directories():
                             'type': script_type,
                             'directory': scripts_dir
                         })
-                        
-                      #  logger.debug(f"找到脚本文件: {filename}, 类型: {script_type}, 大小: {size_str}")
-                        
                     except Exception as e:
                         logger.error(f"处理脚本文件 {filename} 时出错: {str(e)}")
                         continue
@@ -595,8 +552,6 @@ def get_vm_list_from_directory(vm_dir, vm_type_name):
         stats = {'total': 0, 'running': 0, 'stopped': 0, 'suspended': 0, 'online': 0}
         
         logger.debug(f"开始扫描{vm_type_name}虚拟机目录: {vm_dir}")
-        
-        # 批量获取运行中的虚拟机列表（只执行一次vmrun命令）
         running_vms = set()
         try:
             vmrun_path = get_vmrun_path()
@@ -607,7 +562,7 @@ def get_vm_list_from_directory(vm_dir, vm_type_name):
             
             if result.returncode == 0:
                 running_vms = set(result.stdout.strip().split('\n')[1:])  # 跳过标题行
-                logger.debug(f"获取到运行中虚拟机: {len(running_vms)} 个")
+                #logger.debug(f"获取到运行中虚拟机: {len(running_vms)} 个")
             else:
                 logger.warning(f"vmrun命令执行失败: {result.stderr}")
         except Exception as e:
@@ -633,10 +588,7 @@ def get_vm_list_from_directory(vm_dir, vm_type_name):
                             vmss_files = [f for f in os.listdir(vm_dir_path) if f.endswith('.vmss')]
                             if vmss_files:
                                 vm_status = 'suspended'
-                        
-                      #  logger.debug(f"找到{vm_type_name}虚拟机: {vm_name}, 状态: {vm_status}")
-                        
-                        # 构建虚拟机基本信息
+
                         vm_info = {
                             'name': vm_name,
                             'path': vm_path,
@@ -663,16 +615,12 @@ def get_vm_list_from_directory(vm_dir, vm_type_name):
                             stats['suspended'] += 1
         else:
             logger.warning(f"{vm_type_name}虚拟机目录不存在: {vm_dir}")
-        
-        # 对虚拟机进行排序：运行中的虚拟机排在前面
         vms.sort(key=lambda vm: (vm['status'] != 'running', vm['name']))
-        
         # 计算分页
         total_count = len(vms)
         total_pages = (total_count + page_size - 1) // page_size
         start_index = (page - 1) * page_size
         end_index = min(start_index + page_size, total_count)
-        
         # 分页数据
         paged_vms = vms[start_index:end_index] if vms else []
         
@@ -701,7 +649,7 @@ def get_vm_list_from_directory(vm_dir, vm_type_name):
 # 通用函数 - 获取五码信息
 def get_wuma_info_generic(vm_type_name):
     """获取虚拟机五码信息的通用函数"""
-    logger.info(f"收到获取{vm_type_name}虚拟机五码信息请求")
+  #  logger.info(f"收到获取{vm_type_name}虚拟机五码信息请求")
     try:
         data = request.get_json()
         vm_name = data.get('vm_name')
@@ -715,7 +663,7 @@ def get_wuma_info_generic(vm_type_name):
         # 首先检查缓存
         cached_result = vm_cache.get_cached_status(vm_name, 'wuma_info')
         if cached_result:
-            logger.debug(f"使用缓存的五码信息: {vm_name}")
+            #logger.debug(f"使用缓存的五码信息: {vm_name}")
             return jsonify(cached_result)
         
         # 获取虚拟机IP（不执行强制重启）
@@ -760,7 +708,7 @@ def get_wuma_info_generic(vm_type_name):
 # 通用函数 - 获取JU值信息
 def get_ju_info_generic(vm_type_name):
     """获取虚拟机JU值信息的通用函数"""
-    logger.info(f"收到获取{vm_type_name}虚拟机JU值信息请求")
+   # logger.info(f"收到获取{vm_type_name}虚拟机JU值信息请求")
     try:
         data = request.get_json()
         vm_name = data.get('vm_name')
@@ -774,7 +722,7 @@ def get_ju_info_generic(vm_type_name):
         # 首先检查缓存
         cached_result = vm_cache.get_cached_status(vm_name, 'ju_info')
         if cached_result:
-            logger.debug(f"使用缓存的JU值信息: {vm_name}")
+           # logger.debug(f"使用缓存的JU值信息: {vm_name}")
             return jsonify(cached_result)
         
         # 获取虚拟机IP（不执行强制重启）
@@ -971,7 +919,7 @@ def delete_vm_generic(vm_type_name, vm_dir):
 # 通用函数 - 获取虚拟机详细信息
 def get_vm_info_generic(vm_name, vm_type_name, vm_dir):
     """获取虚拟机详细信息的通用函数"""
-    logger.info(f"收到获取{vm_type_name}虚拟机详细信息请求: {vm_name}")
+    #logger.info(f"收到获取{vm_type_name}虚拟机详细信息请求: {vm_name}")
     try:
         # 查找虚拟机文件
         vm_file = find_vm_file(vm_name)
@@ -1086,7 +1034,7 @@ def send_script_generic(vm_type_name):
                 f"{vm_username}@{vm_info['ip']}:{dir_script_remote_path}{script_name}"
             ]
             
-            logger.debug(f"执行SCP命令: {' '.join(scp_cmd)}")
+           # logger.debug(f"执行SCP命令: {' '.join(scp_cmd)}")
             result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=30, encoding="utf-8")
             
             if result.returncode == 0:
@@ -1175,7 +1123,7 @@ def add_permissions_generic(vm_type_name):
 # 通用函数 - 获取IP状态
 def get_ip_status_generic(vm_name, vm_type_name, vm_dir):
     """获取虚拟机IP状态的通用函数"""
-    logger.info(f"收到获取{vm_type_name}虚拟机IP状态请求: {vm_name}")
+   # logger.info(f"收到获取{vm_type_name}虚拟机IP状态请求: {vm_name}")
     try:
         # 查找虚拟机文件
         vm_file = find_vm_file(vm_name)
@@ -1426,7 +1374,7 @@ def api_vm_info_list():
             if result.returncode == 0:
                 running_vms = set(result.stdout.strip().split('\n')[1:])
         except Exception as e:
-            print(f"[DEBUG] 获取运行中虚拟机列表失败: {str(e)}")
+            logger.info(f"[DEBUG] 获取运行中虚拟机列表失败: {str(e)}")
         
         if os.path.exists(vm_dir):
             for root, dirs, files in os.walk(vm_dir):
@@ -1469,7 +1417,7 @@ def api_vm_info_list():
         })
         
     except Exception as e:
-        print(f"[DEBUG] 获取虚拟机信息列表失败: {str(e)}")
+        logger.info(f"[DEBUG] 获取虚拟机信息列表失败: {str(e)}")
         return jsonify({
             'success': False,
             'message': f'获取虚拟机信息失败: {str(e)}'
@@ -1660,8 +1608,8 @@ def api_vnc_connect():
         if not client_ip:
             return jsonify({'success': False, 'message': '客户端IP不能为空'})
         
-        logger.info(f"=== VNC连接请求开始 ===")
-        logger.info(f"请求连接的客户端IP: {client_ip}")
+       # logger.info(f"=== VNC连接请求开始 ===")
+      #  logger.info(f"请求连接的客户端IP: {client_ip}")
         
         # 查找对应的VMX文件
         vmx_file = find_vmx_file_by_ip(client_ip)
@@ -1672,8 +1620,8 @@ def api_vnc_connect():
         
         # 提取虚拟机名称
         vm_name = os.path.basename(os.path.dirname(vmx_file))
-        logger.info(f"找到匹配的虚拟机: {vm_name}")
-        logger.info(f"VMX配置文件路径: {vmx_file}")
+       # logger.info(f"找到匹配的虚拟机: {vm_name}")
+       # logger.info(f"VMX配置文件路径: {vmx_file}")
         
         # 读取VNC配置
         vnc_config = read_vnc_config_from_vmx(vmx_file)
@@ -1684,7 +1632,7 @@ def api_vnc_connect():
         
         logger.info(f"VNC配置信息:")
         logger.info(f"  - VNC端口: {vnc_config['port']}")
-        logger.info(f"  - VNC密码: {'已设置' if vnc_config['password'] else '未设置'}")
+        #logger.info(f"  - VNC密码: {'已设置' if vnc_config['password'] else '未设置'}")
         
         # 启动websockify进程
         websocket_port = start_websockify(client_ip, vnc_config['port'])
@@ -1694,11 +1642,11 @@ def api_vnc_connect():
             return jsonify({'success': False, 'message': 'websockify启动失败'})
         
         logger.info(f"websockify启动成功:")
-        logger.info(f"  - 客户端IP: {client_ip}")
-        logger.info(f"  - 虚拟机名称: {vm_name}")
-        logger.info(f"  - VMX文件: {vmx_file}")
-        logger.info(f"  - VNC端口: {vnc_config['port']}")
-        logger.info(f"  - WebSocket端口: {websocket_port}")
+       # logger.info(f"  - 客户端IP: {client_ip}")
+       # logger.info(f"  - 虚拟机名称: {vm_name}")
+       # logger.info(f"  - VMX文件: {vmx_file}")
+       # #logger.info(f"  - VNC端口: {vnc_config['port']}")
+        #logger.info(f"  - WebSocket端口: {websocket_port}")
         logger.info(f"=== VNC连接请求结束 (成功) ===")
         
         return jsonify({
@@ -1749,7 +1697,7 @@ def find_vmx_file_by_ip(target_ip):
                     vm_ip = ip_result.stdout.strip()
                     # 如果IP匹配且有VNC配置，返回这个VMX文件
                     if vm_ip == target_ip and has_vnc_config(vm_path):
-                        logger.info(f"找到匹配IP {target_ip} 的VMX文件: {vm_path}")
+                      #  logger.info(f"找到匹配IP {target_ip} 的VMX文件: {vm_path}")
                         return vm_path
                         
             except Exception as e:
@@ -1878,7 +1826,7 @@ def start_websockify(client_ip, vnc_port):
             f'localhost:{vnc_port}'
         ]
         
-        logger.info(f"启动websockify命令: {' '.join(cmd)}")
+       # logger.info(f"启动websockify命令: {' '.join(cmd)}")
         
         process = subprocess.Popen(
             cmd,
@@ -1900,7 +1848,7 @@ def start_websockify(client_ip, vnc_port):
         
         # 检查进程是否正常运行
         if process.poll() is None:
-            logger.info(f"websockify进程启动成功: PID={process.pid}, WebSocket端口={websocket_port}")
+           # logger.info(f"websockify进程启动成功: PID={process.pid}, WebSocket端口={websocket_port}")
             return websocket_port
         else:
             logger.error(f"websockify进程启动失败: 返回码={process.returncode}")
@@ -1959,7 +1907,6 @@ def cleanup_all_websockify():
         websockify_processes.clear()
         
         # 使用psutil查找并终止所有websockify进程
-        import psutil
         killed_processes = []
         
         for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
@@ -2047,8 +1994,6 @@ def cleanup_all_vnc_connections():
 
 def get_available_websocket_port():
     """获取可用的WebSocket端口"""
-    import socket
-    
     # 从6080开始尝试端口
     start_port = 6080
     max_attempts = 100
@@ -2434,13 +2379,13 @@ def clone_vm_worker(task_id):
     params = task['params']
     
     # 调试打印：任务参数
-    print(f"[DEBUG] 任务ID: {task_id}")
-    print(f"[DEBUG] 任务参数: {params}")
+    logger.info(f"[DEBUG] 任务ID: {task_id}")
+    logger.info(f"[DEBUG] 任务参数: {params}")
     
     try:
         # 添加开始日志
         add_task_log(task_id, 'info', f'开始克隆任务: 模板={params["templateVM"]}, 数量={params["cloneCount"]}')
-        print(f"[DEBUG] 开始克隆任务: 模板={params['templateVM']}, 数量={params['cloneCount']}")
+        logger.info(f"[DEBUG] 开始克隆任务: 模板={params['templateVM']}, 数量={params['cloneCount']}")
         
         # 验证模板虚拟机是否存在
         template_vm_name = params['templateVM']
@@ -2465,17 +2410,17 @@ def clone_vm_worker(task_id):
         target_dir = clone_dir  # 使用全局配置中的克隆目录
         os.makedirs(target_dir, exist_ok=True)
        # add_task_log(task_id, 'info', f'目标目录: {target_dir}')
-       # print(f"[DEBUG] 目标目录创建/确认完成")
+       # logger.info(f"[DEBUG] 目标目录创建/确认完成")
         # 创建虚拟机快照（如果启用）
         create_snapshot = params.get('createSnapshot', 'true') == 'true'
         snapshot_name = None
-        print(f"[DEBUG] 是否创建快照: {create_snapshot}")
+        logger.info(f"[DEBUG] 是否创建快照: {create_snapshot}")
         if create_snapshot:
             add_task_log(task_id, 'info', '开始创建虚拟机快照...')
-            print(f"[DEBUG] 开始创建虚拟机快照...")
+            logger.info(f"[DEBUG] 开始创建虚拟机快照...")
             vmrun_path = get_vmrun_path()
-            #print(f"[DEBUG] vmrun路径: {vmrun_path}")
-            print(f"[DEBUG] vmrun是否存在: {os.path.exists(vmrun_path)}")
+            #logger.info(f"[DEBUG] vmrun路径: {vmrun_path}")
+            logger.info(f"[DEBUG] vmrun是否存在: {os.path.exists(vmrun_path)}")
             
             # 生成快照名称
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -2499,28 +2444,28 @@ def clone_vm_worker(task_id):
                 end_time = datetime.now()
                 duration = (end_time - start_time).total_seconds()
                 if result.stderr:
-                    print(f"[DEBUG] 快照命令错误: {result.stderr}")
+                    logger.info(f"[DEBUG] 快照命令错误: {result.stderr}")
                 if result.returncode == 0:
                     add_task_log(task_id, 'success', f'虚拟机快照创建成功: {snapshot_name}')
-                 #   print(f"[DEBUG] 快照创建成功: {snapshot_name}")
+                 #   logger.info(f"[DEBUG] 快照创建成功: {snapshot_name}")
                 else:
                     add_task_log(task_id, 'error', f'虚拟机快照创建失败: {result.stderr}')
-                    print(f"[DEBUG] 快照创建失败: {result.stderr}")
+                    logger.info(f"[DEBUG] 快照创建失败: {result.stderr}")
                     task['status'] = 'failed'
                     return
             except subprocess.TimeoutExpired:
                 add_task_log(task_id, 'error', '虚拟机快照创建超时')
-                print(f"[DEBUG] 快照创建超时")
+                logger.info(f"[DEBUG] 快照创建超时")
                 task['status'] = 'failed'
                 return
             except Exception as e:
                 add_task_log(task_id, 'error', f'虚拟机快照创建时发生错误: {str(e)}')
-                print(f"[DEBUG] 快照创建异常: {str(e)}")
+                logger.info(f"[DEBUG] 快照创建异常: {str(e)}")
                 task['status'] = 'failed'
                 return
         else:
             add_task_log(task_id, 'info', '跳过快照创建，直接开始克隆任务')
-           # print(f"[DEBUG] 跳过快照创建，直接开始克隆任务")
+           # logger.info(f"[DEBUG] 跳过快照创建，直接开始克隆任务")
         config_file = params.get('configPlist')
         wuma_codes = []
         if os.path.exists(config_file):
@@ -2550,42 +2495,42 @@ def clone_vm_worker(task_id):
                         
                         wuma_codes.append(line)
                 
-               # print(f"[DEBUG] 读取到有效五码数量: {len(wuma_codes)}")
+               # logger.info(f"[DEBUG] 读取到有效五码数量: {len(wuma_codes)}")
             except Exception as e:
-                print(f"[DEBUG] 读取五码配置文件失败: {str(e)}")
+                logger.info(f"[DEBUG] 读取五码配置文件失败: {str(e)}")
                 add_task_log(task_id, 'error', f'读取五码配置文件失败: {str(e)}')
                 task['status'] = 'failed'
                 return
         else:
-            print(f"[DEBUG] 五码配置文件不存在: {config_file}")
+            logger.info(f"[DEBUG] 五码配置文件不存在: {config_file}")
             add_task_log(task_id, 'error', f'五码配置文件不存在: {config_file}')
             task['status'] = 'failed'
             return
         
-        print(f"[DEBUG] 找到有效五码数量: {len(wuma_codes)}")
-        print(f"[DEBUG] 五码列表: {wuma_codes[:3]}...")  # 只显示前3个
+        logger.info(f"[DEBUG] 找到有效五码数量: {len(wuma_codes)}")
+        logger.info(f"[DEBUG] 五码列表: {wuma_codes[:3]}...")  # 只显示前3个
         
         # 开始克隆
         clone_count = int(params['cloneCount'])
-       # print(f"[DEBUG] 开始克隆，总数: {clone_count}")
+       # logger.info(f"[DEBUG] 开始克隆，总数: {clone_count}")
         
         # 验证克隆数量与五码数量是否匹配
         if clone_count > len(wuma_codes):
             error_msg = f'克隆数量({clone_count})超过可用五码数量({len(wuma_codes)})，请确保五码数量足够'
             add_task_log(task_id, 'error', error_msg)
-            print(f"[DEBUG] 错误: {error_msg}")
+            logger.info(f"[DEBUG] 错误: {error_msg}")
             task['status'] = 'failed'
             return
         elif clone_count < len(wuma_codes):
             warning_msg = f'五码数量({len(wuma_codes)})多于克隆数量({clone_count})，将使用前{clone_count}个五码'
            # add_task_log(task_id, 'warning', warning_msg)
-            #print(f"[DEBUG] 警告: {warning_msg}")
+            #logger.info(f"[DEBUG] 警告: {warning_msg}")
             # 截取需要的五码数量
             wuma_codes = wuma_codes[:clone_count]
         
         # 生成统一的时间戳，用于所有虚拟机
         unified_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-       # print(f"[DEBUG] 使用统一时间戳: {unified_timestamp}")
+       # logger.info(f"[DEBUG] 使用统一时间戳: {unified_timestamp}")
         
       #  add_task_log(task_id, 'info', f'找到 {len(wuma_codes)} 个有效五码，需要克隆 {clone_count} 个虚拟机，数量匹配验证通过')
         
@@ -2602,7 +2547,7 @@ def clone_vm_worker(task_id):
         
         for i in range(clone_count):
             try:
-              #  print(f"[DEBUG] 开始克隆第 {i+1}/{clone_count} 个虚拟机")
+              #  logger.info(f"[DEBUG] 开始克隆第 {i+1}/{clone_count} 个虚拟机")
                 
                 # 生成虚拟机名称和文件夹名称（使用统一时间戳）
                 timestamp = unified_timestamp
@@ -2610,7 +2555,7 @@ def clone_vm_worker(task_id):
                 if vm_name_pattern == 'custom':
                     vm_name_pattern = params.get('customNamingPattern', 'VM_{timestamp}_{index}')
                 
-              #  print(f"[DEBUG] 虚拟机命名模式: {vm_name_pattern}")
+              #  logger.info(f"[DEBUG] 虚拟机命名模式: {vm_name_pattern}")
                 
                 # 生成虚拟机名称（不包含.vmx扩展名）
                 vm_name_without_ext_generated = vm_name_pattern.replace('{timestamp}', timestamp).replace('{index}', str(i+1)).replace('{vmname}', vm_name_without_ext)
@@ -2621,7 +2566,7 @@ def clone_vm_worker(task_id):
                 
                 # 确保虚拟机文件夹存在
                 os.makedirs(vm_folder_path, exist_ok=True)
-                print(f"[DEBUG] 创建虚拟机文件夹: {vm_folder_path}")
+                logger.info(f"[DEBUG] 创建虚拟机文件夹: {vm_folder_path}")
                 
                 # 生成完整的虚拟机文件路径
                 vm_name = vm_name_without_ext_generated + '.vmx'
@@ -2642,7 +2587,7 @@ def clone_vm_worker(task_id):
                 # 执行克隆命令
                 vmrun_path = get_vmrun_path()
                 
-             #   print(f"[DEBUG] 克隆使用的vmrun路径: {vmrun_path}")
+             #   logger.info(f"[DEBUG] 克隆使用的vmrun路径: {vmrun_path}")
                 
                 # 构建克隆命令
                 if create_snapshot and snapshot_name:
@@ -2657,7 +2602,7 @@ def clone_vm_worker(task_id):
                         snapshot_name
                     ]
                    # add_task_log(task_id, 'info', f'从快照克隆: {snapshot_name}')
-                   # print(f"[DEBUG] 从快照克隆: {snapshot_name}")
+                   # logger.info(f"[DEBUG] 从快照克隆: {snapshot_name}")
                 else:
                     # 直接从模板克隆
                     clone_cmd = [
@@ -2668,7 +2613,7 @@ def clone_vm_worker(task_id):
                         'linked'
                     ]
                 start_time = datetime.now()
-                print(f"[DEBUG] 命令开始时间: {start_time}")
+                logger.info(f"[DEBUG] 命令开始时间: {start_time}")
                 
                 result = subprocess.run(clone_cmd, capture_output=True, text=True, timeout=300)
                 
@@ -2676,7 +2621,7 @@ def clone_vm_worker(task_id):
                 end_time = datetime.now()
                 duration = (end_time - start_time).total_seconds()
                 if result.stderr:
-                    print(f"[DEBUG] 克隆命令错误: {result.stderr}")
+                    logger.info(f"[DEBUG] 克隆命令错误: {result.stderr}")
                 if result.stdout:
                     add_task_log(task_id, 'info', f'命令输出: {result.stdout.strip()}')
                 if result.stderr:
@@ -2684,26 +2629,26 @@ def clone_vm_worker(task_id):
                 
                 if result.returncode == 0:
                   #  add_task_log(task_id, 'success', f'虚拟机 {vm_name} 克隆成功')
-                  #  print(f"[DEBUG] 虚拟机 {vm_name} 克隆成功")
+                  #  logger.info(f"[DEBUG] 虚拟机 {vm_name} 克隆成功")
                     task['stats']['success'] += 1
                     
                     # 更新vmx文件中的displayName
                     vm_display_name = vm_name_without_ext_generated  # 使用虚拟机文件夹名称作为显示名称
                     if update_vmx_display_name(vm_file_path, vm_display_name):
                       #  add_task_log(task_id, 'info', f'虚拟机 {vm_name} 的displayName已更新为: {vm_display_name}')
-                        print(f"[DEBUG] displayName更新成功: {vm_display_name}")
+                        logger.info(f"[DEBUG] displayName更新成功: {vm_display_name}")
                     else:
                        # add_task_log(task_id, 'warning', f'虚拟机 {vm_name} 的displayName更新失败')
-                        print(f"[DEBUG] displayName更新失败")
+                        logger.info(f"[DEBUG] displayName更新失败")
                     
                     # 添加VNC配置
                     vnc_port = get_next_vnc_port()
                     if add_vnc_config_to_vmx(vm_file_path, vnc_port):
                        # add_task_log(task_id, 'info', f'虚拟机 {vm_name} 的VNC配置已添加，端口: {vnc_port}')
-                        print(f"[DEBUG] VNC配置添加成功，端口: {vnc_port}")
+                        logger.info(f"[DEBUG] VNC配置添加成功，端口: {vnc_port}")
                     else:
                         add_task_log(task_id, 'warning', f'虚拟机 {vm_name} 的VNC配置添加失败')
-                        print(f"[DEBUG] VNC配置添加失败")
+                        logger.info(f"[DEBUG] VNC配置添加失败")
                     
                     # 如果配置了自动启动或者配置了五码文件（需要启动虚拟机进行后续配置）
                     should_start = params.get('autoStart') == 'true' or params.get('configPlist')
@@ -2714,7 +2659,7 @@ def clone_vm_worker(task_id):
                         
                         # 记录启动命令开始时间
                         start_time = datetime.now()
-                       # print(f"[DEBUG] 启动命令开始时间: {start_time}")
+                       # logger.info(f"[DEBUG] 启动命令开始时间: {start_time}")
                         
                         result = subprocess.run(start_cmd, capture_output=True, text=True, timeout=60)
                         
@@ -2722,7 +2667,7 @@ def clone_vm_worker(task_id):
                         end_time = datetime.now()
                         duration = (end_time - start_time).total_seconds()
                         if result.stderr:
-                            print(f"[DEBUG] 启动命令错误: {result.stderr}")
+                            logger.info(f"[DEBUG] 启动命令错误: {result.stderr}")
                         
                         # 记录详细的启动执行结果
                       #  add_task_log(task_id, 'info', f'启动命令执行完成，返回码: {result.returncode}, 耗时: {duration:.2f}秒')
@@ -2737,12 +2682,12 @@ def clone_vm_worker(task_id):
                             add_task_log(task_id, 'error', f'虚拟机 {vm_name} 启动失败: {result.stderr}')
                 else:
                     add_task_log(task_id, 'error', f'虚拟机 {vm_name} 克隆失败: {result.stderr}')
-                    print(f"[DEBUG] 虚拟机 {vm_name} 克隆失败: {result.stderr}")
+                    logger.info(f"[DEBUG] 虚拟机 {vm_name} 克隆失败: {result.stderr}")
                     task['stats']['error'] += 1
                 
                 # 更新进度
                 task['progress']['current'] = i + 1
-                print(f"[DEBUG] 更新进度: {i+1}/{clone_count}")     
+                logger.info(f"[DEBUG] 更新进度: {i+1}/{clone_count}")     
                 # 发送详细进度信息
                 progress_data = {
                     'type': 'progress',
@@ -2758,20 +2703,20 @@ def clone_vm_worker(task_id):
                 
             except subprocess.TimeoutExpired:
                 add_task_log(task_id, 'error', f'克隆第 {i+1} 个虚拟机超时')
-                print(f"[DEBUG] 克隆第 {i+1} 个虚拟机超时")
+                logger.info(f"[DEBUG] 克隆第 {i+1} 个虚拟机超时")
                 task['stats']['error'] += 1
             except Exception as e:
                 add_task_log(task_id, 'error', f'克隆第 {i+1} 个虚拟机时发生错误: {str(e)}')
-                print(f"[DEBUG] 克隆第 {i+1} 个虚拟机时发生错误: {str(e)}")
+                logger.info(f"[DEBUG] 克隆第 {i+1} 个虚拟机时发生错误: {str(e)}")
                 task['stats']['error'] += 1
         
         # 任务完成
-        print(f"[DEBUG] 任务完成统计 - 成功: {task['stats']['success']}, 失败: {task['stats']['error']}")
+        logger.info(f"[DEBUG] 任务完成统计 - 成功: {task['stats']['success']}, 失败: {task['stats']['error']}")
         
         # 如果有成功克隆的虚拟机且配置了五码文件，启动动态监控和配置流程
         if task['stats']['success'] > 0 and params.get('configPlist'):
             add_task_log(task_id, 'info', '开始启动虚拟机监控和自动配置流程...')
-            print(f"[DEBUG] 开始启动虚拟机监控和自动配置流程...")
+            logger.info(f"[DEBUG] 开始启动虚拟机监控和自动配置流程...")
             
             try:
                 # 收集成功克隆的虚拟机信息（使用相同的统一时间戳）
@@ -2788,19 +2733,19 @@ def clone_vm_worker(task_id):
                     vm_name = vm_name_without_ext_generated + '.vmx'
                     vm_file_path = os.path.join(vm_folder_path, vm_name)
                     
-                    print(f"[DEBUG] 检查虚拟机文件: {vm_file_path}")
+                    logger.info(f"[DEBUG] 检查虚拟机文件: {vm_file_path}")
                     if os.path.exists(vm_file_path):
                         cloned_vms_info.append({
                             'name': vm_name_without_ext_generated,
                             'path': vm_file_path
                         })
-                        print(f"[DEBUG] 找到成功克隆的虚拟机: {vm_name_without_ext_generated}")
+                        logger.info(f"[DEBUG] 找到成功克隆的虚拟机: {vm_name_without_ext_generated}")
                     else:
-                        print(f"[DEBUG] 虚拟机文件不存在: {vm_file_path}")
+                        logger.info(f"[DEBUG] 虚拟机文件不存在: {vm_file_path}")
                 
                 if cloned_vms_info:
                     add_task_log(task_id, 'info', f'找到 {len(cloned_vms_info)} 个成功克隆的虚拟机，启动监控线程')
-                    print(f"[DEBUG] 找到 {len(cloned_vms_info)} 个成功克隆的虚拟机")
+                    logger.info(f"[DEBUG] 找到 {len(cloned_vms_info)} 个成功克隆的虚拟机")
                     
                     # 更新任务状态，增加监控阶段
                     task['monitoring'] = {
@@ -2833,13 +2778,13 @@ def clone_vm_worker(task_id):
                         monitor_thread.start()
                         
                        # add_task_log(task_id, 'info', f'已启动虚拟机 {vm_name} 的监控线程')
-                        #print(f"[DEBUG] 已启动虚拟机 {vm_name} 的监控线程")
+                        #logger.info(f"[DEBUG] 已启动虚拟机 {vm_name} 的监控线程")
                         
                         # 避免同时启动太多线程
                         time.sleep(2)
                     
                     add_task_log(task_id, 'info', '所有虚拟机监控线程已启动，将在后台继续执行')
-                   # print(f"[DEBUG] 所有虚拟机监控线程已启动")
+                   # logger.info(f"[DEBUG] 所有虚拟机监控线程已启动")
                     
                     # 不要立即标记任务完成，让监控线程继续运行
                     # 任务状态保持为'running'，直到所有监控完成
@@ -2847,35 +2792,35 @@ def clone_vm_worker(task_id):
                     
                 else:
                     add_task_log(task_id, 'warning', '未找到成功克隆的虚拟机，跳过监控配置')
-                    print(f"[DEBUG] 未找到成功克隆的虚拟机，跳过监控配置")
+                    logger.info(f"[DEBUG] 未找到成功克隆的虚拟机，跳过监控配置")
                     
                     # 没有监控任务时才标记完成
                     if task['stats']['error'] == 0:
                         task['status'] = 'completed'
                         add_task_log(task_id, 'success', f'虚拟机克隆完成！成功: {task["stats"]["success"]}')
-                        print(f"[DEBUG] 虚拟机克隆完成！成功: {task['stats']['success']}")
+                        logger.info(f"[DEBUG] 虚拟机克隆完成！成功: {task['stats']['success']}")
                     else:
                         task['status'] = 'completed_with_errors'
                         add_task_log(task_id, 'warning', f'克隆任务完成，但有错误。成功: {task["stats"]["success"]}, 失败: {task["stats"]["error"]}')
-                        print(f"[DEBUG] 克隆任务完成，但有错误。成功: {task['stats']['success']}, 失败: {task['stats']['error']}")
+                        logger.info(f"[DEBUG] 克隆任务完成，但有错误。成功: {task['stats']['success']}, 失败: {task['stats']['error']}")
                     
             except Exception as e:
                 add_task_log(task_id, 'error', f'启动虚拟机监控时发生错误: {str(e)}')
-                print(f"[DEBUG] 启动虚拟机监控时发生错误: {str(e)}")
+                logger.info(f"[DEBUG] 启动虚拟机监控时发生错误: {str(e)}")
                 
                 # 发生错误时才标记完成
                 if task['stats']['error'] == 0:
                     task['status'] = 'completed'
                     add_task_log(task_id, 'success', f'虚拟机克隆完成！成功: {task["stats"]["success"]}')
-                    print(f"[DEBUG] 虚拟机克隆完成！成功: {task['stats']['success']}")
+                    logger.info(f"[DEBUG] 虚拟机克隆完成！成功: {task['stats']['success']}")
                 else:
                     task['status'] = 'completed_with_errors'
                     add_task_log(task_id, 'warning', f'克隆任务完成，但有错误。成功: {task["stats"]["success"]}, 失败: {task["stats"]["error"]}')
-                    print(f"[DEBUG] 克隆任务完成，但有错误。成功: {task['stats']['success']}, 失败: {task['stats']['error']}")
+                    logger.info(f"[DEBUG] 克隆任务完成，但有错误。成功: {task['stats']['success']}, 失败: {task['stats']['error']}")
         
     except Exception as e:
         add_task_log(task_id, 'error', f'克隆任务发生严重错误: {str(e)}')
-        print(f"[DEBUG] 克隆任务发生严重错误: {str(e)}")
+        logger.info(f"[DEBUG] 克隆任务发生严重错误: {str(e)}")
         task['status'] = 'failed'
 
 def get_next_vnc_port():
@@ -2901,30 +2846,30 @@ def get_next_vnc_port():
         with open(config_ini_path, 'w', encoding='utf-8') as f:
             f.write(f'vnc_end_port={next_port}\n')
         
-        print(f"[DEBUG] 分配VNC端口: {next_port}，已更新config.ini")
+        logger.info(f"[DEBUG] 分配VNC端口: {next_port}，已更新config.ini")
         return next_port
         
     except Exception as e:
-        print(f"[DEBUG] 获取VNC端口失败: {str(e)}")
+        logger.info(f"[DEBUG] 获取VNC端口失败: {str(e)}")
         # 如果出错，返回默认端口
         return vnc_start_port
 
 def add_vnc_config_to_vmx(vmx_file_path, vnc_port):
     """在VMX文件中添加VNC配置参数"""
     try:
-        print(f"[DEBUG] 开始添加VNC配置到vmx文件: {vmx_file_path}")
-        print(f"[DEBUG] VNC端口: {vnc_port}")
+        #logger.info(f"[DEBUG] 开始添加VNC配置到vmx文件: {vmx_file_path}")
+        logger.info(f"[DEBUG] VNC端口: {vnc_port}")
         
         # 检查文件是否存在
         if not os.path.exists(vmx_file_path):
-            print(f"[DEBUG] vmx文件不存在: {vmx_file_path}")
+            logger.info(f"[DEBUG] vmx文件不存在: {vmx_file_path}")
             return False
         
         # 读取vmx文件
         with open(vmx_file_path, 'r', encoding='utf-8') as f:
             lines = f.readlines()
         
-        print(f"[DEBUG] 读取到 {len(lines)} 行内容")
+        logger.info(f"[DEBUG] 读取到 {len(lines)} 行内容")
         
         # 检查是否已存在VNC配置，如果存在则更新，否则添加
         vnc_configs = {
@@ -2944,7 +2889,7 @@ def add_vnc_config_to_vmx(vmx_file_path, vnc_port):
                     new_line = f'{config_key} = "{config_value}"\n'
                     lines[i] = new_line
                     updated_configs.add(config_key)
-                    print(f"[DEBUG] 更新VNC配置: {old_line} -> {new_line.strip()}")
+                    logger.info(f"[DEBUG] 更新VNC配置: {old_line} -> {new_line.strip()}")
                     break
         
         # 添加未找到的VNC配置
@@ -2952,35 +2897,35 @@ def add_vnc_config_to_vmx(vmx_file_path, vnc_port):
             if config_key not in updated_configs:
                 new_line = f'{config_key} = "{config_value}"\n'
                 lines.append(new_line)
-                print(f"[DEBUG] 添加VNC配置: {new_line.strip()}")
+               # logger.info(f"[DEBUG] 添加VNC配置: {new_line.strip()}")
         
         # 写回文件
         with open(vmx_file_path, 'w', encoding='utf-8') as f:
             f.writelines(lines)
         
-        print(f"[DEBUG] VNC配置添加成功")
+        logger.info(f"[DEBUG] VNC配置添加成功")
         return True
         
     except Exception as e:
-        print(f"[DEBUG] 添加VNC配置失败: {str(e)}")
+      #  logger.info(f"[DEBUG] 添加VNC配置失败: {str(e)}")
         return False
 
 def update_vmx_display_name(vmx_file_path, new_display_name):
     """更新vmx文件中的displayName参数"""
     try:
-        print(f"[DEBUG] 开始更新vmx文件: {vmx_file_path}")
-        print(f"[DEBUG] 新的displayName: {new_display_name}")
+        logger.info(f"[DEBUG] 开始更新vmx文件: {vmx_file_path}")
+        logger.info(f"[DEBUG] 新的displayName: {new_display_name}")
         
         # 检查文件是否存在
         if not os.path.exists(vmx_file_path):
-            print(f"[DEBUG] vmx文件不存在: {vmx_file_path}")
+            logger.info(f"[DEBUG] vmx文件不存在: {vmx_file_path}")
             return False
         
         # 读取vmx文件
         with open(vmx_file_path, 'r', encoding='utf-8') as f:
             lines = f.readlines()
         
-        print(f"[DEBUG] 读取到 {len(lines)} 行内容")
+        logger.info(f"[DEBUG] 读取到 {len(lines)} 行内容")
         
         # 查找并替换displayName参数
         updated = False
@@ -2991,34 +2936,34 @@ def update_vmx_display_name(vmx_file_path, new_display_name):
                 new_line = f'displayName = "{new_display_name}"\n'
                 lines[i] = new_line
                 updated = True
-                print(f"[DEBUG] 找到displayName行: {old_line}")
-                print(f"[DEBUG] 更新为: {new_line.strip()}")
+                logger.info(f"[DEBUG] 找到displayName行: {old_line}")
+                logger.info(f"[DEBUG] 更新为: {new_line.strip()}")
                 break
         
         if not updated:
             # 如果没有找到displayName行，在文件末尾添加
             new_line = f'displayName = "{new_display_name}"\n'
             lines.append(new_line)
-            print(f"[DEBUG] 未找到displayName行，在文件末尾添加: {new_line.strip()}")
+            logger.info(f"[DEBUG] 未找到displayName行，在文件末尾添加: {new_line.strip()}")
         
         # 写回文件
         with open(vmx_file_path, 'w', encoding='utf-8') as f:
             f.writelines(lines)
         
-        print(f"[DEBUG] vmx文件更新成功")
+        logger.info(f"[DEBUG] vmx文件更新成功")
         
         # 验证更新结果
         with open(vmx_file_path, 'r', encoding='utf-8') as f:
             content = f.read()
             if f'displayName = "{new_display_name}"' in content:
-                print(f"[DEBUG] 验证成功：displayName已正确更新")
+                logger.info(f"[DEBUG] 验证成功：displayName已正确更新")
                 return True
             else:
-                print(f"[DEBUG] 验证失败：displayName未找到")
+                logger.info(f"[DEBUG] 验证失败：displayName未找到")
                 return False
         
     except Exception as e:
-        print(f"[DEBUG] 更新vmx文件失败: {str(e)}")
+        logger.info(f"[DEBUG] 更新vmx文件失败: {str(e)}")
         return False
 
 def add_task_log(task_id, level, message):
@@ -3031,9 +2976,6 @@ def add_task_log(task_id, level, message):
             'message': message
         }
         task['logs'].append(log_entry)
-        
-        # 强制刷新，确保前端能立即收到日志更新
-        import sys
         sys.stdout.flush()
         
         # 同时写入日志文件
@@ -3045,7 +2987,7 @@ def add_task_log(task_id, level, message):
                 f.write(f'[{timestamp}] [{level.upper()}] {message}\n')
                 f.flush()  # 强制刷新文件缓冲区
         except Exception as e:
-            print(f"[DEBUG] 写入日志文件失败: {str(e)}")
+            logger.info(f"[DEBUG] 写入日志文件失败: {str(e)}")
 
 @app.route('/api/clone_logs/<task_id>')
 @login_required
@@ -3072,7 +3014,7 @@ def api_clone_logs(task_id):
                     }
                     yield f"data: {json.dumps(complete_data, ensure_ascii=False)}\n\n"
                 except Exception as e:
-                    print(f"[DEBUG] 完成信号序列化失败: {str(e)}")
+                    logger.info(f"[DEBUG] 完成信号序列化失败: {str(e)}")
                     yield f"data: {json.dumps({'type': 'error', 'message': '完成信号序列化失败'})}\n\n"
                 return
             
@@ -3089,7 +3031,7 @@ def api_clone_logs(task_id):
                         try:
                             yield f"data: {json.dumps(log_entry, ensure_ascii=False)}\n\n"
                         except Exception as e:
-                            print(f"[DEBUG] 进度数据序列化失败: {str(e)}")
+                            logger.info(f"[DEBUG] 进度数据序列化失败: {str(e)}")
                             yield f"data: {json.dumps({'type': 'error', 'message': '进度数据序列化失败'})}\n\n"
                     else:
                         # 发送普通日志
@@ -3103,7 +3045,7 @@ def api_clone_logs(task_id):
                             }
                             yield f"data: {json.dumps(log_data, ensure_ascii=False)}\n\n"
                         except Exception as e:
-                            print(f"[DEBUG] 日志数据序列化失败: {str(e)}")
+                            logger.info(f"[DEBUG] 日志数据序列化失败: {str(e)}")
                             yield f"data: {json.dumps({'type': 'error', 'message': '日志数据序列化失败'})}\n\n"
                     
                     last_log_index += 1
@@ -3117,7 +3059,7 @@ def api_clone_logs(task_id):
                         }
                         yield f"data: {json.dumps(stats_data, ensure_ascii=False)}\n\n"
                     except Exception as e:
-                        print(f"[DEBUG] 统计数据序列化失败: {str(e)}")
+                        logger.info(f"[DEBUG] 统计数据序列化失败: {str(e)}")
                         yield f"data: {json.dumps({'type': 'error', 'message': '统计数据序列化失败'})}\n\n"
                 
                 # 如果有新数据，减少等待时间以提高响应速度
@@ -3137,11 +3079,11 @@ def api_clone_logs(task_id):
                 }
                 yield f"data: {json.dumps(complete_data, ensure_ascii=False)}\n\n"
             except Exception as e:
-                print(f"[DEBUG] 完成信号序列化失败: {str(e)}")
+                logger.info(f"[DEBUG] 完成信号序列化失败: {str(e)}")
                 yield f"data: {json.dumps({'type': 'error', 'message': '完成信号序列化失败'})}\n\n"
             
         except Exception as e:
-            print(f"[DEBUG] 日志流生成错误: {str(e)}")
+            logger.info(f"[DEBUG] 日志流生成错误: {str(e)}")
             yield f"data: {json.dumps({'type': 'error', 'message': f'日志流错误: {str(e)}'})}\n\n"
     
     return Response(generate(), mimetype='text/event-stream')
@@ -3174,7 +3116,7 @@ def api_get_task_logs(task_id):
 @login_required
 def api_vm_list():
     """获取虚拟机列表"""
-    logger.info("收到获取虚拟机列表API请求")
+   # logger.info("收到获取虚拟机列表API请求")
     try:
         # 获取分页参数
         page = request.args.get('page', 1, type=int)
@@ -3196,7 +3138,7 @@ def api_vm_list():
             
             if result.returncode == 0:
                 running_vms = set(result.stdout.strip().split('\n')[1:])  # 跳过标题行
-                logger.debug(f"获取到运行中虚拟机: {len(running_vms)} 个")
+               # logger.debug(f"获取到运行中虚拟机: {len(running_vms)} 个")
             else:
                 logger.warning(f"vmrun命令执行失败: {result.stderr}")
         except Exception as e:
@@ -3322,7 +3264,7 @@ def api_vm_ip_status(vm_name):
         })
         
     except Exception as e:
-        print(f"[DEBUG] 获取虚拟机IP状态失败: {str(e)}")
+        logger.info(f"[DEBUG] 获取虚拟机IP状态失败: {str(e)}")
         return jsonify({
             'success': False,
             'message': f'获取虚拟机IP状态失败: {str(e)}'
@@ -3332,10 +3274,10 @@ def api_vm_ip_status(vm_name):
 @login_required
 def api_vm_public_ip(vm_name):
     """获取虚拟机公网IP地址"""
-    logger.info(f"收到获取虚拟机 {vm_name} 公网IP的请求")
+   #logger.info(f"收到获取虚拟机 {vm_name} 公网IP的请求")
     try:
         # 获取虚拟机IP地址
-        logger.debug(f"开始获取虚拟机 {vm_name} 的IP地址")
+        #logger.debug(f"开始获取虚拟机 {vm_name} 的IP地址")
         vm_ip = get_vm_ip(vm_name)
         if not vm_ip:
             logger.warning(f"无法获取虚拟机 {vm_name} 的IP地址")
@@ -3344,10 +3286,10 @@ def api_vm_public_ip(vm_name):
                 'message': '无法获取虚拟机IP地址'
             })
         
-        logger.info(f"虚拟机 {vm_name} 的IP地址: {vm_ip}")
+        logger.info(f"虚拟机 {vm_name} 的局域网IP地址: {vm_ip}")
         
         # 检查SSH连接
-        logger.debug(f"检查虚拟机 {vm_name} 的SSH连接")
+       # logger.debug(f"检查虚拟机 {vm_name} 的SSH连接")
         if not check_ssh_connectivity(vm_ip, vm_username):
             logger.warning(f"虚拟机 {vm_name} SSH连接失败")
             return jsonify({
@@ -3355,22 +3297,22 @@ def api_vm_public_ip(vm_name):
                 'message': 'SSH连接失败，无法获取公网IP'
             })
         
-        logger.info(f"虚拟机 {vm_name} SSH连接成功")
+       # logger.info(f"虚拟机 {vm_name} SSH连接成功")
         
         # 构建脚本路径
         script_path = f"{sh_script_remote_path}getipaddress.sh"
-        logger.debug(f"执行脚本路径: {script_path}")
+       # logger.debug(f"执行脚本路径: {script_path}")
         
         # 通过SSH执行脚本获取公网IP
-        logger.info(f"开始执行获取公网IP脚本: {vm_name}")
+        #logger.info(f"开始执行获取公网IP脚本: {vm_name}")
         success, output, log = execute_remote_script(vm_ip, vm_username, script_path)
         
-        logger.info(f"脚本执行结果 - 成功: {success}, 输出: {output}")
+       # logger.info(f"脚本执行结果 - 成功: {success}, 输出: {output}")
         
         if success:
             # 解析输出，提取IP地址
             public_ip = output.strip()
-            logger.info(f"获取到的公网IP: {public_ip}")
+           # logger.info(f"获取到的公网IP: {public_ip}")
             # 简单验证IP格式
             if is_valid_ip(public_ip):
                 logger.info(f"虚拟机 {vm_name} 公网IP获取成功: {public_ip}")
@@ -3403,7 +3345,7 @@ def api_vm_public_ip(vm_name):
 @login_required
 def api_vm_online_status():
     """异步获取虚拟机在线状态（只处理运行中的虚拟机）"""
-    logger.info("收到异步获取虚拟机在线状态请求")
+    #logger.info("收到异步获取虚拟机在线状态请求")
     try:
         data = request.get_json()
         vm_names = data.get('vm_names', [])
@@ -3412,12 +3354,12 @@ def api_vm_online_status():
             logger.warning("缺少虚拟机名称")
             return jsonify({'success': False, 'message': '缺少虚拟机名称'})
         
-        logger.debug(f"开始异步获取 {len(vm_names)} 个虚拟机的在线状态")
+       # logger.debug(f"开始异步获取 {len(vm_names)} 个虚拟机的在线状态")
         
         results = {}
         for vm_name in vm_names:
             try:
-                logger.debug(f"获取虚拟机 {vm_name} 的在线状态")
+              #  logger.debug(f"获取虚拟机 {vm_name} 的在线状态")
                 online_status = get_vm_online_status(vm_name)
                 results[vm_name] = {
                     'online_status': online_status['status'],
@@ -3426,9 +3368,9 @@ def api_vm_online_status():
                     'ssh_trust': online_status['ssh_trust'],
                     'ssh_port_open': online_status.get('ssh_port_open', False)
                 }
-                logger.debug(f"虚拟机 {vm_name} 在线状态: {online_status['status']}")
+              #  logger.debug(f"虚拟机 {vm_name} 在线状态: {online_status['status']}")
             except Exception as e:
-                logger.error(f"获取虚拟机 {vm_name} 在线状态失败: {str(e)}")
+              #  logger.error(f"获取虚拟机 {vm_name} 在线状态失败: {str(e)}")
                 results[vm_name] = {
                     'online_status': 'error',
                     'online_reason': f'获取状态失败: {str(e)}',
@@ -3436,7 +3378,7 @@ def api_vm_online_status():
                     'ssh_trust': False
                 }
         
-        logger.info(f"异步获取完成，共处理 {len(results)} 个虚拟机")
+       # logger.info(f"异步获取完成，共处理 {len(results)} 个虚拟机")
         return jsonify({
             'success': True,
             'results': results
@@ -3478,7 +3420,7 @@ def api_vm_ip_monitor():
         })
         
     except Exception as e:
-        print(f"[DEBUG] 批量监控IP状态失败: {str(e)}")
+        logger.info(f"[DEBUG] 批量监控IP状态失败: {str(e)}")
         return jsonify({
             'success': False,
             'message': f'批量监控失败: {str(e)}'
@@ -3503,10 +3445,10 @@ def api_vm_start():
         # 启动虚拟机
         vmrun_path = get_vmrun_path()
         
-        print(f"[DEBUG] 启动虚拟机 {vm_name}")
+        logger.info(f"[DEBUG] 启动虚拟机 {vm_name}")
         
         start_cmd = [vmrun_path, 'start', vm_file, 'nogui']
-       # print(f"[DEBUG] 启动命令: {' '.join(start_cmd)}")
+       # logger.info(f"[DEBUG] 启动命令: {' '.join(start_cmd)}")
         
         # 记录命令开始时间
         start_time = datetime.now()
@@ -3518,13 +3460,13 @@ def api_vm_start():
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
         if result.stderr:
-            print(f"[DEBUG] 启动命令错误: {result.stderr}")
+            logger.info(f"[DEBUG] 启动命令错误: {result.stderr}")
         
         if result.returncode == 0:
-            print(f"[DEBUG] 虚拟机 {vm_name} 启动成功")
+            logger.info(f"[DEBUG] 虚拟机 {vm_name} 启动成功")
             return jsonify({'success': True, 'message': '虚拟机启动成功'})
         else:
-            print(f"[DEBUG] 虚拟机 {vm_name} 启动失败: {result.stderr}")
+            logger.info(f"[DEBUG] 虚拟机 {vm_name} 启动失败: {result.stderr}")
             return jsonify({'success': False, 'message': f'启动失败: {result.stderr}'})
             
     except Exception as e:
@@ -3549,34 +3491,34 @@ def api_vm_stop():
         # 停止虚拟机
         vmrun_path = get_vmrun_path()
         
-        print(f"[DEBUG] 停止虚拟机 {vm_name}")
-        print(f"[DEBUG] 虚拟机文件路径: {vm_file}")
-        print(f"[DEBUG] vmrun路径: {vmrun_path}")
+        logger.info(f"[DEBUG] 停止虚拟机 {vm_name}")
+        logger.info(f"[DEBUG] 虚拟机文件路径: {vm_file}")
+        logger.info(f"[DEBUG] vmrun路径: {vmrun_path}")
         
         stop_cmd = [vmrun_path, 'stop', vm_file, 'hard']
-        print(f"[DEBUG] 停止命令: {' '.join(stop_cmd)}")
+        logger.info(f"[DEBUG] 停止命令: {' '.join(stop_cmd)}")
         
         # 记录命令开始时间
         start_time = datetime.now()
-        print(f"[DEBUG] 停止命令开始时间: {start_time}")
+        logger.info(f"[DEBUG] 停止命令开始时间: {start_time}")
         
         result = subprocess.run(stop_cmd, capture_output=True, text=True, timeout=60)
         
         # 记录命令结束时间
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
-        print(f"[DEBUG] 停止命令结束时间: {end_time}")
-        print(f"[DEBUG] 停止命令执行时长: {duration} 秒")
-        print(f"[DEBUG] 停止命令返回码: {result.returncode}")
-        print(f"[DEBUG] 停止命令输出: {result.stdout}")
+        logger.info(f"[DEBUG] 停止命令结束时间: {end_time}")
+        logger.info(f"[DEBUG] 停止命令执行时长: {duration} 秒")
+        logger.info(f"[DEBUG] 停止命令返回码: {result.returncode}")
+        logger.info(f"[DEBUG] 停止命令输出: {result.stdout}")
         if result.stderr:
-            print(f"[DEBUG] 停止命令错误: {result.stderr}")
+            logger.info(f"[DEBUG] 停止命令错误: {result.stderr}")
         
         if result.returncode == 0:
-            print(f"[DEBUG] 虚拟机 {vm_name} 停止成功")
+            logger.info(f"[DEBUG] 虚拟机 {vm_name} 停止成功")
             return jsonify({'success': True, 'message': '虚拟机停止成功'})
         else:
-            print(f"[DEBUG] 虚拟机 {vm_name} 停止失败: {result.stderr}")
+            logger.info(f"[DEBUG] 虚拟机 {vm_name} 停止失败: {result.stderr}")
             return jsonify({'success': False, 'message': f'停止失败: {result.stderr}'})
             
     except Exception as e:
@@ -3601,42 +3543,39 @@ def api_vm_restart():
         # 重启虚拟机
         vmrun_path = get_vmrun_path()
         
-        print(f"[DEBUG] 重启虚拟机 {vm_name}")
-        print(f"[DEBUG] 虚拟机文件路径: {vm_file}")
-        print(f"[DEBUG] vmrun路径: {vmrun_path}")
+        logger.info(f"[DEBUG] 重启虚拟机 {vm_name}")
+        logger.info(f"[DEBUG] 虚拟机文件路径: {vm_file}")
+        logger.info(f"[DEBUG] vmrun路径: {vmrun_path}")
         
         # 先停止虚拟机
         stop_cmd = [vmrun_path, 'stop', vm_file, 'hard']
-        print(f"[DEBUG] 重启-停止命令: {' '.join(stop_cmd)}")
+        logger.info(f"[DEBUG] 重启-停止命令: {' '.join(stop_cmd)}")
         
         # 记录停止命令开始时间
         stop_start_time = datetime.now()
-        print(f"[DEBUG] 重启-停止命令开始时间: {stop_start_time}")
+        logger.info(f"[DEBUG] 重启-停止命令开始时间: {stop_start_time}")
         
         stop_result = subprocess.run(stop_cmd, capture_output=True, text=True, timeout=60)
         
         # 记录停止命令结束时间
         stop_end_time = datetime.now()
         stop_duration = (stop_end_time - stop_start_time).total_seconds()
-        print(f"[DEBUG] 重启-停止命令结束时间: {stop_end_time}")
-        print(f"[DEBUG] 重启-停止命令执行时长: {stop_duration} 秒")
-        print(f"[DEBUG] 重启-停止命令返回码: {stop_result.returncode}")
-        print(f"[DEBUG] 重启-停止命令输出: {stop_result.stdout}")
+        logger.info(f"[DEBUG] 重启-停止命令结束时间: {stop_end_time}")
+        logger.info(f"[DEBUG] 重启-停止命令执行时长: {stop_duration} 秒")
+        logger.info(f"[DEBUG] 重启-停止命令返回码: {stop_result.returncode}")
+        logger.info(f"[DEBUG] 重启-停止命令输出: {stop_result.stdout}")
         if stop_result.stderr:
-            print(f"[DEBUG] 重启-停止命令错误: {stop_result.stderr}")
-        
-        # 等待一下再启动
-        import time
-        print(f"[DEBUG] 等待2秒后启动...")
+            logger.info(f"[DEBUG] 重启-停止命令错误: {stop_result.stderr}")
+        logger.info(f"[DEBUG] 等待2秒后启动...")
         time.sleep(2)
         
         # 启动虚拟机
         start_cmd = [vmrun_path, 'start', vm_file, 'nogui']
-      #  print(f"[DEBUG] 重启-启动命令: {' '.join(start_cmd)}")
+      #  logger.info(f"[DEBUG] 重启-启动命令: {' '.join(start_cmd)}")
         
         # 记录启动命令开始时间
         start_start_time = datetime.now()
-        #print(f"[DEBUG] 重启-启动命令开始时间: {start_start_time}")
+        #logger.info(f"[DEBUG] 重启-启动命令开始时间: {start_start_time}")
         
         start_result = subprocess.run(start_cmd, capture_output=True, text=True, timeout=60)
         
@@ -3644,17 +3583,17 @@ def api_vm_restart():
         start_end_time = datetime.now()
         start_duration = (start_end_time - start_start_time).total_seconds()
         if start_result.stderr:
-            print(f"[DEBUG] 重启-启动命令错误: {start_result.stderr}")
+            logger.info(f"[DEBUG] 重启-启动命令错误: {start_result.stderr}")
         
         if start_result.returncode == 0:
-          #  print(f"[DEBUG] 虚拟机 {vm_name} 重启成功")
+          #  logger.info(f"[DEBUG] 虚拟机 {vm_name} 重启成功")
             return jsonify({'success': True, 'message': '虚拟机重启成功'})
         else:
-            print(f"[DEBUG] 虚拟机 {vm_name} 重启失败: {start_result.stderr}")
+            logger.info(f"[DEBUG] 虚拟机 {vm_name} 重启失败: {start_result.stderr}")
             return jsonify({'success': False, 'message': f'重启失败: {start_result.stderr}'})
             
     except Exception as e:
-        print(f"[DEBUG] 重启虚拟机失败: {str(e)}")
+        logger.info(f"[DEBUG] 重启虚拟机失败: {str(e)}")
         return jsonify({'success': False, 'message': f'重启失败: {str(e)}'})
 
 @app.route('/api/vm_info/<vm_name>')
@@ -3718,16 +3657,15 @@ def api_vm_delete():
                 # 删除虚拟机文件夹
                 vm_dir = os.path.dirname(vm_file)
                 if os.path.exists(vm_dir):
-                    import shutil
                     shutil.rmtree(vm_dir)
                     deleted_vms.append(vm_name)
-                    print(f"[DEBUG] 成功删除虚拟机: {vm_name}")
+                    logger.info(f"[DEBUG] 成功删除虚拟机: {vm_name}")
                 else:
                     failed_vms.append(f'{vm_name} (文件夹不存在)')
                     
             except Exception as e:
                 failed_vms.append(f'{vm_name} ({str(e)})')
-                print(f"[DEBUG] 删除虚拟机失败 {vm_name}: {str(e)}")
+                logger.info(f"[DEBUG] 删除虚拟机失败 {vm_name}: {str(e)}")
         
         return jsonify({
             'success': True,
@@ -3737,7 +3675,7 @@ def api_vm_delete():
         })
         
     except Exception as e:
-        print(f"[DEBUG] 删除虚拟机API失败: {str(e)}")
+        logger.info(f"[DEBUG] 删除虚拟机API失败: {str(e)}")
         return jsonify({'success': False, 'message': f'删除失败: {str(e)}'})
 
 def get_vm_status(vm_path):
@@ -3745,28 +3683,28 @@ def get_vm_status(vm_path):
     try:
         vmrun_path = get_vmrun_path()
         
-        print(f"[DEBUG] 使用vmrun路径: {vmrun_path}")
+       # logger.info(f"[DEBUG] 使用vmrun路径: {vmrun_path}")
         list_cmd = [vmrun_path, 'list']
-        print(f"[DEBUG] 执行命令: {' '.join(list_cmd)}")
+        #logger.info(f"[DEBUG] 执行命令: {' '.join(list_cmd)}")
         
         result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30)
         
-        print(f"[DEBUG] vmrun list命令返回码: {result.returncode}")
-        print(f"[DEBUG] vmrun list命令输出: {result.stdout}")
+       # logger.info(f"[DEBUG] vmrun list命令返回码: {result.returncode}")
+       # logger.info(f"[DEBUG] vmrun list命令输出: {result.stdout}")
         if result.stderr:
-            print(f"[DEBUG] vmrun list命令错误: {result.stderr}")
+            logger.info(f"[DEBUG] vmrun list命令错误: {result.stderr}")
         
         if result.returncode == 0:
             running_vms = result.stdout.strip().split('\n')[1:]  # 跳过标题行
             vm_name = os.path.splitext(os.path.basename(vm_path))[0]
-            print(f"[DEBUG] 查找虚拟机名称: {vm_name}")
-            print(f"[DEBUG] 运行中的虚拟机列表: {running_vms}")
+           # logger.info(f"[DEBUG] 查找虚拟机名称: {vm_name}")
+            #logger.info(f"[DEBUG] 运行中的虚拟机列表: {running_vms}")
             
             # 检查虚拟机是否在运行列表中
             vm_found = False
             for vm in running_vms:
                 if vm.strip() and vm_name in vm:
-                    print(f"[DEBUG] 找到运行中的虚拟机: {vm}")
+                   # logger.info(f"[DEBUG] 找到运行中的虚拟机: {vm}")
                     vm_found = True
                     break
             
@@ -3776,23 +3714,23 @@ def get_vm_status(vm_path):
                     # 尝试获取虚拟机IP，如果获取失败可能正在启动
                     vm_ip = get_vm_ip(vm_name)
                     if vm_ip and is_valid_ip(vm_ip):
-                        print(f"[DEBUG] 虚拟机IP正常: {vm_ip}")
+                      #  logger.info(f"[DEBUG] 虚拟机IP正常: {vm_ip}")
                         return 'running'
                     else:
-                        print(f"[DEBUG] 虚拟机IP获取失败，可能正在启动")
+                       # logger.info(f"[DEBUG] 虚拟机IP获取失败，可能正在启动")
                         return 'starting'
                 except Exception as e:
-                    print(f"[DEBUG] 获取虚拟机IP异常，可能正在启动: {str(e)}")
+                   # logger.info(f"[DEBUG] 获取虚拟机IP异常，可能正在启动: {str(e)}")
                     return 'starting'
             else:
                 # 虚拟机不在运行列表中，检查是否处于挂起状态
-                print(f"[DEBUG] 未找到运行中的虚拟机: {vm_name}，检查是否挂起")
+               # logger.info(f"[DEBUG] 未找到运行中的虚拟机: {vm_name}，检查是否挂起")
                 
                 # 检查.vmss文件是否存在（挂起状态文件）
                 vm_dir = os.path.dirname(vm_path)
                 vmss_files = [f for f in os.listdir(vm_dir) if f.endswith('.vmss')]
                 if vmss_files:
-                    print(f"[DEBUG] 发现挂起状态文件: {vmss_files}")
+                    #logger.info(f"[DEBUG] 发现挂起状态文件: {vmss_files}")
                     return 'suspended'
                 
                 return 'stopped'
@@ -3800,7 +3738,7 @@ def get_vm_status(vm_path):
         return 'stopped'
         
     except Exception as e:
-        print(f"[DEBUG] 获取虚拟机状态失败: {str(e)}")
+       # logger.info(f"[DEBUG] 获取虚拟机状态失败: {str(e)}")
         return 'unknown'
 
 
@@ -3851,48 +3789,25 @@ def get_vm_ip(vm_name):
             if os.path.exists(vmrun_path):
                 try:
                     cmd = [vmrun_path, 'getGuestIPAddress', vm_file, '-wait']
-                  #  logger.debug(f"执行vmrun命令: {cmd}")
-                   # print(f"[DEBUG] 执行vmrun getGuestIPAddress命令: {' '.join(cmd)}")
-                    
-                    # 记录命令开始时间
-                    start_time = datetime.now()
-                   # print(f"[DEBUG] getGuestIPAddress命令开始时间: {start_time}")
-                    
                     result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-                    
                     # 记录命令结束时间
                     end_time = datetime.now()
-                    duration = (end_time - start_time).total_seconds()
-                   # print(f"[DEBUG] getGuestIPAddress命令结束时间: {end_time}")
-                   # print(f"[DEBUG] getGuestIPAddress命令执行时长: {duration} 秒")
-                   # print(f"[DEBUG] getGuestIPAddress命令返回码: {result.returncode}")
-                   # print(f"[DEBUG] getGuestIPAddress命令输出: {result.stdout}")
                     if result.stderr:
-                        print(f"[DEBUG] getGuestIPAddress命令错误: {result.stderr}")
-                    
+                        logger.info(f"[DEBUG] getGuestIPAddress命令错误: {result.stderr}")
                     # 检查特定的错误码4294967295，但不执行强制重启
                     if result.returncode == 4294967295:
-                      #  logger.warning(f"检测到虚拟机 {vm_name} 卡死（返回码: 4294967295），但不执行强制重启")
-                     #   print(f"[DEBUG] 检测到虚拟机卡死，返回码: 4294967295，但不执行强制重启")
                         return None
-                    
+
                     if result.returncode == 0:
                         ip = result.stdout.strip()
-                       # logger.debug(f"vmrun返回IP: {ip}")
-                      #  print(f"[DEBUG] vmrun返回IP: {ip}")
                         if is_valid_ip(ip):
-                           # logger.info(f"通过vmrun成功获取IP: {ip}")
-                         #   print(f"[DEBUG] IP格式有效: {ip}")
                             return ip
                         else:
                             logger.warning(f"vmrun返回的IP格式无效: {ip}")
-                         #   print(f"[DEBUG] IP格式无效: {ip}")
                     else:
                         logger.warning(f"vmrun命令执行失败，返回码: {result.returncode}, 错误: {result.stderr}")
-                        #print(f"[DEBUG] vmrun命令执行失败，返回码: {result.returncode}, 错误: {result.stderr}")
                 except Exception as e:
-                    logger.error(f"vmrun getGuestIPAddress 获取IP失败: {str(e)}")
-                    #print(f"[DEBUG] vmrun getGuestIPAddress 获取IP失败: {str(e)}")
+                    logger.error(f"未获取IP地址,虚拟机正在启动中!")
             else:
                 logger.warning(f"vmrun路径不存在: {vmrun_path}")
         else:
@@ -4056,7 +3971,7 @@ def get_wuma_info(vm_name):
         return None
         
     except Exception as e:
-        print(f"[DEBUG] 获取五码信息失败: {str(e)}")
+        logger.info(f"[DEBUG] 获取五码信息失败: {str(e)}")
         return None
 
 def check_ssh_status(ip):
@@ -4073,7 +3988,7 @@ def check_ssh_status(ip):
             return 'offline'
             
     except Exception as e:
-        print(f"[DEBUG] SSH状态检查失败: {str(e)}")
+        logger.info(f"[DEBUG] SSH状态检查失败: {str(e)}")
         return 'offline'
 
 def check_ssh_port_open(ip, port=22):
@@ -4082,8 +3997,6 @@ def check_ssh_port_open(ip, port=22):
         return False
     
     try:
-        import socket
-        
         # 创建socket连接
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(3)  # 3秒超时
@@ -4107,10 +4020,7 @@ def check_ssh_trust_status(ip, username=vm_username):
     """检查SSH互信状态"""
     if not ip:
         return False
-    
     try:
-        import paramiko
-        
         # 创建SSH客户端
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -4131,14 +4041,11 @@ def get_vm_online_status(vm_name):
     # 首先检查缓存
     cached_status = vm_cache.get_cached_status(vm_name, 'online_status')
     if cached_status:
-       # logger.debug(f"使用缓存的在线状态数据: {vm_name}")
         return cached_status
     
     try:
-        # 1. 检查虚拟机是否运行
         vm_file = find_vm_file(vm_name)
         if not vm_file:
-           # logger.warning(f"未找到虚拟机文件: {vm_name}")
             result = {
                 'status': 'offline',
                 'reason': '虚拟机文件不存在',
@@ -4152,12 +4059,8 @@ def get_vm_online_status(vm_name):
             return result
         
         vm_status = get_vm_status(vm_file)
-        logger.debug(f"虚拟机 {vm_name} 状态: {vm_status}")
-        print(f"[DEBUG] 虚拟机 {vm_name} 状态检测结果: {vm_status}")
-        
-        # 2. 根据虚拟机状态进行初步判断
         if vm_status == 'stopped':
-            logger.debug(f"虚拟机 {vm_name} 已关机")
+            #logger.debug(f"虚拟机 {vm_name} 已关机")
             result = {
                 'status': 'offline',
                 'reason': '虚拟机关机',
@@ -4170,7 +4073,7 @@ def get_vm_online_status(vm_name):
             vm_cache.set_cached_status(vm_name, result, 'online_status')
             return result
         elif vm_status in ['suspended', 'paused']:
-            logger.debug(f"虚拟机 {vm_name} 处于挂起状态")
+           # logger.debug(f"虚拟机 {vm_name} 处于挂起状态")
             result = {
                 'status': 'unknown',
                 'reason': f'虚拟机{vm_status}状态',
@@ -4186,7 +4089,7 @@ def get_vm_online_status(vm_name):
             logger.debug(f"虚拟机 {vm_name} 状态未知，继续检查网络连接")
             # 状态未知时，继续检查网络连接情况
         elif vm_status != 'running':
-            logger.debug(f"虚拟机 {vm_name} 状态异常: {vm_status}")
+           # logger.debug(f"虚拟机 {vm_name} 状态异常: {vm_status}")
             result = {
                 'status': 'unknown',
                 'reason': f'虚拟机状态异常: {vm_status}',
@@ -4202,8 +4105,6 @@ def get_vm_online_status(vm_name):
         # 3. 虚拟机运行中或状态未知，检查网络连接情况
         vm_ip = get_vm_ip(vm_name)
         if not vm_ip:
-            logger.debug(f"虚拟机 {vm_name} 无法获取IP地址")
-            print(f"[DEBUG] 虚拟机 {vm_name} IP地址获取失败")
             result = {
                 'status': 'unknown',
                 'reason': '无法获取IP地址',
@@ -4214,17 +4115,11 @@ def get_vm_online_status(vm_name):
             }
             # 缓存结果（较短时间，因为IP可能很快就能获取到）
             vm_cache.set_cached_status(vm_name, result, 'online_status')
-            return result
-        
-        logger.debug(f"虚拟机 {vm_name} IP地址获取成功: {vm_ip}")
-        print(f"[DEBUG] 虚拟机 {vm_name} IP地址获取成功: {vm_ip}")
-        
+            return result        
         # 4. 检查IP连通性
         ip_status = check_ip_connectivity(vm_ip)
-        print(f"[DEBUG] 虚拟机 {vm_name} IP连通性检查结果: {ip_status}")
+       # logger.info(f"[DEBUG] 虚拟机 {vm_name} IP连通性检查结果: {ip_status}")
         if not ip_status['success']:
-            logger.debug(f"虚拟机 {vm_name} IP {vm_ip} 不可达")
-            print(f"[DEBUG] 虚拟机 {vm_name} IP {vm_ip} 不可达: {ip_status.get('error', '未知错误')}")
             result = {
                 'status': 'offline',
                 'reason': f'IP不可达: {ip_status.get("error", "未知错误")}',
@@ -4239,13 +4134,7 @@ def get_vm_online_status(vm_name):
         
         # 5. 检查SSH端口是否开放
         ssh_port_open = check_ssh_port_open(vm_ip)
-        print(f"[DEBUG] 虚拟机 {vm_name} SSH端口检查结果: {ssh_port_open}")
-        
-        # 6. 检查SSH互信状态
         ssh_trust_status = check_ssh_trust_status(vm_ip)
-        print(f"[DEBUG] 虚拟机 {vm_name} SSH互信检查结果: {ssh_trust_status}")
-        
-        # 7. 根据三个条件综合判断在线状态
         conditions_met = 0
         total_conditions = 3
         
@@ -4255,10 +4144,7 @@ def get_vm_online_status(vm_name):
             conditions_met += 1
         if ssh_trust_status:
             conditions_met += 1
-        
-        logger.debug(f"虚拟机 {vm_name} 条件满足情况: {conditions_met}/{total_conditions}")
-        print(f"[DEBUG] 虚拟机 {vm_name} 条件满足情况: {conditions_met}/{total_conditions}")
-        
+
         if conditions_met == total_conditions:
             # 三个条件都满足：完全在线
             status_text = '完全在线'
@@ -4266,9 +4152,7 @@ def get_vm_online_status(vm_name):
             if vm_status == 'unknown':
                 status_text = '完全在线（状态未知）'
                 reason_text = 'IP可达 + SSH端口开放 + SSH互信成功（虚拟机状态未知）'
-            
-            logger.info(f"虚拟机 {vm_name} {status_text}：{reason_text}")
-            print(f"[DEBUG] 虚拟机 {vm_name} 三个条件都满足，返回online状态")
+
             result = {
                 'status': 'online',
                 'reason': reason_text,
@@ -4289,14 +4173,12 @@ def get_vm_online_status(vm_name):
                 missing_conditions.append('SSH端口未开放')
             if not ssh_trust_status:
                 missing_conditions.append('SSH互信未设置')
-            
-            status_text = '部分在线'
             reason = f'部分在线（缺少: {", ".join(missing_conditions)}）'
             if vm_status == 'unknown':
                 status_text = '部分在线（状态未知）'
                 reason = f'部分在线（缺少: {", ".join(missing_conditions)}，虚拟机状态未知）'
             
-            logger.debug(f"虚拟机 {vm_name} {reason}")
+          #  logger.debug(f"虚拟机 {vm_name} {reason}")
             result = {
                 'status': 'partial',
                 'reason': reason,
@@ -4316,7 +4198,7 @@ def get_vm_online_status(vm_name):
                 status_text = '未在线（状态未知）'
                 reason_text = '所有网络条件都不满足（虚拟机状态未知）'
             
-            logger.debug(f"虚拟机 {vm_name} {status_text}：{reason_text}")
+          #  logger.debug(f"虚拟机 {vm_name} {status_text}：{reason_text}")
             result = {
                 'status': 'offline',
                 'reason': reason_text,
@@ -4330,7 +4212,7 @@ def get_vm_online_status(vm_name):
             return result
             
     except Exception as e:
-        logger.error(f"检查虚拟机 {vm_name} 在线状态时出错: {str(e)}")
+       # logger.error(f"检查虚拟机 {vm_name} 在线状态时出错: {str(e)}")
         return {
             'status': 'error',
             'reason': f'检查状态时出错: {str(e)}',
@@ -4345,12 +4227,12 @@ def find_vm_file(vm_name):
     try:
         # 如果vm_name已经是完整路径，直接检查是否存在
         if vm_name.endswith('.vmx') and os.path.exists(vm_name):
-            logger.debug(f"虚拟机文件路径有效: {vm_name}")
+            #logger.debug(f"虚拟机文件路径有效: {vm_name}")
             return vm_name
         
         # 如果是完整路径但文件不存在，记录警告
         if vm_name.endswith('.vmx'):
-            logger.warning(f"虚拟机文件不存在: {vm_name}")
+            #logger.warning(f"虚拟机文件不存在: {vm_name}")
             return None
         vm_dir = vm_base_dir
         if os.path.exists(vm_dir):
@@ -4378,7 +4260,7 @@ def get_vm_snapshots(vm_path):
             return []
             
     except Exception as e:
-        print(f"[DEBUG] 获取快照列表失败: {str(e)}")
+        logger.info(f"[DEBUG] 获取快照列表失败: {str(e)}")
         return []
 
 def get_vm_config(vm_path):
@@ -4396,7 +4278,7 @@ def get_vm_config(vm_path):
         return config
         
     except Exception as e:
-        print(f"[DEBUG] 获取虚拟机配置失败: {str(e)}")
+        logger.info(f"[DEBUG] 获取虚拟机配置失败: {str(e)}")
         return {}
 
 @app.route('/logout')
@@ -4412,7 +4294,7 @@ def logout():
 @login_required
 def api_scripts():
     """获取脚本文件列表（支持分页）"""
-    logger.info("收到获取脚本列表请求")
+    #logger.info("收到获取脚本列表请求")
     try:
         # 获取分页参数
         page = request.args.get('page', 1, type=int)
@@ -4466,7 +4348,7 @@ def api_scripts():
 @login_required
 def api_all_scripts():
     """获取所有脚本文件列表（不分页）"""
-    logger.info("收到获取所有脚本列表请求")
+   # logger.info("收到获取所有脚本列表请求")
     try:
         # 使用新的通用脚本扫描函数
         scripts = scan_scripts_from_directories()
@@ -4509,7 +4391,7 @@ def api_add_script():
             })
         
         # 检查是否包含中文字符
-        import re
+
         if re.search(r'[\u4e00-\u9fa5]', script_name):
             return jsonify({
                 'success': False,
@@ -4823,7 +4705,7 @@ def api_vm_send_script():
                 f"{vm_username}@{vm_info['ip']}:{file_script_remote_path}{script_name}"
             ]
             
-            logger.debug(f"执行SCP命令: {' '.join(scp_cmd)}")
+          #  logger.debug(f"执行SCP命令: {' '.join(scp_cmd)}")
             result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=30,encoding="utf-8")
             
             if result.returncode == 0:
@@ -4981,7 +4863,7 @@ def api_ssh_trust():
 
 def setup_ssh_trust(ip, username, password):
     """设置SSH互信的具体实现"""
-    logger.info(f"开始设置SSH互信 - IP: {ip}, 用户: {username}")
+    #logger.info(f"开始设置SSH互信 - IP: {ip}, 用户: {username}")
     try:
         # 1. 生成SSH密钥对（如果不存在）
         ssh_key_path = os.path.expanduser('~/.ssh/id_rsa')
@@ -4991,13 +4873,13 @@ def setup_ssh_trust(ip, username, password):
         ssh_dir = os.path.expanduser('~/.ssh')
         if not os.path.exists(ssh_dir):
             os.makedirs(ssh_dir, mode=0o700)
-            logger.debug(f"创建SSH目录: {ssh_dir}")
+            #logger.debug(f"创建SSH目录: {ssh_dir}")
         
         if not os.path.exists(ssh_key_path):
           #  logger.info("生成SSH密钥对")
             # 生成SSH密钥对
             keygen_cmd = ['ssh-keygen', '-t', 'rsa', '-b', '2048', '-f', ssh_key_path, '-N', '']
-            logger.debug(f"执行ssh-keygen命令: {keygen_cmd}")
+           # logger.debug(f"执行ssh-keygen命令: {keygen_cmd}")
             result = subprocess.run(keygen_cmd, capture_output=True, text=True, timeout=30)
             if result.returncode != 0:
             #    logger.error(f"生成SSH密钥失败: {result.stderr}")
@@ -5012,13 +4894,7 @@ def setup_ssh_trust(ip, username, password):
         
         with open(ssh_pub_key_path, 'r') as f:
             public_key = f.read().strip()
-        
-      #  logger.debug("读取公钥成功")
-        
-        # 3. 使用paramiko库设置SSH互信（推荐方法）
         try:
-            import paramiko
-            
             # 创建SSH客户端
             ssh = paramiko.SSHClient()
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -5026,29 +4902,27 @@ def setup_ssh_trust(ip, username, password):
             # 连接到远程主机
           #  logger.debug(f"尝试连接到 {ip}")
             ssh.connect(ip, username=username, password=password, timeout=10)
-            logger.debug("SSH连接成功")
+         #  logger.debug("SSH连接成功")
             
             # 创建.ssh目录
             stdin, stdout, stderr = ssh.exec_command('mkdir -p ~/.ssh')
             exit_status = stdout.channel.recv_exit_status()
-            logger.debug(f"创建.ssh目录状态: {exit_status}")
+           # logger.debug(f"创建.ssh目录状态: {exit_status}")
             
             # 添加公钥到authorized_keys
             stdin, stdout, stderr = ssh.exec_command(f'echo "{public_key}" >> ~/.ssh/authorized_keys')
             exit_status = stdout.channel.recv_exit_status()
-            logger.debug(f"添加公钥状态: {exit_status}")
+           # logger.debug(f"添加公钥状态: {exit_status}")
             
             # 设置正确的权限
             stdin, stdout, stderr = ssh.exec_command('chmod 700 ~/.ssh')
             stdin, stdout, stderr = ssh.exec_command('chmod 600 ~/.ssh/authorized_keys')
-            logger.debug("设置SSH目录权限完成")
+           # logger.debug("设置SSH目录权限完成")
             
             # 验证设置是否成功
             stdin, stdout, stderr = ssh.exec_command('cat ~/.ssh/authorized_keys')
             authorized_keys_content = stdout.read().decode().strip()
-            
             ssh.close()
-            
             if public_key in authorized_keys_content:
                 logger.info("SSH互信设置成功（使用paramiko）")
                 return True, "SSH互信设置成功"
@@ -5272,7 +5146,7 @@ def api_get_ju_info():
         if not vm_name:
             return jsonify({'success': False, 'error': '缺少虚拟机名称参数'})
         
-        logger.debug(f"开始获取虚拟机 {vm_name} 的JU值信息")
+       # logger.debug(f"开始获取虚拟机 {vm_name} 的JU值信息")
         
         # 获取虚拟机IP地址
         vm_ip = get_vm_ip(vm_name)
@@ -5291,7 +5165,7 @@ def api_get_ju_info():
             success, output = False, "未知错误"
         
         if success:
-            logger.info(f"成功获取虚拟机 {vm_name} 的JU值信息")
+           # logger.info(f"成功获取虚拟机 {vm_name} 的JU值信息:")
             return jsonify({'success': True, 'output': output})
         else:
             logger.error(f"获取虚拟机 {vm_name} 的JU值信息失败: {output}")
@@ -5304,8 +5178,6 @@ def api_get_ju_info():
 def execute_remote_script(ip, username, script_name):
     """通过SSH互信执行目录脚本并获取输出"""
     try:
-        import paramiko
-        
         # 构建详细的SSH调用日志
         ssh_log = []
         ssh_log.append(f"[SSH] 开始连接到远程主机: {ip}")
@@ -5369,18 +5241,18 @@ def execute_remote_script(ip, username, script_name):
         full_log = "\n".join(ssh_log)
         
         if exit_status == 0:
-            logger.info(f"脚本 {script_name} 执行成功，输出长度: {len(output)}")
+           # logger.info(f"脚本 {script_name} 执行成功，输出长度: {len(output)}")
             return True, output, full_log
         else:
             error_msg = error if error else f"脚本 {script_name} 执行失败，退出状态: {exit_status}"
-            logger.error(f"脚本 {script_name} 执行失败: {error_msg}")
+            #logger.error(f"脚本 {script_name} 执行失败: {error_msg}")
             return False, error_msg, full_log
             
     except ImportError:
-        logger.error("paramiko库未安装")
+       # logger.error("paramiko库未安装")
         return False, "需要安装paramiko库: pip install paramiko", "paramiko库未安装"
     except Exception as e:
-        logger.error(f"execute_remote_script异常: {str(e)}")
+      #  logger.error(f"execute_remote_script异常: {str(e)}")
         error_msg = f"通过SSH互信执行脚本时发生错误: {str(e)}"
         return False, error_msg, f"[SSH] 连接异常: {str(e)}"
 
@@ -5408,7 +5280,7 @@ def api_get_chengpin_ju_info():
 @login_required
 def api_vm_chengpin_online_status():
     """获取成品虚拟机在线状态"""
-    logger.info("收到获取成品虚拟机在线状态请求")
+   # logger.info("收到获取成品虚拟机在线状态请求")
     try:
         data = request.get_json()
         vm_names = data.get('vm_names', [])
@@ -5424,10 +5296,10 @@ def api_vm_chengpin_online_status():
             try:
                 online_status = get_vm_online_status(vm_name)
                 results[vm_name] = online_status
-                print(f"[DEBUG] 成品虚拟机 {vm_name} 在线状态结果: {online_status}")
+                logger.info(f"[DEBUG] 成品虚拟机 {vm_name} 在线状态结果: {online_status}")
             except Exception as e:
                 logger.error(f"获取虚拟机 {vm_name} 在线状态失败: {str(e)}")
-                print(f"[DEBUG] 成品虚拟机 {vm_name} 获取状态失败: {str(e)}")
+                logger.info(f"[DEBUG] 成品虚拟机 {vm_name} 获取状态失败: {str(e)}")
                 results[vm_name] = {
                     'status': 'error',
                     'reason': f'获取状态失败: {str(e)}',
@@ -5725,7 +5597,7 @@ def api_get_10_12_ju_info():
 @login_required
 def api_vm_10_12_online_status():
     """获取10.12目录虚拟机在线状态"""
-    logger.info("收到获取10.12目录虚拟机在线状态请求")
+   # logger.info("收到获取10.12目录虚拟机在线状态请求")
     try:
         data = request.get_json()
         vm_names = data.get('vm_names', [])
@@ -5741,10 +5613,10 @@ def api_vm_10_12_online_status():
             try:
                 online_status = get_vm_online_status(vm_name)
                 results[vm_name] = online_status
-                print(f"[DEBUG] 10.12虚拟机 {vm_name} 在线状态结果: {online_status}")
+                logger.info(f"[DEBUG] 10.12虚拟机 {vm_name} 在线状态结果: {online_status}")
             except Exception as e:
                 logger.error(f"获取虚拟机 {vm_name} 在线状态失败: {str(e)}")
-                print(f"[DEBUG] 10.12虚拟机 {vm_name} 获取状态失败: {str(e)}")
+                logger.info(f"[DEBUG] 10.12虚拟机 {vm_name} 获取状态失败: {str(e)}")
                 results[vm_name] = {
                     'status': 'error',
                     'reason': f'获取状态失败: {str(e)}',
@@ -5769,7 +5641,7 @@ def api_vm_10_12_online_status():
 @login_required
 def api_ssh_10_12_trust():
     """设置10.12目录虚拟机SSH互信"""
-    logger.info("收到设置10.12目录虚拟机SSH互信请求")
+   # logger.info("收到设置10.12目录虚拟机SSH互信请求")
     try:
         data = request.get_json()
         vm_name = data.get('vm_name')
@@ -6024,7 +5896,7 @@ def api_vm_10_12_execute_scripts():
 @login_required
 def api_wuma_list():
     """获取五码列表"""
-    logger.info("收到获取五码列表请求")
+  #  logger.info("收到获取五码列表请求")
     try:
         page = int(request.args.get('page', 1))
         page_size = int(request.args.get('page_size', 5))
@@ -6129,7 +6001,7 @@ def api_wuma_list():
 @login_required
 def api_wuma_configs():
     """获取可用的配置文件列表"""
-    logger.info("收到获取配置文件列表请求")
+   # logger.info("收到获取配置文件列表请求")
     try:
         configs = []
         config_dir = wuma_config_dir
@@ -6242,7 +6114,6 @@ def api_wuma_upload():
         custom_filename = request.form.get('custom_filename', '').strip()
         if custom_filename:
             # 清理文件名，移除特殊字符
-            import re
             custom_filename = re.sub(r'[<>:"/\\|?*]', '', custom_filename)
             filename = f"{custom_filename}.txt"
         else:
@@ -6555,7 +6426,7 @@ def batch_change_wuma_core(selected_vms, config_file_path, task_id=None):
             }
         
         running_vms = result.stdout.strip().split('\n')[1:]  # 跳过标题行
-        logger.info(f"获取到运行中虚拟机: {running_vms}")
+       # logger.info(f"获取到运行中虚拟机: {running_vms}")
         logger.info(f"选中的虚拟机: {selected_vms}")
         
         # 验证选中的虚拟机是否都在运行
@@ -6611,11 +6482,11 @@ def batch_change_wuma_core(selected_vms, config_file_path, task_id=None):
             for running_vm in running_vms:
                 if vm_name in running_vm or running_vm.endswith(vm_name):
                     vm_path = running_vm
-                    logger.info(f"找到虚拟机 {vm_name} 的运行路径: {vm_path}")
+                   # logger.info(f"找到虚拟机 {vm_name} 的运行路径: {vm_path}")
                     break
             
             if not vm_path:
-                log_message('error', f'未找到虚拟机 {vm_name} 的运行路径')
+                #log_message('error', f'未找到虚拟机 {vm_name} 的运行路径')
                 results.append({
                     'vm_name': vm_name,
                     'success': False,
@@ -6715,7 +6586,7 @@ def batch_change_wuma_core(selected_vms, config_file_path, task_id=None):
                 
                 # 传输plist文件到虚拟机
                 scp_cmd = f'scp -o StrictHostKeyChecking=no "{plist_file_path}" {vm_username}@{vm_ip}:{boot_config_path}'
-                logger.info(f"执行scp命令: {scp_cmd}")
+               # logger.info(f"执行scp命令: {scp_cmd}")
                 scp_result = subprocess.run(scp_cmd, shell=True, capture_output=True, text=True, timeout=60)
                 
                 if scp_result.returncode != 0:
@@ -6834,7 +6705,6 @@ def api_batch_change_wuma():
             }
             
             # 启动JU值更改后台任务
-            import threading
             thread = threading.Thread(target=batch_change_ju_worker, args=(ju_task_id, successful_vms))
             thread.daemon = True
             thread.start()
@@ -6888,9 +6758,6 @@ def api_batch_change_ju():
             'results': [],
             'logs': []
         }
-        
-        # 启动后台任务
-        import threading
         thread = threading.Thread(target=batch_change_ju_worker, args=(task_id, selected_vms))
         thread.daemon = True
         thread.start()
@@ -6927,7 +6794,7 @@ def batch_change_ju_worker(task_id, selected_vms):
             return
         
         running_vms = result.stdout.strip().split('\n')[1:]  # 跳过标题行
-        logger.info(f"获取到运行中虚拟机: {running_vms}")
+       # logger.info(f"获取到运行中虚拟机: {running_vms}")
         
         # 验证选中的虚拟机是否都在运行
         for vm_name in selected_vms:
@@ -6952,11 +6819,11 @@ def batch_change_ju_worker(task_id, selected_vms):
                 for running_vm in running_vms:
                     if vm_name in running_vm or running_vm.endswith(vm_name):
                         vm_path = running_vm
-                        logger.info(f"找到虚拟机 {vm_name} 的运行路径: {vm_path}")
+                      #  logger.info(f"找到虚拟机 {vm_name} 的运行路径: {vm_path}")
                         break
                 
                 if not vm_path:
-                    logger.error(f"未找到虚拟机 {vm_name} 的运行路径")
+                   # logger.error(f"未找到虚拟机 {vm_name} 的运行路径")
                     add_task_log(task_id, 'ERROR', f'未找到虚拟机 {vm_name} 的运行路径')
                     tasks[task_id]['results'].append({
                         'vm_name': vm_name,
@@ -6979,7 +6846,7 @@ def batch_change_ju_worker(task_id, selected_vms):
                 add_task_log(task_id, 'INFO', f'虚拟机 {vm_name} IP: {vm_ip}')
                 
                 # 执行test.sh脚本
-                test_cmd = f'ssh -o StrictHostKeyChecking=no wx@{vm_ip} "{sh_script_remote_path}/test.sh"'
+                test_cmd = f'ssh -o StrictHostKeyChecking=no wx@{vm_ip} "{sh_script_remote_path}test.sh"'
                 logger.info(f"执行test.sh脚本: {test_cmd}")
                 add_task_log(task_id, 'INFO', f'执行test.sh脚本: {vm_name}')
                 test_result = subprocess.run(test_cmd, shell=True, capture_output=True, text=True, timeout=60)
@@ -7091,7 +6958,7 @@ def api_batch_delete_vm():
             })
         
         running_vms = result.stdout.strip().split('\n')[1:]  # 跳过标题行
-        logger.info(f"获取到运行中虚拟机: {running_vms}")
+       # logger.info(f"获取到运行中虚拟机: {running_vms}")
         
         # 验证选中的虚拟机是否都已停止
         for vm_name in selected_vms:
@@ -7229,7 +7096,7 @@ def count_available_wuma(file_path):
 @login_required
 def api_appleid_files():
     """获取Apple ID文件列表"""
-    logger.info("收到获取Apple ID文件列表请求")
+   # logger.info("收到获取Apple ID文件列表请求")
     try:
         files = []
         id_dir = os.path.join(project_root, appleid_unused_dir)
@@ -7279,7 +7146,7 @@ def api_appleid_files():
 @login_required
 def api_appleid_file_content():
     """获取Apple ID文件内容"""
-    logger.info("收到获取Apple ID文件内容请求")
+    #logger.info("收到获取Apple ID文件内容请求")
     try:
         filename = request.args.get('file')
         if not filename:
@@ -7390,7 +7257,6 @@ def api_appleid_upload():
         custom_filename = request.form.get('custom_filename', '').strip()
         if custom_filename:
             # 确保文件名安全
-            import re
             custom_filename = re.sub(r'[^\w\-_.]', '_', custom_filename)
             filename = f"{custom_filename}.txt"
         else:
@@ -7545,7 +7411,7 @@ def api_appleid_delete():
 @login_required
 def api_apple_ids():
     """获取Apple ID列表"""
-    logger.info("收到获取Apple ID列表请求")
+    #logger.info("收到获取Apple ID列表请求")
     try:
         apple_ids = []
         id_dir = os.path.join(project_root, appleid_unused_dir)
@@ -7783,10 +7649,6 @@ def api_batch_im_login():
         
         logger.info(f"每个虚拟机分配 {apple_ids_per_vm} 个Apple ID，共使用 {len(apple_ids_to_distribute)} 个")
         
-        # 使用多线程并发处理每个虚拟机的登录
-        import threading
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-        
         results = []
         results_lock = threading.Lock()  # 用于保护results列表的线程安全
         
@@ -7842,7 +7704,7 @@ def api_batch_im_login():
                      f"{vm_username}@{vm_ip}:{remote_file_path}"
                  ]
                  
-                 logger.info(f"[线程] 执行SCP命令: {' '.join(scp_cmd)}")
+                 #logger.info(f"[线程] 执行SCP命令: {' '.join(scp_cmd)}")
                  result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=60)
                 
                  if result.returncode == 0:
@@ -7860,15 +7722,13 @@ def api_batch_im_login():
                          for script_dir in script_upload_dirs:
                              # 直接使用完整路径
                              potential_script_path = os.path.join(script_dir, f'{login_imessage}')
-                             logger.info(f"[线程] 检查脚本路径: {potential_script_path}")
+                            # logger.info(f"[线程] 检查本地脚本路径: {potential_script_path}")
                              if os.path.exists(potential_script_path):
                                  script_path = potential_script_path
                                  script_found = True
-                                 logger.info(f"[线程] 找到登录脚本: {script_path}")
+                                 logger.info(f"[线程] 找到本地登录脚本: {script_path}")
                                  break
-                             else:
-                                 logger.warning(f"[线程] 脚本不存在: {potential_script_path}")
-                        
+                             
                          if script_found:
                              # 先传输脚本到虚拟机，然后调用API执行
                              dir_remote_script_path = f"{scpt_script_remote_path}{login_imessage}"
@@ -7879,16 +7739,14 @@ def api_batch_im_login():
                                  f"{vm_username}@{vm_ip}:{dir_remote_script_path}"
                              ]
                              
-                             logger.info(f"[线程] 传输登录脚本到虚拟机 {vm_name}: {' '.join(scp_script_cmd)}")
+                            # logger.info(f"[线程] 传输登录脚本到虚拟机 {vm_name}: {' '.join(scp_script_cmd)}")
                              script_transfer_result = subprocess.run(scp_script_cmd, capture_output=True, text=True, timeout=60)
                              
                              if script_transfer_result.returncode == 0:
-                                 logger.info(f"[线程] 成功传输登录脚本到虚拟机 {vm_name}")
+                                # logger.info(f"[线程] 成功传输登录脚本到虚拟机 {vm_name}")
                                 
                                  # 调用客户端8787端口API执行登录脚本
                                  try:
-                                     import requests
-                                     
                                      script_api_url = f"http://{vm_ip}:8787/run?path={dir_remote_script_path}"
                                      logger.info(f"[线程] 调用客户端API执行登录脚本: {script_api_url}")
                                      
@@ -7900,24 +7758,24 @@ def api_batch_im_login():
                                          script_success = True
                                          script_message = f"登录脚本执行成功: {script_output}"
                                      else:
-                                         logger.error(f"[线程] 虚拟机 {vm_name} 登录脚本执行失败，HTTP状态码: {response.status_code}")
+                                       #  logger.error(f"[线程] 虚拟机 {vm_name} 登录脚本执行失败，HTTP状态码: {response.status_code}")
                                          script_message = f"登录脚本执行失败: HTTP {response.status_code}"
                                         
                                  except requests.exceptions.Timeout:
-                                     logger.error(f"[线程] 虚拟机 {vm_name} 登录脚本执行超时")
+                                     #logger.error(f"[线程] 虚拟机 {vm_name} 登录脚本执行超时")
                                      script_message = "登录脚本执行超时"
                                  except requests.exceptions.ConnectionError:
-                                     logger.error(f"[线程] 虚拟机 {vm_name} 无法连接到8787端口")
+                                     #logger.error(f"[线程] 虚拟机 {vm_name} 无法连接到8787端口")
                                      script_message = "无法连接到客户端8787端口"
                                  except Exception as api_error:
-                                     logger.error(f"[线程] 虚拟机 {vm_name} API调用异常: {str(api_error)}")
+                                    # logger.error(f"[线程] 虚拟机 {vm_name} API调用异常: {str(api_error)}")
                                      script_message = f"API调用异常: {str(api_error)}"
                              else:
                                  script_error = script_transfer_result.stderr.strip() if script_transfer_result.stderr else '未知错误'
-                                 logger.error(f"[线程] 传输登录脚本到虚拟机 {vm_name} 失败: {script_error}")
+                                # logger.error(f"[线程] 传输登录脚本到虚拟机 {vm_name} 失败: {script_error}")
                                  script_message = f"登录脚本传输失败: {script_error}"
                          else:
-                             logger.warning(f"[线程] 未找到login_imessage.scpt登录脚本")
+                            # logger.warning(f"[线程] 未找到login_imessage.scpt登录脚本")
                              script_message = "未找到登录脚本"
                             
                      except Exception as e:
@@ -7943,7 +7801,7 @@ def api_batch_im_login():
                          })
                  else:
                      error_msg = result.stderr.strip() if result.stderr else '未知错误'
-                     logger.error(f"[线程] 传输Apple ID文件到虚拟机 {vm_name} 失败: {error_msg}")
+                    # logger.error(f"[线程] 传输Apple ID文件到虚拟机 {vm_name} 失败: {error_msg}")
                      with results_lock:
                          results.append({
                              'vm_name': vm_name,
@@ -7956,12 +7814,12 @@ def api_batch_im_login():
                  # 清理临时文件
                  try:
                      os.remove(temp_file_path)
-                     logger.info(f"[线程] 清理临时文件: {temp_file_path}")
+                    # logger.info(f"[线程] 清理临时文件: {temp_file_path}")
                  except Exception as e:
                      logger.warning(f"[线程] 清理临时文件失败: {str(e)}")
                 
             except subprocess.TimeoutExpired:
-                logger.error(f"[线程] 传输Apple ID文件到虚拟机 {vm_name} 超时")
+               # logger.error(f"[线程] 传输Apple ID文件到虚拟机 {vm_name} 超时")
                 with results_lock:
                     results.append({
                         'vm_name': vm_name,
@@ -7969,7 +7827,7 @@ def api_batch_im_login():
                         'message': '传输超时（60秒）'
                     })
             except Exception as e:
-                logger.error(f"[线程] 处理虚拟机 {vm_name} 时发生错误: {str(e)}")
+              #  logger.error(f"[线程] 处理虚拟机 {vm_name} 时发生错误: {str(e)}")
                 with results_lock:
                     results.append({
                         'vm_name': vm_name,
@@ -8363,7 +8221,7 @@ def api_distribute_text_lines():
                     f"{vm_username}@{vm_ip}:{remote_file_path}"
                 ]
                 
-                logger.info(f"执行SCP命令: {' '.join(scp_cmd)}")
+              #  logger.info(f"执行SCP命令: {' '.join(scp_cmd)}")
                 result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=60)
                 
                 if result.returncode == 0:
@@ -8447,13 +8305,7 @@ def api_distribute_text_lines():
 @app.route('/api/scan_clients', methods=['POST'])
 @login_required
 def api_scan_clients():
-    """扫描ScptRunner客户端"""
-    import socket
-    import requests
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-    import ipaddress
-    import re
-    
+    """扫描ScptRunner客户端"""    
     try:
         logger.info("开始扫描ScptRunner客户端")
         
@@ -8700,7 +8552,7 @@ def api_test_url():
         
         # 验证URL格式
         try:
-            from urllib.parse import urlparse
+
             parsed_url = urlparse(url)
             if not parsed_url.scheme or not parsed_url.netloc:
                 return jsonify({
@@ -8712,9 +8564,6 @@ def api_test_url():
                 'success': False,
                 'message': f'URL格式验证失败: {str(e)}'
             })
-        
-        # 发送GET请求
-        import requests
         start_time = time.time()
         
         try:
@@ -8885,7 +8734,6 @@ def api_execute_im_test():
         logger.info(f"解析得到客户端IP: {client_ip}")
         
         # 检查客户端是否在线（检查8787端口）
-        import socket
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(5)
@@ -8902,9 +8750,6 @@ def api_execute_im_test():
                 'success': False,
                 'message': f'检查客户端连接失败: {str(e)}'
             })
-        
-        # 通过ScptRunner API执行脚本
-        import requests
         try:
             # 构建ScptRunner API URL - 使用GET请求和查询参数格式
             scptrunner_url = f"http://{client_ip}:8787/script?name={script_name}"
@@ -9130,9 +8975,6 @@ def upload_phone_file():
         
         # 如果是csv文件，需要转换格式
         if file_extension == '.csv':
-            import csv
-            import io
-            
             # 读取csv内容
             file_content = file.read().decode('utf-8')
             csv_reader = csv.reader(io.StringIO(file_content))
@@ -9322,11 +9164,11 @@ def cleanup_on_exit():
         logger.error(f"清理资源时出错: {str(e)}")
 
 # 注册退出处理函数
-import atexit
+
 atexit.register(cleanup_on_exit)
 
 # 信号处理
-import signal
+
 
 def signal_handler(signum, frame):
     """处理系统信号"""
@@ -9346,7 +9188,7 @@ signal.signal(signal.SIGINT, signal_handler)  # Ctrl+C
 @login_required
 def api_batch_get_10_12_wuma_info():
     """批量获取10.12目录虚拟机五码信息"""
-    logger.info("收到批量获取10.12目录虚拟机五码信息请求")
+    #logger.info("收到批量获取10.12目录虚拟机五码信息请求")
     try:
         data = request.get_json()
         vm_names = data.get('vm_names', [])
@@ -9367,7 +9209,7 @@ def api_batch_get_10_12_wuma_info():
                     response = get_wuma_info_generic('10.12目录')
                     response_data = response.get_json()
                     results[vm_name] = response_data
-                    logger.info(f"虚拟机 {vm_name} 五码信息获取结果: {response_data.get('success', False)}")
+                    #logger.info(f"虚拟机 {vm_name} 五码信息获取结果: {response_data.get('success', False)}")
             except Exception as e:
                 logger.error(f"获取虚拟机 {vm_name} 五码信息失败: {str(e)}")
                 results[vm_name] = {
