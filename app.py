@@ -7419,7 +7419,7 @@ def api_apple_ids():
         # 确保ID目录存在
         if not os.path.exists(id_dir):
             os.makedirs(id_dir, exist_ok=True)
-            logger.info("创建ID_unused目录")
+           # logger.info("创建ID_unused目录")
         
         # 查找ID目录下的所有.txt文件
         if os.path.exists(id_dir):
@@ -7435,7 +7435,7 @@ def api_apple_ids():
                         try:
                             with open(file_path, 'r', encoding=encoding) as f:
                                 content = f.read().strip()
-                            logger.info(f"成功使用 {encoding} 编码读取文件 {filename}")
+                           # logger.info(f"成功使用 {encoding} 编码读取文件 {filename}")
                             break
                         except UnicodeDecodeError:
                             logger.warning(f"使用 {encoding} 编码读取文件 {filename} 失败，尝试下一种编码")
@@ -7457,7 +7457,7 @@ def api_apple_ids():
                                 # 如果没有分隔符，直接使用整行作为Apple ID
                                 if '@' in line:
                                     apple_ids.append(line)
-                        logger.info(f"从文件 {filename} 中读取到 {len(lines)} 行，提取到 {len([l for l in lines if '----' in l])} 个Apple ID")
+                      #  logger.info(f"从文件 {filename} 中读取到 {len(lines)} 行，提取到 {len([l for l in lines if '----' in l])} 个Apple ID")
             
             # 按文件分组统计Apple ID
             file_apple_ids = {}
@@ -7508,7 +7508,7 @@ def api_apple_ids():
             # 按文件名排序
             apple_id_list.sort(key=lambda x: x['id'])
             
-            logger.info(f"总共找到 {len(apple_id_list)} 个唯一的Apple ID")
+          #  logger.info(f"总共找到 {len(apple_id_list)} 个唯一的Apple ID")
             
             return jsonify({
                 'success': True,
@@ -7581,7 +7581,7 @@ def api_batch_im_login():
                 'message': error_msg
             })
         
-        logger.info(f"批量IM登录验证通过 - 运行中虚拟机: {running_vms}, Apple ID文件: {apple_id_file}")
+       # logger.info(f"批量IM登录验证通过 - 运行中虚拟机: {running_vms}, Apple ID文件: {apple_id_file}")
         apple_id_file_path = os.path.join(project_root, appleid_unused_dir, apple_id_file)
         
         if not os.path.exists(apple_id_file_path):
@@ -7600,7 +7600,7 @@ def api_batch_im_login():
                 with open(apple_id_file_path, 'r', encoding=encoding) as f:
                     content = f.read().strip()
                 used_encoding = encoding
-                logger.info(f"成功使用 {encoding} 编码读取文件 {apple_id_file}")
+              #  logger.info(f"成功使用 {encoding} 编码读取文件 {apple_id_file}")
                 break
             except UnicodeDecodeError:
                 logger.warning(f"使用 {encoding} 编码读取文件 {apple_id_file} 失败，尝试下一种编码")
@@ -7633,7 +7633,7 @@ def api_batch_im_login():
                 'message': f'Apple ID文件 {apple_id_file} 中没有找到有效的Apple ID'
             })
         
-        logger.info(f"从文件 {apple_id_file} 中提取到 {len(apple_ids)} 个Apple ID")
+      #  logger.info(f"从文件 {apple_id_file} 中提取到 {len(apple_ids)} 个Apple ID")
         
         # 检查Apple ID数量是否足够分配给所有虚拟机
         if len(apple_ids) < len(running_vms):
@@ -7647,7 +7647,7 @@ def api_batch_im_login():
         # 只使用前running_vms数量的Apple ID
         apple_ids_to_distribute = apple_ids[:len(running_vms)]
         
-        logger.info(f"每个虚拟机分配 {apple_ids_per_vm} 个Apple ID，共使用 {len(apple_ids_to_distribute)} 个")
+       # logger.info(f"每个虚拟机分配 {apple_ids_per_vm} 个Apple ID，共使用 {len(apple_ids_to_distribute)} 个")
         
         results = []
         results_lock = threading.Lock()  # 用于保护results列表的线程安全
@@ -7665,7 +7665,7 @@ def api_batch_im_login():
             }
             
             try:
-                 logger.info(f"[线程] 开始处理虚拟机 {vm_name} 的登录")
+               #  logger.info(f"[线程] 开始处理虚拟机 {vm_name} 的登录")
                  
                  # 获取虚拟机IP
                  vm_ip = get_vm_ip(vm_name)
@@ -7676,7 +7676,7 @@ def api_batch_im_login():
                 # 获取分配给当前虚拟机的Apple ID（每个虚拟机一个）
                  vm_apple_ids = [apple_id_data]
                  
-                 logger.info(f"[线程] 虚拟机 {vm_name} 分配第 {vm_index+1} 个Apple ID: {vm_apple_ids[0]}")
+                # logger.info(f"[线程] 虚拟机 {vm_name} 分配第 {vm_index+1} 个Apple ID: {vm_apple_ids[0]}")
                  
                  # 创建临时文件
                  temp_file_name = f"{vm_name}_appleid.txt"
@@ -7689,10 +7689,10 @@ def api_batch_im_login():
                  with open(temp_file_path, 'w', encoding='utf-8') as f:
                      f.write(vm_apple_ids[0])
                  
-                 logger.info(f"[线程] 创建临时文件: {temp_file_path}，包含 1 个Apple ID")
+                # logger.info(f"[线程] 创建临时文件: {temp_file_path}，包含 1 个Apple ID")
                 
                  # 直接传输文件，不校验远端目录是否存在
-                 logger.info(f"[线程] 直接传输Apple ID文件到虚拟机 {vm_name}，不校验远端目录")
+                # logger.info(f"[线程] 直接传输Apple ID文件到虚拟机 {vm_name}，不校验远端目录")
                  
                  # 使用SCP传输文件到虚拟机的Documents目录，文件名固定为appleid.txt
                  remote_file_path = f"{appleidtxt_path}appleid.txt"
