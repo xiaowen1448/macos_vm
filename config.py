@@ -90,6 +90,15 @@ ScptRunner_path=f'/Users/wx/Documents/ScptRunner/'
 #ScptRunner客户日志路径
 ScptRunner_path=f'/Users/wx/Documents/ScptRunner/logs/'
 
+#imessage脚本配置
+
+#im登录脚本
+login_imessage='login_imessage.scpt'
+
+#imessage发送脚本
+send_imessage='send_imessage.scpt'
+
+
 
 #appleid临时文本路径
 appleidtxt_path=f'/Users/wx/Documents/'

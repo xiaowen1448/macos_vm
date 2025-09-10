@@ -7,7 +7,7 @@ import logging
 import requests
 import json
 import sqlite3
-from config import vm_username, project_root, script_remote_path
+from config import vm_username, project_root, script_remote_path, send_imessage
 
 # 创建蓝图
 mass_messaging_bp = Blueprint('mass_messaging', __name__)
@@ -841,8 +841,8 @@ def api_send_mass_message():
                     script_success = False
                     
                     try:
-                        # 调用客户端8787端口API执行imsendMessage.scpt脚本
-                        script_api_url = f"http://{client_ip}:8787/run?path={script_remote_path}imsendMessage.scpt"
+                        # 调用客户端8787端口API执行{send_imessage}脚本
+                        script_api_url = f"http://{client_ip}:8787/run?path={script_remote_path}{send_imessage}"
                         
                         logger.info(f"调用客户端API执行发信脚本: {script_api_url}")
                         script_response = requests.get(
@@ -1160,8 +1160,8 @@ def api_send_mass_message_async():
                 if text_success and phone_success and attachment_success:
                     # 文件传输成功后，异步调用客户端API执行发信脚本（不等待结果）
                     try:
-                        # 调用客户端8787端口API执行imsendMessage.scpt脚本
-                        script_api_url = f"http://{client_ip}:8787/run?path={script_remote_path}imsendMessage.scpt"
+                        # 调用客户端8787端口API执行{send_imessage}脚本
+                        script_api_url = f"http://{client_ip}:8787/run?path={script_remote_path}{send_imessage}"
                         
                         logger.info(f"异步调用客户端API执行发信脚本: {script_api_url}")
                         # 使用异步方式调用，不等待响应

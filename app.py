@@ -7882,13 +7882,13 @@ def api_batch_im_login():
                          # 从config导入script_upload_dirs
                          from config import script_upload_dirs
                          
-                         # 查找imessage_test.scpt脚本
+                         # 查找login_imessage.scpt脚本
                          script_found = False
                          script_path = None
                          
                          for script_dir in script_upload_dirs:
                              # 直接使用完整路径
-                             potential_script_path = os.path.join(script_dir, 'imessage_test.scpt')
+                             potential_script_path = os.path.join(script_dir, f'{login_imessage}')
                              logger.info(f"[线程] 检查脚本路径: {potential_script_path}")
                              if os.path.exists(potential_script_path):
                                  script_path = potential_script_path
@@ -7900,7 +7900,7 @@ def api_batch_im_login():
                         
                          if script_found:
                              # 先传输脚本到虚拟机，然后调用API执行
-                             remote_script_path = f"{script_remote_path}imessage_test.scpt"
+                             remote_script_path = f"{script_remote_path}{login_imessage}"
                              scp_script_cmd = [
                                  'scp',
                                  '-o', 'StrictHostKeyChecking=no',
@@ -7946,7 +7946,7 @@ def api_batch_im_login():
                                  logger.error(f"[线程] 传输登录脚本到虚拟机 {vm_name} 失败: {script_error}")
                                  script_message = f"登录脚本传输失败: {script_error}"
                          else:
-                             logger.warning(f"[线程] 未找到imessage_test.scpt登录脚本")
+                             logger.warning(f"[线程] 未找到login_imessage.scpt登录脚本")
                              script_message = "未找到登录脚本"
                             
                      except Exception as e:
@@ -8887,7 +8887,7 @@ def api_execute_im_test():
     try:
         data = request.get_json()
         client_id = data.get('client_id', '')
-        script_name = data.get('script_name', 'imessage_test.scpt')
+        script_name = data.get('script_name', f'{login_imessage}')
         
         if not client_id:
             return jsonify({
