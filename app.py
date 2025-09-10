@@ -14,6 +14,7 @@ import base64
 import sys
 import socket
 from pathlib import Path
+from config import *
 
 try:
     import fcntl
@@ -23,8 +24,6 @@ try:
     import msvcrt
 except ImportError:
     msvcrt = None
-
-from config import *
 
 # 虚拟机状态缓存机制
 class VMStatusCache:
@@ -113,8 +112,6 @@ cache_cleanup_thread.start()
 logging.getLogger('paramiko').setLevel(logging.WARNING)
 logging.getLogger('paramiko.transport').setLevel(logging.WARNING)
 
-# 配置日志
-from config import logs_dir
 
 # 使用配置文件中的日志目录
 log_dir = os.path.join(os.path.dirname(__file__), logs_dir)
@@ -176,9 +173,6 @@ clear_sessions_on_startup()
 
 # 使用全局配置文件中的认证信息
 # USERNAME and PASSWORD are imported from config.py
-
-# 虚拟机目录配置 - 使用全局配置
-from config import clone_dir
 VM_DIRS = {
     '10_12': clone_dir,
     'chengpin': vm_chengpin_dir
@@ -376,7 +370,7 @@ def monitor_vm_and_configure(task_id, vm_name, vm_path, wuma_config_file, max_wa
                         
                         try:
                             # 执行test.sh脚本更改JU值
-                            test_cmd = f'ssh -o StrictHostKeyChecking=no {vm_username}@{vm_ip} "{script_remote_path}/test.sh"'
+                            test_cmd = f'ssh -o StrictHostKeyChecking=no {vm_username}@{vm_ip} "{sh_script_remote_path}/test.sh"'
                             print(f"[DEBUG] 执行JU值更改命令: {test_cmd}")
                          #   add_task_log(task_id, 'info', f'执行JU值更改脚本: {vm_name}')
                             
@@ -733,7 +727,7 @@ def get_wuma_info_generic(vm_type_name):
             })
         
         # 执行远程脚本获取五码信息
-        result = execute_remote_script(vm_ip, 'wx', f'{script_remote_path}/run_debug_wuma.sh')
+        result = execute_remote_script(vm_ip, 'wx', f'{sh_script_remote_path}run_debug_wuma.sh')
         if len(result) == 3:
             success, output, ssh_log = result
         elif len(result) == 2:
@@ -792,7 +786,7 @@ def get_ju_info_generic(vm_type_name):
             })
         
         # 执行远程脚本获取JU值信息
-        result = execute_remote_script(vm_ip, 'wx', f'{script_remote_path}/run_debug_ju.sh')
+        result = execute_remote_script(vm_ip, 'wx', f'{sh_script_remote_path}run_debug_ju.sh')
         if len(result) == 3:
             success, output, ssh_log = result
         elif len(result) == 2:
@@ -1075,26 +1069,32 @@ def send_script_generic(vm_type_name):
                     'success': False,
                     'message': f'虚拟机 {vm_name} 未在线或未建立SSH互信'
                 })
+
+          # 确保脚本名以.sh结尾
+            if script_name.endswith('.sh'):
+                dir_script_remote_path = sh_script_remote_path
+            else:
+                dir_script_remote_path=scpt_script_remote_path
+            # 列出指定脚本的权限   
             
             # 使用scp发送脚本
-            import subprocess
             scp_cmd = [
                 'scp',
                 '-o', 'StrictHostKeyChecking=no',
                 '-o', 'ConnectTimeout=10',
                 script_path,
-                f"{vm_username}@{vm_info['ip']}:{script_remote_path}{script_name}"
+                f"{vm_username}@{vm_info['ip']}:{dir_script_remote_path}{script_name}"
             ]
             
             logger.debug(f"执行SCP命令: {' '.join(scp_cmd)}")
-            result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=30)
+            result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=30, encoding="utf-8")
             
             if result.returncode == 0:
                 logger.info(f"脚本发送成功到虚拟机 {vm_name} ({vm_info['ip']})")
                 return jsonify({
                     'success': True,
                     'message': f'脚本 {script_name} 发送成功到虚拟机 {vm_name}',
-                    'file_path': f'{script_remote_path}{script_name}'
+                    'file_path': f'{dir_script_remote_path}{script_name}'
                 })
             else:
                 error_msg = result.stderr.strip() if result.stderr else result.stdout.strip()
@@ -1287,9 +1287,6 @@ def login():
 def dashboard():
     #logger.info("访问dashboard页面")
     current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    
-    #获取虚拟机名称
-    from config import vm_temp_dir, vm_chengpin_dir
     vms = []
     vm_data=[]
     
@@ -1415,8 +1412,6 @@ def vm_info_page():
 def api_vm_info_list():
     """获取虚拟机信息列表"""
     try:
-        # 扫描虚拟机目录
-        from config import vm_base_dir
         vm_dir = vm_base_dir
         vms = []
         
@@ -3185,9 +3180,6 @@ def api_vm_list():
         page = request.args.get('page', 1, type=int)
         page_size = request.args.get('page_size', 10, type=int)
         logger.debug(f"分页参数 - 页码: {page}, 每页大小: {page_size}")
-        
-        # 扫描虚拟机目录
-        from config import vm_base_dir
         vm_dir = vm_base_dir
         vms = []
         stats = {'total': 0, 'running': 0, 'stopped': 0, 'online': 0}
@@ -3366,7 +3358,7 @@ def api_vm_public_ip(vm_name):
         logger.info(f"虚拟机 {vm_name} SSH连接成功")
         
         # 构建脚本路径
-        script_path = f"{script_remote_path}getipaddress.sh"
+        script_path = f"{sh_script_remote_path}getipaddress.sh"
         logger.debug(f"执行脚本路径: {script_path}")
         
         # 通过SSH执行脚本获取公网IP
@@ -4360,9 +4352,6 @@ def find_vm_file(vm_name):
         if vm_name.endswith('.vmx'):
             logger.warning(f"虚拟机文件不存在: {vm_name}")
             return None
-        
-        # 如果是简单名称，则在目录中搜索
-        from config import vm_base_dir
         vm_dir = vm_base_dir
         if os.path.exists(vm_dir):
             for root, dirs, files in os.walk(vm_dir):
@@ -4820,25 +4809,29 @@ def api_vm_send_script():
                     'message': f'虚拟机 {vm_name} 未在线或未建立SSH互信'
                 })
             
-            # 使用scp发送脚本
-            import subprocess
+            # 使用scp发送脚本，sh=> macos_sh目录，scpt=>macos_scpt
+            if  script_name.endswith('.sh'):
+                file_script_remote_path = f"{sh_script_remote_path}"
+            else:
+                file_script_remote_path = f"{scpt_script_remote_path}"
+        
             scp_cmd = [
                 'scp',
                 '-o', 'StrictHostKeyChecking=no',
                 '-o', 'ConnectTimeout=10',
                 script_path,
-                f"{vm_username}@{vm_info['ip']}:{script_remote_path}{script_name}"
+                f"{vm_username}@{vm_info['ip']}:{file_script_remote_path}{script_name}"
             ]
             
             logger.debug(f"执行SCP命令: {' '.join(scp_cmd)}")
-            result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=30)
+            result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=30,encoding="utf-8")
             
             if result.returncode == 0:
                 logger.info(f"脚本发送成功到虚拟机 {vm_name} ({vm_info['ip']})")
                 return jsonify({
                     'success': True,
                     'message': f'脚本 {script_name} 发送成功到虚拟机 {vm_name}',
-                    'file_path': f'{script_remote_path}{script_name}'
+                    'file_path': f'{file_script_remote_path}{script_name}'
                 })
             else:
                 error_msg = result.stderr.strip() if result.stderr else result.stdout.strip()
@@ -5133,8 +5126,6 @@ def execute_chmod_scripts(ip, username, script_names=None):
     """远程执行chmod +x命令"""
     logger.info(f"开始为IP {ip} 的用户 {username} 添加脚本执行权限")
     try:
-        import paramiko
-        
         # 创建SSH客户端
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -5143,35 +5134,35 @@ def execute_chmod_scripts(ip, username, script_names=None):
         logger.debug(f"尝试连接到 {ip}")
         ssh.connect(ip, username=username, timeout=10)
         logger.debug("SSH连接成功")
-        
+       
         # 根据传入的脚本名决定执行方式
         if script_names and len(script_names) > 0:
             # 为指定脚本添加执行权限
-            commands = [f"cd {script_remote_path}"]  # 切换到用户脚本上传目录
-            
             for script_name in script_names:
                 # 确保脚本名以.sh结尾
-                if not script_name.endswith('.sh'):
-                    script_name += '.sh'
-                commands.append(f"chmod +x {script_remote_path}{script_name}")
-            
+                if script_name.endswith('.sh'):
+                   commands = [f"cd {sh_script_remote_path}"]  # 切换到用户脚本上传目录
+                   commands.append(f"chmod +x {sh_script_remote_path}{script_name}")
+                else:
+                   commands = [f"cd {scpt_script_remote_path}"]  # 切换到用户脚本上传目录
+                   commands.append(f"chmod +x {scpt_script_remote_path}{script_name}")
             # 列出指定脚本的权限
             script_list = " ".join([name if name.endswith('.sh') else name + '.sh' for name in script_names])
-            commands.append(f"ls -la {script_list} 2>/dev/null || echo '没有找到指定的脚本文件'")
+            commands.append(f"ls -la {sh_script_remote_path}{script_list} 2>/dev/null || echo '没有找到指定的脚本文件'")
             
             logger.debug(f"为指定脚本添加执行权限: {script_names}")
         else:
             # 为所有sh脚本添加执行权限
             commands = [
-                f"cd {script_remote_path}",  # 切换到用户家目录
-                f"chmod +x {script_remote_path}*.sh",  # 为所有sh脚本添加执行权限
-                f"ls -la {script_remote_path}*.sh 2>/dev/null || echo '没有找到.sh文件'"  # 列出所有sh文件及其权限
+                f"cd {sh_script_remote_path}",  # 切换到用户家目录
+                f"chmod +x {sh_script_remote_path}*.sh",  # 为所有sh脚本添加执行权限
+                f"ls -la {sh_script_remote_path}*.sh 2>/dev/null || echo '没有找到.sh文件'"  # 列出所有sh文件及其权限
             ]
-            logger.debug("为所有.sh文件添加执行权限")
+           # logger.debug("为所有.sh文件添加执行权限")
         
         results = []
         for cmd in commands:
-            logger.debug(f"执行命令: {cmd}")
+          #  logger.debug(f"执行命令: {cmd}")
             stdin, stdout, stderr = ssh.exec_command(cmd)
             exit_status = stdout.channel.recv_exit_status()
             output = stdout.read().decode().strip()
@@ -5251,7 +5242,7 @@ def api_get_wuma_info():
         logger.debug(f"虚拟机 {vm_name} 的IP地址: {vm_ip}")
         
         # 通过SSH互信执行家目录脚本
-        result = execute_remote_script(vm_ip, 'wx', f'{script_remote_path}/run_debug_wuma.sh')
+        result = execute_remote_script(vm_ip, 'wx', f'{sh_script_remote_path}run_debug_wuma.sh')
         if len(result) == 3:
             success, output, ssh_log = result
         elif len(result) == 2:
@@ -5291,7 +5282,7 @@ def api_get_ju_info():
         logger.debug(f"虚拟机 {vm_name} 的IP地址: {vm_ip}")
         
         # 通过SSH互信执行家目录脚本
-        result = execute_remote_script(vm_ip, 'wx', f'{script_remote_path}/run_debug_ju.sh')
+        result = execute_remote_script(vm_ip, 'wx', f'{sh_script_remote_path}run_debug_ju.sh')
         if len(result) == 3:
             success, output, ssh_log = result
         elif len(result) == 2:
@@ -5939,8 +5930,8 @@ def api_vm_10_12_execute_script():
             })
         
         # 执行远程脚本
-        logger.info(f"开始执行脚本 {script_name} 在虚拟机 {vm_name} ({vm_info['ip']})")
-        result = execute_remote_script(vm_info['ip'], 'wx', script_name)
+        logger.info(f"开始执行脚本 {sh_script_remote_path}{script_name} 在虚拟机 {vm_name} ({vm_info['ip']})")
+        result = execute_remote_script(vm_info['ip'], 'wx', f'{sh_script_remote_path}{script_name}')
         
         logger.info(f"execute_remote_script 返回结果: {result}")
         
@@ -6414,7 +6405,6 @@ def api_wuma_delete():
         lines.pop(row_index)
         
         # 创建备份目录
-        from config import wuma_config_delete_dir
         backup_dir = wuma_config_delete_dir
         os.makedirs(backup_dir, exist_ok=True)
         
@@ -6713,7 +6703,7 @@ def batch_change_wuma_core(selected_vms, config_file_path, task_id=None):
                 # 注意：重启进度在monitor_vm_and_configure函数中更新，这里不需要重复更新
                 
                 # 执行mount_efi.sh脚本
-                mount_cmd = f'ssh -o StrictHostKeyChecking=no {vm_username}@{vm_ip} "{script_remote_path}/mount_efi.sh"'
+                mount_cmd = f'ssh -o StrictHostKeyChecking=no {vm_username}@{vm_ip} "{sh_script_remote_path}/mount_efi.sh"'
                 logger.info(f"执行mount命令: {mount_cmd}")
                 mount_result = subprocess.run(mount_cmd, shell=True, capture_output=True, text=True, timeout=60)
                 
@@ -6989,7 +6979,7 @@ def batch_change_ju_worker(task_id, selected_vms):
                 add_task_log(task_id, 'INFO', f'虚拟机 {vm_name} IP: {vm_ip}')
                 
                 # 执行test.sh脚本
-                test_cmd = f'ssh -o StrictHostKeyChecking=no wx@{vm_ip} "{script_remote_path}/test.sh"'
+                test_cmd = f'ssh -o StrictHostKeyChecking=no wx@{vm_ip} "{sh_script_remote_path}/test.sh"'
                 logger.info(f"执行test.sh脚本: {test_cmd}")
                 add_task_log(task_id, 'INFO', f'执行test.sh脚本: {vm_name}')
                 test_result = subprocess.run(test_cmd, shell=True, capture_output=True, text=True, timeout=60)
@@ -7242,8 +7232,6 @@ def api_appleid_files():
     logger.info("收到获取Apple ID文件列表请求")
     try:
         files = []
-        # 从配置文件读取目录路径
-        from config import appleid_unused_dir
         id_dir = os.path.join(project_root, appleid_unused_dir)
         
         # 确保ID目录存在
@@ -7299,9 +7287,6 @@ def api_appleid_file_content():
                 'success': False,
                 'message': '未指定文件名'
             })
-        
-        # 从配置文件读取目录路径
-        from config import appleid_unused_dir
         file_path = os.path.join(project_root, appleid_unused_dir, filename)
         
         if not os.path.exists(file_path):
@@ -7412,9 +7397,6 @@ def api_appleid_upload():
             # 使用原文件名，但确保是.txt格式
             base_name = os.path.splitext(file.filename)[0]
             filename = f"{base_name}.txt"
-        
-        # 确保ID_unused目录存在
-        from config import appleid_unused_dir
         id_dir = os.path.join(project_root, appleid_unused_dir)
         os.makedirs(id_dir, exist_ok=True)
         
@@ -7499,9 +7481,6 @@ def api_appleid_delete():
                 'success': False,
                 'message': '缺少必要的删除参数'
             })
-        
-        # 从配置文件读取目录路径
-        from config import appleid_unused_dir, appleid_delete_dir
         file_path = os.path.join(project_root, appleid_unused_dir, filename)
         
         if not os.path.exists(file_path):
@@ -7569,8 +7548,6 @@ def api_apple_ids():
     logger.info("收到获取Apple ID列表请求")
     try:
         apple_ids = []
-        # 从配置文件读取目录路径
-        from config import appleid_unused_dir
         id_dir = os.path.join(project_root, appleid_unused_dir)
         
         # 确保ID目录存在
@@ -7739,9 +7716,6 @@ def api_batch_im_login():
             })
         
         logger.info(f"批量IM登录验证通过 - 运行中虚拟机: {running_vms}, Apple ID文件: {apple_id_file}")
-        
-        # 读取Apple ID文件内容
-        from config import appleid_unused_dir, appleidtxt_path, vm_username
         apple_id_file_path = os.path.join(project_root, appleid_unused_dir, apple_id_file)
         
         if not os.path.exists(apple_id_file_path):
@@ -7878,10 +7852,7 @@ def api_batch_im_login():
                      script_success = False
                      script_message = ""
                     
-                     try:
-                         # 从config导入script_upload_dirs
-                         from config import script_upload_dirs
-                         
+                     try:                        
                          # 查找login_imessage.scpt脚本
                          script_found = False
                          script_path = None
@@ -7900,12 +7871,12 @@ def api_batch_im_login():
                         
                          if script_found:
                              # 先传输脚本到虚拟机，然后调用API执行
-                             remote_script_path = f"{script_remote_path}{login_imessage}"
+                             dir_remote_script_path = f"{scpt_script_remote_path}{login_imessage}"
                              scp_script_cmd = [
                                  'scp',
                                  '-o', 'StrictHostKeyChecking=no',
                                  script_path,
-                                 f"{vm_username}@{vm_ip}:{remote_script_path}"
+                                 f"{vm_username}@{vm_ip}:{dir_remote_script_path}"
                              ]
                              
                              logger.info(f"[线程] 传输登录脚本到虚拟机 {vm_name}: {' '.join(scp_script_cmd)}")
@@ -7918,7 +7889,7 @@ def api_batch_im_login():
                                  try:
                                      import requests
                                      
-                                     script_api_url = f"http://{vm_ip}:8787/run?path={remote_script_path}"
+                                     script_api_url = f"http://{vm_ip}:8787/run?path={dir_remote_script_path}"
                                      logger.info(f"[线程] 调用客户端API执行登录脚本: {script_api_url}")
                                      
                                      response = requests.get(script_api_url, timeout=300)
@@ -8036,8 +8007,6 @@ def api_batch_im_login():
         used_apple_ids = []
         if success_count > 0:
             try:
-                from config import appleid_install_dir
-                
                 # 获取已使用的Apple ID
                 for i, result in enumerate(results):
                     if result['success']:
@@ -8152,7 +8121,6 @@ def api_appleid_stats():
     """获取Apple ID统计信息"""
     logger.info("收到Apple ID统计信息请求")
     try:
-        from config import appleid_unused_dir, appleid_install_dir, appleid_delete_dir
         
         # 获取请求参数中的文件名
         filename = request.args.get('filename', 'test.txt')

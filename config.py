@@ -74,8 +74,12 @@ vm_username = 'wx'
 # 虚拟机macos密码
 vm_password = '123456'
 
-# 脚本远端上传路径（根据用户名动态变化）
-script_remote_path = f'/Users/{vm_username}/Documents/macos_sh/'
+# 脚本sh远端上传路径（根据用户名动态变化）
+sh_script_remote_path = f'/Users/{vm_username}/Documents/macos_script/macos_sh/'
+
+# 脚本scpt远端上传路径（根据用户名动态变化）
+scpt_script_remote_path = f'/Users/{vm_username}/Documents/macos_script/macos_scpt/'
+
 
 # 引导配置路径
 boot_config_path = '/Volumes/EFI/CLOVER/config.plist'
