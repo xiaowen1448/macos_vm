@@ -862,11 +862,6 @@
                             <button class="btn btn-info btn-sm me-2" id="batchIMStatusBtn" onclick="batchIMStatus()" disabled>
                                 <i class="fas fa-info-circle me-2"></i>批量IM状态
                             </button>
-                            <div class="ms-3 d-flex align-items-center">
-                                <small class="text-muted">
-                                    <i class="fas fa-info-circle me-1"></i>批量更改需要全部运行中的虚拟机，批量删除需要全部已关机的虚拟机
-                                </small>
-                            </div>
                         </div>
                         
                         <!-- 分页控件 -->
@@ -3935,40 +3930,6 @@
                                                     ` : ''}
                                                 </td>
                                             </tr>
-                                            <tr>
-                                                <td><strong>IP地址:</strong></td>
-                                                <td><span class="text-ellipsis" title="${vmInfo.ip || '-'}">${vmInfo.ip || '<span class="text-muted">-</span>'}</span></td>
-                                            </tr>
-                                            <tr>
-                                                <td><strong>SSH状态:</strong></td>
-                                                <td>
-                                                    <span class="badge status-badge ${vmInfo.ssh_status === 'online' ? 'bg-success' : 'bg-secondary'}">
-                                                        ${vmInfo.ssh_status === 'online' ? '在线' : '离线'}
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                                                    <tr>
-                            <td><strong>五码信息:</strong></td>
-                            <td>
-                                <div class="d-flex align-items-center">
-                                    ${getWumaViewStatusIcon(vmInfo.wuma_view_status)}
-                                    <button class="btn btn-outline-info btn-sm ms-2" onclick="viewWumaInfo('${vmInfo.name}')" title="查看五码信息" style="cursor: pointer;">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td><strong>JU值信息:</strong></td>
-                            <td>
-                                <div class="d-flex align-items-center">
-                                    ${getJuStatusIcon(vmInfo.ju_info)}
-                                    <button class="btn btn-outline-info btn-sm ms-2" onclick="viewJuInfo('${vmInfo.name}')" title="查看JU值信息" style="cursor: pointer;">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
                                         </table>
                                     </div>
                                 </div>

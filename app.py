@@ -590,6 +590,13 @@ def get_vm_list_from_directory(vm_dir, vm_type_name):
                             if vmss_files:
                                 vm_status = 'suspended'
 
+                        # 获取创建时间
+                        try:
+                            create_time = os.path.getmtime(vm_path)
+                        except Exception as e:
+                            logger.warning(f"无法获取虚拟机 {vm_name} 的创建时间: {str(e)}")
+                            create_time = 0
+
                         vm_info = {
                             'name': vm_name,
                             'path': vm_path,
@@ -602,7 +609,8 @@ def get_vm_list_from_directory(vm_dir, vm_type_name):
                             'ju_info': '未获取到ju值信息',  # JU值信息初始状态
                             'wuma_view_status': '未获取',  # 五码查看状态初始状态
                             'ssh_status': 'unknown',
-                            'vm_status': vm_status  # 添加虚拟机状态字段
+                            'vm_status': vm_status,  # 添加虚拟机状态字段
+                            'create_time': create_time  # 添加创建时间字段
                         }
                         vms.append(vm_info)
                         
@@ -616,7 +624,8 @@ def get_vm_list_from_directory(vm_dir, vm_type_name):
                             stats['suspended'] += 1
         else:
             logger.warning(f"{vm_type_name}虚拟机目录不存在: {vm_dir}")
-        vms.sort(key=lambda vm: (vm['status'] != 'running', vm['name']))
+        # 排序逻辑：开机虚拟机排在最前面，未开机的按创建时间倒序排列
+        vms.sort(key=lambda vm: (vm['status'] != 'running', -vm['create_time']))
         # 计算分页
         total_count = len(vms)
         
@@ -1746,10 +1755,12 @@ def find_vmx_file_by_ip(target_ip):
 def has_vnc_config(vmx_path):
     """检查VMX文件中是否包含VNC配置"""
     try:
-        with open(vmx_path, 'r', encoding='utf-8', errors='ignore') as f:
-            content = f.read()
-            # 检查是否包含VNC配置
-            return 'RemoteDisplay.vnc.enabled' in content and 'RemoteDisplay.vnc.port' in content
+        content, encoding = read_vmx_file_smart(vmx_path)
+        if content is None:
+            logger.error(f"读取VMX文件 {vmx_path} 时出错")
+            return False
+        # 检查是否包含VNC配置
+        return 'RemoteDisplay.vnc.enabled' in content and 'RemoteDisplay.vnc.port' in content
     except Exception as e:
         logger.error(f"读取VMX文件 {vmx_path} 时出错: {str(e)}")
         return False
@@ -1768,8 +1779,8 @@ def is_vmx_for_ip(vmx_path, target_ip):
                 return True
         
         # 方法2: 检查VMX文件内容中是否有IP相关配置
-        with open(vmx_path, 'r', encoding='utf-8', errors='ignore') as f:
-            content = f.read()
+        content, encoding = read_vmx_file_smart(vmx_path)
+        if content is not None:
             # 检查是否包含目标IP
             if target_ip in content:
                 logger.debug(f"VMX文件内容包含目标IP {target_ip}")
@@ -1796,21 +1807,24 @@ def read_vnc_config_from_vmx(vmx_path):
     try:
         vnc_config = {'port': None, 'password': None}
         
-        with open(vmx_path, 'r', encoding='utf-8', errors='ignore') as f:
-            for line in f:
-                line = line.strip()
-                if line.startswith('RemoteDisplay.vnc.port'):
-                    # 提取端口号
-                    parts = line.split('=')
-                    if len(parts) == 2:
-                        port_value = parts[1].strip().strip('"')
-                        vnc_config['port'] = port_value
-                elif line.startswith('RemoteDisplay.vnc.password'):
-                    # 提取密码
-                    parts = line.split('=')
-                    if len(parts) == 2:
-                        password_value = parts[1].strip().strip('"')
-                        vnc_config['password'] = password_value
+        content, encoding = read_vmx_file_smart(vmx_path)
+        if content is None:
+            return None
+            
+        for line in content.split('\n'):
+            line = line.strip()
+            if line.startswith('RemoteDisplay.vnc.port'):
+                # 提取端口号
+                parts = line.split('=')
+                if len(parts) == 2:
+                    port_value = parts[1].strip().strip('"')
+                    vnc_config['port'] = port_value
+            elif line.startswith('RemoteDisplay.vnc.password'):
+                # 提取密码
+                parts = line.split('=')
+                if len(parts) == 2:
+                    password_value = parts[1].strip().strip('"')
+                    vnc_config['password'] = password_value
         
         # 检查是否获取到了必要的配置
         if vnc_config['port'] and vnc_config['password']:
@@ -2901,27 +2915,14 @@ def add_uuid_config_to_vmx(vmx_file_path):
             logger.info(f"[DEBUG] vmx文件不存在: {vmx_file_path}")
             return False
         
-        # 智能检测文件编码并读取vmx文件
-        lines = None
-        detected_encoding = None
-        
-        # 尝试不同的编码格式读取文件
-        encodings_to_try = ['utf-8', 'gbk', 'ansi', 'cp1252']
-        
-        for encoding in encodings_to_try:
-            try:
-                with open(vmx_file_path, 'r', encoding=encoding) as f:
-                    lines = f.readlines()
-                detected_encoding = encoding
-                logger.info(f"[DEBUG] 成功使用 {encoding} 编码读取vmx文件")
-                break
-            except UnicodeDecodeError:
-                logger.info(f"[DEBUG] 使用 {encoding} 编码读取失败，尝试下一种编码")
-                continue
-        
-        if lines is None:
+        # 使用智能编码读取vmx文件
+        content, detected_encoding = read_vmx_file_smart(vmx_file_path)
+        if content is None:
             logger.error(f"[DEBUG] 无法使用任何编码读取vmx文件: {vmx_file_path}")
             return False
+        
+        lines = content.splitlines(keepends=True)
+        logger.info(f"[DEBUG] 成功使用 {detected_encoding} 编码读取vmx文件")
         
         logger.info(f"[DEBUG] 读取到 {len(lines)} 行内容")
         
@@ -2977,27 +2978,14 @@ def add_vnc_config_to_vmx(vmx_file_path, vnc_port):
             logger.info(f"[DEBUG] vmx文件不存在: {vmx_file_path}")
             return False
         
-        # 智能检测文件编码并读取vmx文件
-        lines = None
-        detected_encoding = None
-        
-        # 尝试不同的编码格式读取文件
-        encodings_to_try = ['utf-8', 'gbk', 'ansi', 'cp1252']
-        
-        for encoding in encodings_to_try:
-            try:
-                with open(vmx_file_path, 'r', encoding=encoding) as f:
-                    lines = f.readlines()
-                detected_encoding = encoding
-                logger.info(f"[DEBUG] VNC配置：成功使用 {encoding} 编码读取vmx文件")
-                break
-            except UnicodeDecodeError:
-                logger.info(f"[DEBUG] VNC配置：使用 {encoding} 编码读取失败，尝试下一种编码")
-                continue
-        
-        if lines is None:
+        # 使用智能编码读取vmx文件
+        content, detected_encoding = read_vmx_file_smart(vmx_file_path)
+        if content is None:
             logger.error(f"[DEBUG] VNC配置：无法使用任何编码读取vmx文件: {vmx_file_path}")
             return False
+        
+        lines = content.splitlines(keepends=True)
+        logger.info(f"[DEBUG] VNC配置：成功使用 {detected_encoding} 编码读取vmx文件")
         
         logger.info(f"[DEBUG] 读取到 {len(lines)} 行内容")
         
@@ -3058,27 +3046,14 @@ def update_vmx_display_name(vmx_file_path, new_display_name):
             logger.info(f"[DEBUG] vmx文件不存在: {vmx_file_path}")
             return False, f"vmx文件不存在: {vmx_file_path}"
         
-        # 智能检测文件编码并读取vmx文件
-        lines = None
-        detected_encoding = None
-        
-        # 尝试不同的编码格式读取文件
-        encodings_to_try = ['utf-8', 'gbk', 'ansi', 'cp1252']
-        
-        for encoding in encodings_to_try:
-            try:
-                with open(vmx_file_path, 'r', encoding=encoding) as f:
-                    lines = f.readlines()
-                detected_encoding = encoding
-                logger.info(f"[DEBUG] DisplayName更新：成功使用 {encoding} 编码读取vmx文件")
-                break
-            except UnicodeDecodeError:
-                logger.info(f"[DEBUG] DisplayName更新：使用 {encoding} 编码读取失败，尝试下一种编码")
-                continue
-        
-        if lines is None:
+        # 使用智能编码读取vmx文件
+        content, detected_encoding = read_vmx_file_smart(vmx_file_path)
+        if content is None:
             logger.error(f"[DEBUG] DisplayName更新：无法使用任何编码读取vmx文件: {vmx_file_path}")
             return False, f"无法使用任何编码读取vmx文件: {vmx_file_path}"
+        
+        lines = content.splitlines(keepends=True)
+        logger.info(f"[DEBUG] DisplayName更新：成功使用 {detected_encoding} 编码读取vmx文件")
         
         logger.info(f"[DEBUG] 读取到 {len(lines)} 行内容")
         
@@ -3892,21 +3867,12 @@ def api_update_vm_name():
             new_vm_file = os.path.join(vm_dir, new_name + '.vmx')
             if new_vm_file != original_vm_file and os.path.exists(new_vm_file):
                 # 更新VMX文件中的文件路径引用，使用智能编码检测
-                content = None
-                encodings_to_try = ['utf-8', 'gbk', 'ansi', 'cp1252']
-                
-                for encoding in encodings_to_try:
-                    try:
-                        with open(new_vm_file, 'r', encoding=encoding) as f:
-                            content = f.read()
-                        logger.info(f'成功使用 {encoding} 编码读取VMX文件进行路径更新')
-                        break
-                    except UnicodeDecodeError:
-                        continue
+                content, encoding = read_vmx_file_smart(new_vm_file)
                 
                 if content is None:
                     logger.error(f'无法使用任何编码读取VMX文件: {new_vm_file}')
                 else:
+                    logger.info(f'成功使用 {encoding} 编码读取VMX文件进行路径更新')
                     logger.info(f'VMX文件路径引用更新成功: {new_vm_file}')
             
         except Exception as e:
@@ -4584,11 +4550,33 @@ def get_vm_snapshots(vm_path):
         logger.info(f"[DEBUG] 获取快照列表失败: {str(e)}")
         return []
 
+def read_vmx_file_smart(vmx_file_path):
+    """智能编码读取vmx文件的通用函数"""
+    encodings_to_try = ['utf-8', 'gbk', 'ansi', 'cp1252']
+    
+    for encoding in encodings_to_try:
+        try:
+            with open(vmx_file_path, 'r', encoding=encoding) as f:
+                content = f.read()
+            logger.debug(f"成功使用 {encoding} 编码读取vmx文件: {vmx_file_path}")
+            return content, encoding
+        except UnicodeDecodeError:
+            logger.debug(f"使用 {encoding} 编码读取失败，尝试下一种编码")
+            continue
+        except Exception as e:
+            logger.error(f"读取vmx文件时出错: {str(e)}")
+            return None, None
+    
+    logger.error(f"无法使用任何编码读取vmx文件: {vmx_file_path}")
+    return None, None
+
 def get_vm_config(vm_path):
     """获取虚拟机配置信息"""
     try:
-        with open(vm_path, 'r', encoding='utf-8') as f:
-            content = f.read()
+        content, encoding = read_vmx_file_smart(vm_path)
+        if content is None:
+            logger.info(f"[DEBUG] 获取虚拟机配置失败: 无法读取文件")
+            return {}
         
         config = {}
         for line in content.split('\n'):
