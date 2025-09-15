@@ -546,7 +546,8 @@ def get_vm_list_from_directory(vm_dir, vm_type_name):
         # 获取分页参数
         page = request.args.get('page', 1, type=int)
         page_size = request.args.get('page_size', 10, type=int)
-        logger.debug(f"分页参数 - 页码: {page}, 每页大小: {page_size}")
+        get_all = request.args.get('all', 'false').lower() == 'true'  # 新增获取所有数据参数
+        logger.debug(f"分页参数 - 页码: {page}, 每页大小: {page_size}, 获取所有: {get_all}")
         
         vms = []
         stats = {'total': 0, 'running': 0, 'stopped': 0, 'suspended': 0, 'online': 0}
@@ -558,7 +559,7 @@ def get_vm_list_from_directory(vm_dir, vm_type_name):
             
             list_cmd = [vmrun_path, 'list']
  
-            result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30)
+            result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30, encoding='utf-8', errors='ignore')
             
             if result.returncode == 0:
                 running_vms = set(result.stdout.strip().split('\n')[1:])  # 跳过标题行
@@ -618,11 +619,19 @@ def get_vm_list_from_directory(vm_dir, vm_type_name):
         vms.sort(key=lambda vm: (vm['status'] != 'running', vm['name']))
         # 计算分页
         total_count = len(vms)
-        total_pages = (total_count + page_size - 1) // page_size
-        start_index = (page - 1) * page_size
-        end_index = min(start_index + page_size, total_count)
-        # 分页数据
-        paged_vms = vms[start_index:end_index] if vms else []
+        
+        if get_all:
+            # 返回所有数据，不分页
+            paged_vms = vms
+            total_pages = 1
+            start_index = 0
+            end_index = total_count
+        else:
+            # 正常分页
+            total_pages = (total_count + page_size - 1) // page_size
+            start_index = (page - 1) * page_size
+            end_index = min(start_index + page_size, total_count)
+            paged_vms = vms[start_index:end_index] if vms else []
         
         logger.info(f"{vm_type_name}虚拟机列表获取完成 - 总数: {total_count}, 运行中: {stats['running']}, 已停止: {stats['stopped']}, 挂起: {stats['suspended']}")
         
@@ -1349,6 +1358,12 @@ def vm_management_page():
     """虚拟机管理页面"""
     return render_template('vm_management.html')
 
+@app.route('/batch_im_status')
+@login_required
+def batch_im_status_page():
+    """批量IM状态管理页面"""
+    return render_template('batch_im_status.html')
+
 @app.route('/vm_info')
 @login_required
 def vm_info_page():
@@ -1369,7 +1384,7 @@ def api_vm_info_list():
             vmrun_path = get_vmrun_path()
             
             list_cmd = [vmrun_path, 'list']
-            result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30)
+            result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30, encoding='utf-8', errors='ignore')
             
             if result.returncode == 0:
                 running_vms = set(result.stdout.strip().split('\n')[1:])
@@ -1671,7 +1686,7 @@ def find_vmx_file_by_ip(target_ip):
         
         # 首先获取运行中的虚拟机列表
         list_cmd = [vmrun_path, 'list']
-        result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30, encoding='utf-8', errors='ignore')
         
         if result.returncode != 0:
             logger.error(f"获取运行中虚拟机列表失败: {result.stderr}")
@@ -2440,7 +2455,7 @@ def clone_vm_worker(task_id):
             try:
               #  add_task_log(task_id, 'info', f'执行快照命令: vmrun snapshot {template_path} {snapshot_name}')
                 start_time = datetime.now()
-                result = subprocess.run(snapshot_cmd, capture_output=True, text=True, timeout=120)
+                result = subprocess.run(snapshot_cmd, capture_output=True, text=True, timeout=120, encoding='utf-8', errors='ignore')
                 end_time = datetime.now()
                 duration = (end_time - start_time).total_seconds()
                 if result.stderr:
@@ -2615,7 +2630,7 @@ def clone_vm_worker(task_id):
                 start_time = datetime.now()
                 logger.info(f"[DEBUG] 命令开始时间: {start_time}")
                 
-                result = subprocess.run(clone_cmd, capture_output=True, text=True, timeout=300)
+                result = subprocess.run(clone_cmd, capture_output=True, text=True, timeout=300, encoding='utf-8', errors='ignore')
                 
                 # 记录命令结束时间
                 end_time = datetime.now()
@@ -2641,6 +2656,28 @@ def clone_vm_worker(task_id):
                        # add_task_log(task_id, 'warning', f'虚拟机 {vm_name} 的displayName更新失败')
                         logger.info(f"[DEBUG] displayName更新失败")
                     
+                    #添加UUID配置参数
+                    if add_uuid_config_to_vmx(vm_file_path):
+                        logger.info(f"[DEBUG] UUID配置添加成功")
+                    else:
+                        logger.info(f"[DEBUG] UUID配置添加失败")
+
+                    #重写虚拟机uuid参数 
+                    # new_lines = []
+                    # logger.info(f"[DEBUG]开始重写uuid：{vm_file_path}")
+                    # with open(vm_file_path, "r", encoding="utf-8") as f:
+                    #     for line in f:
+                    #         if line.strip().startswith(("uuid.bios", "uuid.location")):
+                    #             continue
+                    #         new_lines.append(line)
+
+                    #清理nvram
+                     # 删除 nvram
+                    # logger.info(f"[DEBUG]开始删除 nvram：{vm_folder_path}")
+                    # for f in os.listdir(vm_folder_path):
+                    #     if f.endswith(".nvram"):
+                    #          os.remove(os.path.join(vm_folder_path, f))
+
                     # 添加VNC配置
                     vnc_port = get_next_vnc_port()
                     if add_vnc_config_to_vmx(vm_file_path, vnc_port):
@@ -2661,7 +2698,7 @@ def clone_vm_worker(task_id):
                         start_time = datetime.now()
                        # logger.info(f"[DEBUG] 启动命令开始时间: {start_time}")
                         
-                        result = subprocess.run(start_cmd, capture_output=True, text=True, timeout=60)
+                        result = subprocess.run(start_cmd, capture_output=True, text=True, timeout=60, encoding='utf-8', errors='ignore')
                         
                         # 记录启动命令结束时间
                         end_time = datetime.now()
@@ -2854,6 +2891,81 @@ def get_next_vnc_port():
         # 如果出错，返回默认端口
         return vnc_start_port
 
+def add_uuid_config_to_vmx(vmx_file_path):
+    """在VMX文件中添加UUID配置参数"""
+    try:
+        logger.info(f"[DEBUG] 开始添加UUID配置到vmx文件: {vmx_file_path}")
+        
+        # 检查文件是否存在
+        if not os.path.exists(vmx_file_path):
+            logger.info(f"[DEBUG] vmx文件不存在: {vmx_file_path}")
+            return False
+        
+        # 智能检测文件编码并读取vmx文件
+        lines = None
+        detected_encoding = None
+        
+        # 尝试不同的编码格式读取文件
+        encodings_to_try = ['utf-8', 'gbk', 'ansi', 'cp1252']
+        
+        for encoding in encodings_to_try:
+            try:
+                with open(vmx_file_path, 'r', encoding=encoding) as f:
+                    lines = f.readlines()
+                detected_encoding = encoding
+                logger.info(f"[DEBUG] 成功使用 {encoding} 编码读取vmx文件")
+                break
+            except UnicodeDecodeError:
+                logger.info(f"[DEBUG] 使用 {encoding} 编码读取失败，尝试下一种编码")
+                continue
+        
+        if lines is None:
+            logger.error(f"[DEBUG] 无法使用任何编码读取vmx文件: {vmx_file_path}")
+            return False
+        
+        logger.info(f"[DEBUG] 读取到 {len(lines)} 行内容")
+        
+        # 检查是否已存在uuid.action配置，如果存在则更新，否则添加
+        uuid_config_key = 'uuid.action'
+        uuid_config_value = 'create'
+        
+        config_found = False
+        
+        # 查找并更新已存在的uuid.action配置
+        for i, line in enumerate(lines):
+            line_stripped = line.strip()
+            if line_stripped.startswith(uuid_config_key):
+                old_line = line_stripped
+                new_line = f'{uuid_config_key} = "{uuid_config_value}"\n'
+                lines[i] = new_line
+                config_found = True
+                logger.info(f"[DEBUG] 更新UUID配置: {old_line} -> {new_line.strip()}")
+                break
+        
+        # 如果未找到uuid.action配置，则添加
+        if not config_found:
+            new_line = f'{uuid_config_key} = "{uuid_config_value}"\n'
+            lines.append(new_line)
+            logger.info(f"[DEBUG] 添加UUID配置: {new_line.strip()}")
+        
+        # 写回文件，使用ANSI编码防止VMware乱码
+        try:
+            with open(vmx_file_path, 'w', encoding='ansi') as f:
+                f.writelines(lines)
+            logger.info(f"[DEBUG] UUID配置添加成功，使用ANSI编码写入")
+        except UnicodeEncodeError:
+            # 如果ANSI编码失败，回退到UTF-8
+            logger.info(f"[DEBUG] ANSI编码写入失败，回退到UTF-8编码")
+            with open(vmx_file_path, 'w', encoding='utf-8') as f:
+                f.writelines(lines)
+            logger.info(f"[DEBUG] UUID配置添加成功，使用UTF-8编码写入")
+        
+        return True
+        
+    except Exception as e:
+        logger.info(f"[DEBUG] 添加UUID配置失败: {str(e)}")
+        return False
+
 def add_vnc_config_to_vmx(vmx_file_path, vnc_port):
     """在VMX文件中添加VNC配置参数"""
     try:
@@ -2865,9 +2977,27 @@ def add_vnc_config_to_vmx(vmx_file_path, vnc_port):
             logger.info(f"[DEBUG] vmx文件不存在: {vmx_file_path}")
             return False
         
-        # 读取vmx文件
-        with open(vmx_file_path, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
+        # 智能检测文件编码并读取vmx文件
+        lines = None
+        detected_encoding = None
+        
+        # 尝试不同的编码格式读取文件
+        encodings_to_try = ['utf-8', 'gbk', 'ansi', 'cp1252']
+        
+        for encoding in encodings_to_try:
+            try:
+                with open(vmx_file_path, 'r', encoding=encoding) as f:
+                    lines = f.readlines()
+                detected_encoding = encoding
+                logger.info(f"[DEBUG] VNC配置：成功使用 {encoding} 编码读取vmx文件")
+                break
+            except UnicodeDecodeError:
+                logger.info(f"[DEBUG] VNC配置：使用 {encoding} 编码读取失败，尝试下一种编码")
+                continue
+        
+        if lines is None:
+            logger.error(f"[DEBUG] VNC配置：无法使用任何编码读取vmx文件: {vmx_file_path}")
+            return False
         
         logger.info(f"[DEBUG] 读取到 {len(lines)} 行内容")
         
@@ -2899,11 +3029,18 @@ def add_vnc_config_to_vmx(vmx_file_path, vnc_port):
                 lines.append(new_line)
                # logger.info(f"[DEBUG] 添加VNC配置: {new_line.strip()}")
         
-        # 写回文件
-        with open(vmx_file_path, 'w', encoding='utf-8') as f:
-            f.writelines(lines)
+        # 写回文件，使用ANSI编码防止VMware乱码
+        try:
+            with open(vmx_file_path, 'w', encoding='ansi') as f:
+                f.writelines(lines)
+            logger.info(f"[DEBUG] VNC配置添加成功，使用ANSI编码写入")
+        except UnicodeEncodeError:
+            # 如果ANSI编码失败，回退到UTF-8
+            logger.info(f"[DEBUG] VNC配置：ANSI编码写入失败，回退到UTF-8编码")
+            with open(vmx_file_path, 'w', encoding='utf-8') as f:
+                f.writelines(lines)
+            logger.info(f"[DEBUG] VNC配置添加成功，使用UTF-8编码写入")
         
-        logger.info(f"[DEBUG] VNC配置添加成功")
         return True
         
     except Exception as e:
@@ -2911,7 +3048,7 @@ def add_vnc_config_to_vmx(vmx_file_path, vnc_port):
         return False
 
 def update_vmx_display_name(vmx_file_path, new_display_name):
-    """更新vmx文件中的displayName参数"""
+    """更新vmx文件中的displayName参数并修改编码为ANSI"""
     try:
         logger.info(f"[DEBUG] 开始更新vmx文件: {vmx_file_path}")
         logger.info(f"[DEBUG] 新的displayName: {new_display_name}")
@@ -2919,52 +3056,106 @@ def update_vmx_display_name(vmx_file_path, new_display_name):
         # 检查文件是否存在
         if not os.path.exists(vmx_file_path):
             logger.info(f"[DEBUG] vmx文件不存在: {vmx_file_path}")
-            return False
+            return False, f"vmx文件不存在: {vmx_file_path}"
         
-        # 读取vmx文件
-        with open(vmx_file_path, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
+        # 智能检测文件编码并读取vmx文件
+        lines = None
+        detected_encoding = None
+        
+        # 尝试不同的编码格式读取文件
+        encodings_to_try = ['utf-8', 'gbk', 'ansi', 'cp1252']
+        
+        for encoding in encodings_to_try:
+            try:
+                with open(vmx_file_path, 'r', encoding=encoding) as f:
+                    lines = f.readlines()
+                detected_encoding = encoding
+                logger.info(f"[DEBUG] DisplayName更新：成功使用 {encoding} 编码读取vmx文件")
+                break
+            except UnicodeDecodeError:
+                logger.info(f"[DEBUG] DisplayName更新：使用 {encoding} 编码读取失败，尝试下一种编码")
+                continue
+        
+        if lines is None:
+            logger.error(f"[DEBUG] DisplayName更新：无法使用任何编码读取vmx文件: {vmx_file_path}")
+            return False, f"无法使用任何编码读取vmx文件: {vmx_file_path}"
         
         logger.info(f"[DEBUG] 读取到 {len(lines)} 行内容")
         
-        # 查找并替换displayName参数
-        updated = False
+        # 查找并替换displayName参数和编码参数
+        displayname_updated = False
+        encoding_updated = False
+        
         for i, line in enumerate(lines):
             line_stripped = line.strip()
             if line_stripped.startswith('displayName'):
                 old_line = line_stripped
                 new_line = f'displayName = "{new_display_name}"\n'
                 lines[i] = new_line
-                updated = True
+                displayname_updated = True
                 logger.info(f"[DEBUG] 找到displayName行: {old_line}")
                 logger.info(f"[DEBUG] 更新为: {new_line.strip()}")
-                break
+            elif line_stripped.startswith('.encoding'):
+                old_encoding_line = line_stripped
+                new_encoding_line = '.encoding = "GBK"\n'
+                lines[i] = new_encoding_line
+                encoding_updated = True
+                logger.info(f"[DEBUG] 找到编码行: {old_encoding_line}")
+                logger.info(f"[DEBUG] 更新为: {new_encoding_line.strip()}")
         
-        if not updated:
-            # 如果没有找到displayName行，在文件末尾添加
+        if not displayname_updated:
+            # 如果没有找到displayName行，在文件开头添加
             new_line = f'displayName = "{new_display_name}"\n'
-            lines.append(new_line)
-            logger.info(f"[DEBUG] 未找到displayName行，在文件末尾添加: {new_line.strip()}")
+            lines.insert(1, new_line)  # 在编码行后添加
+            logger.info(f"[DEBUG] 未找到displayName行，在文件开头添加: {new_line.strip()}")
         
-        # 写回文件
-        with open(vmx_file_path, 'w', encoding='utf-8') as f:
-            f.writelines(lines)
+        if not encoding_updated:
+            # 如果没有找到编码行，在文件开头添加
+            new_encoding_line = '.encoding = "GBK"\n'
+            lines.insert(0, new_encoding_line)
+            logger.info(f"[DEBUG] 未找到编码行，在文件开头添加: {new_encoding_line.strip()}")
         
-        logger.info(f"[DEBUG] vmx文件更新成功")
+        # 写回文件，使用GBK编码防止VMware乱码
+        write_encoding = 'gbk'
+        try:
+            with open(vmx_file_path, 'w', encoding='gbk') as f:
+                f.writelines(lines)
+            logger.info(f"[DEBUG] DisplayName更新：vmx文件更新成功，使用GBK编码写入")
+        except UnicodeEncodeError:
+            # 如果GBK编码失败，回退到UTF-8
+            write_encoding = 'utf-8'
+            logger.info(f"[DEBUG] DisplayName更新：GBK编码写入失败，回退到UTF-8编码")
+            with open(vmx_file_path, 'w', encoding='utf-8') as f:
+                f.writelines(lines)
+            logger.info(f"[DEBUG] DisplayName更新：vmx文件更新成功，使用UTF-8编码写入")
         
-        # 验证更新结果
-        with open(vmx_file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-            if f'displayName = "{new_display_name}"' in content:
-                logger.info(f"[DEBUG] 验证成功：displayName已正确更新")
-                return True
-            else:
-                logger.info(f"[DEBUG] 验证失败：displayName未找到")
-                return False
+        # 验证更新结果，使用相同的编码读取
+        try:
+            with open(vmx_file_path, 'r', encoding=write_encoding) as f:
+                content = f.read()
+                if f'displayName = "{new_display_name}"' in content:
+                    logger.info(f"[DEBUG] 验证成功：displayName已正确更新")
+                    return True, "displayName和编码更新成功"
+                else:
+                    logger.info(f"[DEBUG] 验证失败：displayName未找到")
+                    return False, "验证失败：displayName未找到"
+        except UnicodeDecodeError:
+            # 验证时如果编码失败，尝试其他编码
+            for encoding in encodings_to_try:
+                try:
+                    with open(vmx_file_path, 'r', encoding=encoding) as f:
+                        content = f.read()
+                        if f'displayName = "{new_display_name}"' in content:
+                            logger.info(f"[DEBUG] 验证成功：displayName已正确更新（使用{encoding}编码验证）")
+                            return True, "displayName和编码更新成功"
+                except UnicodeDecodeError:
+                    continue
+            logger.info(f"[DEBUG] 验证失败：无法读取文件进行验证")
+            return False, "验证失败：无法读取文件进行验证"
         
     except Exception as e:
         logger.info(f"[DEBUG] 更新vmx文件失败: {str(e)}")
-        return False
+        return False, f"更新vmx文件失败: {str(e)}"
 
 def add_task_log(task_id, level, message):
     """添加任务日志"""
@@ -3134,7 +3325,7 @@ def api_vm_list():
             vmrun_path = get_vmrun_path()
             
             list_cmd = [vmrun_path, 'list']
-            result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30)
+            result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30, encoding='utf-8', errors='ignore')
             
             if result.returncode == 0:
                 running_vms = set(result.stdout.strip().split('\n')[1:])  # 跳过标题行
@@ -3625,6 +3816,136 @@ def api_vm_info(vm_name):
     except Exception as e:
         return jsonify({'success': False, 'message': f'获取信息失败: {str(e)}'})
 
+#修改虚拟机名称
+@app.route('/api/update_vm_name', methods=['POST'])
+@login_required
+def api_update_vm_name():
+    """更新虚拟机名称 - 修改displayName参数并重命名相关文件"""
+    try:
+        data = request.get_json()
+        original_name = data.get('original_name')
+        new_name = data.get('new_name')
+        
+        if not original_name or not new_name:
+            return jsonify({'success': False, 'message': '缺少原始名称或新名称'})
+        
+        if original_name == new_name:
+            return jsonify({'success': False, 'message': '新名称与原名称相同'})
+        
+        # 验证新名称的合法性
+        invalid_chars = r'[\\/:*?"<>|]'
+        if re.search(invalid_chars, new_name):
+            return jsonify({'success': False, 'message': '虚拟机名称不能包含特殊字符：\\ / : * ? " < > |'})
+        
+        # 查找原始虚拟机文件
+        original_vm_file = find_vm_file(original_name)
+        if not original_vm_file:
+            return jsonify({'success': False, 'message': f'找不到虚拟机文件: {original_name}'})
+        
+        # 检查虚拟机是否正在运行
+        vm_status = get_vm_status(original_vm_file)
+        if vm_status == 'running' or vm_status == 'starting':
+            return jsonify({'success': False, 'message': '无法重命名正在运行的虚拟机，请先停止虚拟机'})
+        
+        logger.info(f'开始修改虚拟机名称: {original_name} -> {new_name}')
+        
+        # 获取虚拟机目录
+        vm_dir = os.path.dirname(original_vm_file)
+        
+        # 备份原始vmx文件
+        backup_file = original_vm_file + '.backup.' + datetime.now().strftime('%Y%m%d_%H%M%S')
+        try:
+            shutil.copy2(original_vm_file, backup_file)
+            logger.info(f'VMX文件备份成功: {backup_file}')
+        except Exception as e:
+            logger.error(f'备份VMX文件失败: {str(e)}')
+            return jsonify({'success': False, 'message': f'备份VMX文件失败: {str(e)}'})
+        
+        renamed_files = []  # 记录已重命名的文件，用于回滚
+        
+        try:
+            # 1. 修改VMX文件中的displayName参数和编码
+            success, message = update_vmx_display_name(original_vm_file, new_name)
+            if not success:
+                logger.error(f'更新VMX文件失败: {message}')
+                return jsonify({'success': False, 'message': f'更新VMX文件失败: {message}'})
+            
+            logger.info(f'VMX文件displayName和编码更新成功: {original_vm_file}')
+            
+            # 2. 重命名相关文件
+            file_extensions = ['.vmx']
+            
+            for ext in file_extensions:
+                old_file = os.path.join(vm_dir, original_name + ext)
+                new_file = os.path.join(vm_dir, new_name + ext)
+                
+                if os.path.exists(old_file):
+                    try:
+                        os.rename(old_file, new_file)
+                        renamed_files.append((old_file, new_file))
+                        logger.info(f'文件重命名成功: {old_file} -> {new_file}')
+                    except Exception as e:
+                        logger.error(f'重命名文件失败: {old_file} -> {new_file}, 错误: {str(e)}')
+                        raise Exception(f'重命名文件失败: {ext} 文件')
+            
+            # 3. 更新VMX文件路径（如果文件被重命名）
+            new_vm_file = os.path.join(vm_dir, new_name + '.vmx')
+            if new_vm_file != original_vm_file and os.path.exists(new_vm_file):
+                # 更新VMX文件中的文件路径引用，使用智能编码检测
+                content = None
+                encodings_to_try = ['utf-8', 'gbk', 'ansi', 'cp1252']
+                
+                for encoding in encodings_to_try:
+                    try:
+                        with open(new_vm_file, 'r', encoding=encoding) as f:
+                            content = f.read()
+                        logger.info(f'成功使用 {encoding} 编码读取VMX文件进行路径更新')
+                        break
+                    except UnicodeDecodeError:
+                        continue
+                
+                if content is None:
+                    logger.error(f'无法使用任何编码读取VMX文件: {new_vm_file}')
+                else:
+                    logger.info(f'VMX文件路径引用更新成功: {new_vm_file}')
+            
+        except Exception as e:
+            logger.error(f'重命名过程中发生错误: {str(e)}')
+            
+            # 回滚已重命名的文件
+            for old_file, new_file in reversed(renamed_files):
+                try:
+                    if os.path.exists(new_file):
+                        os.rename(new_file, old_file)
+                        logger.info(f'回滚文件: {new_file} -> {old_file}')
+                except:
+                    pass
+            
+            # 恢复备份文件
+            try:
+                shutil.copy2(backup_file, original_vm_file)
+                os.remove(backup_file)
+                logger.info('已恢复VMX备份文件')
+            except:
+                pass
+            
+            return jsonify({'success': False, 'message': f'重命名失败: {str(e)}'})
+        
+        logger.info(f'虚拟机名称修改完成: {original_name} -> {new_name}')
+        
+        return jsonify({
+            'success': True,
+            'message': f'虚拟机名称修改成功: {original_name} -> {new_name}',
+            'original_name': original_name,
+            'new_name': new_name,
+            'backup_file': backup_file,
+            'renamed_files': len(renamed_files)
+        })
+        
+    except Exception as e:
+        logger.error(f'更新虚拟机名称失败: {str(e)}')
+        return jsonify({'success': False, 'message': f'更新虚拟机名称失败: {str(e)}'})
+
 @app.route('/api/vm_delete', methods=['POST'])
 @login_required
 def api_vm_delete():
@@ -3687,7 +4008,7 @@ def get_vm_status(vm_path):
         list_cmd = [vmrun_path, 'list']
         #logger.info(f"[DEBUG] 执行命令: {' '.join(list_cmd)}")
         
-        result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30, encoding='utf-8', errors='ignore')
         
        # logger.info(f"[DEBUG] vmrun list命令返回码: {result.returncode}")
        # logger.info(f"[DEBUG] vmrun list命令输出: {result.stdout}")
@@ -6417,7 +6738,7 @@ def batch_change_wuma_core(selected_vms, config_file_path, task_id=None):
         vmrun_path = get_vmrun_path()
         
         list_cmd = [vmrun_path, 'list'] 
-        result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30, encoding='utf-8', errors='ignore')
         
         if result.returncode != 0:
             return {
@@ -6786,7 +7107,7 @@ def batch_change_ju_worker(task_id, selected_vms):
         
         list_cmd = [vmrun_path, 'list']
  
-        result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30, encoding='utf-8', errors='ignore')
         
         if result.returncode != 0:
             add_task_log(task_id, 'ERROR', f'获取运行中虚拟机列表失败: {result.stderr}')
@@ -6949,7 +7270,7 @@ def api_batch_delete_vm():
         
         list_cmd = [vmrun_path, 'list']
  
-        result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30, encoding='utf-8', errors='ignore')
         
         if result.returncode != 0:
             return jsonify({
@@ -8318,7 +8639,7 @@ def api_scan_clients():
             try:
                 # 首先获取运行中的虚拟机列表
                 list_cmd = [vmrun_path, 'list']
-                result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30)
+                result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30, encoding='utf-8', errors='ignore')
                 
                 if result.returncode != 0:
                     logger.error(f"获取运行中虚拟机列表失败: {result.stderr}")
@@ -9270,6 +9591,430 @@ def api_batch_get_10_12_ju_info():
         return jsonify({
             'success': False,
             'message': f'批量获取JU值信息失败: {str(e)}'
+        })
+
+#批量IM注销
+import threading
+import json
+from concurrent.futures import ThreadPoolExecutor
+
+@app.route('/api/batch_im_logout', methods=['POST'])
+def batch_im_logout():
+    """批量IM注销API - 多线程异步版本"""
+    try:
+        data = request.get_json()
+        vm_names = data.get('vm_names', [])
+        session_id = data.get('session_id', str(uuid.uuid4()))
+        
+        if not vm_names:
+            return jsonify({
+                'success': False,
+                'message': '请提供虚拟机名称列表'
+            })
+        
+        # 启动异步处理
+        thread = threading.Thread(target=process_batch_im_logout_async, args=(vm_names, session_id))
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({
+            'success': True,
+            'session_id': session_id,
+            'message': '批量IM注销任务已启动，请通过WebSocket接收实时更新'
+        })
+        
+    except Exception as e:
+        logger.error(f"批量IM注销启动失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'批量IM注销启动失败: {str(e)}'
+        })
+
+def process_batch_im_logout_async(vm_names, session_id):
+    """异步处理批量IM注销"""
+    try:
+        success_count = 0
+        failed_count = 0
+        results = []
+        
+        # 发送开始消息
+        socketio.emit('batch_im_logout_start', {
+            'session_id': session_id,
+            'total_count': len(vm_names)
+        })
+        
+        def process_single_vm(vm_name):
+            nonlocal success_count, failed_count
+            try:
+                logger.info(f"执行虚拟机 {vm_name} 的IM注销操作")
+                
+                # 发送处理中消息
+                socketio.emit('batch_im_logout_progress', {
+                    'session_id': session_id,
+                    'vm_name': vm_name,
+                    'status': 'processing',
+                    'message': '正在处理...'
+                })
+                
+                # 获取虚拟机IP
+                vm_ip = get_vm_ip(vm_name)
+                if not vm_ip or not is_valid_ip(vm_ip):
+                    failed_count += 1
+                    result = {
+                        'vm_name': vm_name,
+                        'result': 'IM_SUCESSFULL',  # IP获取失败视为未注销
+                        'message': '虚拟机IP获取失败或无效'
+                    }
+                    socketio.emit('batch_im_logout_progress', {
+                        'session_id': session_id,
+                        'vm_name': vm_name,
+                        'status': 'failed',
+                        'result': 'IM_SUCESSFULL',
+                        'message': '虚拟机IP获取失败或无效'
+                    })
+                    return result
+                
+                # 调用客户端8787端口API执行IM注销脚本
+                script_name = 'logout_imessage.scpt'
+                script_api_url = f"http://{vm_ip}:8787/run?path={scpt_script_remote_path}{script_name}"
+                
+                try:
+                    logger.info(f"调用客户端API执行IM注销: {script_api_url}")
+                    response = requests.get(script_api_url, timeout=90)  # 延长超时时间
+                    
+                    if response.status_code == 200:
+                        try:
+                            # 尝试解析JSON响应
+                            response_data = response.json()
+                            result_status = response_data.get('result', 'IM_SUCESSFULL')
+                        except:
+                            # 如果不是JSON，根据文本内容判断
+                            output = response.text.strip()
+                            if 'IM_ERROR' in output:
+                                result_status = 'IM_ERROR'
+                            else:
+                                result_status = 'IM_SUCESSFULL'
+                        
+                        logger.info(f"虚拟机 {vm_name} IM注销完成: {result_status}")
+                        
+                        if result_status == 'IM_ERROR':
+                            success_count += 1  # IM_ERROR表示已注销
+                        else:
+                            failed_count += 1   # IM_SUCESSFULL表示未注销
+                        
+                        result = {
+                            'vm_name': vm_name,
+                            'result': result_status,
+                            'message': f'IM注销操作完成'
+                        }
+                        
+                        socketio.emit('batch_im_logout_progress', {
+                            'session_id': session_id,
+                            'vm_name': vm_name,
+                            'status': 'completed',
+                            'result': result_status,
+                            'message': 'IM注销操作完成'
+                        })
+                        
+                        return result
+                    else:
+                        failed_count += 1
+                        result = {
+                            'vm_name': vm_name,
+                            'result': 'IM_SUCESSFULL',
+                            'message': f'IM注销失败: HTTP {response.status_code}'
+                        }
+                        socketio.emit('batch_im_logout_progress', {
+                            'session_id': session_id,
+                            'vm_name': vm_name,
+                            'status': 'failed',
+                            'result': 'IM_SUCESSFULL',
+                            'message': f'IM注销失败: HTTP {response.status_code}'
+                        })
+                        return result
+                        
+                except requests.exceptions.Timeout:
+                    failed_count += 1
+                    result = {
+                        'vm_name': vm_name,
+                        'result': 'IM_SUCESSFULL',
+                        'message': 'IM注销超时'
+                    }
+                    socketio.emit('batch_im_logout_progress', {
+                        'session_id': session_id,
+                        'vm_name': vm_name,
+                        'status': 'failed',
+                        'result': 'IM_SUCESSFULL',
+                        'message': 'IM注销超时'
+                    })
+                    return result
+                except requests.exceptions.ConnectionError:
+                    failed_count += 1
+                    result = {
+                        'vm_name': vm_name,
+                        'result': 'IM_SUCESSFULL',
+                        'message': '无法连接到客户端8787端口'
+                    }
+                    socketio.emit('batch_im_logout_progress', {
+                        'session_id': session_id,
+                        'vm_name': vm_name,
+                        'status': 'failed',
+                        'result': 'IM_SUCESSFULL',
+                        'message': '无法连接到客户端8787端口'
+                    })
+                    return result
+                except Exception as api_error:
+                    failed_count += 1
+                    result = {
+                        'vm_name': vm_name,
+                        'result': 'IM_SUCESSFULL',
+                        'message': f'API调用异常: {str(api_error)}'
+                    }
+                    socketio.emit('batch_im_logout_progress', {
+                        'session_id': session_id,
+                        'vm_name': vm_name,
+                        'status': 'failed',
+                        'result': 'IM_SUCESSFULL',
+                        'message': f'API调用异常: {str(api_error)}'
+                    })
+                    return result
+                
+            except Exception as e:
+                failed_count += 1
+                result = {
+                    'vm_name': vm_name,
+                    'result': 'IM_SUCESSFULL',
+                    'message': str(e)
+                }
+                socketio.emit('batch_im_logout_progress', {
+                    'session_id': session_id,
+                    'vm_name': vm_name,
+                    'status': 'failed',
+                    'result': 'IM_SUCESSFULL',
+                    'message': str(e)
+                })
+                logger.error(f"虚拟机 {vm_name} IM注销失败: {str(e)}")
+                return result
+        
+        # 使用线程池并发处理
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            results = list(executor.map(process_single_vm, vm_names))
+        
+        # 发送完成消息
+        socketio.emit('batch_im_logout_complete', {
+            'session_id': session_id,
+            'success_count': success_count,
+            'failed_count': failed_count,
+            'results': results
+        })
+        
+    except Exception as e:
+        logger.error(f"批量IM注销异步处理失败: {str(e)}")
+        socketio.emit('batch_im_logout_error', {
+            'session_id': session_id,
+            'message': f'批量IM注销处理失败: {str(e)}'
+        })
+
+#批量IM状态
+@app.route('/api/batch_im_status', methods=['POST'])
+def batch_im_status():
+    """批量IM状态查询API - 多线程异步版本"""
+    try:
+        data = request.get_json()
+        vm_names = data.get('vm_names', [])
+        session_id = data.get('session_id', str(uuid.uuid4()))
+        
+        if not vm_names:
+            return jsonify({
+                'success': False,
+                'message': '请提供虚拟机名称列表'
+            })
+        
+        # 启动异步处理
+        thread = threading.Thread(target=process_batch_im_status_async, args=(vm_names, session_id))
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({
+            'success': True,
+            'session_id': session_id,
+            'message': '批量IM状态查询任务已启动，请通过WebSocket接收实时更新'
+        })
+        
+    except Exception as e:
+        logger.error(f"批量IM状态查询启动失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'批量IM状态查询启动失败: {str(e)}'
+        })
+
+def process_batch_im_status_async(vm_names, session_id):
+    """异步处理批量IM状态查询"""
+    try:
+        results = []
+        
+        # 发送开始消息
+        socketio.emit('batch_im_status_start', {
+            'session_id': session_id,
+            'total_count': len(vm_names)
+        })
+        
+        def process_single_vm(vm_name):
+            try:
+                logger.info(f"查询虚拟机 {vm_name} 的IM状态")
+                
+                # 发送处理中消息
+                socketio.emit('batch_im_status_progress', {
+                    'session_id': session_id,
+                    'vm_name': vm_name,
+                    'status': 'processing',
+                    'message': '正在查询...'
+                })
+                
+                # 获取虚拟机IP
+                vm_ip = get_vm_ip(vm_name)
+                if not vm_ip or not is_valid_ip(vm_ip):
+                    result = {
+                        'vm_name': vm_name,
+                        'result': 'IM_ERROR',  # IP获取失败视为未激活
+                        'message': '虚拟机IP获取失败或无效'
+                    }
+                    socketio.emit('batch_im_status_progress', {
+                        'session_id': session_id,
+                        'vm_name': vm_name,
+                        'status': 'failed',
+                        'result': 'IM_ERROR',
+                        'message': '虚拟机IP获取失败或无效'
+                    })
+                    return result
+                
+                # 调用客户端8787端口API执行IM状态查询脚本
+                script_name = 'login_status_imessage.scpt'
+                script_api_url = f"http://{vm_ip}:8787/run?path={scpt_script_remote_path}{script_name}"
+                
+                try:
+                    logger.info(f"调用客户端API查询IM状态: {script_api_url}")
+                    response = requests.get(script_api_url, timeout=90)  # 延长超时时间
+                    
+                    if response.status_code == 200:
+                        try:
+                            # 尝试解析JSON响应
+                            response_data = response.json()
+                            result_status = response_data.get('result', 'IM_ERROR')
+                        except:
+                            # 如果不是JSON，根据文本内容判断
+                            output = response.text.strip()
+                            if 'IM_SUCESSFULL' in output:
+                                result_status = 'IM_SUCESSFULL'
+                            else:
+                                result_status = 'IM_ERROR'
+                        
+                        logger.info(f"虚拟机 {vm_name} IM状态查询成功: {result_status}")
+                        
+                        result = {
+                            'vm_name': vm_name,
+                            'result': result_status,
+                            'message': 'IM状态查询完成'
+                        }
+                        
+                        socketio.emit('batch_im_status_progress', {
+                            'session_id': session_id,
+                            'vm_name': vm_name,
+                            'status': 'completed',
+                            'result': result_status,
+                            'message': 'IM状态查询完成'
+                        })
+                        
+                        return result
+                    else:
+                        result = {
+                            'vm_name': vm_name,
+                            'result': 'IM_ERROR',
+                            'message': f'查询失败: HTTP {response.status_code}'
+                        }
+                        socketio.emit('batch_im_status_progress', {
+                            'session_id': session_id,
+                            'vm_name': vm_name,
+                            'status': 'failed',
+                            'result': 'IM_ERROR',
+                            'message': f'查询失败: HTTP {response.status_code}'
+                        })
+                        return result
+                        
+                except requests.exceptions.Timeout:
+                    result = {
+                        'vm_name': vm_name,
+                        'result': 'IM_ERROR',
+                        'message': '查询超时'
+                    }
+                    socketio.emit('batch_im_status_progress', {
+                        'session_id': session_id,
+                        'vm_name': vm_name,
+                        'status': 'failed',
+                        'result': 'IM_ERROR',
+                        'message': '查询超时'
+                    })
+                    return result
+                except requests.exceptions.ConnectionError:
+                    result = {
+                        'vm_name': vm_name,
+                        'result': 'IM_ERROR',
+                        'message': '无法连接到客户端8787端口'
+                    }
+                    socketio.emit('batch_im_status_progress', {
+                        'session_id': session_id,
+                        'vm_name': vm_name,
+                        'status': 'failed',
+                        'result': 'IM_ERROR',
+                        'message': '无法连接到客户端8787端口'
+                    })
+                    return result
+                except Exception as api_error:
+                    result = {
+                        'vm_name': vm_name,
+                        'result': 'IM_ERROR',
+                        'message': f'API调用异常: {str(api_error)}'
+                    }
+                    socketio.emit('batch_im_status_progress', {
+                        'session_id': session_id,
+                        'vm_name': vm_name,
+                        'status': 'failed',
+                        'result': 'IM_ERROR',
+                        'message': f'API调用异常: {str(api_error)}'
+                    })
+                    return result
+                
+            except Exception as e:
+                result = {
+                    'vm_name': vm_name,
+                    'result': 'IM_ERROR',
+                    'message': '查询失败: ' + str(e)
+                }
+                socketio.emit('batch_im_status_progress', {
+                    'session_id': session_id,
+                    'vm_name': vm_name,
+                    'status': 'failed',
+                    'result': 'IM_ERROR',
+                    'message': '查询失败: ' + str(e)
+                })
+                logger.error(f"虚拟机 {vm_name} IM状态查询失败: {str(e)}")
+                return result
+        
+        # 使用线程池并发处理
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            results = list(executor.map(process_single_vm, vm_names))
+        
+        # 发送完成消息
+        socketio.emit('batch_im_status_complete', {
+            'session_id': session_id,
+            'results': results
+        })
+        
+    except Exception as e:
+        logger.error(f"批量IM状态查询异步处理失败: {str(e)}")
+        socketio.emit('batch_im_status_error', {
+            'session_id': session_id,
+            'message': f'批量IM状态查询处理失败: {str(e)}'
         })
 
 signal.signal(signal.SIGTERM, signal_handler)  # 终止信号

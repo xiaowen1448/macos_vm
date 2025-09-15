@@ -11,7 +11,6 @@
             background-color: #f8f9fa;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-    
     .sidebar {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         box-shadow: 2px 0 15px rgba(102, 126, 234, 0.3);
@@ -777,6 +776,29 @@
                             </div>
                         </div>
                         
+                        <!-- 搜索框 -->
+                        <div class="search-container mb-3">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="input-group">
+                                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                                        <input type="text" class="form-control" id="searchInput" placeholder="搜索虚拟机名称..." onkeyup="searchVMs()">
+                                        <button class="btn btn-outline-secondary" type="button" onclick="clearSearch()">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="d-flex align-items-center">
+                                        <small class="text-muted">
+                                            <i class="fas fa-info-circle me-1"></i>
+                                            找到 <span id="searchResultCount">0</span> 个匹配结果
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <!-- 错误信息显示 -->
                         <div class="error-message" id="errorMessage"></div>
                         
@@ -834,6 +856,12 @@
                             <button class="btn btn-primary btn-sm me-2" id="batchIMLoginBtn" onclick="openBatchIMLoginModal()" disabled>
                                 <i class="fas fa-comments me-2"></i>批量IM登录
                             </button>
+                            <button class="btn btn-secondary btn-sm me-2" id="batchIMLogoutBtn" onclick="batchIMLogout()" disabled>
+                                <i class="fas fa-sign-out-alt me-2"></i>批量IM注销
+                            </button>
+                            <button class="btn btn-info btn-sm me-2" id="batchIMStatusBtn" onclick="batchIMStatus()" disabled>
+                                <i class="fas fa-info-circle me-2"></i>批量IM状态
+                            </button>
                             <div class="ms-3 d-flex align-items-center">
                                 <small class="text-muted">
                                     <i class="fas fa-info-circle me-1"></i>批量更改需要全部运行中的虚拟机，批量删除需要全部已关机的虚拟机
@@ -874,8 +902,66 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
     <script>
-        // 分页相关变量
+           // 异步更新前台虚拟机名称显示
+        function updateVMNameInUI(originalName, newName) {
+            // 更新虚拟机名称显示元素
+            const nameElement = document.getElementById(`vm-name-${originalName}`);
+            if (nameElement) {
+                nameElement.textContent = newName;
+                nameElement.id = `vm-name-${newName}`;
+            }
+            
+            // 更新表格行的data属性
+            const row = document.querySelector(`tr[data-vm-name="${originalName}"]`);
+            if (row) {
+                row.setAttribute('data-vm-name', newName);
+                
+                // 更新行内所有相关按钮的onclick事件
+                const buttons = row.querySelectorAll('button[onclick*="' + originalName + '"]');
+                buttons.forEach(button => {
+                    const onclick = button.getAttribute('onclick');
+                    if (onclick) {
+                        button.setAttribute('onclick', onclick.replace(new RegExp(originalName, 'g'), newName));
+                    }
+                });
+                
+                // 更新复选框的value
+                const checkbox = row.querySelector('input[type="checkbox"]');
+                if (checkbox) {
+                    checkbox.value = newName;
+                }
+            }
+            
+            // 更新totalVMs数组中的数据
+            if (typeof totalVMs !== 'undefined') {
+                const vmIndex = totalVMs.findIndex(vm => vm.name === originalName);
+                if (vmIndex !== -1) {
+                    totalVMs[vmIndex].name = newName;
+                }
+            }
+            
+            // 更新filteredVMs数组中的数据（如果存在）
+            if (typeof filteredVMs !== 'undefined') {
+                const vmIndex = filteredVMs.findIndex(vm => vm.name === originalName);
+                if (vmIndex !== -1) {
+                    filteredVMs[vmIndex].name = newName;
+                }
+            }
+            
+            // 更新页面标题或其他可能显示虚拟机名称的地方
+            const titleElements = document.querySelectorAll(`[title*="${originalName}"]`);
+            titleElements.forEach(element => {
+                const title = element.getAttribute('title');
+                if (title) {
+                    element.setAttribute('title', title.replace(new RegExp(originalName, 'g'), newName));
+                }
+            });
+            
+            console.log(`虚拟机名称已从 "${originalName}" 更新为 "${newName}"`);
+        }
+            // 分页相关变量
         let currentPage = 1;
         let pageSize = 5; // 默认最小分页大小
         let totalVMs = [];
@@ -1246,6 +1332,9 @@
                         updateVMTableWithPagination(page, data.pagination);
                         updatePagination(page);
                         
+                        // 更新搜索结果计数
+                        updateSearchResultCount();
+                        
                         // 数据加载完成后，确保使用外部滚动条模式
                         setTimeout(() => {
                             console.log(`数据加载完成，分页大小: ${pageSize} 条`);
@@ -1361,7 +1450,16 @@
                         <input type="checkbox" class="vm-checkbox" value="${vm.name}" onchange="toggleVMSelection('${vm.name}')" ${isSelected ? 'checked' : ''}>
                     </td>
                     <td>
-                        <small>${vm.name}</small>
+                        <div class="d-flex align-items-center">
+                            <small id="vm-name-${vm.name}">${vm.name}</small>
+                            <button class="btn btn-outline-secondary btn-sm ms-2" 
+                                    onclick="editVMName('${vm.name}')" 
+                                    title="编辑虚拟机名称" 
+                                    style="cursor: pointer;" 
+                                    ${vm.status === 'running' || vm.status === 'starting' ? 'disabled' : ''}>
+                                <i class="fas fa-edit"></i>
+                            </button>
+                        </div>
                     </td>
                     <td>
                         <div class="d-flex align-items-center">
@@ -1478,6 +1576,256 @@
             
             // 智能刷新策略：根据虚拟机数量和状态动态调整刷新频率
             startSmartRefreshStrategy();
+        }
+
+        // 更新批量操作按钮状态
+        function updateBatchButtons() {
+            const checkboxes = document.querySelectorAll('.vm-checkbox:checked');
+            const selectedCount = checkboxes.length;
+            
+            // 获取所有批量操作按钮
+            const batchChangeWumaBtn = document.getElementById('batchChangeWumaBtn');
+            const batchDeleteBtn = document.getElementById('batchDeleteBtn');
+            const batchIMLoginBtn = document.getElementById('batchIMLoginBtn');
+            const batchIMLogoutBtn = document.getElementById('batchIMLogoutBtn');
+            const batchIMStatusBtn = document.getElementById('batchIMStatusBtn');
+            
+            // 根据选中数量启用/禁用按钮
+            const hasSelection = selectedCount > 0;
+            
+            if (batchChangeWumaBtn) batchChangeWumaBtn.disabled = !hasSelection;
+            if (batchDeleteBtn) batchDeleteBtn.disabled = !hasSelection;
+            if (batchIMLoginBtn) batchIMLoginBtn.disabled = !hasSelection;
+            if (batchIMLogoutBtn) batchIMLogoutBtn.disabled = !hasSelection;
+            if (batchIMStatusBtn) batchIMStatusBtn.disabled = !hasSelection;
+        }
+        
+        // 更新全选复选框状态
+        function updateSelectAllCheckbox() {
+            const selectAllCheckbox = document.getElementById('selectAll');
+            const vmCheckboxes = document.querySelectorAll('.vm-checkbox');
+            const checkedCheckboxes = document.querySelectorAll('.vm-checkbox:checked');
+            
+            if (!selectAllCheckbox) return;
+            
+            if (vmCheckboxes.length === 0) {
+                selectAllCheckbox.checked = false;
+                selectAllCheckbox.indeterminate = false;
+            } else if (checkedCheckboxes.length === vmCheckboxes.length) {
+                selectAllCheckbox.checked = true;
+                selectAllCheckbox.indeterminate = false;
+            } else if (checkedCheckboxes.length > 0) {
+                selectAllCheckbox.checked = false;
+                selectAllCheckbox.indeterminate = true;
+            } else {
+                selectAllCheckbox.checked = false;
+                selectAllCheckbox.indeterminate = false;
+            }
+        }
+
+        // 更新虚拟机表格（搜索结果）
+        // 状态相关辅助函数
+        function getStatusBadgeClass(status) {
+            switch(status) {
+                case 'running': return 'bg-success';
+                case 'stopped': return 'bg-danger';
+                case 'suspended': return 'bg-warning';
+                case 'starting': return 'bg-info';
+                default: return 'bg-secondary';
+            }
+        }
+        
+        function getStatusTitle(status) {
+            switch(status) {
+                case 'running': return '运行中';
+                case 'stopped': return '已停止';
+                case 'suspended': return '已挂起';
+                case 'starting': return '启动中';
+                default: return '未知状态';
+            }
+        }
+        
+        function getStatusIcon(status) {
+            switch(status) {
+                case 'running': return '<i class="fas fa-play"></i>';
+                case 'stopped': return '<i class="fas fa-stop"></i>';
+                case 'suspended': return '<i class="fas fa-pause"></i>';
+                case 'starting': return '<i class="fas fa-spinner fa-spin"></i>';
+                default: return '<i class="fas fa-question"></i>';
+            }
+        }
+        
+        function getStatusText(status) {
+            switch(status) {
+                case 'running': return '运行中';
+                case 'stopped': return '已停止';
+                case 'suspended': return '已挂起';
+                case 'starting': return '启动中';
+                default: return '未知';
+            }
+        }
+        
+        function getWumaStatusIcon(wumaInfo) {
+            if (!wumaInfo || !wumaInfo.status) {
+                return '<span class="badge bg-secondary me-2">未检测</span>';
+            }
+            const statusClass = wumaInfo.status === 'success' ? 'bg-success' : 'bg-danger';
+            const statusText = wumaInfo.status === 'success' ? '已获取' : '获取失败';
+            return `<span class="badge ${statusClass} me-2">${statusText}</span>`;
+        }
+        
+        function getJuStatusIcon(juInfo) {
+            if (!juInfo || !juInfo.status) {
+                return '<span class="badge bg-secondary me-2">未检测</span>';
+            }
+            const statusClass = juInfo.status === 'success' ? 'bg-success' : 'bg-danger';
+            const statusText = juInfo.status === 'success' ? '已获取' : '获取失败';
+            return `<span class="badge ${statusClass} me-2">${statusText}</span>`;
+        }
+
+        function updateVMTableWithSearchResults(vms) {
+            const tbody = document.getElementById('vmTableBody');
+            tbody.innerHTML = '';
+            
+            if (vms.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">未找到匹配的虚拟机</td></tr>';
+                return;
+            }
+            
+            // 更新记录显示信息
+            document.getElementById('startRecord').textContent = vms.length > 0 ? 1 : 0;
+            document.getElementById('endRecord').textContent = vms.length;
+            document.getElementById('totalRecords').textContent = vms.length;
+            
+            // 渲染搜索结果
+            const currentPageVMs = [];
+            vms.forEach((vm, index) => {
+                currentPageVMs.push(vm);
+                const row = document.createElement('tr');
+                const isSelected = selectedVMs.has(vm.name);
+                row.setAttribute('data-vm-name', vm.name);
+                row.innerHTML = `
+                    <td>
+                        <input type="checkbox" class="vm-checkbox" value="${vm.name}" onchange="toggleVMSelection('${vm.name}')" ${isSelected ? 'checked' : ''}>
+                    </td>
+                    <td>
+                        <div class="d-flex align-items-center">
+                            <small id="vm-name-${vm.name}">${vm.name}</small>
+                            <button class="btn btn-outline-secondary btn-sm ms-2" 
+                                    onclick="editVMName('${vm.name}')" 
+                                    title="编辑虚拟机名称" 
+                                    style="cursor: pointer;" 
+                                    ${vm.status === 'running' || vm.status === 'starting' ? 'disabled' : ''}>
+                                <i class="fas fa-edit"></i>
+                            </button>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="d-flex align-items-center">
+                            <span class="badge status-badge ${getStatusClass(vm.status)} me-2">
+                                ${getStatusText(vm.status)}
+                            </span>
+                            ${vm.online_status ? `
+                                <span class="badge status-badge ${getOnlineStatusClass(vm.online_status)}" title="${vm.online_reason || ''}">
+                                    ${getOnlineStatusText(vm.online_status)}
+                                </span>
+                            ` : ''}
+                        </div>
+                    </td>
+                    <td id="ip-${vm.name}">
+                        <div class="ip-container">
+                            <div class="local-ip">
+                                <small class="text-muted">局域网:</small>
+                                <span id="local-ip-${vm.name}">
+                                  
+                                </span>
+                            </div>
+                            <div class="public-ip mt-1">
+                                <small class="text-muted">公网IP:</small>
+                                <span id="public-ip-${vm.name}" class="text-info">
+                                 
+                                </span>
+                            </div>
+                        </div>
+                    </td>
+                    <td id="wuma-view-${vm.name}">
+                        <div class="d-flex align-items-center">
+                            ${getWumaViewStatusIcon(vm.wuma_view_status)}
+                            <button class="btn btn-outline-info btn-sm ms-2" onclick="viewWumaInfo('${vm.name}')" title="查看五码信息" style="cursor: pointer;">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </td>
+                    <td id="ju-${vm.name}">
+                        <div class="d-flex align-items-center">
+                            ${getJuStatusIcon(vm.ju_info)}
+                            <button class="btn btn-outline-info btn-sm ms-2" onclick="viewJuInfo('${vm.name}')" title="查看JU值信息" style="cursor: pointer;">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </td>
+                    <td id="ssh-${vm.name}">
+                        <div class="d-flex align-items-center">
+                            <span class="badge status-badge ${vm.status === 'running' || vm.status === 'starting' ? 'bg-secondary' : 'bg-danger'} me-2" title="${vm.status === 'running' || vm.status === 'starting' ? '检测中...' : '虚拟机未运行，无法检测SSH状态'}">
+                                ${vm.status === 'running' || vm.status === 'starting' ? '检测中...' : '未互信'}
+                            </span>
+                            <button class="btn btn-outline-primary btn-sm" onclick="setupSSHTrust('${vm.name}')" title="设置SSH互信" style="cursor: pointer;">
+                                <i class="fas fa-key"></i>
+                            </button>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-primary btn-sm" onclick="startVM('${vm.name}')" ${vm.status === 'running' || vm.status === 'starting' ? 'disabled' : ''} title="${vm.status === 'suspended' ? '恢复虚拟机' : '启动虚拟机'}" style="cursor: pointer;">
+                                <i class="fas fa-play"></i>
+                            </button>
+                            <button class="btn btn-outline-warning btn-sm" onclick="stopVM('${vm.name}')" ${vm.status === 'stopped' || vm.status === 'suspended' ? 'disabled' : ''} title="停止虚拟机" style="cursor: pointer;">
+                                <i class="fas fa-stop"></i>
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm" onclick="restartVM('${vm.name}')" ${vm.status === 'running' ? '' : 'disabled'} title="重启虚拟机" style="cursor: pointer;">
+                                <i class="fas fa-redo"></i>
+                            </button>
+                            <button class="btn btn-outline-purple btn-sm" onclick="suspendVM('${vm.name}')" ${vm.status === 'running' ? '' : 'disabled'} title="${vm.status === 'running' ? '挂起虚拟机' : '只能挂起运行中的虚拟机'}" style="cursor: pointer;">
+                                <i class="fas fa-pause"></i>
+                            </button>
+                            <button class="btn btn-outline-info btn-sm" onclick="getVMInfo('${vm.name}')" title="详细信息" style="cursor: pointer;">
+                                <i class="fas fa-info-circle"></i>
+                            </button>
+                            <button class="btn btn-outline-danger btn-sm" onclick="deleteVM('${vm.name}')" ${vm.status === 'running' || vm.status === 'starting' || vm.status === 'suspended' ? 'disabled' : ''} title="${vm.status === 'running' || vm.status === 'starting' || vm.status === 'suspended' ? '无法删除运行中、重启中或挂起的虚拟机' : '删除虚拟机'}" style="cursor: pointer;">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                            <button class="btn btn-outline-success btn-sm" onclick="sendScriptToVM('${vm.name}')" ${vm.status !== 'running' ? 'disabled' : ''} title="${vm.status !== 'running' ? '虚拟机未运行，无法发送脚本' : '发送脚本'}" style="cursor: pointer;">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                            <button class="btn btn-outline-warning btn-sm" onclick="executeScriptOnVM('${vm.name}')" ${vm.status !== 'running' ? 'disabled' : ''} title="${vm.status !== 'running' ? '虚拟机未运行，无法执行脚本' : '执行脚本'}" style="cursor: pointer;">
+                                <i class="fas fa-terminal"></i>
+                            </button>
+                            <button class="btn btn-outline-primary btn-sm" onclick="connectVNC('${vm.name}')" ${vm.status !== 'running' ? 'disabled' : ''} title="${vm.status !== 'running' ? '虚拟机未运行，无法连接VNC' : 'VNC远程连接'}" style="cursor: pointer;">
+                                <i class="fas fa-desktop"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+            
+            // 更新全选状态
+            updateSelectAllState();
+            
+            // 异步获取运行中虚拟机的在线状态
+            setTimeout(() => {
+                loadRunningVMOnlineStatus();
+            }, 100);
+            
+            // 异步获取五码信息和JU值信息状态
+            setTimeout(() => {
+                loadWumaAndJuStatus();
+            }, 200);
+            
+            // 异步获取运行中虚拟机的IP地址
+            setTimeout(() => {
+                fetchAllRunningVMIPs(currentPageVMs);
+            }, 300);
         }
 
         // 更新分页控件
@@ -5510,6 +5858,8 @@
             const batchWumaBtn = document.getElementById('batchChangeWumaBtn');
             const batchDeleteBtn = document.getElementById('batchDeleteBtn');
             const batchIMLoginBtn = document.getElementById('batchIMLoginBtn');
+            const batchIMLogoutBtn = document.getElementById('batchIMLogoutBtn');
+            const batchIMStatusBtn = document.getElementById('batchIMStatusBtn');
             
             if (selectedVMs.size === 0) {
                 // 没有选中任何虚拟机，禁用所有按钮
@@ -5524,6 +5874,14 @@
                 batchIMLoginBtn.disabled = true;
                 batchIMLoginBtn.classList.remove('btn-primary');
                 batchIMLoginBtn.classList.add('btn-secondary');
+                
+                batchIMLogoutBtn.disabled = true;
+                batchIMLogoutBtn.classList.remove('btn-secondary');
+                batchIMLogoutBtn.classList.add('btn-outline-secondary');
+                
+                batchIMStatusBtn.disabled = true;
+                batchIMStatusBtn.classList.remove('btn-info');
+                batchIMStatusBtn.classList.add('btn-outline-info');
                 
                 console.log('没有选中任何虚拟机，禁用所有按钮');
                 return;
@@ -5564,6 +5922,16 @@
                 batchIMLoginBtn.classList.remove('btn-secondary');
                 batchIMLoginBtn.classList.add('btn-primary');
                 
+                // 启用批量IM注销按钮
+                batchIMLogoutBtn.disabled = false;
+                batchIMLogoutBtn.classList.remove('btn-outline-secondary');
+                batchIMLogoutBtn.classList.add('btn-secondary');
+                
+                // 启用批量IM状态按钮
+                batchIMStatusBtn.disabled = false;
+                batchIMStatusBtn.classList.remove('btn-outline-info');
+                batchIMStatusBtn.classList.add('btn-info');
+                
                 console.log('启用批量更改按钮，选中了', selectedRunningVMs.length, '个运行中/重启中的虚拟机');
             } else {
                 // 选中的虚拟机中没有运行中的，或者包含已关机的虚拟机，禁用批量更改按钮
@@ -5575,6 +5943,16 @@
                 batchIMLoginBtn.disabled = true;
                 batchIMLoginBtn.classList.remove('btn-primary');
                 batchIMLoginBtn.classList.add('btn-secondary');
+                
+                // 禁用批量IM注销按钮
+                batchIMLogoutBtn.disabled = true;
+                batchIMLogoutBtn.classList.remove('btn-secondary');
+                batchIMLogoutBtn.classList.add('btn-outline-secondary');
+                
+                // 禁用批量IM状态按钮
+                batchIMStatusBtn.disabled = true;
+                batchIMStatusBtn.classList.remove('btn-info');
+                batchIMStatusBtn.classList.add('btn-outline-info');
                 
                 if (selectedRunningVMs.length === 0) {
                     console.log('禁用批量更改按钮，选中的虚拟机中没有运行中/重启中的');
@@ -6171,6 +6549,40 @@
         </div>
     </div>
 
+    <!-- 编辑虚拟机名称模态框 -->
+    <div class="modal fade" id="editVMNameModal" tabindex="-1" aria-labelledby="editVMNameModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editVMNameModalLabel">
+                        <i class="fas fa-edit me-2"></i>编辑虚拟机名称
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="currentVMName" class="form-label">当前虚拟机名称</label>
+                        <input type="text" class="form-control" id="currentVMName" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label for="newVMName" class="form-label">新虚拟机名称 <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="newVMName" placeholder="请输入新的虚拟机名称">
+                        <div class="form-text">名称不能包含特殊字符：\ / : * ? " < > |</div>
+                    </div>
+                    <input type="hidden" id="editVMOriginalName" value="">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>取消
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="saveVMName()">
+                        <i class="fas fa-save me-2"></i>保存
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 删除确认模态框 -->
     <div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-labelledby="deleteConfirmModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
@@ -6345,6 +6757,86 @@
                     </button>
                     <button type="button" class="btn btn-primary" onclick="confirmSSHTrust()">
                         <i class="fas fa-key me-2"></i>确认设置
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 批量IM状态查询模态框 -->
+    <div class="modal fade" id="batchIMStatusModal" tabindex="-1" aria-labelledby="batchIMStatusModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="batchIMStatusModalLabel">
+                        <i class="fas fa-search me-2"></i>批量IM状态查询
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-list me-2"></i>选中的虚拟机</h6>
+                            <div id="statusVMListContainer" class="border rounded p-3" style="max-height: 300px; overflow-y: auto;">
+                                <!-- 虚拟机列表将在这里动态加载 -->
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-info-circle me-2"></i>IM状态信息</h6>
+                            <div id="imStatusResults" class="border rounded p-3" style="max-height: 300px; overflow-y: auto;">
+                                <div class="text-center text-muted">
+                                    <i class="fas fa-clock me-2"></i>点击查询按钮获取IM状态
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i>关闭
+                    </button>
+                    <button type="button" class="btn btn-primary" id="queryIMStatusBtn" onclick="queryBatchIMStatus()">
+                        <i class="fas fa-search me-1"></i>查询状态
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 批量IM注销模态框 -->
+    <div class="modal fade" id="batchIMLogoutModal" tabindex="-1" aria-labelledby="batchIMLogoutModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="batchIMLogoutModalLabel">
+                        <i class="fas fa-sign-out-alt me-2"></i>批量IM注销
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-list me-2"></i>选中的虚拟机</h6>
+                            <div id="logoutVMListContainer" class="border rounded p-3" style="max-height: 300px; overflow-y: auto;">
+                                <!-- 虚拟机列表将在这里动态加载 -->
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-info-circle me-2"></i>注销结果</h6>
+                            <div id="imLogoutResults" class="border rounded p-3" style="max-height: 300px; overflow-y: auto;">
+                                <div class="text-center text-muted">
+                                    <i class="fas fa-clock me-2"></i>点击注销按钮执行IM注销
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i>关闭
+                    </button>
+                    <button type="button" class="btn btn-danger" id="executeIMLogoutBtn" onclick="executeBatchIMLogout()">
+                        <i class="fas fa-sign-out-alt me-1"></i>执行注销
                     </button>
                 </div>
             </div>
@@ -6647,6 +7139,644 @@
                 alert(`VNC连接失败: ${error.message || '未知错误'}`);
             }
         }
-    </script>
-</body>
+
+        // 编辑虚拟机名称
+        function editVMName(vmName) {
+            console.log('编辑虚拟机名称:', vmName);
+            
+            // 设置模态框中的值
+            document.getElementById('currentVMName').value = vmName;
+            document.getElementById('newVMName').value = vmName;
+            document.getElementById('editVMOriginalName').value = vmName;
+            
+            // 显示模态框
+            const modal = new bootstrap.Modal(document.getElementById('editVMNameModal'));
+            modal.show();
+            
+            // 聚焦到新名称输入框
+            setTimeout(() => {
+                document.getElementById('newVMName').focus();
+                document.getElementById('newVMName').select();
+            }, 500);
+        }
+
+        // 保存虚拟机名称
+        function saveVMName() {
+            const originalName = document.getElementById('editVMOriginalName').value;
+            const newName = document.getElementById('newVMName').value.trim();
+            
+            if (!newName) {
+                alert('请输入新的虚拟机名称');
+                return;
+            }
+            
+            if (newName === originalName) {
+                alert('新名称与原名称相同，无需修改');
+                return;
+            }
+            
+            // 验证文件名合法性
+            const invalidChars = /[\\/:*?"<>|]/;
+            if (invalidChars.test(newName)) {
+                alert('虚拟机名称不能包含以下特殊字符：\\ / : * ? " < > |');
+                return;
+            }
+            
+            // 显示加载状态
+            const saveBtn = document.querySelector('#editVMNameModal .btn-primary');
+            const originalText = saveBtn.innerHTML;
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>保存中...';
+            saveBtn.disabled = true;
+            
+            // 发送请求到后端
+            fetch('/api/update_vm_name', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    original_name: originalName,
+                    new_name: newName
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // 异步更新前台虚拟机名称显示
+                    updateVMNameInUI(originalName, newName);
+                    
+                    // 关闭模态框
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('editVMNameModal'));
+                    modal.hide();
+                    
+                    showStaticMessage(`虚拟机名称修改成功！\n已重命名 ${data.renamed_files} 个文件\n备份文件: ${data.backup_file}`, 'success');
+                } else {
+                    alert('修改失败: ' + (data.message || '未知错误'));
+                }
+            })
+            .catch(error => {
+                console.error('修改虚拟机名称失败:', error);
+                alert('修改失败: ' + error.message);
+            })
+            .finally(() => {
+                // 恢复按钮状态
+                saveBtn.innerHTML = originalText;
+                saveBtn.disabled = false;
+            });
+        }
+
+        // 异步更新前台虚拟机名称显示
+        function updateVMNameInUI(originalName, newName) {
+            // 更新虚拟机名称显示元素
+            const nameElement = document.getElementById(`vm-name-${originalName}`);
+            if (nameElement) {
+                nameElement.textContent = newName;
+                nameElement.id = `vm-name-${newName}`;
+            }
+            
+            // 更新表格行的data属性
+            const row = document.querySelector(`tr[data-vm-name="${originalName}"]`);
+            if (row) {
+                row.setAttribute('data-vm-name', newName);
+                
+                // 更新行内所有相关按钮的onclick事件
+                const buttons = row.querySelectorAll('button[onclick*="' + originalName + '"]');
+                buttons.forEach(button => {
+                    const onclick = button.getAttribute('onclick');
+                    if (onclick) {
+                        button.setAttribute('onclick', onclick.replace(new RegExp(originalName, 'g'), newName));
+                    }
+                });
+                
+                // 更新复选框的value
+                const checkbox = row.querySelector('input[type="checkbox"]');
+                if (checkbox) {
+                    checkbox.value = newName;
+                }
+            }
+            
+            // 更新totalVMs数组中的数据
+            if (typeof totalVMs !== 'undefined') {
+                const vmIndex = totalVMs.findIndex(vm => vm.name === originalName);
+                if (vmIndex !== -1) {
+                    totalVMs[vmIndex].name = newName;
+                }
+            }
+            
+            // 更新filteredVMs数组中的数据（如果存在）
+            if (typeof filteredVMs !== 'undefined') {
+                const vmIndex = filteredVMs.findIndex(vm => vm.name === originalName);
+                if (vmIndex !== -1) {
+                    filteredVMs[vmIndex].name = newName;
+                }
+            }
+            
+            // 更新页面标题或其他可能显示虚拟机名称的地方
+            const titleElements = document.querySelectorAll(`[title*="${originalName}"]`);
+            titleElements.forEach(element => {
+                const title = element.getAttribute('title');
+                if (title) {
+                    element.setAttribute('title', title.replace(new RegExp(originalName, 'g'), newName));
+                }
+            });
+            
+            console.log(`虚拟机名称已从 "${originalName}" 更新为 "${newName}"`);
+        }
+
+        // 搜索虚拟机功能
+            function searchVMs() {
+                const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
+                
+                if (searchTerm === '') {
+                    // 清空搜索，恢复分页显示
+                    loadVMData(currentPage);
+                    return;
+                }
+                
+                // 执行全局搜索
+                showLoading();
+                fetch(`/api/vm_10_12_list?all=true`)
+                    .then(response => response.json())
+                    .then(data => {
+                        hideLoading();
+                        if (data.success) {
+                            // 过滤搜索结果
+                            const filteredVMs = data.vms.filter(vm => 
+                                vm.name.toLowerCase().includes(searchTerm)
+                            );
+                            
+                            // 更新表格显示搜索结果
+                            updateVMTableWithSearchResults(filteredVMs);
+                            
+                            // 更新搜索结果计数
+                            document.getElementById('searchResultCount').textContent = filteredVMs.length;
+                            
+                            // 隐藏分页控件
+                            const paginationContainer = document.querySelector('.pagination-container');
+                            if (paginationContainer) {
+                                paginationContainer.style.display = 'none';
+                            }
+                            
+                            // 更新批量操作按钮状态
+                            updateBatchButtons();
+                            
+                            // 更新全选复选框状态
+                            updateSelectAllCheckbox();
+                        } else {
+                            showError(data.message || '搜索失败');
+                        }
+                    })
+                    .catch(error => {
+                        hideLoading();
+                        console.error('搜索虚拟机失败:', error);
+                        showError('搜索虚拟机失败');
+                    });
+            }
+            
+            // 清除搜索
+            function clearSearch() {
+                document.getElementById('searchInput').value = '';
+                // 恢复分页显示
+                const paginationContainer = document.querySelector('.pagination-container');
+                if (paginationContainer) {
+                    paginationContainer.style.display = '';
+                }
+                loadVMData(currentPage);
+            }
+            
+            // 更新搜索结果计数（在加载虚拟机数据时调用）
+             function updateSearchResultCount() {
+                 const tableBody = document.getElementById('vmTableBody');
+                 const visibleRows = Array.from(tableBody.getElementsByTagName('tr')).filter(row => row.style.display !== 'none');
+                 document.getElementById('searchResultCount').textContent = visibleRows.length;
+             }
+             
+             // 批量IM注销功能
+             function batchIMLogout() {
+                 if (selectedVMs.size === 0) {
+                     alert('请先选择要注销IM的虚拟机');
+                     return;
+                 }
+                 
+                 const selectedVMNames = Array.from(selectedVMs);
+                 
+                 // 填充虚拟机列表到模态框
+                 const container = document.getElementById('logoutVMListContainer');
+                 let html = '';
+                 selectedVMNames.forEach(vmName => {
+                     html += `
+                         <div class="d-flex align-items-center mb-2 p-2 bg-light rounded">
+                             <i class="fas fa-desktop text-primary me-2"></i>
+                             <span class="flex-grow-1">${vmName}</span>
+                             <span class="badge bg-secondary">待注销</span>
+                         </div>
+                     `;
+                 });
+                 container.innerHTML = html;
+                 
+                 // 清空结果区域
+                 document.getElementById('imLogoutResults').innerHTML = `
+                     <div class="text-center text-muted">
+                         <i class="fas fa-clock me-2"></i>点击注销按钮执行IM注销
+                     </div>
+                 `;
+                 
+                 // 显示模态框
+                 const modal = new bootstrap.Modal(document.getElementById('batchIMLogoutModal'));
+                 modal.show();
+             }
+             
+             // 批量IM状态查询功能
+             function batchIMStatus() {
+                 if (selectedVMs.size === 0) {
+                     alert('请先选择要查询IM状态的虚拟机');
+                     return;
+                 }
+                 
+                 const selectedVMNames = Array.from(selectedVMs);
+                 
+                 // 填充虚拟机列表到模态框
+                 const container = document.getElementById('statusVMListContainer');
+                 let html = '';
+                 selectedVMNames.forEach(vmName => {
+                     html += `
+                         <div class="d-flex align-items-center mb-2 p-2 bg-light rounded">
+                             <i class="fas fa-desktop text-primary me-2"></i>
+                             <span class="flex-grow-1">${vmName}</span>
+                             <span class="badge bg-secondary">待查询</span>
+                         </div>
+                     `;
+                 });
+                 container.innerHTML = html;
+                 
+                 // 清空结果区域
+                 document.getElementById('imStatusResults').innerHTML = `
+                     <div class="text-center text-muted">
+                         <i class="fas fa-clock me-2"></i>点击查询按钮获取IM状态
+                     </div>
+                 `;
+                 
+                 // 显示模态框
+                 const modal = new bootstrap.Modal(document.getElementById('batchIMStatusModal'));
+                 modal.show();
+             }
+             
+             // 查询批量IM状态
+             // WebSocket连接
+             let socket = null;
+             let currentSessionId = null;
+             
+             function initWebSocket() {
+                 if (!socket || socket.readyState === WebSocket.CLOSED) {
+                     socket = io();
+                     
+                     // 批量IM状态查询WebSocket事件
+                     socket.on('batch_im_status_start', function(data) {
+                         if (data.session_id === currentSessionId) {
+                             console.log('批量IM状态查询开始');
+                         }
+                     });
+                     
+                     socket.on('batch_im_status_progress', function(data) {
+                         if (data.session_id === currentSessionId) {
+                             updateVMStatusInList(data.vm_name, data.result, data.status);
+                         }
+                     });
+                     
+                     socket.on('batch_im_status_complete', function(data) {
+                         if (data.session_id === currentSessionId) {
+                             handleBatchIMStatusComplete(data.results);
+                         }
+                     });
+                     
+                     socket.on('batch_im_status_error', function(data) {
+                         if (data.session_id === currentSessionId) {
+                             document.getElementById('imStatusResults').innerHTML = `
+                                 <div class="alert alert-danger" role="alert">
+                                     <i class="fas fa-exclamation-triangle me-2"></i>
+                                     查询失败: ${data.message}
+                                 </div>
+                             `;
+                             resetIMStatusButton();
+                         }
+                     });
+                     
+                     // 批量IM注销WebSocket事件
+                     socket.on('batch_im_logout_start', function(data) {
+                         if (data.session_id === currentSessionId) {
+                             console.log('批量IM注销开始');
+                         }
+                     });
+                     
+                     socket.on('batch_im_logout_progress', function(data) {
+                         if (data.session_id === currentSessionId) {
+                             updateVMLogoutInList(data.vm_name, data.result, data.status);
+                         }
+                     });
+                     
+                     socket.on('batch_im_logout_complete', function(data) {
+                         if (data.session_id === currentSessionId) {
+                             handleBatchIMLogoutComplete(data.results, data.success_count, data.failed_count);
+                         }
+                     });
+                     
+                     socket.on('batch_im_logout_error', function(data) {
+                         if (data.session_id === currentSessionId) {
+                             document.getElementById('imLogoutResults').innerHTML = `
+                                 <div class="alert alert-danger" role="alert">
+                                     <i class="fas fa-exclamation-triangle me-2"></i>
+                                     注销失败: ${data.message}
+                                 </div>
+                             `;
+                             resetIMLogoutButton();
+                         }
+                     });
+                 }
+             }
+             
+             function updateVMStatusInList(vmName, result, status) {
+                 const container = document.getElementById('statusVMListContainer');
+                 let statusClass, statusText, statusIcon;
+                 
+                 if (status === 'processing') {
+                     statusClass = 'secondary';
+                     statusText = '查询中...';
+                     statusIcon = 'fa-spinner fa-spin';
+                 } else if (result === 'IM_SUCESSFULL') {
+                     // 已激活
+                     statusClass = 'success';
+                     statusText = '已激活';
+                     statusIcon = 'fa-check-circle';
+                 } else if (result === 'IM_ERROR') {
+                     // 未激活
+                     statusClass = 'danger';
+                     statusText = '未激活';
+                     statusIcon = 'fa-times-circle';
+                 } else {
+                     // 未知状态
+                     statusClass = 'warning';
+                     statusText = '未知';
+                     statusIcon = 'fa-question-circle';
+                 }
+                 
+                 // 查找或创建虚拟机项
+                 let vmItem = container.querySelector(`[data-vm-name="${vmName}"]`);
+                 if (!vmItem) {
+                     vmItem = document.createElement('div');
+                     vmItem.className = 'd-flex align-items-center mb-2 p-2 bg-light rounded';
+                     vmItem.setAttribute('data-vm-name', vmName);
+                     vmItem.innerHTML = `
+                         <i class="fas fa-desktop text-primary me-2"></i>
+                         <span class="flex-grow-1">${vmName}</span>
+                         <span class="badge bg-${statusClass}">
+                             <i class="fas ${statusIcon} me-1"></i>
+                             ${statusText}
+                         </span>
+                     `;
+                     container.appendChild(vmItem);
+                 } else {
+                     // 更新现有项
+                     const badge = vmItem.querySelector('.badge');
+                     badge.className = `badge bg-${statusClass}`;
+                     badge.innerHTML = `<i class="fas ${statusIcon} me-1"></i>${statusText}`;
+                 }
+             }
+             
+             function handleBatchIMStatusComplete(results) {
+                 let successCount = 0;
+                 let failedCount = 0;
+                 let unknownCount = 0;
+                 
+                 results.forEach(result => {
+                     if (result.result === 'IM_SUCESSFULL') {
+                         successCount++;
+                     } else if (result.result === 'IM_ERROR') {
+                         failedCount++;
+                     } else {
+                         unknownCount++;
+                     }
+                 });
+                 
+                 let resultHtml = `
+                     <div class="alert alert-info" role="alert">
+                         <i class="fas fa-info-circle me-2"></i>
+                         IM状态查询完成！已激活: ${successCount}, 未激活: ${failedCount}`;
+                 
+                 if (unknownCount > 0) {
+                     resultHtml += `, 未知: ${unknownCount}`;
+                 }
+                 
+                 resultHtml += `</div>`;
+                 
+                 document.getElementById('imStatusResults').innerHTML = resultHtml;
+                 resetIMStatusButton();
+             }
+             
+             function resetIMStatusButton() {
+                 const btn = document.getElementById('queryIMStatusBtn');
+                 btn.innerHTML = '<i class="fas fa-search me-1"></i>查询状态';
+                 btn.disabled = false;
+             }
+             
+             async function queryBatchIMStatus() {
+                 const selectedVMNames = Array.from(selectedVMs);
+                 
+                 if (selectedVMNames.length === 0) {
+                     alert('没有选中的虚拟机');
+                     return;
+                 }
+                 
+                 // 初始化WebSocket连接
+                 initWebSocket();
+                 
+                 const btn = document.getElementById('queryIMStatusBtn');
+                 btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>查询中...';
+                 btn.disabled = true;
+                 
+                 // 清空之前的结果
+                 document.getElementById('statusVMListContainer').innerHTML = '';
+                 document.getElementById('imStatusResults').innerHTML = '';
+                 
+                 // 生成会话ID
+                 currentSessionId = 'status_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                 
+                 try {
+                     const response = await fetch('/api/batch_im_status', {
+                         method: 'POST',
+                         headers: {
+                             'Content-Type': 'application/json',
+                         },
+                         body: JSON.stringify({
+                             vm_names: selectedVMNames,
+                             session_id: currentSessionId
+                         }),
+                         signal: AbortSignal.timeout(120000) // 2分钟超时
+                     });
+                     
+                     const data = await response.json();
+                     
+                     if (!data.success) {
+                         document.getElementById('imStatusResults').innerHTML = `
+                             <div class="alert alert-danger" role="alert">
+                                 <i class="fas fa-exclamation-triangle me-2"></i>
+                                 查询失败: ${data.message}
+                             </div>
+                         `;
+                         resetIMStatusButton();
+                     }
+                     // 成功的情况下，结果将通过WebSocket接收
+                 } catch (error) {
+                     document.getElementById('imStatusResults').innerHTML = `
+                         <div class="alert alert-danger" role="alert">
+                             <i class="fas fa-exclamation-triangle me-2"></i>
+                             网络错误: ${error.message}
+                         </div>
+                     `;
+                     resetIMStatusButton();
+                 }
+             }
+             
+             function updateVMLogoutInList(vmName, result, status) {
+                 const container = document.getElementById('logoutVMListContainer');
+                 let statusClass, statusText, statusIcon;
+                 
+                 if (status === 'processing') {
+                     statusClass = 'secondary';
+                     statusText = '注销中...';
+                     statusIcon = 'fa-spinner fa-spin';
+                 } else if (result === 'IM_ERROR') {
+                     // IM_ERROR表示已注销
+                     statusClass = 'success';
+                     statusText = '注销成功';
+                     statusIcon = 'fa-check-circle';
+                 } else if (result === 'IM_SUCESSFULL') {
+                     // IM_SUCESSFULL表示未注销（登录成功）
+                     statusClass = 'danger';
+                     statusText = '注销失败';
+                     statusIcon = 'fa-times-circle';
+                 } else {
+                     // 未知状态
+                     statusClass = 'warning';
+                     statusText = '未知';
+                     statusIcon = 'fa-question-circle';
+                 }
+                 
+                 // 查找或创建虚拟机项
+                 let vmItem = container.querySelector(`[data-vm-name="${vmName}"]`);
+                 if (!vmItem) {
+                     vmItem = document.createElement('div');
+                     vmItem.className = 'd-flex align-items-center mb-2 p-2 bg-light rounded';
+                     vmItem.setAttribute('data-vm-name', vmName);
+                     vmItem.innerHTML = `
+                         <i class="fas fa-desktop text-primary me-2"></i>
+                         <span class="flex-grow-1">${vmName}</span>
+                         <span class="badge bg-${statusClass}">
+                             <i class="fas ${statusIcon} me-1"></i>
+                             ${statusText}
+                         </span>
+                     `;
+                     container.appendChild(vmItem);
+                 } else {
+                     // 更新现有项
+                     const badge = vmItem.querySelector('.badge');
+                     badge.className = `badge bg-${statusClass}`;
+                     badge.innerHTML = `<i class="fas ${statusIcon} me-1"></i>${statusText}`;
+                 }
+             }
+             
+             function handleBatchIMLogoutComplete(results, successCount, failedCount) {
+                 let unknownCount = 0;
+                 
+                 // 统计未知状态
+                 results.forEach(result => {
+                     if (result.result !== 'IM_ERROR' && result.result !== 'IM_SUCESSFULL') {
+                         unknownCount++;
+                     }
+                 });
+                 
+                 let resultHtml = `
+                     <div class="alert alert-info" role="alert">
+                         <i class="fas fa-info-circle me-2"></i>
+                         批量IM注销完成！成功: ${successCount}, 失败: ${failedCount}`;
+                 
+                 if (unknownCount > 0) {
+                     resultHtml += `, 未知: ${unknownCount}`;
+                 }
+                 
+                 resultHtml += `</div>`;
+                 
+                 document.getElementById('imLogoutResults').innerHTML = resultHtml;
+                 resetIMLogoutButton();
+             }
+             
+             function resetIMLogoutButton() {
+                 const btn = document.getElementById('executeIMLogoutBtn');
+                 btn.innerHTML = '<i class="fas fa-sign-out-alt me-1"></i>执行注销';
+                 btn.disabled = false;
+             }
+             
+             // 执行批量IM注销
+             async function executeBatchIMLogout() {
+                 const selectedVMNames = Array.from(selectedVMs);
+                 
+                 if (selectedVMNames.length === 0) {
+                     alert('没有选中的虚拟机');
+                     return;
+                 }
+                 
+                 if (!confirm(`确定要对 ${selectedVMNames.length} 个虚拟机执行IM注销操作吗？`)) {
+                     return;
+                 }
+                 
+                 // 初始化WebSocket连接
+                 initWebSocket();
+                 
+                 const btn = document.getElementById('executeIMLogoutBtn');
+                 btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>注销中...';
+                 btn.disabled = true;
+                 
+                 // 清空之前的结果
+                 document.getElementById('logoutVMListContainer').innerHTML = '';
+                 document.getElementById('imLogoutResults').innerHTML = '';
+                 
+                 // 生成会话ID
+                 currentSessionId = 'logout_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                 
+                 try {
+                     const response = await fetch('/api/batch_im_logout', {
+                         method: 'POST',
+                         headers: {
+                             'Content-Type': 'application/json',
+                         },
+                         body: JSON.stringify({
+                             vm_names: selectedVMNames,
+                             session_id: currentSessionId
+                         }),
+                         signal: AbortSignal.timeout(120000) // 2分钟超时
+                     });
+                     
+                     const data = await response.json();
+                     
+                     if (!data.success) {
+                         document.getElementById('imLogoutResults').innerHTML = `
+                             <div class="alert alert-danger" role="alert">
+                                 <i class="fas fa-exclamation-triangle me-2"></i>
+                                 注销失败: ${data.message}
+                             </div>
+                         `;
+                         resetIMLogoutButton();
+                     }
+                     // 成功的情况下，结果将通过WebSocket接收
+                 } catch (error) {
+                     document.getElementById('imLogoutResults').innerHTML = `
+                         <div class="alert alert-danger" role="alert">
+                             <i class="fas fa-exclamation-triangle me-2"></i>
+                             网络错误: ${error.message}
+                         </div>
+                     `;
+                     resetIMLogoutButton();
+                 }
+             }
+        </script>
+    </body>
 </html>

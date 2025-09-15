@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>批量IM状态管理</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .status-badge {
+            font-size: 0.8rem;
+            padding: 0.25rem 0.5rem;
+        }
+        .vm-item {
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+            margin-bottom: 0.5rem;
+            padding: 1rem;
+            transition: all 0.2s;
+        }
+        .vm-item:hover {
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status-online {
+            background-color: #d4edda;
+            color: #155724;
+            border-color: #c3e6cb;
+        }
+        .status-offline {
+            background-color: #f8d7da;
+            color: #721c24;
+            border-color: #f5c6cb;
+        }
+        .status-unknown {
+            background-color: #fff3cd;
+            color: #856404;
+            border-color: #ffeaa7;
+        }
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+        .loading-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid mt-4">
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-comments me-2"></i>
+                            <span id="pageTitle">批量IM状态管理</span>
+                        </h5>
+                        <div>
+                            <button class="btn btn-secondary btn-sm me-2" onclick="refreshStatus()">
+                                <i class="fas fa-sync-alt me-1"></i>刷新状态
+                            </button>
+                            <button class="btn btn-primary btn-sm" onclick="submitChanges()" id="submitBtn">
+                                <i class="fas fa-save me-1"></i>提交更新
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <!-- 操作说明 -->
+                        <div class="alert alert-info" id="operationInfo">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <span id="infoText">正在加载虚拟机IM状态信息...</span>
+                        </div>
+                        
+                        <!-- 统计信息 -->
+                        <div class="row mb-3" id="statsRow" style="display: none;">
+                            <div class="col-md-3">
+                                <div class="card bg-light">
+                                    <div class="card-body text-center">
+                                        <h6 class="card-title">总数</h6>
+                                        <h4 class="text-primary" id="totalCount">0</h4>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card bg-success text-white">
+                                    <div class="card-body text-center">
+                                        <h6 class="card-title">在线</h6>
+                                        <h4 id="onlineCount">0</h4>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card bg-danger text-white">
+                                    <div class="card-body text-center">
+                                        <h6 class="card-title">离线</h6>
+                                        <h4 id="offlineCount">0</h4>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="card bg-warning text-white">
+                                    <div class="card-body text-center">
+                                        <h6 class="card-title">未知</h6>
+                                        <h4 id="unknownCount">0</h4>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 虚拟机列表 -->
+                        <div id="vmList">
+                            <div class="text-center py-4">
+                                <div class="spinner-border" role="status">
+                                    <span class="visually-hidden">加载中...</span>
+                                </div>
+                                <div class="mt-2">正在获取虚拟机IM状态...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 加载遮罩 -->
+    <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+        <div class="loading-content">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">处理中...</span>
+            </div>
+            <div class="mt-2" id="loadingText">正在处理请求...</div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // 全局变量
+        let vmData = [];
+        let operationType = 'status'; // 'status' 或 'logout'
+        let selectedVMs = [];
+        
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            // 从URL参数获取操作类型和虚拟机列表
+            const urlParams = new URLSearchParams(window.location.search);
+            operationType = urlParams.get('type') || 'status';
+            const vmNames = urlParams.get('vms');
+            
+            if (vmNames) {
+                selectedVMs = vmNames.split(',');
+                initializePage();
+            } else {
+                showError('未指定要操作的虚拟机');
+            }
+        });
+        
+        // 初始化页面
+        function initializePage() {
+            // 设置页面标题和说明
+            const pageTitle = document.getElementById('pageTitle');
+            const infoText = document.getElementById('infoText');
+            
+            if (operationType === 'logout') {
+                pageTitle.textContent = '批量IM注销管理';
+                infoText.innerHTML = '以下是选中的虚拟机IM注销状态，点击"提交更新"执行注销操作。';
+            } else {
+                pageTitle.textContent = '批量IM状态管理';
+                infoText.innerHTML = '以下是选中的虚拟机当前IM状态，点击"刷新状态"获取最新状态。';
+            }
+            
+            // 加载虚拟机状态
+            loadVMStatus();
+        }
+        
+        // 加载虚拟机状态
+        async function loadVMStatus() {
+            try {
+                const response = await fetch('/api/batch_im_status', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        vm_names: selectedVMs
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    vmData = data.results;
+                    renderVMList();
+                    updateStats();
+                    showStats();
+                } else {
+                    showError('获取IM状态失败: ' + data.message);
+                }
+            } catch (error) {
+                showError('网络错误: ' + error.message);
+            }
+        }
+        
+        // 渲染虚拟机列表
+        function renderVMList() {
+            const vmList = document.getElementById('vmList');
+            
+            if (vmData.length === 0) {
+                vmList.innerHTML = `
+                    <div class="text-center py-4">
+                        <i class="fas fa-exclamation-triangle text-warning" style="font-size: 3rem;"></i>
+                        <h5 class="mt-3">没有找到虚拟机数据</h5>
+                        <p class="text-muted">请检查虚拟机是否存在或网络连接是否正常</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = '';
+            vmData.forEach((vm, index) => {
+                const statusClass = getStatusClass(vm.status);
+                const statusIcon = getStatusIcon(vm.status);
+                const statusText = getStatusText(vm.status);
+                
+                html += `
+                    <div class="vm-item ${statusClass}">
+                        <div class="row align-items-center">
+                            <div class="col-md-4">
+                                <h6 class="mb-1">
+                                    <i class="fas fa-desktop me-2"></i>
+                                    ${vm.vm_name}
+                                </h6>
+                                <small class="text-muted">虚拟机名称</small>
+                            </div>
+                            <div class="col-md-3">
+                                <span class="badge status-badge ${statusClass}">
+                                    <i class="${statusIcon} me-1"></i>
+                                    ${statusText}
+                                </span>
+                            </div>
+                            <div class="col-md-3">
+                                <small class="text-muted">
+                                    <i class="fas fa-clock me-1"></i>
+                                    ${vm.timestamp || '未知时间'}
+                                </small>
+                            </div>
+                            <div class="col-md-2 text-end">
+                                ${operationType === 'logout' ? `
+                                    <button class="btn btn-sm btn-outline-danger" onclick="toggleVMAction('${vm.vm_name}', ${index})" id="actionBtn_${index}">
+                                        <i class="fas fa-sign-out-alt me-1"></i>注销
+                                    </button>
+                                ` : `
+                                    <button class="btn btn-sm btn-outline-primary" onclick="refreshSingleVM('${vm.vm_name}', ${index})" id="refreshBtn_${index}">
+                                        <i class="fas fa-sync-alt me-1"></i>刷新
+                                    </button>
+                                `}
+                            </div>
+                        </div>
+                        ${vm.error ? `
+                            <div class="mt-2">
+                                <small class="text-danger">
+                                    <i class="fas fa-exclamation-triangle me-1"></i>
+                                    错误: ${vm.error}
+                                </small>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            });
+            
+            vmList.innerHTML = html;
+        }
+        
+        // 获取状态样式类
+        function getStatusClass(status) {
+            switch (status) {
+                case 'online':
+                case '在线':
+                    return 'status-online';
+                case 'offline':
+                case '离线':
+                    return 'status-offline';
+                default:
+                    return 'status-unknown';
+            }
+        }
+        
+        // 获取状态图标
+        function getStatusIcon(status) {
+            switch (status) {
+                case 'online':
+                case '在线':
+                    return 'fas fa-circle text-success';
+                case 'offline':
+                case '离线':
+                    return 'fas fa-circle text-danger';
+                default:
+                    return 'fas fa-question-circle text-warning';
+            }
+        }
+        
+        // 获取状态文本
+        function getStatusText(status) {
+            switch (status) {
+                case 'online':
+                    return '在线';
+                case 'offline':
+                    return '离线';
+                default:
+                    return status || '未知';
+            }
+        }
+        
+        // 更新统计信息
+        function updateStats() {
+            const total = vmData.length;
+            const online = vmData.filter(vm => vm.status === 'online' || vm.status === '在线').length;
+            const offline = vmData.filter(vm => vm.status === 'offline' || vm.status === '离线').length;
+            const unknown = total - online - offline;
+            
+            document.getElementById('totalCount').textContent = total;
+            document.getElementById('onlineCount').textContent = online;
+            document.getElementById('offlineCount').textContent = offline;
+            document.getElementById('unknownCount').textContent = unknown;
+        }
+        
+        // 显示统计信息
+        function showStats() {
+            document.getElementById('statsRow').style.display = 'block';
+        }
+        
+        // 刷新状态
+        async function refreshStatus() {
+            showLoading('正在刷新IM状态...');
+            await loadVMStatus();
+            hideLoading();
+        }
+        
+        // 刷新单个虚拟机状态
+        async function refreshSingleVM(vmName, index) {
+            const btn = document.getElementById(`refreshBtn_${index}`);
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>刷新中';
+            btn.disabled = true;
+            
+            try {
+                const response = await fetch('/api/batch_im_status', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        vm_names: [vmName]
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success && data.results.length > 0) {
+                    // 更新vmData中的对应项
+                    const vmIndex = vmData.findIndex(vm => vm.vm_name === vmName);
+                    if (vmIndex !== -1) {
+                        vmData[vmIndex] = data.results[0];
+                        renderVMList();
+                        updateStats();
+                    }
+                } else {
+                    alert('刷新失败: ' + (data.message || '未知错误'));
+                }
+            } catch (error) {
+                alert('网络错误: ' + error.message);
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+        
+        // 切换虚拟机操作状态
+        function toggleVMAction(vmName, index) {
+            const btn = document.getElementById(`actionBtn_${index}`);
+            
+            if (btn.classList.contains('btn-outline-danger')) {
+                // 标记为将要注销
+                btn.classList.remove('btn-outline-danger');
+                btn.classList.add('btn-danger');
+                btn.innerHTML = '<i class="fas fa-check me-1"></i>已选择';
+            } else {
+                // 取消注销标记
+                btn.classList.remove('btn-danger');
+                btn.classList.add('btn-outline-danger');
+                btn.innerHTML = '<i class="fas fa-sign-out-alt me-1"></i>注销';
+            }
+        }
+        
+        // 提交更改
+        async function submitChanges() {
+            if (operationType === 'logout') {
+                await submitLogout();
+            } else {
+                // 状态查询模式下，提交更新就是刷新状态
+                await refreshStatus();
+            }
+        }
+        
+        // 提交注销操作
+        async function submitLogout() {
+            // 获取选中要注销的虚拟机
+            const selectedForLogout = [];
+            vmData.forEach((vm, index) => {
+                const btn = document.getElementById(`actionBtn_${index}`);
+                if (btn && btn.classList.contains('btn-danger')) {
+                    selectedForLogout.push(vm.vm_name);
+                }
+            });
+            
+            if (selectedForLogout.length === 0) {
+                alert('请至少选择一个虚拟机进行IM注销操作');
+                return;
+            }
+            
+            if (!confirm(`确定要对 ${selectedForLogout.length} 个虚拟机执行IM注销操作吗？`)) {
+                return;
+            }
+            
+            showLoading('正在执行IM注销操作...');
+            
+            try {
+                const response = await fetch('/api/batch_im_logout', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        vm_names: selectedForLogout
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert(`IM注销操作完成！\n成功: ${data.success_count}\n失败: ${data.failed_count}`);
+                    // 刷新状态
+                    await loadVMStatus();
+                } else {
+                    alert('IM注销操作失败: ' + data.message);
+                }
+            } catch (error) {
+                alert('网络错误: ' + error.message);
+            } finally {
+                hideLoading();
+            }
+        }
+        
+        // 显示加载遮罩
+        function showLoading(text = '正在处理请求...') {
+            document.getElementById('loadingText').textContent = text;
+            document.getElementById('loadingOverlay').style.display = 'flex';
+        }
+        
+        // 隐藏加载遮罩
+        function hideLoading() {
+            document.getElementById('loadingOverlay').style.display = 'none';
+        }
+        
+        // 显示错误信息
+        function showError(message) {
+            const vmList = document.getElementById('vmList');
+            vmList.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle text-danger" style="font-size: 3rem;"></i>
+                    <h5 class="mt-3 text-danger">加载失败</h5>
+                    <p class="text-muted">${message}</p>
+                    <button class="btn btn-primary" onclick="location.reload()">
+                        <i class="fas fa-redo me-1"></i>重新加载
+                    </button>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>
