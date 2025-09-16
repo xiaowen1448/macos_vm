@@ -165,6 +165,9 @@ logging.getLogger('werkzeug').disabled = True
 from app.routes.mass_messaging import mass_messaging_bp
 app.register_blueprint(mass_messaging_bp)
 
+from app.routes.mupan import mupan_bp
+app.register_blueprint(mupan_bp)
+
 # 启动时清除所有session，确保每次启动都使用新的session
 def clear_sessions_on_startup():
     """启动时清除所有session"""
