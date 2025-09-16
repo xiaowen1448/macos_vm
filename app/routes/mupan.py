@@ -42,7 +42,7 @@ def parse_vmsd_file(vmsd_path):
             content = f.read()
         
         # 使用正则表达式匹配快照信息
-        snapshot_pattern = r'snapshot(\d+)\.(\w+)\s*=\s*"([^"]*)"'
+        snapshot_pattern = r'snapshot(\d+)\.(\w+(?:\.\w+)*)\s*=\s*"([^"]*)"'
         matches = re.findall(snapshot_pattern, content)
         
         for match in matches:
@@ -53,7 +53,17 @@ def parse_vmsd_file(vmsd_path):
             if snapshot_id not in snapshots:
                 snapshots[snapshot_id] = {}
             
-            snapshots[snapshot_id][property_name] = property_value
+            # 处理嵌套属性，如disk0.fileName
+            if '.' in property_name:
+                parts = property_name.split('.')
+                current = snapshots[snapshot_id]
+                for part in parts[:-1]:
+                    if part not in current:
+                        current[part] = {}
+                    current = current[part]
+                current[parts[-1]] = property_value
+            else:
+                snapshots[snapshot_id][property_name] = property_value
         
         logger.info(f"解析vmsd文件成功，找到 {len(snapshots)} 个快照")
         return snapshots
@@ -150,6 +160,9 @@ def get_template_vm_snapshots(template_name, template_vm_dir=None):
     if not snapshots_data:
         return {'success': True, 'snapshots': []}
     
+    # 从config.py导入clone_dir配置
+    from config import clone_dir
+    
     # 处理快照数据
     snapshots = []
     for snapshot_id, snapshot_info in snapshots_data.items():
@@ -172,13 +185,25 @@ def get_template_vm_snapshots(template_name, template_vm_dir=None):
                     create_time = '未知'
             
             # 获取快照磁盘文件名
-            disk_file = snapshot_info.get('disk0', {}).get('fileName', '') if isinstance(snapshot_info.get('disk0'), dict) else snapshot_info.get('disk0fileName', '')
+            disk_file = ''
+            if 'disk0' in snapshot_info and isinstance(snapshot_info['disk0'], dict):
+                disk_file = snapshot_info['disk0'].get('fileName', '')
+            else:
+                disk_file = snapshot_info.get('disk0fileName', '')
+            
+            # 检查vmdk关联关系
+            vmdk_associated_vms = []
+            if disk_file:
+                vmdk_associated_vms = check_snapshot_vmdk_association(disk_file, clone_dir)
             
             # 提取存在的克隆虚拟机名称
             existing_vm_names = []
             for clone_path in existing_clones:
                 vm_name = os.path.basename(os.path.dirname(clone_path))
                 existing_vm_names.append(vm_name)
+            
+            # 合并所有关联的虚拟机（包括vmsd中的克隆和vmdk关联）
+            all_associated_vms = list(set(existing_vm_names + vmdk_associated_vms))
             
             snapshot = {
                 'id': snapshot_id,
@@ -189,12 +214,14 @@ def get_template_vm_snapshots(template_name, template_vm_dir=None):
                 'clone_paths': clone_paths,
                 'existing_clones': existing_clones,
                 'used_by': existing_vm_names,
-                'can_delete': len(existing_clones) == 0,
+                'vmdk_associated_vms': vmdk_associated_vms,  # 新增：通过vmdk关联的虚拟机
+                'all_associated_vms': all_associated_vms,    # 新增：所有关联的虚拟机
+                'can_delete': len(all_associated_vms) == 0,  # 修改：只有没有任何关联时才能删除
                 'clone_count': len(snapshot_info.get('clone0', '').split(',')) if snapshot_info.get('clone0') else 0,
                 'vmsn_file': snapshot_info.get('filename', '')
             }
             
-            # 添加关联虚拟机信息
+            # 添加关联虚拟机信息（保持向后兼容）
             clones = []
             clone_index = 0
             while f'clone{clone_index}' in snapshot_info:
@@ -204,7 +231,7 @@ def get_template_vm_snapshots(template_name, template_vm_dir=None):
                     clones.append(vm_name)
                 clone_index += 1
             
-            snapshot['related_vms'] = clones
+            snapshot['related_vms'] = all_associated_vms  # 使用所有关联的虚拟机
             snapshots.append(snapshot)
     
     return {'success': True, 'snapshots': snapshots}
@@ -334,7 +361,8 @@ def clean_invalid_snapshots(template_name):
         
         # 遍历所有快照，只删除未被使用的快照
         for snapshot in snapshots:
-            if snapshot['can_delete'] and len(snapshot['used_by']) == 0:
+            # 修改删除条件：检查所有关联的虚拟机
+            if snapshot['can_delete'] and len(snapshot.get('all_associated_vms', [])) == 0:
                 try:
                     # 删除快照
                     success = delete_single_snapshot(template_name, snapshot, template_vm_dir)
@@ -356,12 +384,13 @@ def clean_invalid_snapshots(template_name):
                     logger.error(f"删除快照 {snapshot['name']} 时出错: {str(e)}")
             else:
                 kept_count += 1
-                if len(snapshot['used_by']) > 0:
+                associated_vms = snapshot.get('all_associated_vms', [])
+                if len(associated_vms) > 0:
                     skipped_snapshots.append({
                         'name': snapshot['name'],
-                        'used_by': snapshot['used_by']
+                        'used_by': associated_vms
                     })
-                    logger.info(f"跳过删除快照 {snapshot['name']}，被以下虚拟机使用: {', '.join(snapshot['used_by'])}")
+                    logger.info(f"跳过删除快照 {snapshot['name']}，被以下虚拟机使用: {', '.join(associated_vms)}")
         
         message = f"清理完成，删除了 {deleted_count} 个失效快照"
         if skipped_snapshots:
@@ -425,3 +454,59 @@ def delete_single_snapshot(template_name, snapshot, template_vm_dir):
     except Exception as e:
         logger.error(f"删除单个快照失败: {str(e)}")
         return False
+
+
+def check_vmdk_parent_hint(vmdk_file_path):
+    """检查vmdk文件的parentFileNameHint参数"""
+    if not os.path.exists(vmdk_file_path):
+        return None
+    
+    try:
+        with open(vmdk_file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            # 只读取文件头部，通常parentFileNameHint在前几行
+            for i, line in enumerate(f):
+                if i > 50:  # 只检查前50行
+                    break
+                if 'parentFileNameHint' in line:
+                    # 提取parentFileNameHint的值
+                    match = re.search(r'parentFileNameHint\s*=\s*"([^"]*)"', line)
+                    if match:
+                        parent_hint = match.group(1)
+                        # 提取文件名部分
+                        parent_filename = os.path.basename(parent_hint)
+                        logger.info(f"找到parentFileNameHint: {parent_filename}")
+                        return parent_filename
+        return None
+    except Exception as e:
+        logger.error(f"读取vmdk文件失败 {vmdk_file_path}: {str(e)}")
+        return None
+
+def check_snapshot_vmdk_association(snapshot_disk_file, clone_dir):
+    """检查快照的vmdk文件是否与克隆虚拟机关联"""
+    if not snapshot_disk_file or not clone_dir or not os.path.exists(clone_dir):
+        return []
+    
+    associated_vms = []
+    
+    try:
+        # 遍历克隆目录中的所有虚拟机目录
+        for vm_name in os.listdir(clone_dir):
+            vm_path = os.path.join(clone_dir, vm_name)
+            if not os.path.isdir(vm_path):
+                continue
+            
+            # 查找该虚拟机目录中的vmdk文件
+            for file in os.listdir(vm_path):
+                if file.endswith('.vmdk'):
+                    vmdk_path = os.path.join(vm_path, file)
+                    parent_hint = check_vmdk_parent_hint(vmdk_path)
+                    
+                    if parent_hint and parent_hint == snapshot_disk_file:
+                        associated_vms.append(vm_name)
+                        logger.info(f"发现关联: 快照文件 {snapshot_disk_file} 与虚拟机 {vm_name} 关联")
+                        break
+    
+    except Exception as e:
+        logger.error(f"检查快照vmdk关联失败: {str(e)}")
+    
+    return associated_vms
