@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MacOS VM 虚拟机管理平台 - 虚拟机管理</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='lib/bootstrap.min.css') }}" rel="stylesheet">
+<link href="{{ url_for('static', filename='lib/all.min.css') }}" rel="stylesheet">
     <style>
    body {
             background-color: #f8f9fa;
@@ -896,8 +896,8 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <script src="{{ url_for('static', filename='lib/bootstrap.bundle.min.js') }}"></script>
+<script src="{{ url_for('static', filename='lib/socket.io-4.7.2.js') }}"></script>
     <script>
            // 异步更新前台虚拟机名称显示
         function updateVMNameInUI(originalName, newName) {
@@ -1922,19 +1922,19 @@
             let result;
             switch (onlineStatus) {
                 case 'online': 
-                    result = '在线';
+                    result = '完全在线';
                     break;
                 case 'partial': 
-                    result = '在线';
+                    result = '部分在线';
                     break;
                 case 'offline': 
-                    result = '未在线';
+                    result = '离线';
                     break;
                 case 'error': 
                     result = '错误';
                     break;
                 case 'unknown': 
-                    result = '离线';
+                    result = '未知';
                     break;
                 default: 
                     result = '未知';

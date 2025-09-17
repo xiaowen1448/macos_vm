@@ -4289,7 +4289,7 @@ def check_ssh_port_open(ip, port=22):
     try:
         # 创建socket连接
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(3)  # 3秒超时
+        sock.settimeout(8)  # 增加超时时间到8秒
         
         # 尝试连接SSH端口
         result = sock.connect_ex((ip, port))
@@ -4299,8 +4299,23 @@ def check_ssh_port_open(ip, port=22):
            # logger.debug(f"SSH端口 {port} 开放: {ip}")
             return True
         else:
-            logger.debug(f"SSH端口 {port} 未开放: {ip}")
-            return False
+            # 如果端口连接失败，再尝试一次确认
+            logger.debug(f"SSH端口 {port} 首次检测失败，进行二次确认: {ip}")
+            try:
+                sock2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock2.settimeout(5)  # 二次检测用较短超时
+                result2 = sock2.connect_ex((ip, port))
+                sock2.close()
+                
+                if result2 == 0:
+                    logger.debug(f"SSH端口 {port} 二次检测成功: {ip}")
+                    return True
+                else:
+                    logger.debug(f"SSH端口 {port} 确认未开放: {ip}")
+                    return False
+            except Exception as e2:
+                logger.debug(f"SSH端口二次检测异常: {str(e2)}")
+                return False
             
     except Exception as e:
         logger.debug(f"检查SSH端口失败: {str(e)}")
@@ -4315,10 +4330,22 @@ def check_ssh_trust_status(ip, username=vm_username):
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         
-        # 尝试无密码连接
-        ssh.connect(ip, username=username, timeout=5)
+        # 尝试无密码连接，增加超时时间
+        ssh.connect(ip, username=username, timeout=10, look_for_keys=True, allow_agent=True)
+        
+        # 执行简单命令测试连接
+        stdin, stdout, stderr = ssh.exec_command('echo "ssh_trust_test"', timeout=5)
+        output = stdout.read().decode().strip()
+        
         ssh.close()
-        return True
+        
+        # 验证命令执行结果
+        if output == 'ssh_trust_test':
+            logger.debug(f"SSH互信检查成功: {ip}")
+            return True
+        else:
+            logger.debug(f"SSH互信检查失败，命令执行结果异常: {ip}")
+            return False
         
     except Exception as e:
         logger.debug(f"SSH互信检查失败: {str(e)}")
