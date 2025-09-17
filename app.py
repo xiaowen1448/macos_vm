@@ -29,6 +29,7 @@ from flask_socketio import SocketIO, emit
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import wraps
 from config import *
+from utils.ssh_utils import SSHClient, setup_ssh_trust, check_ssh_connectivity, check_ssh_trust_status
 
 try:
     import fcntl
@@ -208,30 +209,11 @@ def ping_vm_ip(ip_address, timeout=3):
         logger.debug(f"Ping {ip_address} 失败: {str(e)}")
         return False
 
-def check_ssh_connectivity(ip_address, username, timeout=10):
-    """检测SSH连通性"""
-    try:
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        
-        # 尝试连接（使用密钥认证）
-        ssh.connect(
-            hostname=ip_address,
-            username=username,
-            timeout=timeout,
-            look_for_keys=True,
-            allow_agent=True
-        )
-        
-        # 执行简单命令测试连接
-        stdin, stdout, stderr = ssh.exec_command('echo "ssh_test"', timeout=5)
-        output = stdout.read().decode().strip()
-        
-        ssh.close()
-        return output == 'ssh_test'
-    except Exception as e:
-        logger.debug(f"SSH连接 {ip_address} 失败: {str(e)}")
-        return False
+def check_ssh_connectivity_old(ip_address, username, timeout=10):
+    """旧的SSH连通性检测实现（已弃用）"""
+    # 使用新的SSH工具类实现
+    from utils.ssh_utils import check_ssh_connectivity as new_check_ssh_connectivity
+    return new_check_ssh_connectivity(ip_address, username, timeout=timeout)
 
 def check_and_complete_task(task_id):
     """检查所有监控任务是否完成，如果完成则标记主任务为完成状态"""
@@ -354,9 +336,9 @@ def monitor_vm_and_configure(task_id, vm_name, vm_path, wuma_config_file, max_wa
                         
                         try:
                             # 执行test.sh脚本更改JU值
-                            test_cmd = f'ssh -o StrictHostKeyChecking=no {vm_username}@{vm_ip} "{sh_script_remote_path}test.sh"'
-                            test_result = subprocess.run(test_cmd, shell=True, capture_output=True, text=True, timeout=60)
-                            if test_result.returncode == 0:
+                            script_path = f"{sh_script_remote_path}test.sh"
+                            success, output, ssh_log = execute_remote_script(vm_ip, vm_username, script_path)
+                            if success:
                                 add_task_log(task_id, 'success', f'虚拟机 {vm_name} JU值更改成功')
                                 add_task_log(task_id, 'info', f'开始重启虚拟机 {vm_name}...')
                                 #logger.info(f"[DEBUG] 开始重启虚拟机 {vm_name}")
@@ -1046,38 +1028,29 @@ def send_script_generic(vm_type_name):
                 dir_script_remote_path=scpt_script_remote_path
             # 列出指定脚本的权限   
             
-            # 使用scp发送脚本
-            scp_cmd = [
-                'scp',
-                '-o', 'StrictHostKeyChecking=no',
-                '-o', 'ConnectTimeout=10',
-                script_path,
-                f"{vm_username}@{vm_info['ip']}:{dir_script_remote_path}{script_name}"
-            ]
+            # 使用SFTP发送脚本
+            remote_file_path = f"{dir_script_remote_path}{script_name}"
+            success, message = send_file_via_sftp(script_path, remote_file_path, vm_info['ip'], vm_username, timeout=30)
             
-           # logger.debug(f"执行SCP命令: {' '.join(scp_cmd)}")
-            result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=30, encoding="utf-8")
-            
-            if result.returncode == 0:
+            if success:
                 logger.info(f"脚本发送成功到虚拟机 {vm_name} ({vm_info['ip']})")
                 return jsonify({
                     'success': True,
                     'message': f'脚本 {script_name} 发送成功到虚拟机 {vm_name}',
-                    'file_path': f'{dir_script_remote_path}{script_name}'
+                    'file_path': remote_file_path
                 })
             else:
-                error_msg = result.stderr.strip() if result.stderr else result.stdout.strip()
-                logger.error(f"脚本发送失败到虚拟机 {vm_name}: {error_msg}")
+                logger.error(f"脚本发送失败到虚拟机 {vm_name}: {message}")
                 
                 # 根据错误类型提供更详细的错误信息
-                if 'Permission denied' in error_msg:
+                if 'Permission denied' in message:
                     error_detail = 'SSH认证失败，请检查SSH互信设置'
-                elif 'Connection refused' in error_msg:
+                elif 'Connection refused' in message:
                     error_detail = 'SSH连接被拒绝，请检查SSH服务是否运行'
-                elif 'No route to host' in error_msg:
+                elif 'No route to host' in message:
                     error_detail = '无法连接到主机，请检查网络连接'
                 else:
-                    error_detail = f'SCP传输失败: {error_msg}'
+                    error_detail = message
                 
                 return jsonify({
                     'success': False,
@@ -4002,15 +3975,20 @@ def get_vm_status(vm_path):
                 # 检查虚拟机是否正在启动过程中
                 try:
                     # 尝试获取虚拟机IP，如果获取失败可能正在启动
-                    vm_ip = get_vm_ip(vm_name)
-                    if vm_ip and is_valid_ip(vm_ip):
-                      #  logger.info(f"[DEBUG] 虚拟机IP正常: {vm_ip}")
-                        return 'running'
+                    # 对于母盘虚拟机，直接使用vmrun getGuestIPAddress命令
+                    vmrun_path = get_vmrun_path()
+                    cmd = [vmrun_path, 'getGuestIPAddress', vm_path, '-wait']
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+                    
+                    if result.returncode == 0:
+                        vm_ip = result.stdout.strip()
+                        if vm_ip and is_valid_ip(vm_ip):
+                            return 'running'
+                        else:
+                            return 'starting'
                     else:
-                       # logger.info(f"[DEBUG] 虚拟机IP获取失败，可能正在启动")
                         return 'starting'
                 except Exception as e:
-                   # logger.info(f"[DEBUG] 获取虚拟机IP异常，可能正在启动: {str(e)}")
                     return 'starting'
             else:
                 # 虚拟机不在运行列表中，检查是否处于挂起状态
@@ -4321,35 +4299,29 @@ def check_ssh_port_open(ip, port=22):
         logger.debug(f"检查SSH端口失败: {str(e)}")
         return False
 
-def check_ssh_trust_status(ip, username=vm_username):
-    """检查SSH互信状态"""
-    if not ip:
-        return False
+def check_ssh_trust_status_old(ip, username=vm_username):
+    """旧的SSH互信状态检查实现（已弃用）"""
+    # 使用新的SSH工具类实现
+    from utils.ssh_utils import check_ssh_trust_status as new_check_ssh_trust_status
+    return new_check_ssh_trust_status(ip, username)
+
+def get_vm_name_by_ip(ip):
+    """根据IP地址获取虚拟机名称"""
     try:
-        # 创建SSH客户端
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        
-        # 尝试无密码连接，增加超时时间
-        ssh.connect(ip, username=username, timeout=10, look_for_keys=True, allow_agent=True)
-        
-        # 执行简单命令测试连接
-        stdin, stdout, stderr = ssh.exec_command('echo "ssh_trust_test"', timeout=5)
-        output = stdout.read().decode().strip()
-        
-        ssh.close()
-        
-        # 验证命令执行结果
-        if output == 'ssh_trust_test':
-            logger.debug(f"SSH互信检查成功: {ip}")
-            return True
-        else:
-            logger.debug(f"SSH互信检查失败，命令执行结果异常: {ip}")
-            return False
-        
+        # 遍历所有虚拟机，找到匹配的IP
+        vm_dirs = [clone_dir, vm_chengpin_dir]
+        for vm_dir in vm_dirs:
+            if os.path.exists(vm_dir):
+                for vm_name in os.listdir(vm_dir):
+                    vm_path = os.path.join(vm_dir, vm_name)
+                    if os.path.isdir(vm_path):
+                        vm_ip = get_vm_ip(vm_name)
+                        if vm_ip == ip:
+                            return vm_name
+        return None
     except Exception as e:
-        logger.debug(f"SSH互信检查失败: {str(e)}")
-        return False
+        logger.error(f"根据IP获取虚拟机名称失败: {str(e)}")
+        return None
 
 def get_vm_online_status(vm_name):
     """获取虚拟机在线状态（新逻辑：根据虚拟机状态和网络连接情况综合判断）"""
@@ -4451,7 +4423,7 @@ def get_vm_online_status(vm_name):
         
         # 5. 检查SSH端口是否开放
         ssh_port_open = check_ssh_port_open(vm_ip)
-        ssh_trust_status = check_ssh_trust_status(vm_ip)
+        ssh_trust_status = check_ssh_trust_status(vm_ip, vm_username)
         conditions_met = 0
         total_conditions = 3
         
@@ -5036,37 +5008,29 @@ def api_vm_send_script():
             else:
                 file_script_remote_path = f"{scpt_script_remote_path}"
         
-            scp_cmd = [
-                'scp',
-                '-o', 'StrictHostKeyChecking=no',
-                '-o', 'ConnectTimeout=10',
-                script_path,
-                f"{vm_username}@{vm_info['ip']}:{file_script_remote_path}{script_name}"
-            ]
+            # 使用SFTP发送脚本
+            remote_file_path = f"{file_script_remote_path}{script_name}"
+            success, message = send_file_via_sftp(script_path, remote_file_path, vm_info['ip'], vm_username, timeout=30)
             
-          #  logger.debug(f"执行SCP命令: {' '.join(scp_cmd)}")
-            result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=30,encoding="utf-8")
-            
-            if result.returncode == 0:
+            if success:
                 logger.info(f"脚本发送成功到虚拟机 {vm_name} ({vm_info['ip']})")
                 return jsonify({
                     'success': True,
                     'message': f'脚本 {script_name} 发送成功到虚拟机 {vm_name}',
-                    'file_path': f'{file_script_remote_path}{script_name}'
+                    'file_path': remote_file_path
                 })
             else:
-                error_msg = result.stderr.strip() if result.stderr else result.stdout.strip()
-                logger.error(f"脚本发送失败到虚拟机 {vm_name}: {error_msg}")
+                logger.error(f"脚本发送失败到虚拟机 {vm_name}: {message}")
                 
                 # 根据错误类型提供更详细的错误信息
-                if 'Permission denied' in error_msg:
+                if 'Permission denied' in message:
                     error_detail = 'SSH认证失败，请检查SSH互信设置'
-                elif 'Connection refused' in error_msg:
+                elif 'Connection refused' in message:
                     error_detail = 'SSH连接被拒绝，请检查SSH服务是否运行'
-                elif 'No route to host' in error_msg:
+                elif 'No route to host' in message:
                     error_detail = '无法连接到主机，请检查网络连接'
                 else:
-                    error_detail = f'SCP传输失败: {error_msg}'
+                    error_detail = message
                 
                 return jsonify({
                     'success': False,
@@ -5190,6 +5154,8 @@ def api_ssh_trust():
         success, message = setup_ssh_trust(vm_ip, username, password)
         
         if success:
+            # 清理虚拟机状态缓存，确保下次检查时获取最新状态
+            vm_cache.clear_cache(vm_name, 'online_status')
             logger.info(f"SSH互信设置成功: {message}")
             return jsonify({'success': True, 'message': message})
         else:
@@ -5200,84 +5166,14 @@ def api_ssh_trust():
         logger.error(f"SSH互信设置异常: {str(e)}")
         return jsonify({'success': False, 'message': f'设置SSH互信时发生错误: {str(e)}'})
 
-def setup_ssh_trust(ip, username, password):
-    """设置SSH互信的具体实现"""
-    #logger.info(f"开始设置SSH互信 - IP: {ip}, 用户: {username}")
+def setup_ssh_trust_old(ip, username, password):
+    """旧的SSH互信设置实现（已弃用）"""
+    # 使用新的SSH工具类实现
+    from utils.ssh_utils import setup_ssh_trust as new_setup_ssh_trust
     try:
-        # 1. 生成SSH密钥对（如果不存在）
-        ssh_key_path = os.path.expanduser('~/.ssh/id_rsa')
-        ssh_pub_key_path = os.path.expanduser('~/.ssh/id_rsa.pub')
-        
-        # 确保.ssh目录存在
-        ssh_dir = os.path.expanduser('~/.ssh')
-        if not os.path.exists(ssh_dir):
-            os.makedirs(ssh_dir, mode=0o700)
-            #logger.debug(f"创建SSH目录: {ssh_dir}")
-        
-        if not os.path.exists(ssh_key_path):
-          #  logger.info("生成SSH密钥对")
-            # 生成SSH密钥对
-            keygen_cmd = ['ssh-keygen', '-t', 'rsa', '-b', '2048', '-f', ssh_key_path, '-N', '']
-           # logger.debug(f"执行ssh-keygen命令: {keygen_cmd}")
-            result = subprocess.run(keygen_cmd, capture_output=True, text=True, timeout=30)
-            if result.returncode != 0:
-            #    logger.error(f"生成SSH密钥失败: {result.stderr}")
-                return False, f"生成SSH密钥失败: {result.stderr}"
-            else:
-                logger.debug("SSH密钥生成成功")
-        
-        # 2. 读取公钥
-        if not os.path.exists(ssh_pub_key_path):
-           # logger.error("SSH公钥文件不存在")
-            return False, "SSH公钥文件不存在"
-        
-        with open(ssh_pub_key_path, 'r') as f:
-            public_key = f.read().strip()
-        try:
-            # 创建SSH客户端
-            ssh = paramiko.SSHClient()
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            
-            # 连接到远程主机
-          #  logger.debug(f"尝试连接到 {ip}")
-            ssh.connect(ip, username=username, password=password, timeout=10)
-         #  logger.debug("SSH连接成功")
-            
-            # 创建.ssh目录
-            stdin, stdout, stderr = ssh.exec_command('mkdir -p ~/.ssh')
-            exit_status = stdout.channel.recv_exit_status()
-           # logger.debug(f"创建.ssh目录状态: {exit_status}")
-            
-            # 添加公钥到authorized_keys
-            stdin, stdout, stderr = ssh.exec_command(f'echo "{public_key}" >> ~/.ssh/authorized_keys')
-            exit_status = stdout.channel.recv_exit_status()
-           # logger.debug(f"添加公钥状态: {exit_status}")
-            
-            # 设置正确的权限
-            stdin, stdout, stderr = ssh.exec_command('chmod 700 ~/.ssh')
-            stdin, stdout, stderr = ssh.exec_command('chmod 600 ~/.ssh/authorized_keys')
-           # logger.debug("设置SSH目录权限完成")
-            
-            # 验证设置是否成功
-            stdin, stdout, stderr = ssh.exec_command('cat ~/.ssh/authorized_keys')
-            authorized_keys_content = stdout.read().decode().strip()
-            ssh.close()
-            if public_key in authorized_keys_content:
-                logger.info("SSH互信设置成功（使用paramiko）")
-                return True, "SSH互信设置成功"
-            else:
-                logger.error("公钥未正确添加到authorized_keys")
-                return False, "公钥未正确添加到authorized_keys"
-            
-        except ImportError:
-            logger.error("paramiko库未安装")
-            return False, "需要安装paramiko库: pip install paramiko"
-        except Exception as e:
-            logger.error(f"paramiko方法失败: {str(e)}")
-            return False, f"SSH连接失败: {str(e)}"
-        
+        return new_setup_ssh_trust(ip, username, password)
     except Exception as e:
-        logger.error(f"setup_ssh_trust异常: {str(e)}")
+        logger.error(f"设置SSH互信时发生错误: {str(e)}")
         return False, f"设置SSH互信时发生错误: {str(e)}"
 
 @app.route('/api/vm_chmod_scripts', methods=['POST'])
@@ -5514,6 +5410,61 @@ def api_get_ju_info():
         logger.error(f"获取JU值信息时发生异常: {str(e)}")
         return jsonify({'success': False, 'error': f'获取JU值信息时发生异常: {str(e)}'})
 
+def send_file_via_sftp(local_path, remote_path, ip, username, timeout=30):
+    """使用paramiko SFTP发送文件到远程主机"""
+    try:
+        # 创建SSH客户端
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        
+        try:
+            # 首先尝试密钥认证
+            ssh.connect(ip, username=username, timeout=timeout, look_for_keys=True, allow_agent=True)
+        except paramiko.AuthenticationException:
+            # 密钥认证失败，尝试密码认证并自动设置互信
+            logger.info(f"密钥认证失败，尝试密码认证: {ip}")
+            try:
+                ssh.connect(ip, username=username, password=vm_password, timeout=timeout)
+                logger.info(f"密码认证成功，开始设置SSH互信: {ip}")
+                
+                # 设置SSH互信
+                success, message = setup_ssh_trust(ip, username, vm_password)
+                if success:
+                    logger.info(f"SSH互信设置成功: {ip}")
+                    # 清理缓存
+                    vm_cache.clear_cache(get_vm_name_by_ip(ip), 'online_status')
+                else:
+                    logger.warning(f"SSH互信设置失败: {ip} - {message}")
+            except Exception as pwd_e:
+                ssh.close()
+                return False, f"密码认证也失败: {str(pwd_e)}"
+        
+        # 创建SFTP客户端
+        sftp = ssh.open_sftp()
+        
+        # 确保远程目录存在
+        remote_dir = os.path.dirname(remote_path)
+        if remote_dir:
+            try:
+                sftp.mkdir(remote_dir)
+            except IOError:
+                # 目录可能已存在，忽略错误
+                pass
+        
+        # 传输文件
+        sftp.put(local_path, remote_path)
+        
+        # 关闭连接
+        sftp.close()
+        ssh.close()
+        
+        return True, "文件传输成功"
+        
+    except ImportError:
+        return False, "需要安装paramiko库: pip install paramiko"
+    except Exception as e:
+        return False, f"SFTP传输失败: {str(e)}"
+
 def execute_remote_script(ip, username, script_name):
     """通过SSH互信执行目录脚本并获取输出"""
     try:
@@ -5530,8 +5481,30 @@ def execute_remote_script(ip, username, script_name):
         
         # 通过SSH互信连接到远程主机（无需密码）
         ssh_log.append(f"[SSH] 正在建立SSH连接...")
-        ssh.connect(ip, username=username, timeout=10)
-        ssh_log.append("[SSH] SSH连接建立成功")
+        try:
+            ssh.connect(ip, username=username, timeout=10, look_for_keys=True, allow_agent=True)
+            ssh_log.append("[SSH] SSH连接建立成功")
+        except paramiko.AuthenticationException:
+            # 密钥认证失败，尝试密码认证并自动设置互信
+            ssh_log.append("[SSH] 密钥认证失败，尝试密码认证")
+            try:
+                ssh.connect(ip, username=username, password=vm_password, timeout=10)
+                ssh_log.append("[SSH] 密码认证成功，开始设置SSH互信")
+                
+                # 设置SSH互信
+                success, message = setup_ssh_trust(ip, username, vm_password)
+                if success:
+                    ssh_log.append("[SSH] SSH互信设置成功")
+                    # 清理缓存
+                    vm_name = get_vm_name_by_ip(ip)
+                    if vm_name:
+                        vm_cache.clear_cache(vm_name, 'online_status')
+                else:
+                    ssh_log.append(f"[SSH] SSH互信设置失败: {message}")
+            except Exception as pwd_e:
+                ssh_log.append(f"[SSH] 密码认证也失败: {str(pwd_e)}")
+                ssh.close()
+                return False, f"SSH连接失败: {str(pwd_e)}", "\n".join(ssh_log)
         
         # 检查脚本是否存在
         check_command = f"ls -la {script_name}"
@@ -5693,6 +5666,10 @@ def api_ssh_chengpin_trust():
         
         # 设置SSH互信
         success, message = setup_ssh_trust(vm_ip, username, password)
+        
+        if success:
+            # 清理虚拟机状态缓存，确保下次检查时获取最新状态
+            vm_cache.clear_cache(vm_name, 'online_status')
         
         return jsonify({
             'success': success,
@@ -6010,6 +5987,10 @@ def api_ssh_10_12_trust():
         
         # 设置SSH互信
         success, message = setup_ssh_trust(vm_ip, username, password)
+        
+        if success:
+            # 清理虚拟机状态缓存，确保下次检查时获取最新状态
+            vm_cache.clear_cache(vm_name, 'online_status')
         
         return jsonify({
             'success': success,
@@ -6913,27 +6894,34 @@ def batch_change_wuma_core(selected_vms, config_file_path, task_id=None):
                 # 注意：重启进度在monitor_vm_and_configure函数中更新，这里不需要重复更新
                 
                 # 执行mount_efi.sh脚本
-                mount_cmd = f'ssh -o StrictHostKeyChecking=no {vm_username}@{vm_ip} "{sh_script_remote_path}/mount_efi.sh"'
-                logger.info(f"执行mount命令: {mount_cmd}")
-                mount_result = subprocess.run(mount_cmd, shell=True, capture_output=True, text=True, timeout=60)
+                script_path = f"{sh_script_remote_path}/mount_efi.sh"
+                logger.info(f"执行mount脚本: {script_path}")
+                success, output, ssh_log = execute_remote_script(vm_ip, vm_username, script_path)
                 
-                if mount_result.returncode != 0:
-                    logger.warning(f"mount_efi.sh执行失败: {mount_result.stderr}")
+                if not success:
+                    logger.warning(f"mount_efi.sh执行失败: {output}")
                     # 继续执行，不中断流程
                 else:
                     logger.info(f"mount_efi.sh执行成功")
                 
                 # 传输plist文件到虚拟机
-                scp_cmd = f'scp -o StrictHostKeyChecking=no "{plist_file_path}" {vm_username}@{vm_ip}:{boot_config_path}'
-               # logger.info(f"执行scp命令: {scp_cmd}")
-                scp_result = subprocess.run(scp_cmd, shell=True, capture_output=True, text=True, timeout=60)
-                
-                if scp_result.returncode != 0:
-                    log_message('error', f'文件传输失败: {scp_result.stderr}')
+                if not os.path.exists(plist_file_path):
+                    log_message('error', f'plist文件不存在: {plist_file_path}')
                     results.append({
                         'vm_name': vm_name,
                         'success': False,
-                        'message': f'文件传输失败: {scp_result.stderr}'
+                        'message': f'plist文件不存在: {plist_file_path}'
+                    })
+                    continue
+                
+                success, message = send_file_via_sftp(plist_file_path, boot_config_path, vm_ip, vm_username, timeout=60)
+                
+                if not success:
+                    log_message('error', f'文件传输失败: {message}')
+                    results.append({
+                        'vm_name': vm_name,
+                        'success': False,
+                        'message': f'文件传输失败: {message}'
                     })
                     continue
                 else:
@@ -7185,13 +7173,13 @@ def batch_change_ju_worker(task_id, selected_vms):
                 add_task_log(task_id, 'INFO', f'虚拟机 {vm_name} IP: {vm_ip}')
                 
                 # 执行test.sh脚本
-                test_cmd = f'ssh -o StrictHostKeyChecking=no wx@{vm_ip} "{sh_script_remote_path}test.sh"'
-                logger.info(f"执行test.sh脚本: {test_cmd}")
+                script_path = f"{sh_script_remote_path}test.sh"
+                logger.info(f"执行test.sh脚本: {script_path}")
                 add_task_log(task_id, 'INFO', f'执行test.sh脚本: {vm_name}')
-                test_result = subprocess.run(test_cmd, shell=True, capture_output=True, text=True, timeout=60)
+                success, output, ssh_log = execute_remote_script(vm_ip, 'wx', script_path)
                 
-                if test_result.returncode != 0:
-                    add_task_log(task_id, 'ERROR', f'test.sh脚本执行失败: {test_result.stderr}')
+                if not success:
+                    add_task_log(task_id, 'ERROR', f'test.sh脚本执行失败: {output}')
                     tasks[task_id]['results'].append({
                         'vm_name': vm_name,
                         'success': False,
@@ -8036,17 +8024,10 @@ def api_batch_im_login():
                  # 使用SCP传输文件到虚拟机的Documents目录，文件名固定为appleid.txt
                  remote_file_path = f"{appleidtxt_path}appleid.txt"
                  
-                 scp_cmd = [
-                     'scp',
-                     '-o', 'StrictHostKeyChecking=no',
-                     temp_file_path,
-                     f"{vm_username}@{vm_ip}:{remote_file_path}"
-                 ]
-                 
-                 #logger.info(f"[线程] 执行SCP命令: {' '.join(scp_cmd)}")
-                 result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=60)
+                 # 使用SFTP传输Apple ID文件
+                 success, message = send_file_via_sftp(temp_file_path, remote_file_path, vm_ip, vm_username, timeout=60)
                 
-                 if result.returncode == 0:
+                 if success:
                      logger.info(f"[线程] 成功传输Apple ID文件到虚拟机 {vm_name} 的Documents目录")
                      
                      # 执行登录脚本
@@ -8071,17 +8052,10 @@ def api_batch_im_login():
                          if script_found:
                              # 先传输脚本到虚拟机，然后调用API执行
                              dir_remote_script_path = f"{scpt_script_remote_path}{login_imessage}"
-                             scp_script_cmd = [
-                                 'scp',
-                                 '-o', 'StrictHostKeyChecking=no',
-                                 script_path,
-                                 f"{vm_username}@{vm_ip}:{dir_remote_script_path}"
-                             ]
+                             # 使用SFTP传输登录脚本
+                             script_success_transfer, script_message_transfer = send_file_via_sftp(script_path, dir_remote_script_path, vm_ip, vm_username, timeout=60)
                              
-                            # logger.info(f"[线程] 传输登录脚本到虚拟机 {vm_name}: {' '.join(scp_script_cmd)}")
-                             script_transfer_result = subprocess.run(scp_script_cmd, capture_output=True, text=True, timeout=60)
-                             
-                             if script_transfer_result.returncode == 0:
+                             if script_success_transfer:
                                 # logger.info(f"[线程] 成功传输登录脚本到虚拟机 {vm_name}")
                                 
                                  # 调用客户端8787端口API执行登录脚本
@@ -8552,18 +8526,10 @@ def api_distribute_text_lines():
                 else:
                     remote_file_path = f"/Users/{vm_username}/{file_name}"
                 
-                # 使用SCP传输文件到虚拟机
-                scp_cmd = [
-                    'scp',
-                    '-o', 'StrictHostKeyChecking=no',
-                    temp_file_path,
-                    f"{vm_username}@{vm_ip}:{remote_file_path}"
-                ]
+                # 使用SFTP传输文件到虚拟机
+                success, message = send_file_via_sftp(temp_file_path, remote_file_path, vm_ip, vm_username, timeout=60)
                 
-              #  logger.info(f"执行SCP命令: {' '.join(scp_cmd)}")
-                result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=60)
-                
-                if result.returncode == 0:
+                if success:
                     logger.info(f"成功传输文本文件到虚拟机 {vm_name}")
                     results.append({
                         'vm_name': vm_name,
@@ -8575,8 +8541,7 @@ def api_distribute_text_lines():
                         'text_lines': vm_text_lines  # 返回分配给该虚拟机的具体文本行
                     })
                 else:
-                    error_msg = result.stderr.strip() if result.stderr else '未知错误'
-                    logger.error(f"传输文本文件到虚拟机 {vm_name} 失败: {error_msg}")
+                    logger.error(f"传输文本文件到虚拟机 {vm_name} 失败: {message}")
                     results.append({
                         'vm_name': vm_name,
                         'success': False,

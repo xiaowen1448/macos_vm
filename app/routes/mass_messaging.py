@@ -8,6 +8,7 @@ import requests
 import json
 import sqlite3
 from config import *
+from utils.ssh_utils import SSHClient
 
 # 创建蓝图
 mass_messaging_bp = Blueprint('mass_messaging', __name__)
@@ -171,35 +172,22 @@ def api_download_chat_db():
         for remote_file, local_file in remote_files:
             remote_path = f'{remote_base_path}/{remote_file}'
             
-            scp_command = [
-                'scp',
-                '-o', 'StrictHostKeyChecking=no',
-                '-o', 'UserKnownHostsFile=/dev/null',
-                f'{vm_username}@{client_ip}:{remote_path}',
-                local_file
-            ]
-            
             logger.info(f"尝试下载文件: {remote_file}")
             
             try:
-                result = subprocess.run(
-                    scp_command,
-                    capture_output=True,
-                    text=True,
-                    timeout=60
-                )
-                
-                if result.returncode == 0 and os.path.exists(local_file) and os.path.getsize(local_file) > 0:
-                    downloaded_files.append(remote_file)
-                    logger.info(f"文件下载成功: {remote_file} -> {local_file}, 大小: {os.path.getsize(local_file)} bytes")
-                else:
-                    logger.warning(f"文件下载失败或不存在: {remote_file}, 返回码: {result.returncode}")
-                    if result.stderr:
-                        logger.warning(f"SCP错误信息: {result.stderr.strip()}")
-                    # 删除可能创建的空文件
-                    if os.path.exists(local_file):
-                        logger.debug(f"删除空文件: {local_file}")
-                        os.remove(local_file)
+                # 使用SSH工具类下载文件
+                with SSHClient(client_ip, vm_username) as ssh:
+                    success, message = ssh.download_file(remote_path, local_file)
+                    
+                    if success and os.path.exists(local_file) and os.path.getsize(local_file) > 0:
+                        downloaded_files.append(remote_file)
+                        logger.info(f"文件下载成功: {remote_file} -> {local_file}, 大小: {os.path.getsize(local_file)} bytes")
+                    else:
+                        logger.warning(f"文件下载失败或不存在: {remote_file}, 错误: {message}")
+                        # 删除可能创建的空文件
+                        if os.path.exists(local_file):
+                            logger.debug(f"删除空文件: {local_file}")
+                            os.remove(local_file)
                         
             except subprocess.TimeoutExpired:
                 logger.warning(f"下载文件超时: {remote_file}")
@@ -785,47 +773,35 @@ def api_send_mass_message():
                 with open(temp_phone_file, 'w', encoding='utf-8') as f:
                     f.write(phone_template_content)
                 
-                # 传输文本文件
-                text_scp_cmd = [
-                    'scp',
-                    '-o', 'StrictHostKeyChecking=no',
-                    temp_text_file,
-                    f"{vm_username}@{client_ip}:{text_target_dir}message_template.txt"
-                ]
-                
-                logger.info(f"传输文本到 {client_ip}: {' '.join(text_scp_cmd)}")
-                text_result = subprocess.run(text_scp_cmd, capture_output=True, text=True, timeout=60)
-                text_success = text_result.returncode == 0
-                
-                # 传输手机号文件
-                phone_scp_cmd = [
-                    'scp',
-                    '-o', 'StrictHostKeyChecking=no',
-                    temp_phone_file,
-                    f"{vm_username}@{client_ip}:{phone_target_dir}phone_numbers.txt"
-                ]
-                
-                logger.info(f"传输手机号到 {client_ip}: {' '.join(phone_scp_cmd)}")
-                phone_result = subprocess.run(phone_scp_cmd, capture_output=True, text=True, timeout=60)
-                phone_success = phone_result.returncode == 0
-                
-                attachment_success = True  # 默认附件传输成功
-                
-                # 如果有附件，传输附件文件
-                if attachment_file and os.path.exists(attachment_file):
-                    attachment_scp_cmd = [
-                        'scp',
-                        '-o', 'StrictHostKeyChecking=no',
-                        attachment_file,
-                        f"{vm_username}@{client_ip}:{attachment_target_dir}attachment.png"
-                    ]
-                    
-                    logger.info(f"传输附件到 {client_ip}: {' '.join(attachment_scp_cmd)}")
-                    attachment_result = subprocess.run(attachment_scp_cmd, capture_output=True, text=True, timeout=60)
-                    attachment_success = attachment_result.returncode == 0
-                    
-                    if not attachment_success:
-                        logger.error(f"附件传输失败到 {client_ip}: {attachment_result.stderr}")
+                # 使用SSH工具类传输文件
+                try:
+                    with SSHClient(client_ip, vm_username) as ssh:
+                        # 传输文本文件
+                        logger.info(f"传输文本到 {client_ip}: {temp_text_file} -> {text_target_dir}message_template.txt")
+                        text_success, text_message = ssh.upload_file(temp_text_file, f"{text_target_dir}message_template.txt")
+                        
+                        # 传输手机号文件
+                        logger.info(f"传输手机号到 {client_ip}: {temp_phone_file} -> {phone_target_dir}phone_numbers.txt")
+                        phone_success, phone_message = ssh.upload_file(temp_phone_file, f"{phone_target_dir}phone_numbers.txt")
+                        
+                        attachment_success = True  # 默认附件传输成功
+                        
+                        # 如果有附件，传输附件文件
+                        if attachment_file and os.path.exists(attachment_file):
+                            logger.info(f"传输附件到 {client_ip}: {attachment_file} -> {attachment_target_dir}attachment.png")
+                            attachment_success, attachment_message = ssh.upload_file(attachment_file, f"{attachment_target_dir}attachment.png")
+                            
+                            if not attachment_success:
+                                logger.error(f"附件传输失败到 {client_ip}: {attachment_message}")
+                        
+                        if not text_success:
+                            logger.error(f"文本传输失败到 {client_ip}: {text_message}")
+                        if not phone_success:
+                            logger.error(f"手机号传输失败到 {client_ip}: {phone_message}")
+                            
+                except Exception as e:
+                    logger.error(f"SSH连接失败到 {client_ip}: {str(e)}")
+                    text_success = phone_success = attachment_success = False
                 
                 # 清理临时文件
                 try:
@@ -1107,47 +1083,35 @@ def api_send_mass_message_async():
                 with open(temp_phone_file, 'w', encoding='utf-8') as f:
                     f.write(phone_template_content)
                 
-                # 传输文本文件
-                text_scp_cmd = [
-                    'scp',
-                    '-o', 'StrictHostKeyChecking=no',
-                    temp_text_file,
-                    f"{vm_username}@{client_ip}:{text_target_dir}message_template.txt"
-                ]
-                
-                logger.info(f"传输文本到 {client_ip}: {' '.join(text_scp_cmd)}")
-                text_result = subprocess.run(text_scp_cmd, capture_output=True, text=True, timeout=60)
-                text_success = text_result.returncode == 0
-                
-                # 传输手机号文件
-                phone_scp_cmd = [
-                    'scp',
-                    '-o', 'StrictHostKeyChecking=no',
-                    temp_phone_file,
-                    f"{vm_username}@{client_ip}:{phone_target_dir}phone_numbers.txt"
-                ]
-                
-                logger.info(f"传输手机号到 {client_ip}: {' '.join(phone_scp_cmd)}")
-                phone_result = subprocess.run(phone_scp_cmd, capture_output=True, text=True, timeout=60)
-                phone_success = phone_result.returncode == 0
-                
-                attachment_success = True  # 默认附件传输成功
-                
-                # 如果有附件，传输附件文件
-                if attachment_file and os.path.exists(attachment_file):
-                    attachment_scp_cmd = [
-                        'scp',
-                        '-o', 'StrictHostKeyChecking=no',
-                        attachment_file,
-                        f"{vm_username}@{client_ip}:{attachment_target_dir}attachment.png"
-                    ]
-                    
-                    logger.info(f"传输附件到 {client_ip}: {' '.join(attachment_scp_cmd)}")
-                    attachment_result = subprocess.run(attachment_scp_cmd, capture_output=True, text=True, timeout=60)
-                    attachment_success = attachment_result.returncode == 0
-                    
-                    if not attachment_success:
-                        logger.error(f"附件传输失败到 {client_ip}: {attachment_result.stderr}")
+                # 使用SSH工具类传输文件
+                try:
+                    with SSHClient(client_ip, vm_username) as ssh:
+                        # 传输文本文件
+                        logger.info(f"传输文本到 {client_ip}: {temp_text_file} -> {text_target_dir}message_template.txt")
+                        text_success, text_message = ssh.upload_file(temp_text_file, f"{text_target_dir}message_template.txt")
+                        
+                        # 传输手机号文件
+                        logger.info(f"传输手机号到 {client_ip}: {temp_phone_file} -> {phone_target_dir}phone_numbers.txt")
+                        phone_success, phone_message = ssh.upload_file(temp_phone_file, f"{phone_target_dir}phone_numbers.txt")
+                        
+                        attachment_success = True  # 默认附件传输成功
+                        
+                        # 如果有附件，传输附件文件
+                        if attachment_file and os.path.exists(attachment_file):
+                            logger.info(f"传输附件到 {client_ip}: {attachment_file} -> {attachment_target_dir}attachment.png")
+                            attachment_success, attachment_message = ssh.upload_file(attachment_file, f"{attachment_target_dir}attachment.png")
+                            
+                            if not attachment_success:
+                                logger.error(f"附件传输失败到 {client_ip}: {attachment_message}")
+                        
+                        if not text_success:
+                            logger.error(f"文本传输失败到 {client_ip}: {text_message}")
+                        if not phone_success:
+                            logger.error(f"手机号传输失败到 {client_ip}: {phone_message}")
+                            
+                except Exception as e:
+                    logger.error(f"SSH连接失败到 {client_ip}: {str(e)}")
+                    text_success = phone_success = attachment_success = False
                 
                 # 清理临时文件
                 try:

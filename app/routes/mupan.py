@@ -5,6 +5,7 @@ from datetime import datetime
 from flask import Blueprint, request, jsonify
 import logging
 from config import *
+from utils.ssh_utils import setup_ssh_trust
 # 创建蓝图
 mupan_bp = Blueprint('mupan', __name__)
 
@@ -510,3 +511,340 @@ def check_snapshot_vmdk_association(snapshot_disk_file, clone_dir):
         logger.error(f"检查快照vmdk关联失败: {str(e)}")
     
     return associated_vms
+
+import subprocess
+
+def get_vmrun_path():
+    """获取vmrun路径，优先使用配置文件中的路径，如果不存在则使用备用路径"""
+    if os.path.exists(vmrun_path):
+        return vmrun_path
+    else:
+        backup_path = r'C:\Program Files\VMware\VMware Workstation\vmrun.exe'
+        if os.path.exists(backup_path):
+            return backup_path
+        else:
+            raise FileNotFoundError(f"vmrun.exe not found at {vmrun_path} or {backup_path}")
+
+def find_vm_file(vm_name):
+    """查找虚拟机文件"""
+    try:
+        # 如果vm_name已经是完整路径，直接检查是否存在
+        if vm_name.endswith('.vmx') and os.path.exists(vm_name):
+            return vm_name
+        
+        # 如果是完整路径但文件不存在，记录警告
+        if vm_name.endswith('.vmx'):
+            return None
+            
+        vm_dir = vm_base_dir
+        if os.path.exists(vm_dir):
+            # 首先尝试精确匹配
+            for root, dirs, files in os.walk(vm_dir):
+                for file in files:
+                    if file.endswith('.vmx') and file == f"{vm_name}.vmx":
+                        return os.path.join(root, file)
+            
+            # 如果精确匹配失败，尝试模糊匹配
+            for root, dirs, files in os.walk(vm_dir):
+                for file in files:
+                    if file.endswith('.vmx') and vm_name.lower() in file.lower():
+                        return os.path.join(root, file)
+            
+            # 如果还是找不到，尝试查找最新的.vmx文件（按修改时间排序）
+            vmx_files = []
+            for root, dirs, files in os.walk(vm_dir):
+                for file in files:
+                    if file.endswith('.vmx'):
+                        file_path = os.path.join(root, file)
+                        try:
+                            mtime = os.path.getmtime(file_path)
+                            vmx_files.append((file_path, mtime))
+                        except:
+                            continue
+            
+            if vmx_files:
+                # 按修改时间降序排序，返回最新的
+                vmx_files.sort(key=lambda x: x[1], reverse=True)
+                logger.info(f"未找到精确匹配的虚拟机文件，使用最新的: {vmx_files[0][0]}")
+                return vmx_files[0][0]
+        
+        return None
+        
+    except Exception as e:
+        logger.error(f"查找虚拟机文件失败: {str(e)}")
+        return None
+
+def is_valid_ip(ip):
+    """验证IP地址格式"""
+    if not ip:
+        return False
+    
+    try:
+        parts = ip.split('.')
+        if len(parts) != 4:
+            return False
+        
+        for part in parts:
+            if not part.isdigit():
+                return False
+            num = int(part)
+            if num < 0 or num > 255:
+                return False
+        
+        return True
+    except:
+        return False
+
+def get_vm_ip(vm_name):
+    """获取虚拟机IP地址，优先用vmrun getGuestIPAddress"""
+    try:
+        # 1. 通过vmrun getGuestIPAddress
+        vm_file = find_vm_file(vm_name)
+        if vm_file:
+            vmrun_path_exe = get_vmrun_path()
+            
+            if os.path.exists(vmrun_path_exe):
+                try:
+                    cmd = [vmrun_path_exe, 'getGuestIPAddress', vm_file, '-wait']
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                    
+                    if result.returncode == 4294967295:
+                        return None
+
+                    if result.returncode == 0:
+                        ip = result.stdout.strip()
+                        if is_valid_ip(ip):
+                            return ip
+                        else:
+                            logger.warning(f"vmrun返回的IP格式无效: {ip}")
+                    else:
+                        logger.warning(f"vmrun命令执行失败，返回码: {result.returncode}, 错误: {result.stderr}")
+                except Exception as e:
+                    logger.error(f"未获取IP地址,虚拟机正在启动中!")
+            else:
+                logger.warning(f"vmrun路径不存在: {vmrun_path_exe}")
+        else:
+            logger.warning(f"未找到虚拟机文件: {vm_name}")
+        
+        # 2. 兜底：从VMX文件读取
+        if vm_file and os.path.exists(vm_file):
+            logger.debug(f"尝试从VMX文件读取IP: {vm_file}")
+            try:
+                with open(vm_file, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+                    lines = content.split('\n')
+                    for line in lines:
+                        if 'ip=' in line.lower() or 'ipaddress=' in line.lower():
+                            ip = line.split('=')[1].strip().strip('"')
+                            if is_valid_ip(ip):
+                                return ip
+                            else:
+                                logger.warning(f"VMX文件中的IP格式无效: {ip}")
+            except Exception as e:
+                logger.error(f"从VMX文件读取IP失败: {str(e)}")
+        
+        logger.warning(f"无法获取虚拟机 {vm_name} 的IP地址")
+        return None
+    except Exception as e:
+        logger.error(f"获取虚拟机IP失败: {str(e)}")
+        return None
+
+def get_vm_ip_from_template(vm_name):
+    """从template_dir目录获取虚拟机IP地址"""
+    try:
+        # 使用template_dir目录
+        vm_file = find_vm_file_in_template(vm_name)
+        if not vm_file:
+            logger.error(f"未找到虚拟机文件: {vm_name}")
+            return None
+        
+        logger.info(f"找到虚拟机文件: {vm_file}")
+        
+        # 获取vmrun路径
+        vmrun_path = get_vmrun_path()
+        if not vmrun_path:
+            logger.error("未找到vmrun路径")
+            return None
+        
+        # 使用vmrun获取IP地址
+        cmd = [vmrun_path, "getGuestIPAddress", vm_file]
+        logger.info(f"执行命令: {' '.join(cmd)}")
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        
+        if result.returncode == 0:
+            ip = result.stdout.strip()
+            if is_valid_ip(ip):
+                logger.info(f"获取到虚拟机IP: {ip}")
+                return ip
+            else:
+                logger.error(f"获取到无效IP: {ip}")
+                return None
+        else:
+            logger.error(f"获取IP失败: {result.stderr}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"获取虚拟机IP时发生错误: {str(e)}")
+        return None
+
+def find_vm_file_in_template(vm_name):
+    """在template_dir目录中查找虚拟机文件"""
+    try:
+        # 使用template_dir目录
+        search_dir = template_dir
+        logger.info(f"在目录中搜索虚拟机文件: {search_dir}")
+        
+        if not os.path.exists(search_dir):
+            logger.error(f"目录不存在: {search_dir}")
+            return None
+        
+        # 精确匹配
+        for root, dirs, files in os.walk(search_dir):
+            for file in files:
+                if file.endswith('.vmx'):
+                    file_name_without_ext = os.path.splitext(file)[0]
+                    if file_name_without_ext == vm_name:
+                        vm_file_path = os.path.join(root, file)
+                        logger.info(f"精确匹配找到虚拟机文件: {vm_file_path}")
+                        return vm_file_path
+        
+        # 模糊匹配（大小写不敏感）
+        for root, dirs, files in os.walk(search_dir):
+            for file in files:
+                if file.endswith('.vmx'):
+                    file_name_without_ext = os.path.splitext(file)[0]
+                    if vm_name.lower() in file_name_without_ext.lower():
+                        vm_file_path = os.path.join(root, file)
+                        logger.info(f"模糊匹配找到虚拟机文件: {vm_file_path}")
+                        return vm_file_path
+        
+        # 兜底策略：返回最新修改的.vmx文件
+        latest_file = None
+        latest_time = 0
+        
+        for root, dirs, files in os.walk(search_dir):
+            for file in files:
+                if file.endswith('.vmx'):
+                    file_path = os.path.join(root, file)
+                    try:
+                        mtime = os.path.getmtime(file_path)
+                        if mtime > latest_time:
+                            latest_time = mtime
+                            latest_file = file_path
+                    except OSError:
+                        continue
+        
+        if latest_file:
+            logger.info(f"兜底策略找到最新虚拟机文件: {latest_file}")
+            return latest_file
+        
+        logger.error(f"未找到虚拟机文件: {vm_name}")
+        return None
+        
+    except Exception as e:
+        logger.error(f"查找虚拟机文件时发生错误: {str(e)}")
+        return None
+
+@mupan_bp.route('/api/check-ssh-trust', methods=['POST'])
+def check_ssh_trust():
+    """检查SSH互信状态API"""
+    try:
+        data = request.get_json()
+        vm_name = data.get('vm_name')
+        use_template_dir = data.get('use_template_dir', False)
+        
+        if not vm_name:
+            return jsonify({
+                'success': False,
+                'message': '虚拟机名称不能为空'
+            })
+        
+        logger.info(f"检查虚拟机 {vm_name} 的SSH互信状态")
+        
+        # 获取虚拟机IP
+        if use_template_dir:
+            vm_ip = get_vm_ip_from_template(vm_name)
+        else:
+            vm_ip = get_vm_ip(vm_name)
+            
+        if not vm_ip:
+            return jsonify({
+                'success': False,
+                'trusted': False,
+                'message': f'无法获取虚拟机 {vm_name} 的IP地址'
+            })
+        
+        logger.info(f"虚拟机 {vm_name} 的IP地址: {vm_ip}")
+        
+        # 检查SSH互信状态
+        from utils.ssh_utils import check_ssh_trust_status
+        trusted = check_ssh_trust_status(vm_ip, vm_username)
+        
+        return jsonify({
+            'success': True,
+            'trusted': trusted,
+            'message': f'SSH互信状态: {"已互信" if trusted else "未互信"}',
+            'vm_ip': vm_ip
+        })
+            
+    except Exception as e:
+        logger.error(f"检查SSH互信状态时发生错误: {str(e)}")
+        return jsonify({
+            'success': False,
+            'trusted': False,
+            'message': f'检查SSH互信状态时发生错误: {str(e)}'
+        })
+
+@mupan_bp.route('/api/setup-trust', methods=['POST'])
+def setup_trust():
+    """设置SSH互信API"""
+    try:
+        data = request.get_json()
+        vm_name = data.get('vm_name')
+        use_template_dir = data.get('use_template_dir', False)
+        
+        if not vm_name:
+            return jsonify({
+                'success': False,
+                'message': '虚拟机名称不能为空'
+            })
+        
+        logger.info(f"开始为虚拟机 {vm_name} 设置SSH互信")
+        
+        # 获取虚拟机IP
+        if use_template_dir:
+            vm_ip = get_vm_ip_from_template(vm_name)
+        else:
+            vm_ip = get_vm_ip(vm_name)
+            
+        if not vm_ip:
+            return jsonify({
+                'success': False,
+                'message': f'无法获取虚拟机 {vm_name} 的IP地址'
+            })
+        
+        logger.info(f"虚拟机 {vm_name} 的IP地址: {vm_ip}")
+        
+        # 设置SSH互信
+        success, message = setup_ssh_trust(vm_ip, vm_username, vm_password)
+        
+        if success:
+            logger.info(f"虚拟机 {vm_name} SSH互信设置成功")
+            return jsonify({
+                'success': True,
+                'message': f'SSH互信设置成功，虚拟机IP: {vm_ip}'
+            })
+        else:
+            logger.error(f"虚拟机 {vm_name} SSH互信设置失败: {message}")
+            return jsonify({
+                'success': False,
+                'message': f'SSH互信设置失败: {message}'
+            })
+            
+    except Exception as e:
+        logger.error(f"设置SSH互信时发生错误: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'设置SSH互信时发生错误: {str(e)}'
+        })

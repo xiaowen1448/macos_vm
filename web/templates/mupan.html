@@ -348,6 +348,38 @@
                         </div>
                     </div>
 
+<!-- 设置互信弹窗 -->
+<div class="modal fade" id="setupTrustModal" tabindex="-1" aria-labelledby="setupTrustModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="setupTrustModalLabel">
+                    <i class="fas fa-handshake me-2"></i>设置SSH互信
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info" role="alert">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>提示：</strong>此操作将为虚拟机设置SSH互信，确保后续操作可以免密码连接。
+                </div>
+
+                <div id="trustMessage" class="alert" style="display: none;">
+                    <span id="trustMessageText"></span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-2"></i>取消
+                </button>
+                <button type="button" class="btn btn-primary" id="confirmTrustBtn" onclick="confirmSetupTrust()">
+                    <i class="fas fa-handshake me-2"></i>确认设置
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- 快照管理弹窗 -->
 <div class="modal fade" id="snapshotModal" tabindex="-1" aria-labelledby="snapshotModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
@@ -517,41 +549,124 @@
             }
 
             console.log('开始遍历数据...');
-            templateVms.forEach((vm, index) => {
-                console.log(`处理第${index + 1}个虚拟机:`, vm);
-                const row = document.createElement('tr');
-                
-                // 状态徽章
-                let statusBadge = '';
-                if (vm.status === 'running') {
-                    statusBadge = '<span class="badge bg-success">运行中</span>';
-                } else if (vm.status === 'stopped') {
-                    statusBadge = '<span class="badge bg-secondary">已停止</span>';
-                } else {
-                    statusBadge = '<span class="badge bg-warning">未知</span>';
-                }
-
-                row.innerHTML = `
-                    <td>${vm.name}</td>
-                    <td>${vm.system_version}</td>
-                    <td>${vm.size}</td>
-                    <td>${vm.create_time}</td>
-                    <td>${statusBadge}</td>
-                    <td>
-                        <button class="btn btn-sm btn-outline-secondary me-2" onclick="editMupan('${vm.name}')" title="编辑">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="btn btn-sm btn-outline-warning" onclick="cleanInvalidSnapshots('${vm.name}')" title="清理失效快照">
-                            <i class="fas fa-broom"></i>
-                        </button>
-                    </td>
-                `;
-                
-                tbody.appendChild(row);
-                console.log(`第${index + 1}行已添加到表格`);
-            });
             
-            console.log('数据显示完成');
+            // 检查所有虚拟机的SSH互信状态
+            Promise.all(templateVms.map(vm => checkSSHTrustStatus(vm.name)))
+                .then(trustStatuses => {
+                    templateVms.forEach((vm, index) => {
+                        console.log(`处理第${index + 1}个虚拟机:`, vm);
+                        const row = document.createElement('tr');
+                        const trustStatus = trustStatuses[index];
+                        
+                        // 状态徽章
+                        let statusBadge = '';
+                        if (vm.status === 'running') {
+                            statusBadge = '<span class="badge bg-success">运行中</span>';
+                        } else if (vm.status === 'stopped') {
+                            statusBadge = '<span class="badge bg-secondary">已停止</span>';
+                        } else {
+                            statusBadge = '<span class="badge bg-warning">未知</span>';
+                        }
+
+                        // SSH互信状态徽章
+                        let trustBadge = '';
+                        if (trustStatus.trusted) {
+                            trustBadge = '<span class="badge bg-success me-2"><i class="fas fa-shield-alt me-1"></i>已互信</span>';
+                        } else {
+                            trustBadge = '<span class="badge bg-danger me-2"><i class="fas fa-exclamation-triangle me-1"></i>未互信</span>';
+                        }
+
+                        // 互信操作按钮
+                        let trustButton = '';
+                        if (vm.status === 'running') {
+                            if (trustStatus.trusted) {
+                                trustButton = `<button class="btn btn-sm btn-success me-2" onclick="setupTrust('${vm.name}')" title="重新设置互信">
+                                    <i class="fas fa-handshake"></i>
+                                </button>`;
+                            } else {
+                                trustButton = `<button class="btn btn-sm btn-outline-primary me-2" onclick="setupTrust('${vm.name}')" title="添加互信">
+                                    <i class="fas fa-handshake"></i>
+                                </button>`;
+                            }
+                        } else {
+                            trustButton = `<button class="btn btn-sm btn-outline-secondary me-2" disabled title="虚拟机未运行">
+                                <i class="fas fa-handshake"></i>
+                            </button>`;
+                        }
+
+                        row.innerHTML = `
+                            <td>${vm.name}</td>
+                            <td>${vm.system_version}</td>
+                            <td>${vm.size}</td>
+                            <td>${vm.create_time}</td>
+                            <td>${statusBadge}</td>
+                            <td>
+                         
+                                <button class="btn btn-sm btn-outline-secondary me-2" onclick="editMupan('${vm.name}')" title="编辑">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                ${trustBadge}
+                                ${trustButton}
+                                <button class="btn btn-sm btn-outline-warning" onclick="cleanInvalidSnapshots('${vm.name}')" title="清理失效快照">
+                                    <i class="fas fa-broom"></i>
+                                </button>
+                            </td>
+                        `;
+                        
+                        tbody.appendChild(row);
+                        console.log(`第${index + 1}行已添加到表格`);
+                    });
+                    
+                    console.log('数据显示完成');
+                })
+                .catch(error => {
+                    console.error('检查SSH互信状态失败:', error);
+                    // 如果检查失败，使用原有逻辑显示
+                    templateVms.forEach((vm, index) => {
+                        console.log(`处理第${index + 1}个虚拟机:`, vm);
+                        const row = document.createElement('tr');
+                        
+                        // 状态徽章
+                        let statusBadge = '';
+                        if (vm.status === 'running') {
+                            statusBadge = '<span class="badge bg-success">运行中</span>';
+                        } else if (vm.status === 'stopped') {
+                            statusBadge = '<span class="badge bg-secondary">已停止</span>';
+                        } else {
+                            statusBadge = '<span class="badge bg-warning">未知</span>';
+                        }
+
+                        row.innerHTML = `
+                            <td>${vm.name}</td>
+                            <td>${vm.system_version}</td>
+                            <td>${vm.size}</td>
+                            <td>${vm.create_time}</td>
+                            <td>${statusBadge}</td>
+                            <td>
+                                <span class="badge bg-secondary me-2"><i class="fas fa-question me-1"></i>未知</span>
+                                <button class="btn btn-sm btn-outline-secondary me-2" onclick="editMupan('${vm.name}')" title="编辑">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-sm ${vm.status === 'running' ? 'btn-outline-primary' : 'btn-outline-secondary'} me-2" 
+                                        onclick="setupTrust('${vm.name}')" 
+                                        ${vm.status !== 'running' ? 'disabled' : ''} 
+                                        title="${vm.status === 'running' ? '设置互信' : '虚拟机未运行'}">
+                                    <i class="fas fa-handshake"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-warning" onclick="cleanInvalidSnapshots('${vm.name}')" title="清理失效快照">
+                                    <i class="fas fa-broom"></i>
+                                </button>
+                            </td>
+                        `;
+                        
+                        tbody.appendChild(row);
+                        console.log(`第${index + 1}行已添加到表格`);
+                    });
+                    
+                    console.log('数据显示完成');
+                });
+                
+
         }
 
         // 编辑母盘
@@ -1117,6 +1232,95 @@
             const links = document.querySelectorAll(`#${linkContainerId} .nav-link`);
             links.forEach(link => link.classList.remove('active'));
             event.target.classList.add('active');
+        }
+
+        
+        // 检查SSH互信状态
+        function checkSSHTrustStatus(vmName) {
+            return fetch('/api/check-ssh-trust', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    vm_name: vmName,
+                    use_template_dir: true  // 使用template_dir目录
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                return {
+                    trusted: data.success && data.trusted,
+                    message: data.message || ''
+                };
+            })
+            .catch(error => {
+                console.error('检查SSH互信状态失败:', error);
+                return {
+                    trusted: false,
+                    message: '检查失败'
+                };
+            });
+        }
+
+        function setupTrust(vmName, vmIp, vmStatus) {
+            // 保存虚拟机名称
+            currentVmName = vmName;
+            
+            // 显示弹窗
+            const modal = new bootstrap.Modal(document.getElementById('setupTrustModal'));
+            modal.show();
+        }
+
+        function confirmSetupTrust() {
+            const vmName = currentVmName;
+            const confirmBtn = document.getElementById('confirmTrustBtn');
+            const originalText = confirmBtn.innerHTML;
+            
+            // 设置按钮为加载状态
+            confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>设置中...';
+            confirmBtn.disabled = true;
+            
+            // 调用后端API，使用template_dir目录
+            fetch('/api/setup-trust', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    vm_name: vmName,
+                    use_template_dir: true  // 使用template_dir目录
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showTrustMessage('SSH互信设置成功！', 'success');
+                    // 关闭弹窗
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('setupTrustModal'));
+                    modal.hide();
+                    
+                    // 刷新母盘列表以更新互信状态显示
+                    setTimeout(() => {
+                        loadMupanData();
+                    }, 1000);
+                } else {
+                    showTrustMessage('设置失败: ' + (data.error || '未知错误'), 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('设置SSH互信失败:', error);
+                showTrustMessage('设置失败: ' + error.message, 'danger');
+            })
+            .finally(() => {
+                // 重置按钮状态
+                confirmBtn.innerHTML = originalText;
+                confirmBtn.disabled = false;
+            });
+        }
+
+        function showTrustMessage(message, type) {
+            showToast(message, type);
         }
     </script>
 
