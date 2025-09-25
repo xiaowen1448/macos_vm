@@ -54,6 +54,8 @@ sh_script_remote_path = f'/Users/{vm_username}/Documents/macos_script/macos_sh/'
 scpt_script_remote_path = f'/Users/{vm_username}/Documents/macos_script/macos_scpt/'
 # 引导配置路径
 boot_config_path = '/Volumes/EFI/CLOVER/config.plist'
+
+oc_config_path='/Volumes/EFI/OC/config.plist'
 # 日志目录
 logs_dir = r'logs'
 #ScptRunner客户端安装路径

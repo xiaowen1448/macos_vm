@@ -6763,20 +6763,44 @@ def batch_change_wuma_core(selected_vms, config_file_path, task_id=None):
                 log_message('warning', f'虚拟机 {vm_name} 不在运行状态，跳过处理')
                 continue
         
-        # 读取temp.plist模板
-        plist_template_path = os.path.join(plist_template_dir, 'temp.plist')
-        logger.info(f"检查temp.plist模板文件: {plist_template_path}")
+        # 检测母盘版本并选择合适的plist模板
+        def detect_macos_version(vm_name):
+            """检测虚拟机的macOS版本"""
+            # 检查虚拟机名称中是否包含版本信息
+            vm_name_lower = vm_name.lower()
+            if any(version in vm_name_lower for version in ['12', 'monterey', '13', 'ventura', '14', 'sonoma', '15', 'sequoia']):
+                return 'macos12+'
+            elif any(version in vm_name_lower for version in ['10.12', '10.13', '10.14', '10.15', '11', 'sierra', 'high sierra', 'mojave', 'catalina', 'big sur']):
+                return 'legacy'
+            else:
+                # 默认使用legacy模板（向后兼容）
+                return 'legacy'
+        
+        # 检测第一个虚拟机的版本来决定使用哪个模板
+        first_vm = selected_vms[0] if selected_vms else ''
+        macos_version = detect_macos_version(first_vm)
+        
+        # 根据版本选择模板文件
+        if macos_version == 'macos12+':
+            template_filename = 'opencore.plist'
+            logger.info(f"检测到macOS 12+版本，使用OpenCore模板")
+        else:
+            template_filename = 'temp.plist'
+            logger.info(f"检测到legacy版本，使用Clover模板")
+        
+        plist_template_path = os.path.join(plist_template_dir, template_filename)
+        logger.info(f"检查plist模板文件: {plist_template_path}")
         if not os.path.exists(plist_template_path):
-            logger.error(f"temp.plist模板文件不存在: {plist_template_path}")
+            logger.error(f"plist模板文件不存在: {plist_template_path}")
             return {
                 'status': 'error',
-                'message': f'temp.plist模板文件不存在: {plist_template_path}'
+                'message': f'plist模板文件不存在: {plist_template_path}'
             }
         
-        logger.info(f"temp.plist模板文件存在，开始读取...")
+        logger.info(f"plist模板文件存在，开始读取...")
         with open(plist_template_path, 'r', encoding='utf-8') as f:
             plist_template = f.read()
-        logger.info(f"temp.plist模板读取完成，长度: {len(plist_template)}")
+        logger.info(f"plist模板读取完成，长度: {len(plist_template)}")
         
         # 创建备份目录
         backup_dir = wuma_config_install_dir
@@ -6862,12 +6886,18 @@ def batch_change_wuma_core(selected_vms, config_file_path, task_id=None):
                 # 替换plist模板中的占位符
                 plist_content = plist_template
                 plist_content = plist_content.replace('$1', model)
-                plist_content = plist_content.replace('$2', board_id)
                 plist_content = plist_content.replace('$3', serial_number)
-                plist_content = plist_content.replace('$4', custom_uuid)
                 plist_content = plist_content.replace('$5', rom_formatted)  # 使用格式化后的ROM
                 plist_content = plist_content.replace('$6', mlb)
                 plist_content = plist_content.replace('$7', sm_uuid)
+                
+                # 对于legacy版本（Clover），需要替换$2和$4占位符
+                if macos_version == 'legacy':
+                    plist_content = plist_content.replace('$2', board_id)  # Board-ID for Clover
+                    plist_content = plist_content.replace('$4', custom_uuid)  # CustomUUID for Clover
+                    logger.info(f"Legacy版本：已替换Board-ID和CustomUUID占位符")
+                else:
+                    logger.info(f"OpenCore版本：跳过Board-ID和CustomUUID占位符替换")
                 
                 # 生成plist文件
                 plist_filename = f"{vm_name}.plist"
@@ -6878,6 +6908,14 @@ def batch_change_wuma_core(selected_vms, config_file_path, task_id=None):
                     f.write(plist_content)
                 
                 logger.info(f"生成plist文件: {plist_file_path}")
+                
+                # 根据版本设置不同的上传路径
+                if macos_version == 'macos12+':
+                    remote_config_path = oc_config_path  # OpenCore路径
+                    logger.info(f"macOS 12+版本，使用OpenCore配置路径: {remote_config_path}")
+                else:
+                    remote_config_path = boot_config_path  # Clover路径
+                    logger.info(f"Legacy版本，使用Clover配置路径: {remote_config_path}")
                 
                 # 获取虚拟机IP
                 vm_ip = get_vm_ip(vm_name)
@@ -6914,7 +6952,7 @@ def batch_change_wuma_core(selected_vms, config_file_path, task_id=None):
                     })
                     continue
                 
-                success, message = send_file_via_sftp(plist_file_path, boot_config_path, vm_ip, vm_username, timeout=60)
+                success, message = send_file_via_sftp(plist_file_path, remote_config_path, vm_ip, vm_username, timeout=60)
                 
                 if not success:
                     log_message('error', f'文件传输失败: {message}')
