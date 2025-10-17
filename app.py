@@ -2640,10 +2640,20 @@ def clone_vm_worker(task_id):
 
                 #  logger.info(f"[DEBUG] 虚拟机命名模式: {vm_name_pattern}")
 
+                # 如果命名模式中没有包含 {vmname} 占位符，则将默认前缀 VM 替换为所选模板的基名（去除 .vmx），使命名更具可读性
+                # 例如: 原默认 'VM_{timestamp}_{index}' -> 'TemplateName_{timestamp}_{index}'
+                if '{vmname}' not in vm_name_pattern:
+                    try:
+                        template_vm = params.get('templateVM', '')
+                        template_base = os.path.splitext(template_vm)[0] if template_vm else 'VM'
+                        # 仅替换最左侧的 VM 标识，避免误替换其它部分
+                        if vm_name_pattern.startswith('VM'):
+                            vm_name_pattern = vm_name_pattern.replace('VM', template_base, 1)
+                    except Exception:
+                        pass
+
                 # 生成虚拟机名称（不包含.vmx扩展名）
-                vm_name_without_ext_generated = vm_name_pattern.replace('{timestamp}', timestamp).replace('{index}',
-                                                                                                          str(i + 1)).replace(
-                    '{vmname}', vm_name_without_ext)
+                vm_name_without_ext_generated = vm_name_pattern.replace('{timestamp}', timestamp).replace('{index}', str(i + 1)).replace('{vmname}', vm_name_without_ext)
 
                 # 创建虚拟机文件夹名称
                 vm_folder_name = vm_name_without_ext_generated
@@ -2836,9 +2846,16 @@ def clone_vm_worker(task_id):
                     if vm_name_pattern == 'custom':
                         vm_name_pattern = params.get('customNamingPattern', 'VM_{timestamp}_{index}')
 
-                    vm_name_without_ext_generated = vm_name_pattern.replace('{timestamp}', timestamp).replace('{index}',
-                                                                                                              str(i + 1)).replace(
-                        '{vmname}', vm_name_without_ext)
+                    if '{vmname}' not in vm_name_pattern:
+                        try:
+                            template_vm = params.get('templateVM', '')
+                            template_base = os.path.splitext(template_vm)[0] if template_vm else 'VM'
+                            if vm_name_pattern.startswith('VM'):
+                                vm_name_pattern = vm_name_pattern.replace('VM', template_base, 1)
+                        except Exception:
+                            pass
+
+                    vm_name_without_ext_generated = vm_name_pattern.replace('{timestamp}', timestamp).replace('{index}', str(i + 1)).replace('{vmname}', vm_name_without_ext)
                     vm_folder_name = vm_name_without_ext_generated
                     vm_folder_path = os.path.join(target_dir, vm_folder_name)
                     vm_name = vm_name_without_ext_generated + '.vmx'
