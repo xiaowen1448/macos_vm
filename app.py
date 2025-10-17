@@ -2556,15 +2556,16 @@ def clone_vm_worker(task_id):
                 
                 # 生成虚拟机名称和文件夹名称（使用统一时间戳）
                 timestamp = unified_timestamp
+                vmstr_name = template_vm_name.replace(".vmx", "")
                 vm_name_pattern = params['namingPattern']
                 if vm_name_pattern == 'custom':
-                    vm_name_pattern = params.get('customNamingPattern', 'VM_{timestamp}_{index}')
+                    vm_name_pattern = params.get('customNamingPattern', '{VM}_{timestamp}_{index}')
                 
               #  logger.info(f"[DEBUG] 虚拟机命名模式: {vm_name_pattern}")
                 
                 # 生成虚拟机名称（不包含.vmx扩展名）
-                vm_name_without_ext_generated = vm_name_pattern.replace('{timestamp}', timestamp).replace('{index}', str(i+1)).replace('{vmname}', vm_name_without_ext)
-                
+                vm_name_without_ext_generated = vm_name_pattern.replace('{VM}', vmstr_name).replace('{timestamp}', timestamp).replace('{index}', str(i+1)).replace('{vmname}', vm_name_without_ext)
+
                 # 创建虚拟机文件夹名称
                 vm_folder_name = vm_name_without_ext_generated
                 vm_folder_path = os.path.join(target_dir, vm_folder_name)
@@ -2748,13 +2749,17 @@ def clone_vm_worker(task_id):
             try:
                 # 收集成功克隆的虚拟机信息（使用相同的统一时间戳）
                 cloned_vms_info = []
+                vmstr_name = template_vm_name.replace(".vmx", "")
                 for i in range(clone_count):
                     timestamp = unified_timestamp  # 使用克隆时的统一时间戳
                     vm_name_pattern = params['namingPattern']
                     if vm_name_pattern == 'custom':
-                        vm_name_pattern = params.get('customNamingPattern', 'VM_{timestamp}_{index}')
-                    
-                    vm_name_without_ext_generated = vm_name_pattern.replace('{timestamp}', timestamp).replace('{index}', str(i+1)).replace('{vmname}', vm_name_without_ext)
+                        vm_name_pattern = params.get('customNamingPattern', '{VM}_{timestamp}_{index}')
+                        # 生成虚拟机名称（不包含.vmx扩展名）
+                        vm_name_without_ext_generated = vm_name_pattern.replace('{VM}', vmstr_name).replace(
+                            '{timestamp}', timestamp).replace('{index}', str(i + 1)).replace('{vmname}',
+                                                                                             vm_name_without_ext)
+
                     vm_folder_name = vm_name_without_ext_generated
                     vm_folder_path = os.path.join(target_dir, vm_folder_name)
                     vm_name = vm_name_without_ext_generated + '.vmx'
