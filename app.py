@@ -6967,11 +6967,10 @@ def batch_change_wuma_core(selected_vms, config_file_path, task_id=None):
             # 检查虚拟机名称中是否包含版本信息
             vm_name_lower = vm_name.lower()
             if any(version in vm_name_lower for version in
-                   ['macos12', 'monterey', 'macos13', 'ventura', 'macos14', 'sonoma', 'macos15', 'sequoia']):
-                return 'macos12+'
+                   ['macos10.15', 'macos11''macos12','macos13','macos14', 'macos15']):
+                return 'macos10.15+'
             elif any(version in vm_name_lower for version in
-                     ['macos10.12', 'macos10.13', 'macos10.14', 'macos10.15', 'macos11', 'sierra', 'high sierra', 'mojave', 'catalina',
-                      'big sur']):
+                     ['macos10.12', 'macos10.13', 'macos10.14']):
                 return 'legacy'
             else:
                 # 默认使用legacy模板（向后兼容）
@@ -6982,9 +6981,9 @@ def batch_change_wuma_core(selected_vms, config_file_path, task_id=None):
         macos_version = detect_macos_version(first_vm)
 
         # 根据版本选择模板文件
-        if macos_version == 'macos12+':
+        if macos_version == 'macos10.15+':
             template_filename = 'opencore.plist'
-            logger.info(f"检测到macOS 12+版本，使用OpenCore模板")
+            logger.info(f"检测到macos10.15+版本，使用OpenCore模板")
         else:
             template_filename = 'temp.plist'
             logger.info(f"检测到legacy版本，使用Clover模板")
@@ -7113,7 +7112,7 @@ def batch_change_wuma_core(selected_vms, config_file_path, task_id=None):
                 logger.info(f"生成plist文件: {plist_file_path}")
 
                 # 根据版本设置不同的上传路径
-                if macos_version == 'macos12+':
+                if macos_version == 'macos10.15+':
                     remote_config_path = oc_config_path  # OpenCore路径
                     logger.info(f"macOS 12+版本，使用OpenCore配置路径: {remote_config_path}")
                 else:
