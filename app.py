@@ -6967,7 +6967,7 @@ def batch_change_wuma_core(selected_vms, config_file_path, task_id=None):
             # 检查虚拟机名称中是否包含版本信息
             vm_name_lower = vm_name.lower()
             if any(version in vm_name_lower for version in
-                   ['macos10.15', 'macos11''macos12','macos13','macos14', 'macos15']):
+                   ['macos10.15', 'macos11','macos12','macos13','macos14', 'macos15']):
                 return 'macos10.15+'
             elif any(version in vm_name_lower for version in
                      ['macos10.12', 'macos10.13', 'macos10.14']):
@@ -7114,7 +7114,7 @@ def batch_change_wuma_core(selected_vms, config_file_path, task_id=None):
                 # 根据版本设置不同的上传路径
                 if macos_version == 'macos10.15+':
                     remote_config_path = oc_config_path  # OpenCore路径
-                    logger.info(f"macOS 12+版本，使用OpenCore配置路径: {remote_config_path}")
+                    logger.info(f"macos10.15+版本，使用OpenCore配置路径: {remote_config_path}")
                 else:
                     remote_config_path = boot_config_path  # Clover路径
                     logger.info(f"Legacy版本，使用Clover配置路径: {remote_config_path}")
