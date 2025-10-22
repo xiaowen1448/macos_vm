@@ -225,19 +225,34 @@ function changePage(page) {
 
 function startProcess(processId) {
     if (!confirm('确定要启动该进程吗？')) return;
+    console.log('准备启动进程，进程ID:', processId);
     fetch('/api/icloud/process/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ process_id: processId })
     })
-    .then(response => response.json())
+    .then(response => {
+        console.log('API响应状态:', response.status);
+        return response.json().catch(e => {
+            console.error('JSON解析错误:', e);
+            console.log('原始响应:', response);
+            return { success: false, message: '响应格式错误' };
+        });
+    })
     .then(data => {
-        console.log(data.message);
-        if (data.success) loadProcessList();
+        console.log('API响应数据:', data);
+        if (data.success) {
+            console.log('进程启动成功，刷新进程列表');
+            loadProcessList();
+        } else {
+            console.log('进程启动失败:', data.message);
+            alert('启动失败: ' + data.message);
+        }
     })
     .catch(error => {
-        console.error('启动进程失败:', error);
+        console.error('启动进程网络错误:', error);
         console.log('启动进程失败，请检查网络连接');
+        alert('网络错误，请检查控制台日志');
     });
 }
 
@@ -1158,7 +1173,6 @@ function saveProcess() {
     });
 }
 
-// 已在页面上方定义了正确的startProcess函数，此处移除重复定义
 
 // 显示进程详情
 function showProcessDetail(processId) {
@@ -1453,6 +1467,33 @@ function refreshConsoleOutput(processId) {
     }, 300);
 }
 
+// Session超时检测功能
+function checkSessionTimeout() {
+    // 向服务器发送请求检查session状态
+    fetch('/api/check_session')
+        .then(response => {
+            // 如果响应不是200 OK，可能是session过期导致的重定向
+            if (response.status !== 200) {
+                console.log('Session过期，正在跳转到登录页面...');
+                window.location.href = '/login';
+                return;
+            }
+            return response.json();
+        })
+        .then(data => {
+            // 如果服务器返回session过期信息
+            if (data && data.session_expired) {
+                console.log('Session过期，正在跳转到登录页面...');
+                window.location.href = '/login';
+            }
+        })
+        .catch(error => {
+            console.error('检查session状态失败:', error);
+            // 发生错误时也可以考虑跳转到登录页面，特别是网络错误可能表示session已经无效
+            // window.location.href = '/login';
+        });
+}
+
 // 使用立即执行函数包装所有代码
 // 页面加载完成后加载进程列表
 document.addEventListener('DOMContentLoaded', function() {
@@ -1460,6 +1501,11 @@ document.addEventListener('DOMContentLoaded', function() {
     loadProcessList();
     // 每5秒刷新一次进程列表
     setInterval(loadProcessList, 5000);
+    
+    // 设置session检查定时器，每30秒检查一次
+    setInterval(checkSessionTimeout, 30000);
+    // 立即执行一次检查
+    checkSessionTimeout();
 });
 </script>
 {% endblock %}

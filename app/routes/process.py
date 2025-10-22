@@ -20,79 +20,47 @@ processes = [
 # 进程管理路由
 @process_bp.route('/api/process/list')
 def get_process_list():
-    return jsonify({
-        "success": True,
-        "data": processes
-    })
+    # 重定向到icloud_process.py中的完整实现
+    from flask import redirect, url_for
+    return redirect(url_for('icloud_process.get_process_list'))
 
 @process_bp.route('/api/process/add', methods=['POST'])
 def add_process():
-    data = request.json
-    new_process = {
-        "id": str(len(processes) + 1),
-        "name": data.get('process_name'),
-        "script": data.get('process_script'),
-        "client": data.get('process_client'),
-        "apple_id": data.get('apple_id'),
-        "status": "已停止",
-        "create_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    }
-    processes.append(new_process)
-    return jsonify({
-        "success": True,
-        "message": "进程添加成功",
-        "data": new_process
-    })
+    # 重定向到icloud_process.py中的完整实现
+    from flask import redirect, url_for
+    return redirect(url_for('icloud_process.add_process'), code=307)  # 307保持原始方法
 
 @process_bp.route('/api/process/start', methods=['POST'])
 def start_process():
-    process_id = request.json.get('process_id')
-    for process in processes:
-        if process['id'] == process_id:
-            process['status'] = '执行中'
-            return jsonify({
-                "success": True,
-                "message": "进程已启动"
-            })
-    return jsonify({
-        "success": False,
-        "message": "找不到指定进程"
-    })
+    # 重定向到icloud_process.py中的完整实现
+    from flask import redirect, url_for
+    return redirect(url_for('icloud_process.start_process'), code=307)  # 307保持原始方法
 
 @process_bp.route('/api/process/stop', methods=['POST'])
 def stop_process():
-    process_id = request.json.get('process_id')
-    for process in processes:
-        if process['id'] == process_id:
-            process['status'] = '已停止'
-            return jsonify({
-                "success": True,
-                "message": "进程已停止"
-            })
-    return jsonify({
-        "success": False,
-        "message": "找不到指定进程"
-    })
+    # 重定向到icloud_process.py中的完整实现
+    from flask import redirect, url_for
+    return redirect(url_for('icloud_process.stop_process'), code=307)  # 307保持原始方法
 
 @process_bp.route('/api/process/delete', methods=['POST'])
 def delete_process():
-    process_id = request.json.get('process_id')
-    global processes
-    processes = [p for p in processes if p['id'] != process_id]
-    return jsonify({
-        "success": True,
-        "message": "进程已删除"
-    })
+    # 重定向到icloud_process.py中的完整实现
+    from flask import redirect, url_for
+    return redirect(url_for('icloud_process.delete_process'), code=307)  # 307保持原始方法
 
 @process_bp.route('/api/process/detail/<process_id>')
 def get_process_detail(process_id):
-    for process in processes:
-        if process['id'] == process_id:
-            return jsonify({
-                "success": True,
-                "data": process
-            })
-    return jsonify({
-        "success": False,
-        "message": "找不到指定进程"
-    })
+    # 重定向到icloud_process.py中的完整实现
+    from flask import redirect, url_for
+    return redirect(url_for('icloud_process.get_process_detail', process_id=process_id))
+
+# Session检查路由，用于前端检测session是否过期
+@process_bp.route('/api/check_session')
+def check_session():
+    from flask import session, jsonify
+    # 检查session中是否有用户信息（具体的键名可能需要根据实际情况调整）
+    # 这里假设session中存储了'user_id'或'logged_in'标志
+    if 'user_id' in session or 'logged_in' in session:
+        return jsonify({'session_expired': False})
+    else:
+        return jsonify({'session_expired': True})

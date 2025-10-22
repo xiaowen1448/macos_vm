@@ -165,16 +165,9 @@ logging.getLogger('werkzeug').setLevel(logging.ERROR)
 app.logger.disabled = False
 logging.getLogger('werkzeug').disabled = True
 
-# 注册蓝图
-from app.routes.mass_messaging import mass_messaging_bp
-from app.routes.mupan import mupan_bp
-from app.routes.icloud_manager import icloud_manager
-from app.routes.process import process_bp
-
-app.register_blueprint(mass_messaging_bp)
-app.register_blueprint(mupan_bp)
-app.register_blueprint(icloud_manager)
-app.register_blueprint(process_bp)
+# 导入并初始化所有路由蓝图
+from app.routes import init_app
+init_app(app)
 
 
 # 启动时清除所有session，确保每次启动都使用新的session
