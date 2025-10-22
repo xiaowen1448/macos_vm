@@ -736,8 +736,10 @@ function loadScriptList() {
                                 </div>
                                 <p class="mb-0 text-sm text-muted overflow-hidden text-ellipsis whitespace-nowrap" style="max-width: 100%;">${script.path.replace(/\\/g, '/')}</p>
                             </div>
-                        <button type="button" class="btn ${isSelected ? 'btn-danger' : 'btn-primary'} btn-sm" 
-                                onclick="toggleScriptSelection(this, ${JSON.stringify(script)})">
+                        <button type="button" class="btn ${isSelected ? 'btn-danger' : 'btn-primary'} btn-sm script-toggle-btn"
+                                data-script-path="${script.path}"
+                                data-script-name="${script.name}"
+                                data-script-size="${script.size}">
                             ${isSelected ? '移除' : '添加'}
                         </button>
                     `;
@@ -756,14 +758,67 @@ function loadScriptList() {
         });
 }
 
+// 添加事件监听器来处理脚本按钮点击
+function setupScriptToggleButtons() {
+    // 为所有脚本切换按钮添加点击事件
+    document.querySelectorAll('.script-toggle-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            // 从数据属性获取脚本信息
+            const scriptObj = {
+                path: this.getAttribute('data-script-path'),
+                name: this.getAttribute('data-script-name'),
+                size: parseInt(this.getAttribute('data-script-size'))
+            };
+            toggleScriptSelection(this, scriptObj);
+        });
+    });
+}
+
+// 在DOM加载完成后初始化事件监听器
+document.addEventListener('DOMContentLoaded', function() {
+    // 监听脚本列表变化后重新设置事件监听器
+    const scriptListContent = document.getElementById('scriptListContent');
+    if (scriptListContent) {
+        // 使用MutationObserver监听DOM变化
+        const observer = new MutationObserver(function(mutations) {
+            // 当脚本列表更新时，重新设置事件监听器
+            setupScriptToggleButtons();
+        });
+        
+        observer.observe(scriptListContent, {
+            childList: true,
+            subtree: true
+        });
+    }
+});
+
 // 切换脚本选择状态
-function toggleScriptSelection(button, script) {
-    // 确保script对象存在
-    if (!script || !script.path || !script.name) {
-        console.error('无效的脚本对象:', script);
+function toggleScriptSelection(button, scriptObj) {
+    // 检查button是否存在
+    if (!button) {
+        console.error('toggleScriptSelection: button参数为null或undefined');
         return;
     }
     
+    // 检查scriptObj是否有效
+    if (!scriptObj) {
+        console.error('toggleScriptSelection: scriptObj参数为null或undefined');
+        return;
+    }
+    
+    // 确保script对象存在
+    if (!scriptObj || !scriptObj.path || !scriptObj.name) {
+        console.error('无效的脚本对象:', scriptObj);
+        return;
+    }
+    // 使用解析后的对象
+    script = scriptObj;
+    
+    // 再次检查button是否存在（可能在操作过程中被移除）
+    if (!button) {
+        console.error('toggleScriptSelection: button在操作过程中被移除');
+        return;
+    }
     // 检查当前状态
     const isSelected = button.textContent.trim() === '移除';
     
@@ -803,6 +858,9 @@ function toggleScriptSelection(button, script) {
     // 立即更新已选择脚本列表显示
     console.log('更新脚本显示，当前选中数量:', selectedScripts.length);
     updateSelectedScriptsDisplay();
+    
+    // 重新设置事件监听器，确保所有按钮事件正常工作
+    setupScriptToggleButtons();
 }
 
 // 更新已选择脚本显示
@@ -825,9 +883,17 @@ function updateSelectedScriptsDisplay() {
         return;
     }
     
-    // 更新输入框显示选中的脚本数量
+    // 更新输入框显示选中的脚本文件名
     if (document.getElementById('scriptInput')) {
-        document.getElementById('scriptInput').placeholder = `${selectedScripts.length} 个脚本已选择`;
+        const scriptInput = document.getElementById('scriptInput');
+        // 如果有选中的脚本，显示第一个脚本的文件名
+        if (selectedScripts.length > 0) {
+            scriptInput.value = selectedScripts[0].name;
+            scriptInput.placeholder = ''; // 清空placeholder
+        } else {
+            scriptInput.value = '';
+            scriptInput.placeholder = '请选择脚本';
+        }
     }
     
     // 构建脚本列表HTML
@@ -1057,6 +1123,10 @@ function showProcessDetail(processId) {
                                     <th>Apple ID文本信息</th>
                                      <td>文件名:${process.file_name || (process.apple_id ? process.apple_id.split('/').pop().split('\\').pop() : '未知')},
                                      文件数量:${process.file_count || process.apple_id_count || '未知'}</td>
+                                </tr>
+                                <tr>
+                                    <th>脚本信息</th>
+                                    <td>${process.scripts ? `<pre class="bg-light p-2 rounded" style="white-space: pre-wrap; word-break: break-all; border: none; margin: 0;">${process.scripts}</pre>` : '未配置脚本'}</td>
                                 </tr>
                                 <tr>
                                     <th>状态</th>

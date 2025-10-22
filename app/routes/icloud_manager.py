@@ -101,6 +101,17 @@ def get_db_connection():
          create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
     ''')
     
+    # 检查并添加scripts列（如果不存在）
+    try:
+        c.execute("PRAGMA table_info(processes)")
+        columns = [column[1] for column in c.fetchall()]
+        if 'scripts' not in columns:
+            print("添加scripts列到processes表...")
+            c.execute("ALTER TABLE processes ADD COLUMN scripts TEXT")
+            conn.commit()
+    except sqlite3.Error as e:
+        print(f"更新数据库表结构时出错: {str(e)}")
+    
     # 插入一些测试数据（仅当表为空时）
     c.execute("SELECT COUNT(*) FROM apple_ids")
     if c.fetchone()[0] == 0:
@@ -191,32 +202,49 @@ def add_process():
         import uuid
         process_id = str(uuid.uuid4())
         
-        # 保存到数据库
+        # 处理脚本数据，格式化为要求的格式
+        scripts_text = ''
+        if selected_scripts:
+                script_lines = []
+                for idx, script in enumerate(selected_scripts, 1):
+                    script_name = script.get('name', '')
+                    # 格式: 1. appleid_login.scpt\n2. handleSystemDialogs.scpt...
+                    script_lines.append(f"{idx}. {script_name}")
+                scripts_text = '\n'.join(script_lines)
+            
+            # 保存到数据库
         conn = get_db_connection()
         c = conn.cursor()
         try:
-            # 先检查表结构是否需要更新，添加file_name字段（如果不存在）
-            # 注意：实际生产环境中应该使用迁移工具而不是动态修改表结构
-            # 这里只是演示如何处理可能的结构变更
-            
-            # 插入进程数据
-            current_time = time.strftime('%Y-%m-%d %H:%M:%S')
-            c.execute('''
-                INSERT INTO processes 
-                (id, name, client, apple_id_filename, apple_id_count, status, create_time)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', (process_id, process_name, process_client, apple_id_filename, apple_id_count, '已停止', current_time))
-            conn.commit()
-        except sqlite3.OperationalError:
-            # 如果表结构不匹配，尝试使用兼容的方式插入
-            c.execute('''
-                INSERT INTO processes 
-                (id, name, client, apple_id_filename, apple_id_count, status)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (process_id, process_name, process_client, apple_id_filename, apple_id_count, '已停止'))
-            conn.commit()
+                # 插入进程数据
+                current_time = time.strftime('%Y-%m-%d %H:%M:%S')
+                c.execute('''
+                    INSERT INTO processes 
+                    (id, name, client, apple_id_filename, apple_id_count, status, scripts, create_time)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (process_id, process_name, process_client, apple_id_filename, apple_id_count, '已停止', scripts_text, current_time))
+                conn.commit()
+        except sqlite3.OperationalError as e:
+                print(f"数据库插入错误: {str(e)}")
+                # 如果表结构不匹配，尝试使用兼容的方式插入
+                try:
+                    c.execute('''
+                        INSERT INTO processes 
+                        (id, name, client, apple_id_filename, apple_id_count, status, create_time)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ''', (process_id, process_name, process_client, apple_id_filename, apple_id_count, '已停止', current_time))
+                    conn.commit()
+                except Exception as inner_e:
+                    print(f"兼容模式插入失败: {str(inner_e)}")
+                    # 最后尝试基础字段插入
+                    c.execute('''
+                        INSERT INTO processes 
+                        (id, name, client, apple_id_filename, apple_id_count, status)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    ''', (process_id, process_name, process_client, apple_id_filename, apple_id_count, '已停止'))
+                    conn.commit()
         finally:
-            conn.close()
+                conn.close()
         
         # 同时更新内存中的process_list以保持兼容性
         process_info = {
@@ -246,7 +274,7 @@ def get_process_list():
         try:
             # 尝试获取完整字段（使用数据库中实际的列名）
             c.execute('''
-                SELECT id, name, client, apple_id_filename, apple_id_count, status, create_time 
+                SELECT id, name, client, apple_id_filename, apple_id_count, status, scripts, create_time 
                 FROM processes 
                 ORDER BY create_time DESC
             ''')
@@ -256,6 +284,7 @@ def get_process_list():
                 apple_id_filename = row[3] if row[3] is not None else ''
                 file_name = apple_id_filename.split('/')[-1].split('\\')[-1] if apple_id_filename else ''
                 file_count = row[4] if row[4] is not None else 0
+                scripts = row[6] if len(row) > 6 and row[6] is not None else ''
                 
                 process_info = {
                     'id': row[0],
@@ -266,7 +295,8 @@ def get_process_list():
                     'file_count': file_count,       # 新增文件数量字段
                     'apple_id_count': row[4] if row[4] is not None else 0,  # 保持原有字段
                     'status': row[5],
-                    'create_time': row[6] if row[6] else time.strftime('%Y-%m-%d %H:%M:%S')
+                    'scripts': scripts,             # 新增脚本字段
+                    'create_time': row[7] if len(row) > 7 and row[7] else time.strftime('%Y-%m-%d %H:%M:%S')
                 }
                 processes.append(process_info)
                 # 更新内存中的进程列表
@@ -449,8 +479,48 @@ def delete_process():
 
 @icloud_manager.route('/api/icloud/process/detail/<process_id>')
 def get_process_detail(process_id):
-    if process_id not in process_list:
-        return jsonify({'success': False, 'message': '进程不存在'})
+    # 先尝试从数据库获取最新信息
+    conn = get_db_connection()
+    c = conn.cursor()
+    try:
+        c.execute('''
+            SELECT id, name, client, apple_id_filename, apple_id_count, status, scripts, create_time 
+            FROM processes 
+            WHERE id = ?
+        ''', (process_id,))
+        row = c.fetchone()
+        
+        if row:
+            # 处理可能的字段缺失
+            apple_id_filename = row[3] if row[3] is not None else ''
+            file_name = apple_id_filename.split('/')[-1].split('\\')[-1] if apple_id_filename else ''
+            file_count = row[4] if row[4] is not None else 0
+            
+            process_info = {
+                'id': row[0],
+                'name': row[1],
+                'client': row[2],
+                'apple_id': apple_id_filename,
+                'file_name': file_name,
+                'file_count': file_count,
+                'apple_id_count': row[4] if row[4] is not None else 0,
+                'status': row[5],
+                'scripts': row[6] if len(row) > 6 and row[6] is not None else '',
+                'create_time': row[7] if len(row) > 7 and row[7] else time.strftime('%Y-%m-%d %H:%M:%S')
+            }
+            # 更新内存中的进程信息
+            process_list[process_id] = process_info
+            return jsonify({'success': True, 'data': process_info})
+        else:
+            # 如果数据库中没有，再检查内存中的进程列表
+            if process_id not in process_list:
+                return jsonify({'success': False, 'message': '进程不存在'})
+            # 确保内存中的进程也有scripts字段
+            if 'scripts' not in process_list[process_id]:
+                process_list[process_id]['scripts'] = ''
+    finally:
+        conn.close()
+    
     return jsonify({'success': True, 'data': process_list[process_id]})
 
 
