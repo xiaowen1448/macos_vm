@@ -105,7 +105,6 @@
                             <input type="text" class="form-control" id="processName" required>
                         </div>
                     </div>
-                    <!-- 进程脚本选项已删除 -->
                     <div class="row mb-3">
                         <label for="processClient" class="col-sm-3 col-form-label text-end">进程客户端：</label>
                         <div class="col-sm-8">
@@ -121,7 +120,7 @@
                         </div>
                     </div>
                     <div class="row mb-3">
-                        <label for="appleId" class="col-sm-3 col-form-label text-end">Apple ID：</label>
+                        <label for="appleId" class="col-sm-3 col-form-label text-end">Apple ID文本：</label>
                         <div class="col-sm-8">
                             <div class="input-group">
                                 <select class="form-control" id="appleId" required>
@@ -131,7 +130,22 @@
                                     <i class="fas fa-sync-alt"></i>
                                 </button>
                             </div>
-                        
+                        </div>
+                    </div>
+                    <!-- 新增脚本选择区域 -->
+                    <div class="row mb-3">
+                        <label class="col-sm-3 col-form-label text-end">脚本选择：</label>
+                        <div class="col-sm-8">
+                            <div class="input-group mb-2">
+                                <input type="text" class="form-control" id="scriptInput" placeholder="请选择脚本" readonly>
+                                <button type="button" class="btn btn-primary" onclick="showScriptListModal()">
+                                    <i class="fas fa-plus"></i> 添加
+                                </button>
+                            </div>
+                            <!-- 已选择的脚本列表 -->
+                            <div id="selectedScriptsList" class="mt-2">
+                                <p class="text-muted">暂未选择任何脚本</p>
+                            </div>
                         </div>
                     </div>
                 </form>
@@ -139,6 +153,38 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
                 <button type="button" class="btn btn-primary" onclick="saveProcess()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 脚本列表模态框 -->
+<div class="modal fade" id="scriptListModal" tabindex="-1" aria-labelledby="scriptListModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="scriptListModalLabel">选择脚本</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <div class="input-group">
+                        <input type="text" id="scriptSearch" class="form-control" placeholder="搜索脚本...">
+                        <button class="btn btn-outline-secondary" type="button" onclick="loadScriptList()">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                </div>
+                <div id="scriptListLoading" class="text-center py-4">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">加载中...</span>
+                    </div>
+                </div>
+                <div id="scriptListError" class="alert alert-danger d-none"></div>
+                <div id="scriptListContent" class="list-group d-none"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
             </div>
         </div>
     </div>
@@ -164,22 +210,15 @@
 {% block extra_js %}
 <script type="text/JavaScript">
 // 直接在全局作用域定义所有函数
-function addNewProcess() {
-    document.getElementById('processModalLabel').textContent = '添加进程';
-    document.getElementById('processForm').reset();
-    loadAppleIds();
-    const modal = new bootstrap.Modal(document.getElementById('processModal'));
-    modal.show();
-}
+// 注意：addNewProcess函数的完整实现已在页面上方定义，请不要重复定义
 
+// 旧版脚本选择功能的函数（保留但标记为废弃）
 function showStaticScripts() {
-    const modal = new bootstrap.Modal(document.getElementById('staticScriptsModal'));
-    modal.show();
+    console.warn('showStaticScripts函数已废弃，请使用showScriptListModal代替');
 }
 
 function selectScript(scriptName) {
-    document.getElementById('processScript').value = scriptName;
-    bootstrap.Modal.getInstance(document.getElementById('staticScriptsModal')).hide();
+    console.warn('selectScript函数已废弃，请使用toggleScriptSelection代替');
 }
 
 function changePage(page) {
@@ -197,12 +236,12 @@ function startProcess(processId) {
     })
     .then(response => response.json())
     .then(data => {
-        alert(data.message);
+        console.log(data.message);
         if (data.success) loadProcessList();
     })
     .catch(error => {
         console.error('启动进程失败:', error);
-        alert('启动进程失败，请检查网络连接');
+        console.log('启动进程失败，请检查网络连接');
     });
 }
 
@@ -215,12 +254,12 @@ function stopProcess(processId) {
     })
     .then(response => response.json())
     .then(data => {
-        alert(data.message);
+        console.log(data.message);
         if (data.success) loadProcessList();
     })
     .catch(error => {
         console.error('停止进程失败:', error);
-        alert('停止进程失败，请检查网络连接');
+        console.log('停止进程失败，请检查网络连接');
     });
 }
 
@@ -233,12 +272,12 @@ function deleteProcess(processId) {
     })
     .then(response => response.json())
     .then(data => {
-        alert(data.message);
+        console.log(data.message);
         if (data.success) loadProcessList();
     })
     .catch(error => {
         console.error('删除进程失败:', error);
-        alert('删除进程失败，请检查网络连接');
+        console.log('删除进程失败，请检查网络连接');
     });
 }
 
@@ -264,12 +303,12 @@ function showProcessDetail(processId) {
                 const modal = new bootstrap.Modal(document.getElementById('processDetailModal'));
                 modal.show();
             } else {
-                alert('获取进程详情失败: ' + data.message);
+                console.log('获取进程详情失败: ' + data.message);
             }
         })
         .catch(error => {
             console.error('获取进程详情失败:', error);
-            alert('获取进程详情失败，请检查网络连接');
+            console.log('获取进程详情失败，请检查网络连接');
         });
 }
 
@@ -353,10 +392,11 @@ function loadAppleIds() {
                     results.forEach(result => {
                         const option = document.createElement('option');
                         option.value = result.file.name;
-                        // 显示Apple ID文本名称
+                        // 显示Apple ID文本名称和数量
                         const displayText = result.file.display_name || result.file.name;
-                        option.textContent = displayText;
-                        // 保存带数量信息的数据属性
+                        // 直接在选项文本中显示数量，格式为"文件名 (xx个)"
+                        option.textContent = `${displayText} (${result.count}个)`;
+                        // 保存原始信息的数据属性
                         option.setAttribute('data-count', result.count.toString());
                         option.setAttribute('data-display-text', `${displayText} (${result.count}个)`);
                         select.appendChild(option);
@@ -366,7 +406,7 @@ function loadAppleIds() {
                     document.getElementById('availableAppleIdCount').textContent = totalAppleIdsCount;
                     console.log('Apple ID列表加载成功，共', totalAppleIdsCount, '个可用Apple ID');
                     
-                    // 添加change事件监听器，当选择变化时更新显示该Apple ID的数量
+                    // 添加change事件监听器，仅记录选择信息
                     select.addEventListener('change', function() {
                         const selectedOption = this.options[this.selectedIndex];
                         if (selectedOption && selectedOption.value) {
@@ -375,15 +415,6 @@ function loadAppleIds() {
                             
                             // 显示选中的Apple ID数量信息
                             console.log(`已选择${displayText}`);
-                            
-                            // 更新选项文本以显示数量
-                            // 先重置所有选项的文本
-                            Array.from(this.options).forEach(option => {
-                                if (option.value) {
-                                    const originalText = option.getAttribute('data-display-text').split(' (')[0];
-                                    option.textContent = option === selectedOption ? option.getAttribute('data-display-text') : originalText;
-                                }
-                            });
                         }
                     });
                 });
@@ -395,14 +426,14 @@ function loadAppleIds() {
         .catch(error => {
             console.error('加载Apple ID列表失败:', error);
             document.getElementById('availableAppleIdCount').textContent = '0';
-            alert('加载Apple ID列表失败，请稍后重试');
+            console.log('加载Apple ID列表失败，请稍后重试');
         });
 }
 
 // 刷新Apple ID列表
 function refreshAppleIds() {
     loadAppleIds();
-    alert('Apple ID列表已刷新');
+    console.log('Apple ID列表已刷新');
 }
 
 // 加载客户端列表（异步）
@@ -539,7 +570,7 @@ function loadProcessList() {
         })
         .catch(error => {
             console.error('加载进程列表失败:', error);
-            alert('加载进程列表失败，请检查网络连接');
+            console.log('加载进程列表失败，请检查网络连接');
         });
 }
 
@@ -636,17 +667,265 @@ function addNewProcess() {
     });
 }
 
+// 存储选中的脚本列表
+let selectedScripts = [];
+
+// 显示脚本列表模态框
+function showScriptListModal() {
+    // 清空搜索框
+    document.getElementById('scriptSearch').value = '';
+    // 显示加载状态
+    document.getElementById('scriptListLoading').classList.remove('d-none');
+    document.getElementById('scriptListContent').classList.add('d-none');
+    document.getElementById('scriptListError').classList.add('d-none');
+    
+    // 打开模态框
+    const modalElement = document.getElementById('scriptListModal');
+    const modal = new bootstrap.Modal(modalElement);
+    modal.show();
+    
+    // 加载脚本列表
+    loadScriptList();
+    
+    // 添加模态框关闭事件监听，确保关闭后脚本列表正确显示
+    modalElement.addEventListener('hidden.bs.modal', function() {
+        console.log('模态框关闭，更新脚本显示');
+        updateSelectedScriptsDisplay();
+    });
+}
+
+// 加载脚本列表
+function loadScriptList() {
+    const searchTerm = document.getElementById('scriptSearch').value.toLowerCase();
+    
+    fetch('/api/script/list')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('scriptListLoading').classList.add('d-none');
+            
+            if (data.success) {
+                const scriptListContent = document.getElementById('scriptListContent');
+                scriptListContent.innerHTML = '';
+                scriptListContent.classList.remove('d-none');
+                
+                // 过滤脚本
+                let filteredScripts = data.data;
+                if (searchTerm) {
+                    filteredScripts = data.data.filter(script => 
+                        script.name.toLowerCase().includes(searchTerm)
+                    );
+                }
+                
+                if (filteredScripts.length === 0) {
+                    scriptListContent.innerHTML = '<div class="text-center py-3 text-muted">未找到匹配的脚本</div>';
+                    return;
+                }
+                
+                // 显示脚本列表
+                filteredScripts.forEach(script => {
+                    // 检查是否已选中
+                    const isSelected = selectedScripts.some(s => s.path === script.path);
+                    
+                    const listItem = document.createElement('div');
+                    listItem.className = `list-group-item d-flex justify-content-between align-items-center ${isSelected ? 'list-group-item-info' : ''}`;
+                    listItem.innerHTML = `
+                        <div style="min-width: 0; flex: 1;">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <h6 class="mb-1">${script.name}</h6>
+                                    <small class="text-muted">${formatFileSize(script.size)}</small>
+                                </div>
+                                <p class="mb-0 text-sm text-muted overflow-hidden text-ellipsis whitespace-nowrap" style="max-width: 100%;">${script.path.replace(/\\/g, '/')}</p>
+                            </div>
+                        <button type="button" class="btn ${isSelected ? 'btn-danger' : 'btn-primary'} btn-sm" 
+                                onclick="toggleScriptSelection(this, ${JSON.stringify(script)})">
+                            ${isSelected ? '移除' : '添加'}
+                        </button>
+                    `;
+                    scriptListContent.appendChild(listItem);
+                });
+            } else {
+                document.getElementById('scriptListError').textContent = data.message || '加载脚本列表失败';
+                document.getElementById('scriptListError').classList.remove('d-none');
+            }
+        })
+        .catch(error => {
+            console.error('加载脚本列表失败:', error);
+            document.getElementById('scriptListLoading').classList.add('d-none');
+            document.getElementById('scriptListError').textContent = '加载脚本列表失败，请检查网络连接';
+            document.getElementById('scriptListError').classList.remove('d-none');
+        });
+}
+
+// 切换脚本选择状态
+function toggleScriptSelection(button, script) {
+    // 确保script对象存在
+    if (!script || !script.path || !script.name) {
+        console.error('无效的脚本对象:', script);
+        return;
+    }
+    
+    // 检查当前状态
+    const isSelected = button.textContent.trim() === '移除';
+    
+    if (isSelected) {
+        // 移除脚本
+        const initialLength = selectedScripts.length;
+        selectedScripts = selectedScripts.filter(s => s.path !== script.path);
+        
+        if (selectedScripts.length < initialLength) {
+            // 成功移除
+            button.textContent = '添加';
+            button.className = 'btn btn-primary btn-sm';
+            const listItem = button.closest('.list-group-item');
+            if (listItem) {
+                listItem.classList.remove('list-group-item-info');
+            }
+            console.log('脚本已移除:', script.name);
+        }
+    } else {
+        // 添加脚本（避免重复）
+        if (!selectedScripts.some(s => s.path === script.path)) {
+            // 创建脚本对象的副本
+            const scriptCopy = { ...script };
+            selectedScripts.push(scriptCopy);
+            
+            // 更新按钮状态
+            button.textContent = '移除';
+            button.className = 'btn btn-danger btn-sm';
+            const listItem = button.closest('.list-group-item');
+            if (listItem) {
+                listItem.classList.add('list-group-item-info');
+            }
+            console.log('脚本已添加:', script.name);
+        }
+    }
+    
+    // 立即更新已选择脚本列表显示
+    console.log('更新脚本显示，当前选中数量:', selectedScripts.length);
+    updateSelectedScriptsDisplay();
+}
+
+// 更新已选择脚本显示
+function updateSelectedScriptsDisplay() {
+    console.log('开始更新已选择脚本显示，脚本数量:', selectedScripts.length);
+    
+    const selectedScriptsList = document.getElementById('selectedScriptsList');
+    
+    if (!selectedScriptsList) {
+        console.error('未找到selectedScriptsList元素');
+        return;
+    }
+    
+    if (selectedScripts.length === 0) {
+        selectedScriptsList.innerHTML = '<p class="text-muted">暂未选择任何脚本</p>';
+        // 清空输入框提示
+        if (document.getElementById('scriptInput')) {
+            document.getElementById('scriptInput').placeholder = '请选择脚本';
+        }
+        return;
+    }
+    
+    // 更新输入框显示选中的脚本数量
+    if (document.getElementById('scriptInput')) {
+        document.getElementById('scriptInput').placeholder = `${selectedScripts.length} 个脚本已选择`;
+    }
+    
+    // 构建脚本列表HTML
+    let html = '<div class="selected-scripts-container">';
+    selectedScripts.forEach((script, index) => {
+        // 安全地转义引号
+        const escapedPath = script.path.replace(/'/g, "\\'");
+        
+        html += `
+            <div class="mb-1 d-flex align-items-center p-1 border rounded">
+                <span class="text-primary mr-2 font-weight-bold">${index + 1}.</span>
+                <span class="mr-3 overflow-hidden text-ellipsis whitespace-nowrap" style="flex: 1;">${script.name}</span>
+                <button type="button" class="btn btn-danger btn-sm btn-xs" 
+                        onclick="removeSelectedScript('${escapedPath}')" 
+                        title="删除此脚本">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `;
+    });
+    html += '</div>';
+    
+    // 清空并更新DOM
+    selectedScriptsList.innerHTML = '';
+    // 使用DocumentFragment优化DOM操作
+    const fragment = document.createDocumentFragment();
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    
+    while (tempDiv.firstChild) {
+        fragment.appendChild(tempDiv.firstChild);
+    }
+    
+    selectedScriptsList.appendChild(fragment);
+    
+    // 强制重排确保DOM更新生效
+    void selectedScriptsList.offsetHeight;
+    
+    console.log('脚本显示更新完成');
+}
+
+// 从已选择列表中移除脚本
+function removeSelectedScript(scriptPath) {
+    console.log('尝试移除脚本:', scriptPath);
+    
+    // 移除脚本
+    const initialLength = selectedScripts.length;
+    selectedScripts = selectedScripts.filter(s => s.path !== scriptPath);
+    
+    if (selectedScripts.length < initialLength) {
+        console.log('脚本移除成功');
+        // 更新显示
+        updateSelectedScriptsDisplay();
+        
+        // 如果脚本列表模态框是打开的，也需要更新其中的状态
+        const scriptListModal = document.getElementById('scriptListModal');
+        const modal = bootstrap.Modal.getInstance(scriptListModal);
+        
+        if (modal && scriptListModal.classList.contains('show')) {
+            console.log('模态框已打开，更新其中的脚本状态');
+            const scriptItems = document.querySelectorAll('#scriptListContent .list-group-item');
+            scriptItems.forEach(item => {
+                const pathElement = item.querySelector('.text-muted');
+                if (pathElement && pathElement.textContent.trim() === scriptPath.trim()) {
+                    const button = item.querySelector('button');
+                    if (button) {
+                        button.textContent = '添加';
+                        button.className = 'btn btn-primary btn-sm';
+                    }
+                    item.classList.remove('list-group-item-info');
+                }
+            });
+        }
+    } else {
+        console.warn('未找到要移除的脚本:', scriptPath);
+    }
+}
+
+// 格式化文件大小
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
 // 保存进程
 function saveProcess() {
     const processData = {
         process_name: document.getElementById('processName').value,
         process_client: document.getElementById('processClient').value,
-        apple_id: document.getElementById('appleId').value
-        // 移除进程脚本字段
+        apple_id: document.getElementById('appleId').value,
+        scripts: selectedScripts  // 添加选中的脚本列表
     };
 
     if (!processData.process_name || !processData.process_client || !processData.apple_id) {
-        alert('请填写所有必填字段');
+        console.log('请填写所有必填字段');
         return;
     }
 
@@ -661,15 +940,18 @@ function saveProcess() {
     .then(data => {
         if (data.success) {
             bootstrap.Modal.getInstance(document.getElementById('processModal')).hide();
-            alert('进程添加成功');
+            console.log('进程添加成功');
             loadProcessList();
+            // 清空已选择的脚本列表
+            selectedScripts = [];
+            updateSelectedScriptsDisplay();
         } else {
-            alert('进程添加失败: ' + data.message);
+            console.log('进程添加失败: ' + data.message);
         }
     })
     .catch(error => {
         console.error('保存进程失败:', error);
-        alert('保存进程失败，请检查网络连接');
+        console.log('保存进程失败，请检查网络连接');
     });
 }
 
@@ -686,14 +968,14 @@ function startProcess(processId) {
     })
     .then(response => response.json())
     .then(data => {
-        alert(data.message);
+        console.log(data.message);
         if (data.success) {
             loadProcessList();
         }
     })
     .catch(error => {
         console.error('启动进程失败:', error);
-        alert('启动进程失败，请检查网络连接');
+        console.log('启动进程失败，请检查网络连接');
     });
 }
 
@@ -710,14 +992,14 @@ function stopProcess(processId) {
     })
     .then(response => response.json())
     .then(data => {
-        alert(data.message);
+        console.log(data.message);
         if (data.success) {
             loadProcessList();
         }
     })
     .catch(error => {
         console.error('停止进程失败:', error);
-        alert('停止进程失败，请检查网络连接');
+        console.log('停止进程失败，请检查网络连接');
     });
 }
 
@@ -734,14 +1016,14 @@ function deleteProcess(processId) {
     })
     .then(response => response.json())
     .then(data => {
-        alert(data.message);
+        console.log(data.message);
         if (data.success) {
             loadProcessList();
         }
     })
     .catch(error => {
         console.error('删除进程失败:', error);
-        alert('删除进程失败，请检查网络连接');
+        console.log('删除进程失败，请检查网络连接');
     });
 }
 
@@ -836,12 +1118,12 @@ function showProcessDetail(processId) {
                     }, { once: true });
                 }
             } else {
-                alert('获取进程详情失败: ' + data.message);
+                console.log('获取进程详情失败: ' + data.message);
             }
         })
         .catch(error => {
             console.error('获取进程详情失败:', error);
-            alert('获取进程详情失败，请检查网络连接');
+            console.log('获取进程详情失败，请检查网络连接');
         });
 }
 

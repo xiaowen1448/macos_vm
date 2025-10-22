@@ -74,3 +74,5 @@ vnc_start_port = 5918
 # 当前分配的最大VNC端口（用于端口递增分配）
 # VNC默认密码
 vnc_default_password = '123456'
+
+macos_script_dir=f'{project_root}\\..\\macos_script\\macos_scpt\\macos11'

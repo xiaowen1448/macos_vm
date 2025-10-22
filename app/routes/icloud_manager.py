@@ -8,6 +8,7 @@ import os
 import sqlite3
 from pathlib import Path
 from typing import Dict, Any
+import config
 
 # 定义login_required装饰器
 def login_required(f):
@@ -127,6 +128,36 @@ def get_apple_id_list():
     except Exception as e:
         return jsonify({'success': False, 'message': f'获取Apple ID列表失败: {str(e)}'})
 
+@icloud_manager.route('/api/script/list', methods=['GET'])
+def get_script_list():
+    try:
+        # 从config.py中获取脚本目录配置
+        script_dir = config.macos_script_dir
+        
+        # 确保目录存在
+        if not os.path.exists(script_dir):
+            return jsonify({'success': False, 'message': f'脚本目录不存在: {script_dir}'})
+        
+        # 获取目录下所有的.scpt文件
+        scpt_files = []
+        for file in os.listdir(script_dir):
+            if file.endswith('.scpt'):
+                file_path = os.path.join(script_dir, file)
+                file_size = os.path.getsize(file_path)  # 获取文件大小
+                scpt_files.append({
+                    'name': file,
+                    'path': file_path,
+                    'size': file_size,
+                    'filename': file  # 为了与前端兼容性
+                })
+        
+        # 按照文件名排序
+        scpt_files.sort(key=lambda x: x['name'])
+        
+        return jsonify({'success': True, 'data': scpt_files})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'获取脚本列表失败: {str(e)}'})
+
 # 存储进程输出日志的字典
 process_output_logs = {}
 
@@ -145,6 +176,9 @@ def add_process():
         process_name = data['process_name']
         process_client = data['process_client']
         apple_id_filename = data['apple_id']
+        
+        # 获取选择的脚本列表（如果有）
+        selected_scripts = data.get('scripts', [])
         
         # 从前端传递的apple_id中提取文件名（去除路径等）
         file_name = apple_id_filename.split('/')[-1].split('\\')[-1]
@@ -193,7 +227,8 @@ def add_process():
             'file_name': file_name,         # 添加文件名
             'apple_id_count': apple_id_count,
             'status': '已停止',
-            'create_time': time.strftime('%Y-%m-%d %H:%M:%S')
+            'create_time': time.strftime('%Y-%m-%d %H:%M:%S'),
+            'scripts': selected_scripts     # 添加选中的脚本列表
         }
         process_list[process_id] = process_info
         
