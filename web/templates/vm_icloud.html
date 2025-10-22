@@ -288,7 +288,7 @@ function showProcessDetail(processId) {
             if (data.success) {
                 const process = data.data;
                 const detailContent = document.getElementById('processDetailContent');
-                detailContent.innerHTML = `
+                detailContent.innerHTML = `<div class="process-detail-container text-sm">`
                     <div class="table-responsive">
                         <table class="table table-bordered">
                             <tr><th style="width: 150px;">进程名称</th><td>${process.name}</td></tr>
@@ -1103,37 +1103,37 @@ function showProcessDetail(processId) {
                 const detailContent = document.getElementById('processDetailContent');
                 detailContent.innerHTML = `
                     <!-- 进程配置信息 -->
-                    <div class="mb-4">
-                        <h5><i class="fas fa-cog"></i> 进程配置信息</h5>
+                    <div class="mb-2">
+                        <h7 class="mb-1"><i class="fas fa-cog"></i> 进程配置信息</h7>
                         <div class="table-responsive">
-                            <table class="table table-bordered">
+                            <table class="table table-bordered" style="font-size: 13px; margin-bottom: 0;">
                                 <tr>
-                                    <th style="width: 150px;">进程名称</th>
+                                    <th style="width: 150px; font-size: 14px;">进程名称</th>
                                     <td>${process.name}</td>
                                 </tr>
                                 <tr>
-                                    <th>进程ID</th>
+                                    <th style="font-size: 14px;">进程ID</th>
                                     <td>${process.id}</td>
                                 </tr>
                                 <tr>
-                                    <th>进程客户端</th>
+                                    <th style="font-size: 14px;">进程客户端</th>
                                     <td>${process.client}</td>
                                 </tr>
                                 <tr>
-                                    <th>Apple ID文本信息</th>
+                                    <th style="font-size: 14px;">Apple ID文本信息</th>
                                      <td>文件名:${process.file_name || (process.apple_id ? process.apple_id.split('/').pop().split('\\').pop() : '未知')},
                                      文件数量:${process.file_count || process.apple_id_count || '未知'}</td>
                                 </tr>
                                 <tr>
-                                    <th>脚本信息</th>
+                                    <th style="font-size: 14px;">脚本信息</th>
                                     <td>${process.scripts ? `<pre class="bg-light p-2 rounded" style="white-space: pre-wrap; word-break: break-all; border: none; margin: 0;">${process.scripts}</pre>` : '未配置脚本'}</td>
                                 </tr>
                                 <tr>
-                                    <th>状态</th>
+                                    <th style="font-size: 14px;">状态</th>
                                     <td><span class="badge bg-${getStatusBadgeClass(process.status)}">${process.status}</span></td>
                                 </tr>
                                 <tr>
-                                    <th>创建时间</th>
+                                    <th style="font-size: 14px;">创建时间</th>
                                     <td>${process.create_time}</td>
                                 </tr>
                             </table>
@@ -1143,7 +1143,7 @@ function showProcessDetail(processId) {
                     <!-- 模拟控制台页面 -->
                     <div class="mt-4">
                         <div class="d-flex justify-content-between align-items-center mb-2">
-                            <h5><i class="fas fa-terminal"></i> 控制台输出</h5>
+                            <h7 class="mb-2"><i class="fas fa-terminal"></i> 控制台输出</h7>
                             <div>
                                 <button class="btn btn-sm btn-outline-secondary me-2" onclick="clearConsoleOutput('${processId}')">
                                     <i class="fas fa-eraser"></i> 清空
@@ -1153,19 +1153,123 @@ function showProcessDetail(processId) {
                                 </button>
                             </div>
                         </div>
-                        <div class="card" style="border-radius: 8px;">
-                            <div class="card-header bg-gray-800 text-white py-2" style="border-radius: 8px 8px 0 0;">
-                                <div class="d-flex gap-2">
+                        <!-- 终端仿真容器 -->
+                        <div class="terminal-container border border-gray-700 rounded-lg shadow-lg overflow-hidden" style="font-family: 'Courier New', Courier, monospace;">
+                            <!-- 终端标题栏 -->
+                            <div class="terminal-header bg-gray-800 p-2 flex items-center space-x-2 border-b border-gray-700">
+                                <div class="flex space-x-2">
                                     <span class="w-3 h-3 rounded-full bg-red-500"></span>
                                     <span class="w-3 h-3 rounded-full bg-yellow-500"></span>
                                     <span class="w-3 h-3 rounded-full bg-green-500"></span>
-                                    <span class="ml-2 text-sm">进程输出日志</span>
                                 </div>
+                                <span class="text-gray-400 text-xs ml-2">process_${processId.substring(0, 8)}_terminal</span>
                             </div>
-                            <div id="consoleOutput_${processId}" class="card-body bg-gray-900 text-green-400 p-3 font-mono text-sm h-64 overflow-auto" style="white-space: pre-wrap;">
-                                <i class="fas fa-spinner fa-spin mr-2"></i>正在获取进程输出信息...
+                            <!-- 终端内容区域 -->
+                            <div id="consoleOutput_${processId}" class="terminal-content bg-gray-900 text-green-400 p-3 font-mono text-xs overflow-auto" style="white-space: pre-wrap; height: calc(90vh - 400px);">
+                                <span class="text-gray-500">正在获取进程输出信息...</span>
                             </div>
                         </div>
+                        <style>
+                            /* 终端仿真样式 */
+                            .terminal-container {
+                                background-color: #1e1e1e;
+                                border-radius: 8px;
+                                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+                                transition: all 0.3s ease;
+                            }
+                            
+                            .terminal-container:hover {
+                                box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
+                            }
+                            
+                            .terminal-header {
+                                background: linear-gradient(to right, #2d2d2d, #1e1e1e);
+                                border-bottom: 1px solid #3e3e3e;
+                                user-select: none;
+                            }
+                            
+                            .terminal-content {
+                                background-color: #1a1a1a;
+                                background-image: 
+                                    radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+                                    radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+                                background-size: 20px 20px;
+                                background-position: 0 0, 10px 10px;
+                                line-height: 1.4;
+                                tab-size: 4;
+                            }
+                            
+                            /* 优化滚动条样式 */
+                            .terminal-content::-webkit-scrollbar {
+                                width: 8px;
+                                height: 8px;
+                            }
+                            
+                            .terminal-content::-webkit-scrollbar-track {
+                                background: #2d2d2d;
+                                border-left: 1px solid #3e3e3e;
+                            }
+                            
+                            .terminal-content::-webkit-scrollbar-thumb {
+                                background: #555;
+                                border-radius: 4px;
+                            }
+                            
+                            .terminal-content::-webkit-scrollbar-thumb:hover {
+                                background: #666;
+                            }
+                            
+                            /* 命令提示符样式 */
+                            .terminal-prompt {
+                                font-weight: bold;
+                                color: #00bfff;
+                            }
+                            
+                            /* 日志级别颜色 */
+                            .log-info { color: #00ff00; }
+                            .log-warning { color: #ffaa00; }
+                            .log-error { color: #ff5555; }
+                            .log-success { color: #00cc66; }
+                            .log-debug { color: #8888ff; }
+                            
+                            /* 文本选择样式 */
+                            .terminal-content::selection {
+                                background-color: #0066ff;
+                                color: #ffffff;
+                            }
+                            
+                            .terminal-content::-moz-selection {
+                                background-color: #0066ff;
+                                color: #ffffff;
+                            }
+                            
+                            /* 进程详情容器样式 */
+                            .process-detail-container {
+                                font-size: 13px;
+                            }
+                            
+                            /* 进程详情模态框样式 */
+                            #processDetailModal .modal-dialog {
+                                height: 90vh; /* 减少高度 */
+                                margin: auto;
+                                margin-top: 5vh;
+                            }
+                            
+                            #processDetailModal .modal-content {
+                                height: 90vh;
+                                border-radius: 0;
+                            }
+                            
+                            #processDetailModal .modal-body {
+                                max-height: calc(90vh - 100px);
+                                overflow-y: hidden; /* 移除滚动条 */
+                            }
+                            
+                            /* 控制台日志文字进一步减小 */
+                            .terminal-content {
+                                font-size: 11px !important;
+                            }
+                        </style>
                     </div>
                 `;
                 
@@ -1197,6 +1301,26 @@ function showProcessDetail(processId) {
         });
 }
 
+// 格式化日志行，添加颜色
+function formatLogLine(line) {
+    // 根据日志级别添加颜色类
+    let formattedLine = line;
+    
+    if (line.toLowerCase().includes('error') || line.toLowerCase().includes('错误')) {
+        formattedLine = `<span class="log-error">${line}</span>`;
+    } else if (line.toLowerCase().includes('warning') || line.toLowerCase().includes('警告')) {
+        formattedLine = `<span class="log-warning">${line}</span>`;
+    } else if (line.toLowerCase().includes('success') || line.toLowerCase().includes('成功')) {
+        formattedLine = `<span class="log-success">${line}</span>`;
+    } else if (line.toLowerCase().includes('debug') || line.toLowerCase().includes('调试')) {
+        formattedLine = `<span class="log-debug">${line}</span>`;
+    } else {
+        formattedLine = `<span class="log-info">${line}</span>`;
+    }
+    
+    return formattedLine;
+}
+
 // 获取进程控制台输出
 function fetchConsoleOutput(processId) {
     fetch(`/api/icloud/process/output/${processId}`)
@@ -1205,9 +1329,28 @@ function fetchConsoleOutput(processId) {
             const consoleElement = document.getElementById(`consoleOutput_${processId}`);
             if (consoleElement) {
                 if (data.success && data.output) {
-                    consoleElement.textContent = data.output;
+                    // 清空内容
+                    consoleElement.innerHTML = '';
+                    
+                    // 按行分割并格式化输出
+                    const lines = data.output.split('\n');
+                    if (lines.length > 0) {
+                        lines.forEach(line => {
+                            if (line.trim()) {  // 只处理非空行
+                                const logDiv = document.createElement('div');
+                                logDiv.innerHTML = formatLogLine(line);
+                                consoleElement.appendChild(logDiv);
+                            }
+                        });
+                    } else {
+                        // 如果没有实际内容，显示提示信息
+                        const logDiv = document.createElement('div');
+                        logDiv.innerHTML = `<span class="text-gray-500">暂无实际输出内容</span>`;
+                        consoleElement.appendChild(logDiv);
+                    }
                 } else {
-                    consoleElement.textContent = data.output || '暂无输出信息';
+                    // 显示错误或无输出信息
+                    consoleElement.innerHTML = `<span class="text-gray-500">${data.output || '暂无输出信息'}</span>`;
                 }
                 // 自动滚动到底部
                 consoleElement.scrollTop = consoleElement.scrollHeight;
@@ -1217,7 +1360,7 @@ function fetchConsoleOutput(processId) {
             console.error('获取进程输出失败:', error);
             const consoleElement = document.getElementById(`consoleOutput_${processId}`);
             if (consoleElement) {
-                consoleElement.textContent = '获取输出信息失败';
+                consoleElement.innerHTML = `<span class="log-error">获取输出信息失败</span>`;
             }
         });
 }
@@ -1226,13 +1369,21 @@ function fetchConsoleOutput(processId) {
 function clearConsoleOutput(processId) {
     const consoleElement = document.getElementById(`consoleOutput_${processId}`);
     if (consoleElement) {
-        consoleElement.textContent = '控制台输出已清空';
+        consoleElement.innerHTML = `<span class="text-gray-500">控制台输出已清空</span>`;
     }
 }
 
 // 刷新控制台输出
 function refreshConsoleOutput(processId) {
-    fetchConsoleOutput(processId);
+    const consoleElement = document.getElementById(`consoleOutput_${processId}`);
+    if (consoleElement) {
+        // 显示刷新提示
+        consoleElement.innerHTML = `<span class="text-gray-500">正在刷新输出信息...</span>`;
+    }
+    // 延迟执行实际刷新，以显示刷新状态
+    setTimeout(() => {
+        fetchConsoleOutput(processId);
+    }, 300);
 }
 
 // 使用立即执行函数包装所有代码
