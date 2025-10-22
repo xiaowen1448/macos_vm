@@ -448,34 +448,169 @@ def stop_process():
 
 @icloud_manager.route('/api/icloud/process/delete', methods=['POST'])
 def delete_process():
+    # 记录API调用开始
+    from datetime import datetime
+    print("===== DELETE PROCESS API CALL START =====")
+    print(f"时间: {datetime.now()}")
+    print(f"请求方法: {request.method}")
+    print(f"请求路径: {request.path}")
+    print(f"客户端IP: {request.remote_addr}")
+    
+    # 获取请求数据
+    data = request.get_json()
+    print(f"请求数据: {data}")
+    
+    # 获取要删除的进程ID
+    process_id = data.get('process_id') if data else None
+    print(f"提取的进程ID: {process_id}")
+    
+    # 验证参数
+    if not process_id:
+        error_msg = "进程ID不能为空"
+        print(f"❌ 验证失败: {error_msg}")
+        print("===== DELETE PROCESS API CALL END (FAILED - MISSING PARAM) =====")
+        return jsonify({
+            'success': False,
+            'message': error_msg
+        })
+    
+    print("✅ 参数验证通过，开始数据库操作")
+    
+    # 数据库删除操作
+    conn = None
     try:
-        data = request.get_json()
-        process_id = data.get('process_id')
-        
-        # 从数据库中删除进程
+        # 获取数据库连接
+        print("正在获取数据库连接...")
         conn = get_db_connection()
         c = conn.cursor()
-        try:
-            c.execute('DELETE FROM processes WHERE id = ?', (process_id,))
-            if c.rowcount == 0:
-                # 如果数据库中没有删除记录，检查内存中的进程列表
-                if process_id not in process_list:
-                    return jsonify({'success': False, 'message': '找不到指定进程'})
-            conn.commit()
-        finally:
-            conn.close()
+        print("✅ 数据库连接获取成功")
+        
+        # 先查询要删除的进程是否存在
+        print(f"查询进程信息: SELECT name, status FROM processes WHERE id = '{process_id}'")
+        c.execute('SELECT name, status FROM processes WHERE id = ?', (process_id,))
+        db_process = c.fetchone()
+        print(f"查询结果: {db_process}")
+        
+        # 执行删除操作
+        print(f"执行删除操作: DELETE FROM processes WHERE id = '{process_id}'")
+        c.execute('DELETE FROM processes WHERE id = ?', (process_id,))
+        affected_rows = c.rowcount
+        conn.commit()
+        print(f"✅ 删除操作完成，影响行数: {affected_rows}")
+        conn.close()
+        
+        # 验证删除结果
+        print("验证删除结果...")
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute('SELECT count(*) FROM processes WHERE id = ?', (process_id,))
+        remaining_count = c.fetchone()[0]
+        conn.close()
+        
+        db_deleted = remaining_count == 0
+        print(f"验证结果: {'成功删除' if db_deleted else '仍然存在'}")
         
         # 从内存中删除进程
-        if process_id in process_list:
+        process_exists = process_id in process_list
+        if process_exists:
+            print(f"从内存中删除进程: {process_list[process_id]['name']}")
             del process_list[process_id]
         
         # 清理进程输出日志
         if process_id in process_output_logs:
+            print(f"清理进程输出日志")
             del process_output_logs[process_id]
         
-        return jsonify({'success': True, 'message': '进程已删除'})
+        # 强制重新同步进程列表
+        print("强制重新从数据库加载所有进程到内存...")
+        process_list.clear()
+        sync_process_list_from_db()
+        print(f"重新加载后内存中的进程数量: {len(process_list)}")
+        
+        if db_deleted:
+            success_msg = f"进程ID {process_id} 删除成功"
+            print(f"✅ 操作成功: {success_msg}")
+            print("===== DELETE PROCESS API CALL END (SUCCESS) =====")
+            
+            return jsonify({
+                'success': True,
+                'message': success_msg,
+                'deleted_id': process_id,
+                'affected_rows': affected_rows,
+                'remaining_count': remaining_count
+            })
+        else:
+            error_msg = f"进程不存在或已被删除"
+            print(f"❌ 删除失败: {error_msg}")
+            print("===== DELETE PROCESS API CALL END (FAILED - NOT FOUND) =====")
+            
+            return jsonify({
+                'success': False,
+                'message': error_msg,
+                'process_id': process_id
+            })
+    
     except Exception as e:
-        return jsonify({'success': False, 'message': f'删除失败: {str(e)}'})
+        # 发生错误时回滚
+        if conn:
+            print(f"❌ 发生异常，执行回滚操作: {str(e)}")
+            conn.rollback()
+        
+        error_msg = f"删除进程时发生错误: {str(e)}"
+        print(f"❌ 异常详情: {error_msg}")
+        print(f"异常类型: {type(e).__name__}")
+        import traceback
+        print(f"异常堆栈: {traceback.format_exc()}")
+        print("===== DELETE PROCESS API CALL END (FAILED - EXCEPTION) =====")
+        
+        # 在异常情况下也尝试清理内存
+        if 'process_id' in locals() and process_id in process_list:
+            print(f"异常情况下从内存中清理进程: {process_id}")
+            del process_list[process_id]
+        return jsonify({
+            'success': False,
+            'message': error_msg,
+            'error_type': type(e).__name__
+        })
+    finally:
+        # 确保关闭连接
+        if conn:
+            print("关闭数据库连接")
+            conn.close()
+        if 'process_id' not in locals():
+            print("===== DELETE PROCESS API CALL END =====")
+
+def sync_process_list_from_db():
+    """从数据库同步进程列表到内存中"""
+    global process_list
+    try:
+        conn = get_db_connection()
+        c = conn.cursor()
+        # 获取所有进程
+        c.execute('SELECT id, name, client, apple_id_filename, status, create_time FROM processes')
+        db_processes = {}
+        for row in c.fetchall():
+            apple_id_filename = row[3] if row[3] is not None else ''
+            process_info = {
+                'id': row[0],
+                'name': row[1],
+                'client': row[2],
+                'apple_id': apple_id_filename,
+                'file_name': apple_id_filename.split('/')[-1].split('\\')[-1] if apple_id_filename else '',
+                'status': row[4],
+                'create_time': row[5] if row[5] else time.strftime('%Y-%m-%d %H:%M:%S')
+            }
+            db_processes[row[0]] = process_info
+        conn.close()
+        
+        # 更新内存中的进程列表，但保留预设的测试数据
+        # 先保留预设的测试数据（ID以1698开头的）
+        preset_processes = {pid: p for pid, p in process_list.items() if pid.startswith('1698')}
+        # 合并数据库中的进程和预设的测试数据
+        process_list = {**db_processes, **preset_processes}
+        print(f"进程列表同步完成，当前内存中有{len(process_list)}个进程")
+    except Exception as e:
+        print(f"同步进程列表时发生异常: {str(e)}")
 
 @icloud_manager.route('/api/icloud/process/detail/<process_id>')
 def get_process_detail(process_id):

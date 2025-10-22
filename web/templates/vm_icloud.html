@@ -264,12 +264,24 @@ function stopProcess(processId) {
 }
 
 function deleteProcess(processId) {
-    // 将确认对话框改为控制台输出提示，详细记录操作信息
+    // 添加确认对话框
+    if (!confirm(`确定要删除进程(ID:${processId})吗？此操作不可撤销。`)) {
+        console.log('===== 进程删除操作取消 =====');
+        return;
+    }
+    
+    // 详细记录操作信息
     console.log('===== 进程删除操作开始 =====');
     console.log('目标进程ID:', processId);
     console.log('操作类型: 从后端数据库永久删除进程记录');
     
+    // 检查当前列表中是否存在该进程
+    const processExists = allProcesses.some(p => p.id === processId);
+    console.log('当前前端列表中进程是否存在:', processExists);
+    
     // 执行删除操作
+    console.log('准备发送删除请求到后端...');
+    
     fetch('/api/icloud/process/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -277,22 +289,45 @@ function deleteProcess(processId) {
     })
     .then(response => {
         console.log('API响应状态:', response.status, response.statusText);
-        return response.json().catch(() => ({
-            success: false,
-            message: `无法解析API响应，HTTP状态: ${response.status}`
-        }));
+        
+        // 获取完整响应信息
+        const contentType = response.headers.get('content-type');
+        console.log('响应内容类型:', contentType);
+        
+        return response.json().catch(err => {
+            console.error('JSON解析错误:', err);
+            return {
+                success: false,
+                message: `无法解析API响应，HTTP状态: ${response.status}`
+            };
+        });
     })
     .then(data => {
-        console.log('删除结果数据:', JSON.stringify(data));
+        console.log('删除结果数据:', JSON.stringify(data, null, 2));
+        
         if (data && data.success) {
             console.log('✅ 进程删除成功');
             console.log('成功消息:', data.message || '无详细消息');
-            console.log('正在刷新进程列表...');
-            // 强制刷新进程列表
+            
+            // 立即从前端列表中移除该项（无需等待重新加载）
+            console.log('立即从前端列表中移除进程...');
+            const initialLength = allProcesses.length;
+            allProcesses = allProcesses.filter(p => p.id !== processId);
+            console.log(`前端列表更新: 从${initialLength}个进程减少到${allProcesses.length}个进程`);
+            
+            console.log('重新渲染进程列表...');
+            totalItems = allProcesses.length;
+            document.getElementById('totalItems').textContent = totalItems;
+            renderProcessList();
+            renderPagination();
+            
+            console.log('同时调用loadProcessList确保与后端完全同步...');
             loadProcessList();
         } else {
             console.log('❌ 进程删除失败');
             console.log('失败原因:', data && data.message ? data.message : '未知错误');
+            // 显示错误提示
+            alert(`删除失败: ${data && data.message ? data.message : '未知错误'}`);
         }
         console.log('===== 进程删除操作结束 =====');
     })
@@ -300,6 +335,8 @@ function deleteProcess(processId) {
         console.error('❌ 删除进程时发生网络或请求错误:', error);
         console.log('错误类型:', error.name);
         console.log('错误消息:', error.message);
+        console.log('错误堆栈:', error.stack);
+        alert(`网络错误: ${error.message}`);
         console.log('===== 进程删除操作异常结束 =====');
     });
 }
@@ -311,16 +348,28 @@ function showProcessDetail(processId) {
             if (data.success) {
                 const process = data.data;
                 const detailContent = document.getElementById('processDetailContent');
-                detailContent.innerHTML = `<div class="process-detail-container text-sm">`
+                // 转义特殊字符，防止XSS和模板字符串错误
+                const escapeHtml = (unsafe) => {
+                    return unsafe
+                        .replace(/&/g, "&amp;")
+                        .replace(/</g, "&lt;")
+                        .replace(/>/g, "&gt;")
+                        .replace(/"/g, "&quot;")
+                        .replace(/'/g, "&#039;");
+                };
+                
+                // 正确构建模板字符串
+                detailContent.innerHTML = `
+                <div class="process-detail-container text-sm">
                     <div class="table-responsive">
                         <table class="table table-bordered">
-                            <tr><th style="width: 150px;">进程名称</th><td>${process.name}</td></tr>
-                            <tr><th>进程ID</th><td>${process.id}</td></tr>
-                            <tr><th>进程脚本</th><td><pre class="mb-0"><code>${process.script}</code></pre></td></tr>
-                            <tr><th>进程客户端</th><td>${process.client}</td></tr>
-                            <tr><th>Apple ID</th><td>${process.apple_id}</td></tr>
-                            <tr><th>状态</th><td><span class="badge bg-${getStatusBadgeClass(process.status)}">${process.status}</span></td></tr>
-                            <tr><th>创建时间</th><td>${process.create_time}</td></tr>
+                            <tr><th style="width: 150px;">进程名称</th><td>${escapeHtml(process.name)}</td></tr>
+                            <tr><th>进程ID</th><td>${escapeHtml(process.id)}</td></tr>
+                            <tr><th>进程脚本</th><td><pre class="mb-0"><code>${escapeHtml(process.script || '')}</code></pre></td></tr>
+                            <tr><th>进程客户端</th><td>${escapeHtml(process.client || '')}</td></tr>
+                              <tr><th>Apple ID</th><td>${escapeHtml(process.apple_id || '')}</td></tr>
+                            <tr><th>状态</th><td><span class="badge bg-${getStatusBadgeClass(process.status)}">${escapeHtml(process.status)}</span></td></tr>
+                              <tr><th>创建时间</th><td>${escapeHtml(process.create_time || '')}</td></tr>
                         </table>
                     </div>`;
                 const modal = new bootstrap.Modal(document.getElementById('processDetailModal'));
@@ -1093,28 +1142,8 @@ function stopProcess(processId) {
 }
 
 // 删除进程
-function deleteProcess(processId) {
-    if (!confirm('确定要删除该进程吗？该操作不可恢复！')) return;
-    
-    fetch('/api/process/delete', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ process_id: processId })
-    })
-    .then(response => response.json())
-    .then(data => {
-        console.log(data.message);
-        if (data.success) {
-            loadProcessList();
-        }
-    })
-    .catch(error => {
-        console.error('删除进程失败:', error);
-        console.log('删除进程失败，请检查网络连接');
-    });
-}
+// 删除函数已移至文件上方，调用/api/icloud/process/delete接口
+// 保留此注释以避免混淆
 
 // 显示进程详情
 function showProcessDetail(processId) {

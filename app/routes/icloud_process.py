@@ -74,16 +74,6 @@ def stop_process():
         "message": "找不到指定进程"
     })
 
-@icloud_process_bp.route('/api/process/delete', methods=['POST'])
-def delete_process():
-    process_id = request.json.get('process_id')
-    global processes
-    processes = [p for p in processes if p['id'] != process_id]
-    return jsonify({
-        "success": True,
-        "message": "进程已删除"
-    })
-
 @icloud_process_bp.route('/api/process/detail/<process_id>')
 def get_process_detail(process_id):
     for process in processes:
