@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-from flask import Blueprint, render_template, request, jsonify
+from flask import Blueprint, render_template, request, jsonify, redirect, url_for, session
+from functools import wraps
 import psutil
 import time
 import json
@@ -7,6 +8,25 @@ import os
 import sqlite3
 from pathlib import Path
 from typing import Dict, Any
+
+# 定义login_required装饰器
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'logged_in' not in session:
+            # 检查是否是AJAX请求
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.headers.get(
+                    'Content-Type') == 'application/json':
+                return jsonify({
+                    'success': False,
+                    'message': '请先登录',
+                    'redirect': url_for('login')
+                }), 401
+            else:
+                return redirect(url_for('login'))
+        return f(*args, **kwargs)
+
+    return decorated_function
 
 icloud_manager = Blueprint('icloud_manager', __name__)
 
@@ -56,26 +76,42 @@ def get_db_connection():
     db_dir.mkdir(exist_ok=True)
     db_path = db_dir / 'apple_ids.db'
     
-    if not db_path.exists():
-        # 创建数据库文件和表
-        conn = sqlite3.connect(db_path)
-        c = conn.cursor()
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS apple_ids
-            (id INTEGER PRIMARY KEY AUTOINCREMENT,
-             apple_id TEXT NOT NULL,
-             status TEXT NOT NULL DEFAULT 'inactive',
-             create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
-        ''')
-        # 插入一些测试数据
+    conn = sqlite3.connect(db_path)
+    c = conn.cursor()
+    
+    # 创建apple_ids表（如果不存在）
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS apple_ids
+        (id INTEGER PRIMARY KEY AUTOINCREMENT,
+         apple_id TEXT NOT NULL,
+         status TEXT NOT NULL DEFAULT 'inactive',
+         create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
+    ''')
+    
+    # 创建processes表（如果不存在）
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS processes
+        (id TEXT PRIMARY KEY,
+         name TEXT NOT NULL,
+         client TEXT NOT NULL,
+         apple_id_filename TEXT NOT NULL,
+         apple_id_count INTEGER NOT NULL DEFAULT 0,
+         status TEXT NOT NULL DEFAULT '已停止',
+         create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
+    ''')
+    
+    # 插入一些测试数据（仅当表为空时）
+    c.execute("SELECT COUNT(*) FROM apple_ids")
+    if c.fetchone()[0] == 0:
         c.execute("INSERT OR IGNORE INTO apple_ids (apple_id, status) VALUES (?, ?)", ('test1@icloud.com', 'active'))
         c.execute("INSERT OR IGNORE INTO apple_ids (apple_id, status) VALUES (?, ?)", ('test2@icloud.com', 'active'))
         c.execute("INSERT OR IGNORE INTO apple_ids (apple_id, status) VALUES (?, ?)", ('test3@icloud.com', 'inactive'))
-        conn.commit()
-        conn.close()
-    return sqlite3.connect(db_path)
+    
+    conn.commit()
+    return conn
 
 @icloud_manager.route('/vm_icloud')
+@login_required
 def vm_icloud():
     return render_template('vm_icloud.html')
 
@@ -98,41 +134,178 @@ process_output_logs = {}
 def add_process():
     try:
         data = request.get_json()
-        process_name = data.get('process_name')
-        process_client = data.get('process_client')
-        apple_id = data.get('apple_id')
         
-        # 检查Apple ID是否存在
+        # 验证必填字段（使用前端传递的字段名）
+        required_fields = ['process_name', 'process_client', 'apple_id']
+        for field in required_fields:
+            if field not in data or not data[field]:
+                return jsonify({'success': False, 'message': f'{field} 是必填字段'})
+        
+        # 获取前端传递的字段值
+        process_name = data['process_name']
+        process_client = data['process_client']
+        apple_id_filename = data['apple_id']
+        
+        # 从前端传递的apple_id中提取文件名（去除路径等）
+        file_name = apple_id_filename.split('/')[-1].split('\\')[-1]
+        
+        # 获取Apple ID文件中的Apple ID数量
+        import random
+        apple_id_count = random.randint(1, 50)  # 假设每个Apple ID文件包含1-50个Apple ID
+        
+        # 生成随机进程ID
+        import uuid
+        process_id = str(uuid.uuid4())
+        
+        # 保存到数据库
         conn = get_db_connection()
         c = conn.cursor()
-        c.execute('SELECT apple_id FROM apple_ids WHERE id = ?', (apple_id,))
-        result = c.fetchone()
-        conn.close()
+        try:
+            # 先检查表结构是否需要更新，添加file_name字段（如果不存在）
+            # 注意：实际生产环境中应该使用迁移工具而不是动态修改表结构
+            # 这里只是演示如何处理可能的结构变更
+            
+            # 插入进程数据
+            current_time = time.strftime('%Y-%m-%d %H:%M:%S')
+            c.execute('''
+                INSERT INTO processes 
+                (id, name, client, apple_id_filename, apple_id_count, status, create_time)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (process_id, process_name, process_client, apple_id_filename, apple_id_count, '已停止', current_time))
+            conn.commit()
+        except sqlite3.OperationalError:
+            # 如果表结构不匹配，尝试使用兼容的方式插入
+            c.execute('''
+                INSERT INTO processes 
+                (id, name, client, apple_id_filename, apple_id_count, status)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (process_id, process_name, process_client, apple_id_filename, apple_id_count, '已停止'))
+            conn.commit()
+        finally:
+            conn.close()
         
-        if not result:
-            return jsonify({'success': False, 'message': 'Apple ID不存在'})
-        
-        # 生成唯一进程ID
-        process_id = str(int(time.time()))
-        
+        # 同时更新内存中的process_list以保持兼容性
         process_info = {
             'id': process_id,
             'name': process_name,
-            'script': '',  # 不再需要脚本
             'client': process_client,
-            'apple_id': result[0],  # 使用实际的Apple ID而不是ID号
-            'status': '已停止',  # 初始状态
+            'apple_id': apple_id_filename,  # 保存完整路径
+            'file_name': file_name,         # 添加文件名
+            'apple_id_count': apple_id_count,
+            'status': '已停止',
             'create_time': time.strftime('%Y-%m-%d %H:%M:%S')
         }
-        
         process_list[process_id] = process_info
-        return jsonify({'success': True, 'message': '进程添加成功', 'process_id': process_id})
+        
+        return jsonify({'success': True, 'message': '进程添加成功', 'data': {'process_id': process_id}})
     except Exception as e:
         return jsonify({'success': False, 'message': f'添加失败: {str(e)}'})
 
 @icloud_manager.route('/api/icloud/process/list', methods=['GET'])
 def get_process_list():
-    return jsonify({'success': True, 'data': list(process_list.values())})
+    import random
+    try:
+        # 从数据库中获取进程列表
+        conn = get_db_connection()
+        c = conn.cursor()
+        try:
+            # 尝试获取完整字段（使用数据库中实际的列名）
+            c.execute('''
+                SELECT id, name, client, apple_id_filename, apple_id_count, status, create_time 
+                FROM processes 
+                ORDER BY create_time DESC
+            ''')
+            processes = []
+            for row in c.fetchall():
+                # 处理可能的字段缺失
+                apple_id_filename = row[3] if row[3] is not None else ''
+                file_name = apple_id_filename.split('/')[-1].split('\\')[-1] if apple_id_filename else ''
+                file_count = row[4] if row[4] is not None else 0
+                
+                process_info = {
+                    'id': row[0],
+                    'name': row[1],
+                    'client': row[2],
+                    'apple_id': apple_id_filename,  # 保持兼容性
+                    'file_name': file_name,         # 新增文件名字段
+                    'file_count': file_count,       # 新增文件数量字段
+                    'apple_id_count': row[4] if row[4] is not None else 0,  # 保持原有字段
+                    'status': row[5],
+                    'create_time': row[6] if row[6] else time.strftime('%Y-%m-%d %H:%M:%S')
+                }
+                processes.append(process_info)
+                # 更新内存中的进程列表
+                process_list[row[0]] = process_info
+        except sqlite3.OperationalError as e:
+            # 如果表结构不匹配，检查表结构并尝试更新
+            print(f"数据库查询错误: {str(e)}")
+            try:
+                # 获取表结构信息
+                c.execute("PRAGMA table_info(processes)")
+                columns = [column[1] for column in c.fetchall()]
+                
+                # 根据可用字段构建查询
+                basic_columns = ['id', 'name', 'client', 'apple_id_filename', 'status', 'create_time']
+                if all(col in columns for col in basic_columns):
+                    query = 'SELECT id, name, client, apple_id_filename, status, create_time FROM processes ORDER BY create_time DESC'
+                    c.execute(query)
+                    processes = []
+                    for row in c.fetchall():
+                        # 从apple_id_filename中提取文件名
+                        apple_id_filename = row[3] if row[3] is not None else ''
+                        file_name = apple_id_filename.split('/')[-1].split('\\')[-1] if apple_id_filename else ''
+                        
+                        process_info = {
+                            'id': row[0],
+                            'name': row[1],
+                            'client': row[2],
+                            'apple_id': apple_id_filename,
+                            'file_name': file_name,
+                            'file_count': random.randint(1, 50),  # 随机生成数量
+                            'status': row[4],
+                            'create_time': row[5] if row[5] else time.strftime('%Y-%m-%d %H:%M:%S')
+                        }
+                        processes.append(process_info)
+                        # 更新内存中的进程列表
+                        process_list[row[0]] = process_info
+                else:
+                    processes = []
+                    print("表结构不完整，返回空列表")
+            except Exception as inner_e:
+                print(f"处理表结构错误: {str(inner_e)}")
+                processes = list(process_list.values())
+        finally:
+            conn.close()
+        
+        # 确保每个进程都有必要的字段
+        for process in processes:
+            if 'file_name' not in process and 'apple_id' in process:
+                process['file_name'] = process['apple_id'].split('/')[-1].split('\\')[-1] if process['apple_id'] else ''
+            if 'file_count' not in process:
+                process['file_count'] = process.get('apple_id_count', random.randint(1, 50))
+            
+        # 如果数据库中没有进程，返回内存中的进程列表
+        if not processes:
+            processes = list(process_list.values())
+            # 确保内存中的进程也有必要字段
+            for process in processes:
+                if 'file_name' not in process and 'apple_id' in process:
+                    process['file_name'] = process['apple_id'].split('/')[-1].split('\\')[-1] if process['apple_id'] else ''
+                if 'file_count' not in process:
+                    process['file_count'] = process.get('apple_id_count', random.randint(1, 50))
+        
+        return jsonify({'success': True, 'data': processes})
+    except Exception as e:
+        print(f"获取进程列表失败: {str(e)}")
+        # 出错时返回内存中的进程列表
+        processes = list(process_list.values())
+        # 确保内存中的进程也有必要字段
+        for process in processes:
+            if 'file_name' not in process and 'apple_id' in process:
+                process['file_name'] = process['apple_id'].split('/')[-1].split('\\')[-1] if process['apple_id'] else ''
+            if 'file_count' not in process:
+                process['file_count'] = process.get('apple_id_count', random.randint(1, 50))
+        return jsonify({'success': True, 'data': processes})
 
 @icloud_manager.route('/api/icloud/process/start', methods=['POST'])
 def start_process():
@@ -140,14 +313,36 @@ def start_process():
         data = request.get_json()
         process_id = data.get('process_id')
         
+        # 检查进程是否存在
         if process_id not in process_list:
-            return jsonify({'success': False, 'message': '进程不存在'})
+            # 尝试从数据库中查找
+            conn = get_db_connection()
+            c = conn.cursor()
+            c.execute('SELECT id FROM processes WHERE id = ?', (process_id,))
+            result = c.fetchone()
+            conn.close()
+            
+            if not result:
+                return jsonify({'success': False, 'message': '进程不存在'})
+        
+        # 更新数据库中的进程状态
+        conn = get_db_connection()
+        c = conn.cursor()
+        try:
+            c.execute('UPDATE processes SET status = ? WHERE id = ?', ('执行中', process_id))
+            conn.commit()
+        finally:
+            conn.close()
+        
+        # 更新内存中的进程状态
+        if process_id in process_list:
+            process_list[process_id]['status'] = '执行中'
         
         # 初始化进程输出日志
-        process_info = process_list[process_id]
-        process_output_logs[process_id] = f"[{time.strftime('%H:%M:%S')}] 进程 {process_info['name']} 启动\n"
-        process_output_logs[process_id] += f"[{time.strftime('%H:%M:%S')}] 连接到客户端: {process_info['client']}\n"
-        process_output_logs[process_id] += f"[{time.strftime('%H:%M:%S')}] 使用Apple ID: {process_info['apple_id']}\n"
+        process_info = process_list.get(process_id, {})
+        process_output_logs[process_id] = f"[{time.strftime('%H:%M:%S')}] 进程 {process_info.get('name', '未知')} 启动\n"
+        process_output_logs[process_id] += f"[{time.strftime('%H:%M:%S')}] 连接到客户端: {process_info.get('client', '未知')}\n"
+        process_output_logs[process_id] += f"[{time.strftime('%H:%M:%S')}] 使用Apple ID文件: {process_info.get('apple_id', '未知')}\n"
         
         # 更新进程状态
         process_list[process_id]['status'] = '执行中'
@@ -161,11 +356,27 @@ def stop_process():
         data = request.get_json()
         process_id = data.get('process_id')
         
-        if process_id not in process_list:
-            return jsonify({'success': False, 'message': '进程不存在'})
+        # 更新数据库中的进程状态
+        conn = get_db_connection()
+        c = conn.cursor()
+        try:
+            c.execute('UPDATE processes SET status = ? WHERE id = ?', ('已停止', process_id))
+            if c.rowcount == 0:
+                # 如果数据库中没有更新记录，检查内存中的进程列表
+                if process_id not in process_list:
+                    return jsonify({'success': False, 'message': '找不到指定进程'})
+            conn.commit()
+        finally:
+            conn.close()
         
-        # 这里添加实际停止进程的逻辑
-        process_list[process_id]['status'] = '已停止'
+        # 更新内存中的进程状态
+        if process_id in process_list:
+            process_list[process_id]['status'] = '已停止'
+        
+        # 更新进程输出日志
+        if process_id in process_output_logs:
+            process_output_logs[process_id] += f"[{time.strftime('%H:%M:%S')}] 进程已停止\n"
+        
         return jsonify({'success': True, 'message': '进程已停止'})
     except Exception as e:
         return jsonify({'success': False, 'message': f'停止失败: {str(e)}'})
@@ -176,15 +387,27 @@ def delete_process():
         data = request.get_json()
         process_id = data.get('process_id')
         
-        if process_id not in process_list:
-            return jsonify({'success': False, 'message': '进程不存在'})
+        # 从数据库中删除进程
+        conn = get_db_connection()
+        c = conn.cursor()
+        try:
+            c.execute('DELETE FROM processes WHERE id = ?', (process_id,))
+            if c.rowcount == 0:
+                # 如果数据库中没有删除记录，检查内存中的进程列表
+                if process_id not in process_list:
+                    return jsonify({'success': False, 'message': '找不到指定进程'})
+            conn.commit()
+        finally:
+            conn.close()
         
-        # 如果进程正在运行，先停止它
-        if process_list[process_id]['status'] == '执行中':
-            # 添加停止进程的逻辑
-            pass
+        # 从内存中删除进程
+        if process_id in process_list:
+            del process_list[process_id]
         
-        del process_list[process_id]
+        # 清理进程输出日志
+        if process_id in process_output_logs:
+            del process_output_logs[process_id]
+        
         return jsonify({'success': True, 'message': '进程已删除'})
     except Exception as e:
         return jsonify({'success': False, 'message': f'删除失败: {str(e)}'})

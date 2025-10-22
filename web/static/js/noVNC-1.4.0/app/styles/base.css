@@ -105,7 +105,7 @@ html {
    */
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: left;
   position: fixed;
   top: 0;
   left: 0;
@@ -119,7 +119,7 @@ html {
 .noVNC_vcenter {
   display: flex !important;
   flex-direction: column;
-  justify-content: center;
+  justify-content: left;
   position: fixed;
   top: 0;
   left: 0;
@@ -658,7 +658,7 @@ html {
 
   display: flex;
   flex-direction: row;
-  justify-content: center;
+  justify-content: left;
   align-content: center;
 
   line-height: 25px;
@@ -830,7 +830,7 @@ html {
 
   /*display: flex;*/
   align-items: center;
-  justify-content: center;
+  justify-content: left;
   flex-direction: column;
 }
 :root.noVNC_loading #noVNC_transition,
