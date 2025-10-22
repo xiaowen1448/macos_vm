@@ -38,7 +38,7 @@ def check_processes_table():
         print(f"进程总数: {count}")
         
         if count > 0:
-            c.execute("SELECT id, name, status, create_time FROM processes ORDER BY create_time DESC")
+            c.execute("SELECT *  FROM processes ORDER BY create_time DESC")
             processes = c.fetchall()
             print("进程列表:")
             for process in processes:

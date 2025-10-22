@@ -36,15 +36,13 @@
                         max-width: 150px;           /* 设置最大宽度 */
                     }
                     /* 为不同列设置固定宽度 */
-                    #processTable th:nth-child(1), #processTable td:nth-child(1) { width: 100px; }
-                    #processTable th:nth-child(2), #processTable td:nth-child(2) { width: 150px; }
-                    #processTable th:nth-child(3), #processTable td:nth-child(3) { width: 70px; text-align: center; }
-                    #processTable th:nth-child(4), #processTable td:nth-child(4) { width: 140px; }
-                    #processTable th:nth-child(5), #processTable td:nth-child(5) { width: 90px; text-align: center; }
-                    #processTable th:nth-child(6), #processTable td:nth-child(6) { width: 140px; }
-                    #processTable th:nth-child(7), #processTable td:nth-child(7) { width: 260px; }
+                    #processTable th:nth-child(1), #processTable td:nth-child(1) { width: 200px; text-align: left; }
+                    #processTable th:nth-child(2), #processTable td:nth-child(2) { width: 150px; text-align: left; }
+                    #processTable th:nth-child(3), #processTable td:nth-child(3) { width: 80px; text-align: center; }
+                    #processTable th:nth-child(4), #processTable td:nth-child(4) { width: 160px; text-align: left; }
+                    #processTable th:nth-child(5), #processTable td:nth-child(5) { width: 300px; text-align: center; }
                     /* 操作按钮列保持内容完整显示 */
-                    #processTable td:nth-child(7) {
+                    #processTable td:nth-child(5) {
                         overflow: visible;
                         white-space: normal;
                         max-width: none;
@@ -67,8 +65,6 @@
                             <th>进程名称</th>
                             <th>进程ID</th>
                             <th>状态</th>
-                            <th>文件名</th>
-                            <th>文件数量</th>
                             <th>创建时间</th>
                             <th>操作</th>
                         </tr>
@@ -367,11 +363,32 @@ function showProcessDetail(processId) {
                             <tr><th>进程ID</th><td>${escapeHtml(process.id)}</td></tr>
                             <tr><th>进程脚本</th><td><pre class="mb-0"><code>${escapeHtml(process.script || '')}</code></pre></td></tr>
                             <tr><th>进程客户端</th><td>${escapeHtml(process.client || '')}</td></tr>
-                              <tr><th>Apple ID</th><td>${escapeHtml(process.apple_id || '')}</td></tr>
+                            <tr><th>Apple ID</th><td>${escapeHtml(process.apple_id || '')}</td></tr>
                             <tr><th>状态</th><td><span class="badge bg-${getStatusBadgeClass(process.status)}">${escapeHtml(process.status)}</span></td></tr>
-                              <tr><th>创建时间</th><td>${escapeHtml(process.create_time || '')}</td></tr>
+                            <tr><th>创建时间</th><td>${escapeHtml(process.create_time || '')}</td></tr>
                         </table>
-                    </div>`;
+                    </div>
+                    <div class="mt-3">
+                        <button type="button" class="btn btn-sm btn-info" onclick="loadProcessLogs('${processId}')">
+                            <i class="fas fa-file-alt"></i> 查看进程日志
+                        </button>
+                    </div>
+                    <div id="processLogsContainer" class="mt-3 d-none">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0">进程日志</h6>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="refreshProcessLogs('${processId}')">
+                                    <i class="fas fa-sync-alt"></i> 刷新
+                                </button>
+                            </div>
+                            <div class="card-body p-0">
+                                <div id="processLogsContent" class="p-3 bg-light text-xs overflow-auto" style="max-height: 300px;">
+                                    <div class="text-center text-muted">加载中...</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
                 const modal = new bootstrap.Modal(document.getElementById('processDetailModal'));
                 modal.show();
             } else {
@@ -382,6 +399,56 @@ function showProcessDetail(processId) {
             console.error('获取进程详情失败:', error);
             console.log('获取进程详情失败，请检查网络连接');
         });
+}
+
+// 加载进程日志
+function loadProcessLogs(processId) {
+    const logsContainer = document.getElementById('processLogsContainer');
+    const logsContent = document.getElementById('processLogsContent');
+    
+    // 显示日志容器
+    logsContainer.classList.remove('d-none');
+    logsContent.innerHTML = '<div class="text-center text-muted">加载中...</div>';
+    
+    // 获取日志
+    fetch(`/api/icloud/process/logs/${processId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const logs = data.data.logs;
+                if (logs && logs.length > 0) {
+                    logsContent.innerHTML = logs.map(log => 
+                        `<div class="log-entry">${escapeHtml(log)}</div>`
+                    ).join('');
+                } else {
+                    logsContent.innerHTML = '<div class="text-center text-muted">暂无日志记录</div>';
+                }
+                // 滚动到底部
+                logsContent.scrollTop = logsContent.scrollHeight;
+            } else {
+                logsContent.innerHTML = `<div class="text-center text-danger">${data.message}</div>`;
+            }
+        })
+        .catch(error => {
+            console.error('获取进程日志失败:', error);
+            logsContent.innerHTML = '<div class="text-center text-danger">获取日志失败，请检查网络连接</div>';
+        });
+}
+
+// 刷新进程日志
+function refreshProcessLogs(processId) {
+    loadProcessLogs(processId);
+}
+
+// 转义HTML特殊字符
+function escapeHtml(unsafe) {
+    if (!unsafe) return '';
+    return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 }
 
 // 其他变量和函数定义
@@ -673,17 +740,15 @@ function renderProcessList() {
             <td>
                 <span class="badge bg-${getStatusBadgeClass(process.status)}">${process.status}</span>
             </td>
-            <td>${fileName}</td>
-            <td>${fileCount}</td>
             <td>${process.create_time}</td>
             <td>
                 <div class="btn-group btn-group-sm" role="group">
-                    <span class="ju-status-icon" style="display: inline-flex; align-items: center; justify-content: center; width: 80px; height: 32px; border: 1px solid #28a745; border-radius: 0.25rem; background-color: #d4edda; color: #155724; font-size: 0.875rem; cursor: default; pointer-events: none;">
-                        <i class="fas fa-play mr-1"></i> 启动
-                    </span>
-                    <span class="ju-status-icon" style="display: inline-flex; align-items: center; justify-content: center; width: 80px; height: 32px; border: 1px solid #ffc107; border-radius: 0.25rem; background-color: #fff3cd; color: #856404; font-size: 0.875rem; cursor: default; pointer-events: none; margin-left: 5px;">
-                        <i class="fas fa-stop mr-1"></i> 停止
-                    </span>
+                        <button class="btn btn-success btn-sm" onclick="startProcess('${process.id}')">
+                            <i class="fas fa-play mr-1"></i> 启动
+                        </button>
+                        <button class="btn btn-warning btn-sm" onclick="stopProcess('${process.id}')">
+                            <i class="fas fa-stop mr-1"></i> 停止
+                        </button>
                     <button class="btn btn-info mb-1" onclick="showProcessDetail('${process.id}')">
                         <i class="fas fa-info-circle"></i> 详情
                     </button>
@@ -1093,57 +1158,7 @@ function saveProcess() {
     });
 }
 
-// 启动进程
-function startProcess(processId) {
-    if (!confirm('确定要启动该进程吗？')) return;
-    
-    fetch('/api/process/start', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ process_id: processId })
-    })
-    .then(response => response.json())
-    .then(data => {
-        console.log(data.message);
-        if (data.success) {
-            loadProcessList();
-        }
-    })
-    .catch(error => {
-        console.error('启动进程失败:', error);
-        console.log('启动进程失败，请检查网络连接');
-    });
-}
-
-// 停止进程
-function stopProcess(processId) {
-    if (!confirm('确定要停止该进程吗？')) return;
-    
-    fetch('/api/process/stop', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ process_id: processId })
-    })
-    .then(response => response.json())
-    .then(data => {
-        console.log(data.message);
-        if (data.success) {
-            loadProcessList();
-        }
-    })
-    .catch(error => {
-        console.error('停止进程失败:', error);
-        console.log('停止进程失败，请检查网络连接');
-    });
-}
-
-// 删除进程
-// 删除函数已移至文件上方，调用/api/icloud/process/delete接口
-// 保留此注释以避免混淆
+// 已在页面上方定义了正确的startProcess函数，此处移除重复定义
 
 // 显示进程详情
 function showProcessDetail(processId) {
@@ -1174,7 +1189,7 @@ function showProcessDetail(processId) {
                                 <tr>
                                     <th style="font-size: 14px;">Apple ID文本信息</th>
                                      <td>文件名:${process.file_name || (process.apple_id ? process.apple_id.split('/').pop().split('\\').pop() : '未知')},
-                                     文件数量:${process.file_count || process.apple_id_count || '未知'}</td>
+                                     appleid数量:${process.file_count || process.apple_id_count || '未知'}</td>
                                 </tr>
                                 <tr>
                                     <th style="font-size: 14px;">脚本信息</th>

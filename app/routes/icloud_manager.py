@@ -315,10 +315,32 @@ def get_process_list():
                     query = 'SELECT id, name, client, apple_id_filename, status, create_time FROM processes ORDER BY create_time DESC'
                     c.execute(query)
                     processes = []
+                    # 导入配置模块，使用appleid_unused_dir路径
+                    from config import appleid_unused_dir
+                    import os
+                    
                     for row in c.fetchall():
                         # 从apple_id_filename中提取文件名
                         apple_id_filename = row[3] if row[3] is not None else ''
                         file_name = apple_id_filename.split('/')[-1].split('\\')[-1] if apple_id_filename else ''
+                        
+                        # 每次直接从appleid_unused_dir目录统计文件行数
+                        apple_id_count = 0
+                        if apple_id_filename:
+                            try:
+                                # 使用配置文件中的appleid_unused_dir路径
+                                file_path = os.path.join(appleid_unused_dir, apple_id_filename)
+                                if os.path.exists(file_path):
+                                    # 直接统计文件行数
+                                    with open(file_path, 'r', encoding='utf-8') as f:
+                                        apple_id_count = sum(1 for line in f if line.strip())
+                                    print(f"从{appleid_unused_dir}统计文件'{apple_id_filename}'行数: {apple_id_count}")
+                                else:
+                                    apple_id_count = 0
+                                    print(f"文件'{file_path}'不存在")
+                            except Exception as e:
+                                print(f"统计文件行数时出错: {str(e)}")
+                                apple_id_count = 0
                         
                         process_info = {
                             'id': row[0],
@@ -326,7 +348,8 @@ def get_process_list():
                             'client': row[2],
                             'apple_id': apple_id_filename,
                             'file_name': file_name,
-                            'file_count': random.randint(1, 50),  # 随机生成数量
+                            'file_count': apple_id_count,  # 使用实际统计的数量
+                            'apple_id_count': apple_id_count,  # 同时设置两个字段保持一致
                             'status': row[4],
                             'create_time': row[5] if row[5] else time.strftime('%Y-%m-%d %H:%M:%S')
                         }
@@ -346,18 +369,46 @@ def get_process_list():
         for process in processes:
             if 'file_name' not in process and 'apple_id' in process:
                 process['file_name'] = process['apple_id'].split('/')[-1].split('\\')[-1] if process['apple_id'] else ''
+            # 确保file_count和apple_id_count字段一致
             if 'file_count' not in process:
-                process['file_count'] = process.get('apple_id_count', random.randint(1, 50))
+                # 使用apple_id_count的值，如果也不存在则设置为0
+                process['file_count'] = process.get('apple_id_count', 0)
+            # 确保两个字段保持一致
+            process['apple_id_count'] = process['file_count']
             
         # 如果数据库中没有进程，返回内存中的进程列表
         if not processes:
             processes = list(process_list.values())
             # 确保内存中的进程也有必要字段
+            from config import appleid_unused_dir
+            import os
             for process in processes:
                 if 'file_name' not in process and 'apple_id' in process:
                     process['file_name'] = process['apple_id'].split('/')[-1].split('\\')[-1] if process['apple_id'] else ''
-                if 'file_count' not in process:
-                    process['file_count'] = process.get('apple_id_count', random.randint(1, 50))
+                
+                # 从appleid_unused_dir目录统计文件行数
+                if 'file_count' not in process or True:  # 每次都重新统计
+                    if 'apple_id' in process and process['apple_id']:
+                        try:
+                            # 使用配置文件中的appleid_unused_dir路径
+                            file_path = os.path.join(appleid_unused_dir, process['apple_id'])
+                            if os.path.exists(file_path):
+                                with open(file_path, 'r', encoding='utf-8') as f:
+                                    apple_id_count = sum(1 for line in f if line.strip())
+                                process['file_count'] = apple_id_count
+                                process['apple_id_count'] = apple_id_count
+                                print(f"从{appleid_unused_dir}统计内存中进程文件行数: {apple_id_count}")
+                            else:
+                                process['file_count'] = 0
+                                process['apple_id_count'] = 0
+                                print(f"内存中进程文件'{file_path}'不存在")
+                        except Exception as e:
+                            print(f"统计内存中进程文件行数时出错: {str(e)}")
+                            process['file_count'] = 0
+                            process['apple_id_count'] = 0
+                    else:
+                        process['file_count'] = 0
+                        process['apple_id_count'] = 0
         
         return jsonify({'success': True, 'data': processes})
     except Exception as e:
@@ -368,8 +419,12 @@ def get_process_list():
         for process in processes:
             if 'file_name' not in process and 'apple_id' in process:
                 process['file_name'] = process['apple_id'].split('/')[-1].split('\\')[-1] if process['apple_id'] else ''
+            # 确保file_count和apple_id_count字段一致
             if 'file_count' not in process:
-                process['file_count'] = process.get('apple_id_count', random.randint(1, 50))
+                # 使用apple_id_count的值，如果也不存在则设置为0
+                process['file_count'] = process.get('apple_id_count', 0)
+            # 确保两个字段保持一致
+            process['apple_id_count'] = process['file_count']
         return jsonify({'success': True, 'data': processes})
 
 @icloud_manager.route('/api/icloud/process/start', methods=['POST'])
@@ -614,6 +669,10 @@ def sync_process_list_from_db():
 
 @icloud_manager.route('/api/icloud/process/detail/<process_id>')
 def get_process_detail(process_id):
+    # 导入配置模块，使用appleid_unused_dir路径
+    from config import appleid_unused_dir
+    import os
+    
     # 先尝试从数据库获取最新信息
     conn = get_db_connection()
     c = conn.cursor()
@@ -629,7 +688,20 @@ def get_process_detail(process_id):
             # 处理可能的字段缺失
             apple_id_filename = row[3] if row[3] is not None else ''
             file_name = apple_id_filename.split('/')[-1].split('\\')[-1] if apple_id_filename else ''
-            file_count = row[4] if row[4] is not None else 0
+            
+            # 根据文件名从appleid_unused_dir目录统计文件的实际行数
+            apple_id_count = 0
+            if apple_id_filename:
+                try:
+                    file_path = os.path.join(appleid_unused_dir, apple_id_filename)
+                    if os.path.exists(file_path):
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            apple_id_count = sum(1 for line in f if line.strip())
+                        print(f"进程详情页 - 从{appleid_unused_dir}统计文件'{apple_id_filename}'行数: {apple_id_count}")
+                    else:
+                        print(f"进程详情页 - 文件'{file_path}'不存在")
+                except Exception as e:
+                    print(f"进程详情页 - 统计文件行数时出错: {str(e)}")
             
             process_info = {
                 'id': row[0],
@@ -637,8 +709,8 @@ def get_process_detail(process_id):
                 'client': row[2],
                 'apple_id': apple_id_filename,
                 'file_name': file_name,
-                'file_count': file_count,
-                'apple_id_count': row[4] if row[4] is not None else 0,
+                'file_count': apple_id_count,
+                'apple_id_count': apple_id_count,
                 'status': row[5],
                 'scripts': row[6] if len(row) > 6 and row[6] is not None else '',
                 'create_time': row[7] if len(row) > 7 and row[7] else time.strftime('%Y-%m-%d %H:%M:%S')
@@ -653,6 +725,20 @@ def get_process_detail(process_id):
             # 确保内存中的进程也有scripts字段
             if 'scripts' not in process_list[process_id]:
                 process_list[process_id]['scripts'] = ''
+            
+            # 从内存中获取进程信息时，也重新统计文件行数
+            process = process_list[process_id]
+            if 'apple_id' in process and process['apple_id']:
+                try:
+                    file_path = os.path.join(appleid_unused_dir, process['apple_id'])
+                    if os.path.exists(file_path):
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            apple_id_count = sum(1 for line in f if line.strip())
+                        process['file_count'] = apple_id_count
+                        process['apple_id_count'] = apple_id_count
+                        print(f"进程详情页(内存) - 从{appleid_unused_dir}统计文件行数: {apple_id_count}")
+                except Exception as e:
+                    print(f"进程详情页(内存) - 统计文件行数时出错: {str(e)}")
     finally:
         conn.close()
     
