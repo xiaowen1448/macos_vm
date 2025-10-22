@@ -264,20 +264,43 @@ function stopProcess(processId) {
 }
 
 function deleteProcess(processId) {
-    if (!confirm('确定要删除该进程吗？该操作不可恢复！')) return;
+    // 将确认对话框改为控制台输出提示，详细记录操作信息
+    console.log('===== 进程删除操作开始 =====');
+    console.log('目标进程ID:', processId);
+    console.log('操作类型: 从后端数据库永久删除进程记录');
+    
+    // 执行删除操作
     fetch('/api/icloud/process/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ process_id: processId })
     })
-    .then(response => response.json())
+    .then(response => {
+        console.log('API响应状态:', response.status, response.statusText);
+        return response.json().catch(() => ({
+            success: false,
+            message: `无法解析API响应，HTTP状态: ${response.status}`
+        }));
+    })
     .then(data => {
-        console.log(data.message);
-        if (data.success) loadProcessList();
+        console.log('删除结果数据:', JSON.stringify(data));
+        if (data && data.success) {
+            console.log('✅ 进程删除成功');
+            console.log('成功消息:', data.message || '无详细消息');
+            console.log('正在刷新进程列表...');
+            // 强制刷新进程列表
+            loadProcessList();
+        } else {
+            console.log('❌ 进程删除失败');
+            console.log('失败原因:', data && data.message ? data.message : '未知错误');
+        }
+        console.log('===== 进程删除操作结束 =====');
     })
     .catch(error => {
-        console.error('删除进程失败:', error);
-        console.log('删除进程失败，请检查网络连接');
+        console.error('❌ 删除进程时发生网络或请求错误:', error);
+        console.log('错误类型:', error.name);
+        console.log('错误消息:', error.message);
+        console.log('===== 进程删除操作异常结束 =====');
     });
 }
 
@@ -606,12 +629,12 @@ function renderProcessList() {
             <td>${process.create_time}</td>
             <td>
                 <div class="btn-group btn-group-sm" role="group">
-                    <button class="btn btn-success mb-1" onclick="startProcess('${process.id}')" ${process.status === '执行中' ? 'disabled' : ''}>
-                        <i class="fas fa-play"></i> 启动
-                    </button>
-                    <button class="btn btn-warning mb-1" onclick="stopProcess('${process.id}')" ${process.status !== '执行中' ? 'disabled' : ''}>
-                        <i class="fas fa-stop"></i> 停止
-                    </button>
+                    <span class="ju-status-icon" style="display: inline-flex; align-items: center; justify-content: center; width: 80px; height: 32px; border: 1px solid #28a745; border-radius: 0.25rem; background-color: #d4edda; color: #155724; font-size: 0.875rem; cursor: default; pointer-events: none;">
+                        <i class="fas fa-play mr-1"></i> 启动
+                    </span>
+                    <span class="ju-status-icon" style="display: inline-flex; align-items: center; justify-content: center; width: 80px; height: 32px; border: 1px solid #ffc107; border-radius: 0.25rem; background-color: #fff3cd; color: #856404; font-size: 0.875rem; cursor: default; pointer-events: none; margin-left: 5px;">
+                        <i class="fas fa-stop mr-1"></i> 停止
+                    </span>
                     <button class="btn btn-info mb-1" onclick="showProcessDetail('${process.id}')">
                         <i class="fas fa-info-circle"></i> 详情
                     </button>

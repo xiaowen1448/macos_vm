@@ -539,6 +539,11 @@ def get_process_output(process_id):
             output += f"[{time.strftime('%H:%M:%S')}] 客户端: {process_info['client']}\n"
             output += f"[{time.strftime('%H:%M:%S')}] Apple ID: {process_info['apple_id']}\n"
             output += f"[{time.strftime('%H:%M:%S')}] 状态: {process_info['status']}\n"
+            output += f"[{time.strftime('%H:%M:%S')}] 状态: {process_info['status']}\n"
+            output += f"[{time.strftime('%H:%M:%S')}] 状态: {process_info['status']}\n"
+            output += f"[{time.strftime('%H:%M:%S')}] 状态: {process_info['status']}\n"
+            output += f"[{time.strftime('%H:%M:%S')}] 状态: {process_info['status']}\n"
+            
             
             if process_info['status'] == '执行中':
                 output += f"[{time.strftime('%H:%M:%S')}] 正在执行操作...\n"
