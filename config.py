@@ -27,6 +27,10 @@ wuma_config_dir = f'{web_base_dir}\\config_unused'
 wuma_config_delete_dir = f'{web_base_dir}\\config_delete'
 # 配置已使用五码目录
 wuma_config_install_dir = f'{web_base_dir}\\config_install'
+
+
+# icloud管理中需要默认五码配置文件
+default_wuma_config = '14.1五码.txt'
 # Apple ID未使用目录
 appleid_unused_dir = f'{web_base_dir}\\ID_unused'
 # Apple ID已删除目录

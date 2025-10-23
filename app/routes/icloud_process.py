@@ -254,17 +254,40 @@ def count_valid_apple_ids(apple_id_text_or_file):
 # 辅助函数：写入日志
 def write_log(process_id, message):
     process_log_dir = os.path.join(LOG_DIR, process_id)
-    logger.debug(f'[DEBUG] 准备写入日志 - 进程ID: {process_id}, 日志目录: {process_log_dir}')
+    # logger.debug(f'[DEBUG] 准备写入日志 - 进程ID: {process_id}, 日志目录: {process_log_dir}')
     os.makedirs(process_log_dir, exist_ok=True)
     log_file = os.path.join(process_log_dir, f'{datetime.now().strftime("%Y%m%d")}.log')
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     try:
+        # 确保message不包含多余的换行符，只在最后添加一个换行
+        message_str = str(message).rstrip('\n')
         with open(log_file, 'a', encoding='utf-8') as f:
-            log_entry = f'[{timestamp}] {message}\n'
+            log_entry = f'[{timestamp}] {message_str}\n'
             f.write(log_entry)
-        logger.debug(f'[DEBUG] 日志写入成功 - 进程ID: {process_id}, 文件: {log_file}')
+        # logger.debug(f'[DEBUG] 日志写入成功 - 进程ID: {process_id}, 文件: {log_file}')
     except Exception as e:
         logger.error(f'[ERROR] 日志写入失败: {str(e)}')
+
+# 辅助函数：通过SSH远程执行脚本
+def run_ssh_remote_command(vm_ip, username, command):
+    logger.debug(f'[DEBUG] 准备通过SSH远程执行命令 - VM IP: {vm_ip}, 用户名: {username}, 命令: {command}')
+    try:
+        # 使用subprocess执行ssh命令
+        result = subprocess.run(
+            ['ssh', f'{username}@{vm_ip}', command],
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+        if result.returncode == 0:
+            logger.debug(f'[DEBUG] SSH命令执行成功 - 输出: {result.stdout.strip()}')
+            return True, result.stdout.strip()
+        else:
+            logger.error(f'[ERROR] SSH命令执行失败 - 错误码: {result.returncode}, 错误输出: {result.stderr.strip()}')
+            return False, result.stderr.strip()
+    except Exception as e:
+        logger.error(f'[ERROR] SSH命令执行异常: {str(e)}')
+        return False, str(e)
 
 # 辅助函数：执行scpt脚本
 def run_scpt_script(vm_ip, script_name):
@@ -284,7 +307,29 @@ def run_scpt_script(vm_ip, script_name):
         logger.error(f'[ERROR] 脚本执行超时: {vm_ip} - {script_name}')
         return {'result': '脚本执行超时'}
     except requests.exceptions.ConnectionError:
-        logger.error(f'[ERROR] 连接失败: {vm_ip}:{SCPTRUNNER_PORT}')
+        error_message = f'[ERROR] 连接失败: {vm_ip}:{SCPTRUNNER_PORT}'
+        logger.error(error_message)
+        # 如果是特定的IP地址连接失败，尝试通过SSH重启Scptrunner客户端
+        if vm_ip == '192.168.119.218':
+            logger.debug(f'[DEBUG] 尝试通过SSH重启Scptrunner客户端 - VM IP: {vm_ip}')
+            ssh_command = "osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/restart_scptapp.scpt"
+            success, output = run_ssh_remote_command(vm_ip, "wx", ssh_command)
+            if success:
+                logger.info(f'[INFO] Scptrunner客户端已通过SSH成功重启')
+                # 重启后等待一段时间，然后尝试重新执行脚本
+                time.sleep(10)
+                logger.debug(f'[DEBUG] 尝试重新执行脚本 - VM IP: {vm_ip}, 脚本名称: {script_name}')
+                try:
+                    response = requests.get(url, timeout=300)
+                    response.raise_for_status()
+                    result = response.json()
+                    logger.debug(f'[DEBUG] 重新执行脚本成功: {json.dumps(result)}')
+                    return result
+                except Exception as retry_e:
+                    logger.error(f'[ERROR] 重新执行脚本失败: {str(retry_e)}')
+                    return {'result': f'连接失败，已尝试重启但仍失败: {str(retry_e)}'}
+            else:
+                logger.error(f'[ERROR] SSH重启Scptrunner客户端失败: {output}')
         return {'result': f'连接失败: {vm_ip}:{SCPTRUNNER_PORT}'}
     except Exception as e:
         logger.error(f'[ERROR] 脚本执行异常: {str(e)}')
@@ -346,7 +391,7 @@ def wait_for_vm_ready(vm_ip, timeout=300):
             
             if response.returncode != 0:
                 logger.debug(f'[DEBUG] IP {vm_ip} 未响应')
-                time.sleep(5)
+                time.sleep(10)  # 改为10秒检查一次
                 continue
             
             logger.debug(f'[DEBUG] IP {vm_ip} 已响应，继续检查端口')
@@ -358,13 +403,25 @@ def wait_for_vm_ready(vm_ip, timeout=300):
             
             if 'Connected' in response.stdout:
                 logger.debug(f'[DEBUG] 端口连接成功，虚拟机已准备就绪')
+                # 虚拟机准备就绪后，重新拉起进程
+                logger.info(f'[INFO] 开始重新拉起进程 - VM IP: {vm_ip}')
+                try:
+                    # 这里可以根据实际需要添加重新拉起进程的逻辑
+                    # 例如：执行某个启动脚本或命令
+                    start_process_script = f'ssh -o ConnectTimeout=5 {vm_username}@{vm_ip} "nohup /path/to/start_process.sh &"'
+                    logger.debug(f'[DEBUG] 执行进程拉取命令: {start_process_script}')
+                    subprocess.run(start_process_script, shell=True, capture_output=True, text=True, timeout=30)
+                    logger.info(f'[INFO] 进程拉取命令执行完成')
+                except Exception as start_error:
+                    logger.error(f'[ERROR] 重新拉起进程时发生异常: {str(start_error)}')
+                    # 进程拉取失败不影响虚拟机就绪状态
                 return True
             else:
                 logger.debug(f'[DEBUG] 端口未开放，继续等待')
         except Exception as e:
             logger.error(f'[ERROR] 检查虚拟机状态时发生异常: {str(e)}')
         
-        time.sleep(5)
+        time.sleep(10)  # 改为10秒检查一次
     
     logger.warning(f'[WARNING] 虚拟机启动超时 - IP: {vm_ip}, 等待时间: {timeout}秒')
     return False
@@ -373,21 +430,423 @@ def wait_for_vm_ready(vm_ip, timeout=300):
 def change_wuma(vm_ip, wuma_config):
     logger.debug(f'[DEBUG] 准备更换五码 - VM IP: {vm_ip}, 配置: {wuma_config}')
     try:
-        # 这里应该调用批量更换五码的API
-        # 由于没有具体实现，这里仅作为示例
-        write_log('', f'更换五码: {vm_ip}, 配置: {wuma_config}')
-        logger.debug(f'[DEBUG] 开始等待虚拟机重启')
+        # 导入必要的模块和配置
+        from config import wuma_config_dir, plist_template_dir, plist_chengpin_template_dir, oc_config_path, boot_config_path
+        import os, uuid, base64, time
+        
+        # 查找对应的虚拟机名称
+        vm_name = None
+        for process in processes:
+            if process.get('client') == vm_ip:
+                vm_name = process.get('name')
+                break
+        
+        if not vm_name:
+            # 如果找不到虚拟机名称，使用IP作为名称
+            vm_name = f'VM_{vm_ip}'
+            logger.warning(f'[WARNING] 未找到虚拟机名称，使用临时名称: {vm_name}')
+        
+        logger.info(f'[INFO] 使用虚拟机名称: {vm_name} 进行五码更换')
+        
+        # 构建配置文件路径
+        if not wuma_config.endswith('.txt'):
+            wuma_config = f'{wuma_config}.txt'
+        config_file_path = os.path.join(wuma_config_dir, wuma_config)
+        
+        # 检查配置文件是否存在
+        if not os.path.exists(config_file_path):
+            logger.error(f'[ERROR] 五码配置文件不存在: {config_file_path}')
+            return False
+        
+        # 使用文件锁确保五码分配的原子性
+        lock_file_path = config_file_path + '.lock'
+        logger.debug(f"[DEBUG] 尝试获取五码配置文件锁: {lock_file_path}")
+        
+        # 导入文件锁相关模块
+        if os.name == 'nt':
+            import msvcrt
+        else:
+            import fcntl
+        
+        with open(lock_file_path, 'w') as lock_file:
+            # 获取文件锁，最多等待30秒
+            max_wait_time = 30
+            start_time = time.time()
+            while True:
+                try:
+                    if os.name == 'nt' and msvcrt:  # Windows系统
+                        msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+                    elif 'fcntl' in locals() and fcntl:  # Unix/Linux系统
+                        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    else:
+                        # 如果没有可用的文件锁机制，使用简单的文件存在检查
+                        if os.path.exists(lock_file_path + '.busy'):
+                            raise IOError("Lock file exists")
+                        with open(lock_file_path + '.busy', 'w') as busy_file:
+                            busy_file.write(str(os.getpid()))
+                    logger.debug("[DEBUG] 成功获取五码配置文件锁")
+                    break
+                except (IOError, OSError):
+                    if time.time() - start_time > max_wait_time:
+                        logger.error("[ERROR] 获取五码配置文件锁超时")
+                        return False
+                    time.sleep(0.1)
+            
+            # 在锁保护下读取和分配五码
+            with open(config_file_path, 'r', encoding='utf-8') as f:
+                wuma_lines = f.readlines()
+            
+            # 过滤有效行
+            def is_valid_wuma_file_line(line):
+                return len(line.split(':')) >= 7
+            
+            valid_wuma_lines = [line.strip() for line in wuma_lines if line.strip() and is_valid_wuma_file_line(line.strip())]
+            
+            if not valid_wuma_lines:
+                logger.error("[ERROR] 配置文件中没有有效的五码数据")
+                return False
+            
+            # 为当前虚拟机分配一个五码
+            allocated_wuma_line = valid_wuma_lines[0]
+            remaining_wuma_lines = valid_wuma_lines[1:]
+            
+            # 立即更新配置文件，移除已分配的五码
+            with open(config_file_path, 'w', encoding='utf-8') as f:
+                for line in remaining_wuma_lines:
+                    f.write(line + '\n')
+            
+            logger.info(f"[INFO] 已分配1个五码，剩余{len(remaining_wuma_lines)}个")
+            
+            # 释放文件锁
+            try:
+                if os.name == 'nt' and msvcrt:
+                    msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+                elif 'fcntl' in locals() and fcntl:
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+                else:
+                    # 删除简单锁文件
+                    busy_lock_path = lock_file_path + '.busy'
+                    if os.path.exists(busy_lock_path):
+                        os.remove(busy_lock_path)
+            except Exception as lock_error:
+                logger.warning(f"[WARNING] 释放文件锁时出错: {lock_error}")
+        
+        # 检测虚拟机的macOS版本
+        def detect_macos_version(vm_name_str):
+            vm_name_lower = vm_name_str.lower()
+            if any(version in vm_name_lower for version in ['macos10.15', 'macos11','macos12','macos13','macos14', 'macos15']):
+                return 'macos10.15+'
+            elif any(version in vm_name_lower for version in ['macos10.12', 'macos10.13', 'macos10.14']):
+                return 'legacy'
+            else:
+                return 'legacy'
+        
+        macos_version = detect_macos_version(vm_name)
+        
+        # 根据版本选择模板文件
+        if macos_version == 'macos10.15+':
+            template_filename = 'opencore.plist'
+            logger.info(f"[INFO] 检测到macos10.15+版本，使用OpenCore模板")
+        else:
+           template_filename = 'opencore.plist'
+           logger.info(f"[INFO] 检测到macos10.15+版本，使用OpenCore模板")
+        
+        plist_template_path = os.path.join(plist_template_dir, template_filename)
+        logger.info(f"[INFO] 检查plist模板文件: {plist_template_path}")
+        
+        if not os.path.exists(plist_template_path):
+            logger.error(f"[ERROR] plist模板文件不存在: {plist_template_path}")
+            return False
+        
+        with open(plist_template_path, 'r', encoding='utf-8') as f:
+            plist_template = f.read()
+        
+        # 解析五码数据
+        wuma_parts = allocated_wuma_line.split(':')
+        if len(wuma_parts) != 7:
+            logger.error(f"[ERROR] 五码格式错误: {allocated_wuma_line}")
+            return False
+        
+        # 提取五码字段
+        rom = wuma_parts[1]
+        mlb = wuma_parts[2]
+        serial_number = wuma_parts[3]
+        board_id = wuma_parts[4]
+        model = wuma_parts[5]
+        
+        # 生成UUID
+        custom_uuid = str(uuid.uuid4()).upper()
+        sm_uuid = str(uuid.uuid4()).upper()
+        
+        # 对ROM进行PowerShell风格的base64加密
+        try:
+            if not all(c in '0123456789ABCDEFabcdef' for c in rom):
+                logger.warning(f"[WARNING] ROM值 {rom} 包含非十六进制字符，使用UTF-8编码")
+                rom_bytes = rom.encode('utf-8')
+            else:
+                rom_pairs = [rom[i:i + 2] for i in range(0, len(rom), 2)]
+                rom_bytes = bytes([int(pair, 16) for pair in rom_pairs])
+            
+            rom_base64 = base64.b64encode(rom_bytes).decode('utf-8')
+            rom_formatted = rom_base64
+        except ValueError as e:
+            logger.error(f"[ERROR] ROM转换失败: {e}, 使用UTF-8编码")
+            rom_bytes = rom.encode('utf-8')
+            rom_base64 = base64.b64encode(rom_bytes).decode('utf-8')
+            rom_formatted = rom_base64
+        
+        # 替换plist模板中的占位符
+        plist_content = plist_template
+        plist_content = plist_content.replace('$1', model)
+        plist_content = plist_content.replace('$3', serial_number)
+        plist_content = plist_content.replace('$5', rom_formatted)
+        plist_content = plist_content.replace('$6', mlb)
+        plist_content = plist_content.replace('$7', sm_uuid)
+        
+        # 对于legacy版本，需要替换$2和$4占位符
+        if macos_version == 'legacy':
+            plist_content = plist_content.replace('$2', board_id)
+            plist_content = plist_content.replace('$4', custom_uuid)
+        
+        # 生成plist文件
+        plist_filename = f"{vm_name}.plist"
+        plist_file_path = os.path.join(plist_chengpin_template_dir, plist_filename)
+        os.makedirs(os.path.dirname(plist_file_path), exist_ok=True)
+        
+        with open(plist_file_path, 'w', encoding='utf-8') as f:
+            f.write(plist_content)
+        
+        logger.info(f"[INFO] 生成plist文件: {plist_file_path}")
+        
+        # 验证文件是否成功创建
+        if not os.path.exists(plist_file_path):
+            logger.error(f"[ERROR] plist文件创建失败，文件不存在: {plist_file_path}")
+            return False
+        else:
+            logger.debug(f"[DEBUG] plist文件创建成功，大小: {os.path.getsize(plist_file_path)} 字节")
+        
+        # 根据版本设置不同的上传路径
+        if macos_version == 'macos10.15+':
+            remote_config_path = oc_config_path
+        else:
+            remote_config_path = oc_config_path
+        
+        # 执行mount_efi.sh脚本
+        from config import sh_script_remote_path, vm_username
+        script_path = f"{sh_script_remote_path}/mount_efi.sh"
+        logger.info(f"[INFO] 执行mount脚本: {script_path}")
+        
+        # 初始化函数变量和状态
+        execute_remote_script = None
+        script_executed = False
+        
+        # 只导入执行远程脚本的函数，文件传输将使用scp命令
+        try:
+            from app import execute_remote_script
+            logger.debug("[DEBUG] 成功从app导入execute_remote_script函数")
+        except ImportError:
+            logger.warning("[WARNING] 无法从app导入execute_remote_script函数")
+        
+        # 执行远程脚本
+        script_success = False
+        output = ""
+        script_executed = False
+        try:
+            if execute_remote_script:
+                script_success, output, ssh_log = execute_remote_script(vm_ip, vm_username, script_path)
+                script_executed = True
+                if script_success:
+                    logger.info(f"[INFO] mount_efi.sh执行成功")
+                else:
+                    logger.warning(f"[WARNING] mount_efi.sh执行失败: {output}")
+            else:
+                logger.warning(f"[WARNING] 无法执行远程脚本，execute_remote_script函数未定义")
+                output = "执行远程脚本函数未定义"
+                # 即使脚本未执行，我们也可以尝试直接传输文件，因为某些情况下可能不需要挂载EFI
+        except Exception as script_error:
+            logger.error(f"[ERROR] 执行mount_efi.sh时发生异常: {str(script_error)}")
+            script_success = False
+            output = str(script_error)
+        
+        logger.info(f"[INFO] mount_efi.sh脚本执行状态: {'已执行' if script_executed else '未执行'}, {'成功' if script_success else '失败'}")
+        
+        # 传输plist文件到虚拟机 - 使用scp命令
+        transfer_success = False
+        transfer_message = ""
+        
+        try:
+            # 验证本地文件是否存在
+            if not os.path.exists(plist_file_path):
+                logger.error(f"[ERROR] 本地plist文件不存在: {plist_file_path}")
+                transfer_message = f"本地文件不存在: {plist_file_path}"
+                return False
+            
+            # 使用scp命令传输文件
+            import subprocess
+            logger.info(f"[INFO] 使用scp命令传输文件: {plist_file_path} -> {vm_username}@{vm_ip}:{remote_config_path}")
+            
+            # 构建scp命令
+            scp_command = f'scp "{plist_file_path}" "{vm_username}@{vm_ip}:{remote_config_path}"'
+            logger.debug(f"[DEBUG] 执行scp命令: {scp_command}")
+            
+            # 执行scp命令
+            start_time = time.time()
+            result = subprocess.run(scp_command, shell=True, capture_output=True, text=True, timeout=60)
+            elapsed_time = time.time() - start_time
+            
+            # 记录命令输出
+            if result.stdout:
+                logger.debug(f"[DEBUG] scp标准输出: {result.stdout.strip()}")
+            if result.stderr:
+                logger.debug(f"[DEBUG] scp标准错误: {result.stderr.strip()}")
+            
+            # 检查传输是否成功
+            transfer_success = result.returncode == 0
+            if transfer_success:
+                transfer_message = f"scp传输成功，耗时: {elapsed_time:.2f}秒"
+                logger.info(f"[INFO] {transfer_message}")
+            else:
+                transfer_message = f"scp传输失败，返回码: {result.returncode}"
+                if result.stderr:
+                    transfer_message += f", 错误信息: {result.stderr.strip()}"
+                logger.error(f"[ERROR] {transfer_message}")
+                
+        except subprocess.TimeoutExpired:
+            logger.error("[ERROR] scp命令执行超时")
+            transfer_message = "scp传输超时"
+        except Exception as scp_error:
+            logger.error(f"[ERROR] 执行scp命令时发生异常: {str(scp_error)}")
+            transfer_message = str(scp_error)
+        
+        # 如果scp传输失败，尝试使用密码方式（如果有密码）
+        if not transfer_success:
+            try:
+                from config import vm_password
+                if vm_password:
+                    logger.info("[INFO] scp传输失败，尝试使用密码方式传输")
+                    
+                    # 在Windows上，可以使用pscp或WinSCP；在Linux/macOS上，可以使用sshpass
+                    # 这里使用一个通用方法，先尝试创建一个临时脚本处理密码
+                    import sys
+                    if sys.platform.startswith('win'):
+                        # Windows平台
+                        temp_script = os.path.join(os.environ.get('TEMP', '/tmp'), 'scp_with_pass.bat')
+                        with open(temp_script, 'w') as f:
+                            f.write(f"@echo off\n")
+                            f.write(f"echo {vm_password} | pscp -pw {vm_password} \"{plist_file_path}\" \"{vm_username}@{vm_ip}:{remote_config_path}\"\n")
+                        
+                        # 执行临时脚本
+                        result = subprocess.run(temp_script, shell=True, capture_output=True, text=True, timeout=60)
+                        transfer_success = result.returncode == 0
+                        if transfer_success:
+                            transfer_message = "使用密码方式scp传输成功"
+                            logger.info(f"[INFO] {transfer_message}")
+                        else:
+                            transfer_message = f"使用密码方式scp传输失败，返回码: {result.returncode}"
+                            logger.error(f"[ERROR] {transfer_message}")
+                        
+                        # 清理临时脚本
+                        if os.path.exists(temp_script):
+                            os.remove(temp_script)
+                    else:
+                        # Linux/macOS平台，尝试使用sshpass
+                        try:
+                            sshpass_command = f'sshpass -p "{vm_password}" scp "{plist_file_path}" "{vm_username}@{vm_ip}:{remote_config_path}"'
+                            result = subprocess.run(sshpass_command, shell=True, capture_output=True, text=True, timeout=60)
+                            transfer_success = result.returncode == 0
+                            if transfer_success:
+                                transfer_message = "使用sshpass和密码方式scp传输成功"
+                                logger.info(f"[INFO] {transfer_message}")
+                            else:
+                                transfer_message = f"使用sshpass传输失败，返回码: {result.returncode}"
+                                logger.error(f"[ERROR] {transfer_message}")
+                        except FileNotFoundError:
+                            logger.warning("[WARNING] sshpass未找到，无法使用密码方式传输")
+            except ImportError:
+                logger.warning("[WARNING] 无法导入vm_password配置")
+            except Exception as pass_error:
+                logger.error(f"[ERROR] 使用密码方式传输时发生异常: {str(pass_error)}")
+        
+        # 检查传输是否成功
+        if not transfer_success:
+            logger.error(f"[ERROR] 文件传输失败: {transfer_message}")
+            return False
+        else:
+            logger.info(f"[INFO] 文件传输成功: {transfer_message}")
+        
+        # 备份已使用的五码
+        backup_dir = os.path.join(wuma_config_dir, 'install')
+        os.makedirs(backup_dir, exist_ok=True)
+        config_filename = os.path.basename(config_file_path)
+        config_filename = os.path.splitext(config_filename)[0]
+        backup_config_file = os.path.join(backup_dir, f'{config_filename}_install.bak')
+        
+        with open(backup_config_file, 'a', encoding='utf-8') as f:
+            f.write(allocated_wuma_line + '\n')
+        
+        # 执行reboot.sh脚本重启虚拟机
+        reboot_success = False
+        try:
+            reboot_script_path = f"{sh_script_remote_path}/reboot.sh"
+            logger.info(f"[INFO] 执行reboot.sh脚本: {reboot_script_path}")
+            
+            # 如果execute_remote_script函数已定义，使用它执行远程脚本
+            if execute_remote_script:
+                reboot_success, _, _ = execute_remote_script(vm_ip, vm_username, reboot_script_path)
+                logger.info(f"[INFO] reboot.sh执行成功")
+                reboot_success = True  # 不管输出如何，标记为成功
+            else:
+                # 如果execute_remote_script未定义，使用subprocess直接执行ssh命令
+                logger.warning("[WARNING] execute_remote_script未定义，使用ssh命令直接执行reboot.sh")
+                
+                # 构建ssh命令
+                ssh_command = f'ssh {vm_username}@{vm_ip} "{reboot_script_path}"'
+                logger.debug(f"[DEBUG] 执行ssh命令: {ssh_command}")
+                
+                # 执行ssh命令
+                start_time = time.time()
+                subprocess.run(ssh_command, shell=True, capture_output=True, text=True, timeout=60)
+                elapsed_time = time.time() - start_time
+                
+                logger.info(f"[INFO] ssh执行reboot.sh成功，耗时: {elapsed_time:.2f}秒")
+                reboot_success = True  # 不管输出如何，标记为成功
+        except Exception as reboot_error:
+            logger.error(f"[ERROR] 执行reboot.sh时发生异常: {str(reboot_error)}")
+            reboot_success = False
+        
+        logger.info(f"[INFO] reboot.sh脚本执行状态: {'成功' if reboot_success else '失败'}")
+        
         # 等待虚拟机重启
+        logger.debug(f"[DEBUG] 开始等待虚拟机重启")
         result = wait_for_vm_ready(vm_ip)
-        logger.debug(f'[DEBUG] 虚拟机重启完成 - 状态: {"成功" if result else "失败"}')
+        logger.debug(f"[DEBUG] 虚拟机重启完成 - 状态: {'成功' if result else '失败'}")
         return result
     except Exception as e:
-        logger.error(f'[ERROR] 更换五码异常: {str(e)}')
-        write_log('', f'更换五码失败: {str(e)}')
+        logger.error(f"[ERROR] 更换五码异常: {str(e)}")
+        import traceback
+        logger.error(f"[ERROR] 异常堆栈: {traceback.format_exc()}")
         return False
+
+# 定义全局变量用于控制进程停止
+stop_flags = {}
+
+# 更新进程状态到数据库
+def update_process_status(process_id, status):
+    try:
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute('UPDATE processes SET status = ? WHERE id = ?', (status, process_id))
+        conn.commit()
+        conn.close()
+        logger.info(f'[INFO] 数据库中进程状态已更新为 {status} - 进程ID: {process_id}')
+    except Exception as e:
+        logger.error(f'[ERROR] 更新进程状态到数据库失败: {str(e)} - 进程ID: {process_id}')
 
 # 主进程执行函数
 def execute_process(process_id):
+    # 初始化停止标志
+    stop_flags[process_id] = False
+    
     # 提高日志级别为INFO，确保能看到输出
     logger.info(f'[INFO] 开始执行进程 - 进程ID: {process_id}')
     process = None
@@ -398,6 +857,9 @@ def execute_process(process_id):
     
     if not process:
         logger.error(f'[ERROR] 找不到指定进程 - 进程ID: {process_id}')
+        # 清理停止标志
+        if process_id in stop_flags:
+            del stop_flags[process_id]
         return
     
     logger.info(f'[INFO] 找到进程 - 进程名称: {process["name"]}, 客户端: {process["client"]}')
@@ -405,12 +867,42 @@ def execute_process(process_id):
     try:
         # 更新状态为执行中
         process['status'] = '执行中'
+        # 同时更新数据库中的状态
+        update_process_status(process_id, '执行中')
         logger.info(f'[INFO] 更新进程状态为执行中 - 进程ID: {process_id}')
         write_log(process_id, f'进程开始执行: {process["name"]}')
         
         # 获取虚拟机IP（这里假设client字段包含IP信息）
         vm_ip = process['client']  # 实际应用中可能需要从配置或数据库获取
         logger.info(f'[INFO] 使用虚拟机IP: {vm_ip}')
+        write_log(process_id, f'使用虚拟机IP: {vm_ip}')
+        
+        # 再次检查虚拟机连通性（双重保障）
+        logger.info(f'[INFO] 再次检查虚拟机连通性...')
+        write_log(process_id, f'再次检查虚拟机连通性...')
+        try:
+            response = subprocess.run(['ping', '-n', '1', '-w', '1', vm_ip], 
+                                    capture_output=True, text=True)
+            if response.returncode != 0:
+                logger.error(f'[ERROR] 虚拟机IP在执行过程中不可达 - {vm_ip}')
+                write_log(process_id, f'虚拟机IP在执行过程中不可达: {vm_ip}')
+                process['status'] = '失败'
+                update_process_status(process_id, '失败')
+                # 清理停止标志
+                if process_id in stop_flags:
+                    del stop_flags[process_id]
+                return
+            write_log(process_id, f'虚拟机IP连通性检查通过')
+        except Exception as e:
+            logger.error(f'[ERROR] 检查虚拟机连通性时出错: {str(e)}')
+            write_log(process_id, f'检查虚拟机连通性时出错: {str(e)}')
+            process['status'] = '失败'
+            # 更新数据库中的状态
+            update_process_status(process_id, '失败')
+            # 清理停止标志
+            if process_id in stop_flags:
+                del stop_flags[process_id]
+            return
         
         # 导入配置，使用正确的文件路径
         from config import appleid_unused_dir
@@ -418,6 +910,7 @@ def execute_process(process_id):
         
         # 传输appleid文本文件
         logger.info(f'[INFO] 准备传输Apple ID文件')
+        write_log(process_id, f'准备传输Apple ID文件...')
         apple_id_filename = process['apple_id']
         apple_id_file_path = os.path.join(appleid_unused_dir, apple_id_filename)
         
@@ -426,99 +919,344 @@ def execute_process(process_id):
             logger.error(f'[ERROR] Apple ID文件不存在: {apple_id_file_path}')
             write_log(process_id, f'Apple ID文件不存在: {apple_id_file_path}')
             process['status'] = '失败'
+            update_process_status(process_id, '失败')
+            # 清理停止标志
+            if process_id in stop_flags:
+                del stop_flags[process_id]
             return
         
         # 读取文件内容
         with open(apple_id_file_path, 'r', encoding='utf-8') as f:
             apple_id_content = f.read()
         logger.info(f'[INFO] 成功读取Apple ID文件: {apple_id_filename}, 内容长度: {len(apple_id_content)} 字符')
+        write_log(process_id, f'成功读取Apple ID文件: {apple_id_filename}, 内容长度: {len(apple_id_content)} 字符')
         
         # 传输文件（这里需要确保transfer_appleid_file函数能正确处理）
+        write_log(process_id, f'开始传输Apple ID文件到虚拟机...')
         if not transfer_appleid_file(vm_ip, apple_id_content):
             logger.error(f'[ERROR] 传输Apple ID文件失败 - 进程ID: {process_id}')
             write_log(process_id, '传输Apple ID文件失败')
             process['status'] = '失败'
+            update_process_status(process_id, '失败')
+            # 清理停止标志
+            if process_id in stop_flags:
+                del stop_flags[process_id]
             return
         logger.info(f'[INFO] Apple ID文件传输成功')
+        write_log(process_id, 'Apple ID文件传输成功')
         
         # 读取appleid文本文件行数，排除空行
         apple_ids = apple_id_content.strip().split('\n')
         # 过滤空行
         non_empty_apple_ids = [id.strip() for id in apple_ids if id.strip()]
         logger.info(f'[INFO] 发现 {len(non_empty_apple_ids)} 个有效Apple ID（原始行数: {len(apple_ids)}）')
+        write_log(process_id, f'发现 {len(non_empty_apple_ids)} 个有效Apple ID（原始行数: {len(apple_ids)}）')
+        
+        # 进程启动时，先执行初始检查和注销流程
+        logger.info(f'[INFO] 开始初始检查：执行查询脚本最多3次')
+        write_log(process_id, '开始初始检查：执行查询脚本最多3次...')
+        
+        initial_query_success = False
+        # 首先执行查询脚本三次
+        for init_query_attempt in range(1, 4):
+            # 检查停止标志
+            if stop_flags.get(process_id, False):
+                logger.info(f'[INFO] 收到停止命令，终止进程执行 - 进程ID: {process_id}')
+                write_log(process_id, '收到停止命令，终止进程执行')
+                process['status'] = '已停止'
+                update_process_status(process_id, '已停止')
+                # 清理停止标志
+                if process_id in stop_flags:
+                    del stop_flags[process_id]
+                return
+            
+            logger.info(f'[INFO] 初始检查 - 执行查询脚本 (尝试 {init_query_attempt}/3)')
+            write_log(process_id, f'初始检查 - 执行查询脚本 (尝试 {init_query_attempt}/3)...')
+            
+            init_query_result = run_scpt_script(vm_ip, 'queryiCloudAccount.scpt')
+            write_log(process_id, f'初始检查查询结果 (尝试 {init_query_attempt}/3): {json.dumps(init_query_result)}')
+            
+            if init_query_result.get('result') == 'success':
+                initial_query_success = True
+                logger.info(f'[INFO] 初始检查查询成功，需要执行注销')
+                write_log(process_id, '初始检查查询成功，需要执行注销')
+                break
+        
+        # 如果查询成功，执行注销直到返回error
+        if initial_query_success:
+            logger.info(f'[INFO] 开始执行注销流程，直到返回error')
+            write_log(process_id, '开始执行注销流程，直到返回error...')
+            
+            while True:
+                # 检查停止标志
+                if stop_flags.get(process_id, False):
+                    logger.info(f'[INFO] 收到停止命令，终止进程执行 - 进程ID: {process_id}')
+                    write_log(process_id, '收到停止命令，终止进程执行')
+                    process['status'] = '已停止'
+                    update_process_status(process_id, '已停止')
+                    # 清理停止标志
+                    if process_id in stop_flags:
+                        del stop_flags[process_id]
+                    return
+                
+                logger.info(f'[INFO] 执行注销脚本')
+                write_log(process_id, '执行注销脚本...')
+                
+                logout_result = run_scpt_script(vm_ip, 'logout_icloud.scpt')
+                write_log(process_id, f'注销结果: {json.dumps(logout_result)}')
+                
+                # 验证是否注销成功（返回error）
+                logger.info(f'[INFO] 验证注销状态')
+                write_log(process_id, '验证注销状态...')
+                
+                verify_result = run_scpt_script(vm_ip, 'queryiCloudAccount.scpt')
+                write_log(process_id, f'注销验证结果: {json.dumps(verify_result)}')
+                
+                if verify_result.get('result') == 'error':
+                    logger.info(f'[INFO] 初始注销完成，返回error，准备开始处理Apple ID')
+                    write_log(process_id, '初始注销完成，返回error，准备开始处理Apple ID')
+                    break
+                else:
+                    logger.warning(f'[WARNING] 注销验证未返回error，继续执行注销')
+                    write_log(process_id, '注销验证未返回error，继续执行注销')
+        else:
+            logger.info(f'[INFO] 初始检查三次查询均未返回success，直接开始处理Apple ID')
+            write_log(process_id, '初始检查三次查询均未返回success，直接开始处理Apple ID')
         
         for idx, apple_id in enumerate(non_empty_apple_ids, 1):
+            # 检查停止标志
+            if stop_flags.get(process_id, False):
+                logger.info(f'[INFO] 收到停止命令，终止进程执行 - 进程ID: {process_id}')
+                write_log(process_id, '收到停止命令，终止进程执行')
+                process['status'] = '已停止'
+                update_process_status(process_id, '已停止')
+                break
+                
             logger.info(f'[INFO] 开始处理Apple ID ({idx}/{len(non_empty_apple_ids)}): {apple_id[:50]}...')
-            write_log(process_id, f'开始处理Apple ID: {apple_id[:50]}...')
+            write_log(process_id, f'开始处理Apple ID ({idx}/{len(non_empty_apple_ids)}): {apple_id[:50]}...')
             
             # 执行登录脚本
             logger.info(f'[INFO] 执行登录脚本')
-            login_result = run_scpt_script(vm_ip, 'appleid_login.scpt')
-            write_log(process_id, f'登录结果: {json.dumps(login_result)}')
+            write_log(process_id, f'[{idx}/{len(non_empty_apple_ids)}] 执行登录脚本...')
+            # 再次检查停止标志
+            if stop_flags.get(process_id, False):
+                logger.info(f'[INFO] 收到停止命令，终止进程执行 - 进程ID: {process_id}')
+                write_log(process_id, '收到停止命令，终止进程执行')
+                process['status'] = '已停止'
+                update_process_status(process_id, '已停止')
+                break
             
-            # 检查登录结果
-            login_message = login_result.get('result', '')
-            logger.info(f'[INFO] 登录消息: {login_message}')
-            
-            if login_message == '':
-                # 需要重启登录
-                logger.info(f'[INFO] 登录消息为空，执行重启登录')
-                restart_result = run_scpt_script(vm_ip, 'login_restart.scpt')
-                write_log(process_id, f'重启登录结果: {json.dumps(restart_result)}')
-                # 重新执行登录
-                logger.info(f'[INFO] 重新执行登录')
+            # 登录流程
+            login_success = False
+            while not login_success:
                 login_result = run_scpt_script(vm_ip, 'appleid_login.scpt')
-                write_log(process_id, f'重新登录结果: {json.dumps(login_result)}')
+                write_log(process_id, f'登录结果: {json.dumps(login_result)}')
+                
+                # 检查停止标志
+                if stop_flags.get(process_id, False):
+                    logger.info(f'[INFO] 收到停止命令，终止进程执行 - 进程ID: {process_id}')
+                    write_log(process_id, '收到停止命令，终止进程执行')
+                    process['status'] = '已停止'
+                    update_process_status(process_id, '已停止')
+                    break
+                
                 login_message = login_result.get('result', '')
-            
-            if 'MOBILEME_CREATE_UNAVAILABLE_MAC' in login_message:
-                # 需要更换五码
-                logger.warning(f'[WARNING] 检测到需要更换五码 - Apple ID: {apple_id}')
-                write_log(process_id, '检测到需要更换五码')
-                if change_wuma(vm_ip, 'default_config'):
-                    logger.info(f'[INFO] 五码更换成功，重新登录')
-                    write_log(process_id, '五码更换成功，重新登录')
-                    # 重新执行登录
-                    login_result = run_scpt_script(vm_ip, 'appleid_login.scpt')
-                    write_log(process_id, f'五码更换后登录结果: {json.dumps(login_result)}')
+                logger.info(f'[INFO] 登录消息: {login_message}')
+                
+                if login_message == '':
+                    # 登录结果为空，执行重启登录
+                    logger.info(f'[INFO] 登录消息为空，执行重启登录')
+                    write_log(process_id, f'登录消息为空，执行重启登录')
+                    restart_result = run_scpt_script(vm_ip, 'login_restart.scpt')
+                    write_log(process_id, f'重启登录结果: {json.dumps(restart_result)}')
+                    
+                    # 检查重启是否成功
+                    if restart_result.get('result') == 'success':
+                        logger.info(f'[INFO] 重启成功，重新执行登录')
+                        write_log(process_id, f'重启成功，重新执行登录...')
+                        continue  # 重新执行登录循环
+                    else:
+                        logger.error(f'[ERROR] 重启登录失败')
+                        write_log(process_id, f'重启登录失败')
+                        break
+                elif login_message == 'Success':
+                    # 登录成功
+                    login_success = True
+                    logger.info(f'[INFO] 登录成功')
+                    write_log(process_id, f'登录成功')
+                elif 'MOBILEME_CREATE_UNAVAILABLE_MAC' in login_message:
+                    # 需要更换五码
+                    logger.warning(f'[WARNING] 检测到需要更换五码 - Apple ID: {apple_id}')
+                    write_log(process_id, f'检测到需要更换五码')
+                    write_log(process_id, f'开始更换五码...')
+                    
+                    # 从两个五码配置文件中随机选择一个
+                    import random
+                    wuma_configs = ['14.1五码.txt', '18.1五码.txt']
+                    selected_config = random.choice(wuma_configs)
+                    logger.info(f'[INFO] 随机选择五码配置文件: {selected_config}')
+                    
+                    if change_wuma(vm_ip, selected_config):
+                        logger.info(f'[INFO] 五码更换成功，重新登录')
+                        write_log(process_id, f'五码更换成功，重新登录')
+                        # 重新执行登录循环
+                        continue
+                    else:
+                        logger.error(f'[ERROR] 五码更换失败 - 进程终止')
+                        write_log(process_id, f'五码更换失败，进程终止')
+                        process['status'] = '失败'
+                        update_process_status(process_id, '失败')
+                        # 清理停止标志
+                        if process_id in stop_flags:
+                            del stop_flags[process_id]
+                        return
                 else:
-                    logger.error(f'[ERROR] 五码更换失败 - 进程终止')
-                    write_log(process_id, '五码更换失败')
-                    process['status'] = '失败'
-                    return
+                    # 其他登录结果
+                    logger.info(f'[INFO] 登录结果: {login_message}')
+                    write_log(process_id, f'登录结果: {login_message}')
+                    break
             
-            # 执行查询脚本
-            logger.info(f'[INFO] 执行查询脚本')
-            query_result = run_scpt_script(vm_ip, 'queryiCloudAccount.scpt')
-            write_log(process_id, f'查询结果: {json.dumps(query_result)}')
+            # 如果登录失败或被停止，跳过后续步骤
+            if stop_flags.get(process_id, False):
+                break
+            if not login_success:
+                continue
             
-            # 执行注销脚本
-            logger.info(f'[INFO] 执行注销脚本')
-            logout_result = run_scpt_script(vm_ip, 'logout_icloud.scpt')
-            write_log(process_id, f'注销结果: {json.dumps(logout_result)}')
+            # 登录成功后，间隔10秒
+            logger.info(f'[INFO] 登录成功，等待10秒后执行查询')
+            write_log(process_id, f'登录成功，等待10秒后执行查询...')
+            time.sleep(10)
+            
+            # 检查停止标志
+            if stop_flags.get(process_id, False):
+                logger.info(f'[INFO] 收到停止命令，终止进程执行 - 进程ID: {process_id}')
+                write_log(process_id, '收到停止命令，终止进程执行')
+                process['status'] = '已停止'
+                update_process_status(process_id, '已停止')
+                break
+            
+            # 执行查询脚本，最多3次
+            query_success = False
+            for query_attempt in range(1, 4):
+                logger.info(f'[INFO] 执行查询脚本 (尝试 {query_attempt}/3)')
+                write_log(process_id, f'[{idx}/{len(non_empty_apple_ids)}] 执行查询脚本 (尝试 {query_attempt}/3)...')
+                
+                # 检查停止标志
+                if stop_flags.get(process_id, False):
+                    logger.info(f'[INFO] 收到停止命令，终止进程执行 - 进程ID: {process_id}')
+                    write_log(process_id, '收到停止命令，终止进程执行')
+                    process['status'] = '已停止'
+                    update_process_status(process_id, '已停止')
+                    break
+                
+                query_result = run_scpt_script(vm_ip, 'queryiCloudAccount.scpt')
+                write_log(process_id, f'查询结果 (尝试 {query_attempt}/3): {json.dumps(query_result)}')
+                
+                if query_result.get('result') == 'success':
+                    query_success = True
+                    logger.info(f'[INFO] 查询成功')
+                    write_log(process_id, f'查询成功')
+                    break
+            
+            # 检查停止标志
+            if stop_flags.get(process_id, False):
+                break
+            
+            if not query_success:
+                logger.warning(f'[WARNING] 三次查询均未成功')
+                write_log(process_id, f'三次查询均未成功')
+                continue
+            
+            # 查询成功后，等待5秒执行注销
+            logger.info(f'[INFO] 查询成功，等待5秒后执行注销')
+            write_log(process_id, f'查询成功，等待5秒后执行注销...')
+            time.sleep(5)
+            
+            # 检查停止标志
+            if stop_flags.get(process_id, False):
+                logger.info(f'[INFO] 收到停止命令，终止进程执行 - 进程ID: {process_id}')
+                write_log(process_id, '收到停止命令，终止进程执行')
+                process['status'] = '已停止'
+                update_process_status(process_id, '已停止')
+                break
+            
+            # 执行注销脚本，直到成功
+            logout_success = False
+            while not logout_success:
+                logger.info(f'[INFO] 执行注销脚本')
+                write_log(process_id, f'[{idx}/{len(non_empty_apple_ids)}] 执行注销脚本...')
+                
+                # 检查停止标志
+                if stop_flags.get(process_id, False):
+                    logger.info(f'[INFO] 收到停止命令，终止进程执行 - 进程ID: {process_id}')
+                    write_log(process_id, '收到停止命令，终止进程执行')
+                    process['status'] = '已停止'
+                    update_process_status(process_id, '已停止')
+                    break
+                
+                logout_result = run_scpt_script(vm_ip, 'logout_icloud.scpt')
+                write_log(process_id, f'注销结果: {json.dumps(logout_result)}')
+                
+                if logout_result.get('result') == 'success':
+                    # 注销成功后查询是否真正注销
+                    logger.info(f'[INFO] 注销脚本执行成功，等待5秒后验证是否真正注销')
+                    write_log(process_id, f'注销脚本执行成功，等待5秒后验证是否真正注销...')
+                    time.sleep(5)
+                    
+                    # 检查停止标志
+                    if stop_flags.get(process_id, False):
+                        break
+                    
+                    verify_result = run_scpt_script(vm_ip, 'queryiCloudAccount.scpt')
+                    write_log(process_id, f'注销验证结果: {json.dumps(verify_result)}')
+                    
+                    if verify_result.get('result') == 'error':
+                        # 验证成功，已注销
+                        logout_success = True
+                        logger.info(f'[INFO] 注销成功')
+                        write_log(process_id, f'注销成功')
+                    else:
+                        # 验证失败，需要重新注销
+                        logger.warning(f'[WARNING] 注销验证失败，需要重新注销')
+                        write_log(process_id, f'注销验证失败，需要重新注销')
+                else:
+                    logger.warning(f'[WARNING] 注销脚本执行失败')
+                    write_log(process_id, f'注销脚本执行失败，准备重试')
+            
+            # 检查停止标志
+            if stop_flags.get(process_id, False):
+                break
             
             logger.info(f'[INFO] Apple ID处理完成 ({idx}/{len(non_empty_apple_ids)}): {apple_id}')
+            write_log(process_id, f'Apple ID处理完成 ({idx}/{len(non_empty_apple_ids)}): {apple_id[:50]}...')
         
-        # 所有操作完成
-        process['status'] = '已完成'
-        logger.info(f'[INFO] 进程执行完成 - 进程ID: {process_id}, 进程名称: {process["name"]}')
-        write_log(process_id, '进程执行完成')
+        # 所有操作完成或被停止
+        if process['status'] != '已停止':
+            process['status'] = '已完成'
+            update_process_status(process_id, '已完成')
+            logger.info(f'[INFO] 进程执行完成 - 进程ID: {process_id}, 进程名称: {process["name"]}')
+            write_log(process_id, '进程执行完成')
         
     except Exception as e:
         error_msg = f'进程执行异常: {str(e)}'
         logger.error(f'[ERROR] {error_msg} - 进程ID: {process_id}')
         write_log(process_id, error_msg)
         process['status'] = '失败'
+        update_process_status(process_id, '失败')
     finally:
         # 从运行任务中移除
         if process_id in running_tasks:
             logger.debug(f'[DEBUG] 从运行任务中移除进程 - 进程ID: {process_id}')
             del running_tasks[process_id]
+        # 清理停止标志
+        if process_id in stop_flags:
+            logger.debug(f'[DEBUG] 清理进程停止标志 - 进程ID: {process_id}')
+            del stop_flags[process_id]
 
 # 进程管理路由
 @icloud_process_bp.route('/api/icloud/process/list')
 def get_process_list():
-    logger.info(f'[INFO] 收到获取进程列表请求')
+   # logger.info(f'[INFO] 收到获取进程列表请求')
     
     try:
         # 从数据库中获取进程列表
@@ -549,7 +1287,7 @@ def get_process_list():
                         if os.path.exists(file_path):
                             with open(file_path, 'r', encoding='utf-8') as f:
                                 apple_id_count = sum(1 for line in f if line.strip())
-                            logger.debug(f"统计文件'{apple_id_filename}'行数: {apple_id_count}")
+                           # logger.debug(f"统计文件'{apple_id_filename}'行数: {apple_id_count}")
                 except Exception as e:
                     logger.error(f"统计文件行数时出错: {str(e)}")
                 
@@ -577,7 +1315,7 @@ def get_process_list():
             processes.clear()
             processes.extend(db_processes)
         
-        logger.info(f"返回进程列表，共{len(processes)}个进程")
+       #，共{len(processes)}个进程")
         return jsonify({
             "success": True,
             "data": processes
@@ -621,7 +1359,7 @@ def add_process():
             if os.path.exists(file_path):
                 with open(file_path, 'r', encoding='utf-8') as f:
                     apple_id_count = sum(1 for line in f if line.strip())
-                logger.debug(f"统计文件'{apple_id_filename}'行数: {apple_id_count}")
+              #  logger.debug(f"统计文件'{apple_id_filename}'行数: {apple_id_count}")
         except Exception as e:
             logger.error(f"统计文件行数时出错: {str(e)}")
         
@@ -707,9 +1445,43 @@ def start_process():
                 
                 logger.debug(f'[DEBUG] 找到进程 - 进程名称: {process["name"]}, 当前状态: {process["status"]}')
                 
+                # 获取虚拟机IP（假设client字段包含IP信息）
+                vm_ip = process['client']
+                logger.info(f'[INFO] 检查虚拟机连通性 - IP: {vm_ip}')
+                
+                # 检查虚拟机IP是否存活
+                try:
+                    # 执行ping命令检查IP是否可达
+                    response = subprocess.run(['ping', '-n', '1', '-w', '1', vm_ip], 
+                                            capture_output=True, text=True)
+                    
+                    if response.returncode != 0:
+                        logger.error(f'[ERROR] 虚拟机IP不可达 - {vm_ip}')
+                        # 更新状态为失败
+                        process['status'] = '失败'
+                        # 写入日志
+                        write_log(process_id, f'进程启动失败: 虚拟机IP {vm_ip} 不可达')
+                        return jsonify({
+                            "success": False,
+                            "message": f"启动失败: 虚拟机IP {vm_ip} 不可达"
+                        })
+                    
+                    logger.info(f'[INFO] 虚拟机IP连通性检查通过')
+                except Exception as e:
+                    logger.error(f'[ERROR] 检查虚拟机连通性时出错: {str(e)}')
+                    process['status'] = '失败'
+                    write_log(process_id, f'进程启动失败: 检查虚拟机连通性时出错 - {str(e)}')
+                    return jsonify({
+                        "success": False,
+                        "message": f"检查虚拟机连通性失败: {str(e)}"
+                    })
+                
                 # 更新状态为启动中
                 process['status'] = '启动中'
+                # 同时更新数据库中的状态
+                update_process_status(process_id, '启动中')
                 logger.debug(f'[DEBUG] 更新进程状态为启动中 - 进程ID: {process_id}')
+                write_log(process_id, f'进程开始启动')
                 
                 # 创建线程执行进程
                 logger.debug(f'[DEBUG] 创建执行线程 - 进程ID: {process_id}')
@@ -747,9 +1519,15 @@ def stop_process():
             if process['id'] == process_id:
                 logger.debug(f'[DEBUG] 找到进程 - 进程名称: {process["name"]}, 当前状态: {process["status"]}')
                 
-                # 这里可以添加停止线程的逻辑，但实际上很难安全停止线程
-                # 这里只是更新状态
+                # 设置停止标志，通知进程线程自行终止
+                stop_flags[process_id] = True
+                logger.info(f'[INFO] 设置进程停止标志 - 进程ID: {process_id}')
+                
+                # 更新状态为已停止
                 process['status'] = '已停止'
+                # 同时更新数据库中的状态
+                update_process_status(process_id, '已停止')
+                
                 logger.debug(f'[DEBUG] 更新进程状态为已停止 - 进程ID: {process_id}')
                 write_log(process_id, '进程被手动停止')
                 
@@ -760,7 +1538,7 @@ def stop_process():
                 
                 return jsonify({
                     "success": True,
-                    "message": "进程已停止"
+                    "message": "进程停止命令已发送，正在终止执行"
                 })
         
         logger.error(f'[ERROR] 找不到指定进程 - 进程ID: {process_id}')
