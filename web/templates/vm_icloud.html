@@ -1481,14 +1481,14 @@ function fetchConsoleOutput(processId) {
         .then(data => {
             const consoleElement = document.getElementById(`consoleOutput_${processId}`);
             if (consoleElement) {
-                if (data.success && data.logs) {
+                if (data.success && data.data && data.data.logs) {
                     // 清空内容
                     consoleElement.innerHTML = '';
                     
-                    // 按行分割并格式化输出
-                    const lines = data.logs.split('\n');
-                    if (lines.length > 0) {
-                        lines.forEach(line => {
+                    // 后端返回的logs已经是数组格式
+                    const logs = data.data.logs;
+                    if (logs && logs.length > 0) {
+                        logs.forEach(line => {
                             if (line.trim()) {  // 只处理非空行
                                 const logDiv = document.createElement('div');
                                 logDiv.innerHTML = formatLogLine(line);
