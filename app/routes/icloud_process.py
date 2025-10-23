@@ -618,6 +618,21 @@ def monitor_and_restart_process_after_reboot(vm_ip, process_id, transfer_icloud_
             download_success = download_file_from_remote(vm_ip, ICLOUD_TXT_PATH, TEMP_PLIST_PATH)
             if download_success:
                 logger.info(f'[INFO] 从远程下载icloud.txt到本地临时文件成功 - 进程ID: {process_id}')
+                
+                # 检查下载的icloud.txt是否为空
+                with open(TEMP_PLIST_PATH, 'r', encoding='utf-8') as f:
+                    apple_id_content = f.read()
+                
+                if not apple_id_content.strip():
+                    logger.info(f'[INFO] 远程icloud.txt为空，直接标记进程为已完成')
+                    process['status'] = '已完成'
+                    update_process_status(process_id, '已完成')
+                    return True
+                
+                # 统计远程文件中的有效Apple ID数量
+                apple_ids = apple_id_content.strip().split('\n')
+                non_empty_apple_ids = [id.strip() for id in apple_ids if id.strip()]
+                logger.info(f'[INFO] 远程icloud.txt中发现 {len(non_empty_apple_ids)} 个有效Apple ID')
             else:
                 logger.warning(f'[WARNING] 从远程下载icloud.txt失败，尝试使用本地原始Apple ID文件')
                 # 尝试使用本地原始Apple ID文件
@@ -1190,6 +1205,18 @@ def execute_process(process_id, transfer_icloud_file=False):
                 with open(TEMP_PLIST_PATH, 'r', encoding='utf-8') as f:
                     apple_id_content = f.read()
                 logger.info(f'[INFO] 成功读取临时文件内容，长度: {len(apple_id_content)} 字符')
+                
+                # 检查远程icloud.txt是否为空
+                stripped_content = apple_id_content.strip()
+                if not stripped_content:
+                    logger.info(f'[INFO] 远程icloud.txt为空，直接标记进程为已完成')
+                    write_log(process_id, '远程icloud.txt为空，进程已完成')
+                    process['status'] = '已完成'
+                    update_process_status(process_id, '已完成')
+                    # 清理停止标志
+                    if process_id in stop_flags:
+                        del stop_flags[process_id]
+                    return
             else:
                 logger.warning(f'[WARNING] 从远程下载icloud.txt失败，尝试使用原始文件')
                 write_log(process_id, '从远程下载icloud.txt失败，尝试使用原始文件')
@@ -1226,8 +1253,27 @@ def execute_process(process_id, transfer_icloud_file=False):
         logger.info(f'[INFO] 发现 {len(non_empty_apple_ids)} 个有效Apple ID（原始行数: {len(apple_ids)}）')
         write_log(process_id, f'发现 {len(non_empty_apple_ids)} 个有效Apple ID（原始行数: {len(apple_ids)}）')
         
-        # 初始化已处理计数器
+        # 如果没有有效Apple ID，直接标记为已完成
+        if not non_empty_apple_ids:
+            logger.info(f'[INFO] 没有有效Apple ID，直接标记进程为已完成')
+            write_log(process_id, '没有有效Apple ID，进程已完成')
+            process['status'] = '已完成'
+            update_process_status(process_id, '已完成')
+            # 清理停止标志
+            if process_id in stop_flags:
+                del stop_flags[process_id]
+            return
+        
+        # 初始化已处理计数器和进度
         processed_count = 0
+        total_count = len(non_empty_apple_ids)
+        logger.info(f'[INFO] 开始处理 {total_count} 个Apple ID')
+        write_log(process_id, f'开始处理 {total_count} 个Apple ID')
+        
+        # 更新进程进度信息
+        process['total_count'] = total_count
+        process['processed_count'] = processed_count
+        process['progress'] = 0
         
         # 进程启动时，先执行初始检查和注销流程
         logger.info(f'[INFO] 开始初始检查：执行查询脚本最多3次，每次间隔2秒')
@@ -1540,8 +1586,12 @@ def execute_process(process_id, transfer_icloud_file=False):
             
             # 增加已处理计数器
             processed_count += 1
-            logger.info(f'[INFO] Apple ID处理完成 ({idx}/{len(non_empty_apple_ids)}): {apple_id}, 已处理: {processed_count}/{len(non_empty_apple_ids)}')
-            write_log(process_id, f'Apple ID处理完成 ({idx}/{len(non_empty_apple_ids)}): {apple_id[:50]}...')
+            # 计算并更新进度
+            progress = int((processed_count / total_count) * 100)
+            process['processed_count'] = processed_count
+            process['progress'] = progress
+            logger.info(f'[INFO] Apple ID处理完成 ({idx}/{total_count}): {apple_id}, 已处理: {processed_count}/{total_count}, 进度: {progress}%')
+            write_log(process_id, f'Apple ID处理完成 ({idx}/{total_count}): {apple_id[:50]}..., 进度: {progress}%')
             
             # 更新剩余未执行的Apple ID到远程icloud.txt
             remaining_apple_ids = non_empty_apple_ids[idx+1:]
