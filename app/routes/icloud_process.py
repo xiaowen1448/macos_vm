@@ -9,9 +9,12 @@ import threading
 import shutil
 import logging
 import sqlite3
+import socket
 from pathlib import Path
 # 导入配置模块，使用appleid_unused_dir路径
 from config import appleid_unused_dir
+# 导入SSH工具类
+from utils.ssh_utils import SSHClient
 
 # 配置日志
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -273,19 +276,16 @@ def write_log(process_id, message):
 def run_ssh_remote_command(vm_ip, username, command):
     logger.debug(f'[DEBUG] 准备通过SSH远程执行命令 - VM IP: {vm_ip}, 用户名: {username}, 命令: {command}')
     try:
-        # 使用subprocess执行ssh命令
-        result = subprocess.run(
-            ['ssh', f'{username}@{vm_ip}', command],
-            capture_output=True,
-            text=True,
-            timeout=60
-        )
-        if result.returncode == 0:
-            logger.debug(f'[DEBUG] SSH命令执行成功 - 输出: {result.stdout.strip()}')
-            return True, result.stdout.strip()
+        # 使用SSHClient执行命令
+        with SSHClient(hostname=vm_ip, username=username) as ssh_client:
+            success, stdout, stderr, exit_code = ssh_client.execute_command(command, timeout=60)
+            
+        if success:
+            logger.debug(f'[DEBUG] SSH命令执行成功 - 输出: {stdout.strip()}')
+            return True, stdout.strip()
         else:
-           # logger.error(f'[ERROR] SSH命令执行失败 - 错误码: {result.returncode}, 错误输出: {result.stderr.strip()}')
-            return False, result.stderr.strip()
+            logger.error(f'[ERROR] SSH命令执行失败 - 错误码: {exit_code}, 错误输出: {stderr.strip()}')
+            return False, stderr.strip()
     except Exception as e:
         logger.error(f'[ERROR] SSH命令执行异常: {str(e)}')
         return False, str(e)
@@ -375,25 +375,18 @@ def run_scpt_script(vm_ip, script_name):
 def download_file_from_remote(vm_ip, remote_path, local_path):
     logger.debug(f'[DEBUG] 准备从远程下载文件 - VM IP: {vm_ip}, 远程路径: {remote_path}, 本地路径: {local_path}')
     try:
-        # 使用scp从远程下载文件
-        scp_command = f'scp wx@{vm_ip}:{remote_path} {local_path}'
-        logger.debug(f'[DEBUG] 执行SCP下载命令: {scp_command}')
-        start_time = time.time()
-        result = subprocess.run(scp_command, shell=True, capture_output=True, text=True)
-        elapsed_time = time.time() - start_time
-        logger.debug(f'[DEBUG] SCP下载命令执行完成，返回码: {result.returncode}, 耗时: {elapsed_time:.2f}秒')
+        # 使用SSHClient从远程下载文件
+        with SSHClient(hostname=vm_ip, username='wx') as ssh_client:
+            start_time = time.time()
+            success = ssh_client.download_file(remote_path, local_path)
+            elapsed_time = time.time() - start_time
+            logger.debug(f'[DEBUG] 下载文件完成，状态: {success}, 耗时: {elapsed_time:.2f}秒')
         
-        # 记录SCP输出
-        if result.stdout:
-            logger.debug(f'[DEBUG] SCP标准输出: {result.stdout.strip()}')
-        if result.stderr:
-            logger.debug(f'[DEBUG] SCP标准错误: {result.stderr.strip()}')
-        
-        if result.returncode == 0:
+        if success:
             logger.info(f'[INFO] 成功从远程下载文件到: {local_path}')
             return True
         else:
-            logger.error(f'[ERROR] 从远程下载文件失败，返回码: {result.returncode}')
+            logger.error(f'[ERROR] 从远程下载文件失败')
             return False
     except Exception as e:
         logger.error(f'[ERROR] 从远程下载文件时发生异常: {str(e)}')
@@ -402,6 +395,7 @@ def download_file_from_remote(vm_ip, remote_path, local_path):
 # 辅助函数：传输appleid文本文件
 def transfer_appleid_file(vm_ip, apple_id_text):
     logger.debug(f'[DEBUG] 准备传输Apple ID文件 - VM IP: {vm_ip}, 目标路径: {ICLOUD_TXT_PATH}')
+    temp_file = None
     try:
         # 创建临时文件
         temp_file = os.path.join(os.environ.get('TEMP', '/tmp'), 'icloud.txt')
@@ -410,38 +404,25 @@ def transfer_appleid_file(vm_ip, apple_id_text):
             f.write(apple_id_text)
         logger.debug(f'[DEBUG] 临时文件创建成功，内容长度: {len(apple_id_text)} 字符')
         
-        # 使用scp传输文件
-        scp_command = f'scp {temp_file} wx@{vm_ip}:{ICLOUD_TXT_PATH}'
-        logger.debug(f'[DEBUG] 执行SCP命令: {scp_command}')
-        start_time = time.time()
-        result = subprocess.run(scp_command, shell=True, capture_output=True, text=True)
-        elapsed_time = time.time() - start_time
-        logger.debug(f'[DEBUG] SCP命令执行完成，返回码: {result.returncode}, 耗时: {elapsed_time:.2f}秒')
-        
-        # 记录SCP输出
-        if result.stdout:
-            logger.debug(f'[DEBUG] SCP标准输出: {result.stdout.strip()}')
-        if result.stderr:
-            logger.debug(f'[DEBUG] SCP标准错误: {result.stderr.strip()}')
+        # 使用SSHClient传输文件
+        with SSHClient(hostname=vm_ip, username='wx') as ssh_client:
+            start_time = time.time()
+            success = ssh_client.upload_file(temp_file, ICLOUD_TXT_PATH)
+            elapsed_time = time.time() - start_time
+            logger.debug(f'[DEBUG] 文件上传完成，状态: {success}, 耗时: {elapsed_time:.2f}秒')
         
         # 删除临时文件
         if os.path.exists(temp_file):
             os.remove(temp_file)
+            logger.debug(f'[DEBUG] 临时文件已删除: {temp_file}')
         
-        return result.returncode == 0
+        return success
     except Exception as e:
         logger.error(f'[ERROR] 传输Apple ID文件时发生异常: {str(e)}')
         # 清理临时文件
-        if os.path.exists(temp_file):
+        if temp_file and os.path.exists(temp_file):
             os.remove(temp_file)
-        return False
-        logger.debug(f'[DEBUG] 临时文件已删除: {temp_file}')
-        
-        success = result.returncode == 0
-        logger.debug(f'[DEBUG] 文件传输结果: {"成功" if success else "失败"}')
-        return success
-    except Exception as e:
-        logger.error(f'[ERROR] 文件传输异常: {str(e)}')
+            logger.debug(f'[DEBUG] 异常情况下临时文件已删除: {temp_file}')
         return False
 
 # 辅助函数：等待虚拟机启动完成
@@ -454,9 +435,7 @@ def wait_for_vm_ready(vm_ip, timeout=300):
     # 定义虚拟机用户名
     vm_username = 'wx'  # 虚拟机用户名
     
-    # 定义客户端重启脚本的实际路径
-    restart_client_script = '/Users/wx/Documents/macos_script/restart_client.sh'  # 根据实际环境修改
-    
+
     while time.time() - start_time < timeout:
         attempt += 1
         elapsed = time.time() - start_time
@@ -466,71 +445,64 @@ def wait_for_vm_ready(vm_ip, timeout=300):
         
         try:
             # 检查IP是否存活
-            logger.debug(f'[DEBUG] 正在ping虚拟机 - IP: {vm_ip}')
-            response = subprocess.run(['ping', '-n', '1', '-w', '2', vm_ip], 
-                                     capture_output=True, text=True)
+            logger.debug(f'[DEBUG] 正在检查虚拟机连通性 - IP: {vm_ip}')
+            # 使用socket检查IP是否可达
+            ping_success = False
+            try:
+                # 尝试连接到SSH端口
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.settimeout(2)
+                    if s.connect_ex((vm_ip, 22)) == 0:
+                        ping_success = True
+                # 如果SSH端口不可达，尝试UDP
+                if not ping_success:
+                    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                        s.settimeout(2)
+                        try:
+                            s.sendto(b'ping', (vm_ip, 80))
+                            ping_success = True
+                        except:
+                            ping_success = False
+            except Exception as e:
+                logger.warning(f'[WARNING] 连接检查异常: {str(e)}')
+                ping_success = False
             
-            if response.returncode != 0:
-                logger.warning(f'[WARNING] 虚拟机IP ping失败 - IP: {vm_ip}')
+            if not ping_success:
+                logger.warning(f'[WARNING] 虚拟机IP连接失败 - IP: {vm_ip}')
                 time.sleep(10)  # 10秒间隔重试
                 continue
             
-            logger.info(f'[INFO] 虚拟机IP ping成功 - IP: {vm_ip}')
+            logger.info(f'[INFO] 虚拟机IP连接成功 - IP: {vm_ip}')
             
-            # 检查8787端口（进程端口）是否开放 - 使用更可靠的方法
+            # 检查8787端口（进程端口）是否开放 - 使用socket
             logger.debug(f'[DEBUG] 检查8787端口 - IP: {vm_ip}')
-            
-            # 方法1: 使用telnet检查
-            port_check_cmd = f'telnet {vm_ip} 8787'
             port_open = False
             
             try:
-                port_response = subprocess.run(port_check_cmd, shell=True, capture_output=True, text=True, timeout=2)
-                # 检查多种可能的连接成功标志
-                if 'Connected' in port_response.stdout or '连接' in port_response.stdout or response.returncode == 0:
-                    port_open = True
-                else:
-                    logger.debug(f'[DEBUG] telnet输出: {port_response.stdout}')
-                    logger.debug(f'[DEBUG] telnet错误: {port_response.stderr}')
-            except Exception as port_error:
-                logger.warning(f'[WARNING] telnet检查失败: {str(port_error)}')
-                
-                # 尝试方法2: 使用curl作为备选方案检查8787端口
-                try:
-                    curl_cmd = f'curl -s -o /dev/null -w "%{{http_code}}" {vm_ip}:8787'
-                    curl_response = subprocess.run(curl_cmd, shell=True, capture_output=True, text=True, timeout=2)
-                    if curl_response.returncode == 0:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.settimeout(2)
+                    if s.connect_ex((vm_ip, 8787)) == 0:
                         port_open = True
-                        logger.info(f'[INFO] 使用curl检测到8787端口开放')
-                except:
-                    logger.warning(f'[WARNING] curl检查也失败')
+                        logger.info(f'[INFO] 8787端口开放')
+            except Exception as port_error:
+                logger.warning(f'[WARNING] 端口检查失败: {str(port_error)}')
             
             if port_open:
                 logger.info(f'[INFO] 8787端口检查成功 - IP: {vm_ip}')
                 # 端口已开放，检查SSH连接
                 logger.debug(f'[DEBUG] 检查SSH连接 - IP: {vm_ip}')
-                ssh_check_cmd = f'ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no {vm_username}@{vm_ip} "echo connected"'
                 
                 try:
-                    ssh_response = subprocess.run(ssh_check_cmd, shell=True, capture_output=True, text=True, timeout=8)
-                    if ssh_response.returncode == 0:
-                        logger.info(f'[INFO] 虚拟机已完全就绪 - IP: {vm_ip}, 所有检查均通过')
-                        return True
-                    else:
-                        logger.warning(f'[WARNING] SSH命令返回非零状态: {ssh_response.returncode}')
-                        logger.debug(f'[DEBUG] SSH输出: {ssh_response.stdout}')
-                        logger.debug(f'[DEBUG] SSH错误: {ssh_response.stderr}')
+                    # 使用SSHClient检查SSH连接
+                    with SSHClient(hostname=vm_ip, username=vm_username, timeout=5) as ssh_client:
+                        success, output, error, exit_code = ssh_client.execute_command("echo connected", timeout=8)
+                        if success:
+                            logger.info(f'[INFO] 虚拟机已完全就绪 - IP: {vm_ip}, 所有检查均通过')
+                            return True
+                        else:
+                            logger.warning(f'[WARNING] SSH命令执行失败 - 退出码: {exit_code}, 输出: {error}')
                 except Exception as ssh_error:
-                    # SSH连接失败，尝试重启客户端
-                    logger.warning(f'[WARNING] SSH连接失败，尝试重启客户端 - IP: {vm_ip}, 错误: {str(ssh_error)}')
-                    try:
-                        # 使用正确的路径重启客户端
-                        restart_cmd = f'ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no {vm_username}@{vm_ip} "nohup {restart_client_script} &"'
-                        logger.info(f'[INFO] 执行重启客户端脚本: {restart_cmd}')
-                        subprocess.run(restart_cmd, shell=True, capture_output=True, text=True, timeout=15)
-                        logger.info(f'[INFO] 客户端重启命令已发送')
-                    except Exception as restart_error:
-                        logger.error(f'[ERROR] 执行重启脚本失败: {str(restart_error)}')
+                    logger.error(f'[ERROR] SSH连接失败: {str(ssh_error)}')
             else:
                 logger.warning(f'[WARNING] 8787端口未开放 - IP: {vm_ip}')
                 # 8787端口未开放，但IP已可达，可能服务尚未启动，尝试等待更长时间
@@ -922,43 +894,31 @@ def change_wuma(vm_ip, wuma_config):
                 transfer_message = f"本地文件不存在: {plist_file_path}"
                 return False
             
-            # 使用scp命令传输文件
-            import subprocess
-            logger.info(f"[INFO] 使用scp命令传输文件: {plist_file_path} -> {vm_username}@{vm_ip}:{remote_config_path}")
+            # 使用SSHClient传输文件
+            logger.info(f"[INFO] 使用SSHClient传输文件: {plist_file_path} -> {vm_username}@{vm_ip}:{remote_config_path}")
             
-            # 构建scp命令
-            scp_command = f'scp "{plist_file_path}" "{vm_username}@{vm_ip}:{remote_config_path}"'
-            logger.debug(f"[DEBUG] 执行scp命令: {scp_command}")
-            
-            # 执行scp命令
-            start_time = time.time()
-            result = subprocess.run(scp_command, shell=True, capture_output=True, text=True, timeout=60)
-            elapsed_time = time.time() - start_time
-            
-            # 记录命令输出
-            if result.stdout:
-                logger.debug(f"[DEBUG] scp标准输出: {result.stdout.strip()}")
-            if result.stderr:
-                logger.debug(f"[DEBUG] scp标准错误: {result.stderr.strip()}")
-            
-            # 检查传输是否成功
-            transfer_success = result.returncode == 0
-            if transfer_success:
-                transfer_message = f"scp传输成功，耗时: {elapsed_time:.2f}秒"
-                logger.info(f"[INFO] {transfer_message}")
-            else:
-                transfer_message = f"scp传输失败，返回码: {result.returncode}"
-                if result.stderr:
-                    transfer_message += f", 错误信息: {result.stderr.strip()}"
-                logger.error(f"[ERROR] {transfer_message}")
+            # 使用SSHClient传输文件
+            try:
+                with SSHClient(hostname=vm_ip, username=vm_username) as ssh_client:
+                    start_time = time.time()
+                    transfer_success = ssh_client.upload_file(plist_file_path, remote_config_path)
+                    elapsed_time = time.time() - start_time
                 
-        except subprocess.TimeoutExpired:
-            logger.error("[ERROR] scp命令执行超时")
-            transfer_message = "scp传输超时"
-        except Exception as scp_error:
-            logger.error(f"[ERROR] 执行scp命令时发生异常: {str(scp_error)}")
-            transfer_message = str(scp_error)
-        
+                if transfer_success:
+                    transfer_message = f"文件传输成功，耗时: {elapsed_time:.2f}秒"
+                    logger.info(f"[INFO] {transfer_message}")
+                else:
+                    transfer_message = "文件传输失败"
+                    logger.error(f"[ERROR] {transfer_message}")
+                
+            except Exception as scp_error:
+                logger.error(f"[ERROR] 执行文件传输时发生异常: {str(scp_error)}")
+                transfer_message = str(scp_error)
+                transfer_success = False
+        except Exception as e:
+            logger.error(f"[ERROR] 执行文件传输时发生异常: {str(e)}")
+            transfer_message = str(e)
+            transfer_success = False
         # 如果scp传输失败，尝试使用密码方式（如果有密码）
         if not transfer_success:
             try:
@@ -966,43 +926,19 @@ def change_wuma(vm_ip, wuma_config):
                 if vm_password:
                     logger.info("[INFO] scp传输失败，尝试使用密码方式传输")
                     
-                    # 在Windows上，可以使用pscp或WinSCP；在Linux/macOS上，可以使用sshpass
-                    # 这里使用一个通用方法，先尝试创建一个临时脚本处理密码
-                    import sys
-                    if sys.platform.startswith('win'):
-                        # Windows平台
-                        temp_script = os.path.join(os.environ.get('TEMP', '/tmp'), 'scp_with_pass.bat')
-                        with open(temp_script, 'w') as f:
-                            f.write(f"@echo off\n")
-                            f.write(f"echo {vm_password} | pscp -pw {vm_password} \"{plist_file_path}\" \"{vm_username}@{vm_ip}:{remote_config_path}\"\n")
-                        
-                        # 执行临时脚本
-                        result = subprocess.run(temp_script, shell=True, capture_output=True, text=True, timeout=60)
-                        transfer_success = result.returncode == 0
+                    # 使用SSHClient和密码方式传输文件（适用于所有平台）
+                    try:
+                        with SSHClient(hostname=vm_ip, username=vm_username, password=vm_password) as ssh_client:
+                            transfer_success = ssh_client.upload_file(plist_file_path, remote_config_path)
+                            
                         if transfer_success:
-                            transfer_message = "使用密码方式scp传输成功"
+                            transfer_message = "使用密码方式SSH传输成功"
                             logger.info(f"[INFO] {transfer_message}")
                         else:
-                            transfer_message = f"使用密码方式scp传输失败，返回码: {result.returncode}"
+                            transfer_message = "使用密码方式SSH传输失败"
                             logger.error(f"[ERROR] {transfer_message}")
-                        
-                        # 清理临时脚本
-                        if os.path.exists(temp_script):
-                            os.remove(temp_script)
-                    else:
-                        # Linux/macOS平台，尝试使用sshpass
-                        try:
-                            sshpass_command = f'sshpass -p "{vm_password}" scp "{plist_file_path}" "{vm_username}@{vm_ip}:{remote_config_path}"'
-                            result = subprocess.run(sshpass_command, shell=True, capture_output=True, text=True, timeout=60)
-                            transfer_success = result.returncode == 0
-                            if transfer_success:
-                                transfer_message = "使用sshpass和密码方式scp传输成功"
-                                logger.info(f"[INFO] {transfer_message}")
-                            else:
-                                transfer_message = f"使用sshpass传输失败，返回码: {result.returncode}"
-                                logger.error(f"[ERROR] {transfer_message}")
-                        except FileNotFoundError:
-                            logger.warning("[WARNING] sshpass未找到，无法使用密码方式传输")
+                    except Exception as e:
+                        logger.error(f"[ERROR] 使用密码方式传输时发生异常: {str(e)}")
             except ImportError:
                 logger.warning("[WARNING] 无法导入vm_password配置")
             except Exception as pass_error:
@@ -1123,9 +1059,27 @@ def execute_process(process_id, transfer_icloud_file=False):
         logger.info(f'[INFO] 再次检查虚拟机连通性...')
         write_log(process_id, f'再次检查虚拟机连通性...')
         try:
-            response = subprocess.run(['ping', '-n', '1', '-w', '1', vm_ip], 
-                                    capture_output=True, text=True)
-            if response.returncode != 0:
+            # 使用socket检查连通性
+            ping_success = False
+            try:
+                # 尝试连接到SSH端口
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.settimeout(1)
+                    if s.connect_ex((vm_ip, 22)) == 0:
+                        ping_success = True
+                # 如果SSH端口不可达，尝试UDP
+                if not ping_success:
+                    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                        s.settimeout(1)
+                        try:
+                            s.sendto(b'ping', (vm_ip, 80))
+                            ping_success = True
+                        except:
+                            ping_success = False
+            except:
+                ping_success = False
+                
+            if not ping_success:
                 logger.error(f'[ERROR] 虚拟机IP在执行过程中不可达 - {vm_ip}')
                 write_log(process_id, f'虚拟机IP在执行过程中不可达: {vm_ip}')
                 process['status'] = '失败'
@@ -1856,11 +1810,27 @@ def start_process():
                 
                 # 检查虚拟机IP是否存活
                 try:
-                    # 执行ping命令检查IP是否可达
-                    response = subprocess.run(['ping', '-n', '1', '-w', '1', vm_ip], 
-                                            capture_output=True, text=True)
+                    # 使用socket检查IP是否可达
+                    ping_success = False
+                    try:
+                        # 尝试连接到SSH端口
+                        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                            s.settimeout(1)
+                            if s.connect_ex((vm_ip, 22)) == 0:
+                                ping_success = True
+                        # 如果SSH端口不可达，尝试UDP
+                        if not ping_success:
+                            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                                s.settimeout(1)
+                                try:
+                                    s.sendto(b'ping', (vm_ip, 80))
+                                    ping_success = True
+                                except:
+                                    ping_success = False
+                    except:
+                        ping_success = False
                     
-                    if response.returncode != 0:
+                    if not ping_success:
                         logger.error(f'[ERROR] 虚拟机IP不可达 - {vm_ip}')
                         # 更新状态为失败
                         process['status'] = '失败'
