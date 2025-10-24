@@ -888,8 +888,8 @@
             scripts.slice(startIndex, endIndex).forEach(script => {
                 const row = document.createElement('tr');
                 const scriptType = script.type === 'applescript' ? 'AppleScript' : 'Shell';
-                const typeIcon = script.type === 'applescript' ? 'fas fa-apple' : 'fas fa-terminal';
-                const typeBadge = script.type === 'applescript' ? 'badge bg-info' : 'badge bg-success';
+const typeIcon = script.type === 'applescript' ? 'fas fa-code' : 'fas fa-terminal';
+const typeBadge = script.type === 'applescript' ? 'badge bg-info' : 'badge bg-success';
                 
                 row.innerHTML = `
                     <td>
@@ -1056,8 +1056,8 @@
             scripts.forEach(script => {
                 const row = document.createElement('tr');
                 const scriptType = script.type === 'applescript' ? 'AppleScript' : 'Shell';
-                const typeIcon = script.type === 'applescript' ? 'fas fa-apple' : 'fas fa-terminal';
-                const typeBadge = script.type === 'applescript' ? 'badge bg-info' : 'badge bg-success';
+const typeIcon = script.type === 'applescript' ? 'fas fa-code' : 'fas fa-terminal';
+const typeBadge = script.type === 'applescript' ? 'badge bg-info' : 'badge bg-success';
                 
                 row.innerHTML = `
                     <td><strong>${script.name}</strong></td>
