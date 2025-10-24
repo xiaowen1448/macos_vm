@@ -38,7 +38,7 @@ class SSHClient:
     
     def connect(self) -> Tuple[bool, str]:
         """
-        建立SSH连接
+        建立SSH连接 - 优先尝试免密认证，失败后尝试密码认证
         
         Returns:
             Tuple[bool, str]: (是否成功, 消息)
@@ -47,35 +47,61 @@ class SSHClient:
             self.ssh_client = paramiko.SSHClient()
             self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             
-            # 优先尝试密钥认证，然后是密码认证
-            connect_kwargs = {
-                'hostname': self.hostname,
-                'username': self.username,
-                'port': self.port,
-                'timeout': self.timeout,
-                'look_for_keys': True,
-                'allow_agent': True
-            }
+            # 1. 首先尝试纯免密认证
+           # logger.debug(f"[SSH] 尝试免密认证连接到 {self.username}@{self.hostname}:{self.port}")
+            try:
+                connect_kwargs = {
+                    'hostname': self.hostname,
+                    'username': self.username,
+                    'port': self.port,
+                    'timeout': self.timeout,
+                    'look_for_keys': True,
+                    'allow_agent': True,
+                    'password': None  # 明确不使用密码
+                }
+                self.ssh_client.connect(**connect_kwargs)
+                self.connected = True
+             #   logger.debug(f"[SSH] 免密认证成功: {self.username}@{self.hostname}:{self.port}")
+                return True, "SSH免密连接成功"
+            except paramiko.AuthenticationException:
+               # logger.debug(f"[SSH] 免密认证失败，尝试密码认证: {self.hostname}")
+                # 免密失败，关闭当前client重新创建
+                if self.ssh_client:
+                    self.ssh_client.close()
+                self.ssh_client = paramiko.SSHClient()
+                self.ssh_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             
+            # 2. 免密失败后，尝试密码认证
             if self.password:
-                connect_kwargs['password'] = self.password
-            
-            self.ssh_client.connect(**connect_kwargs)
-            self.connected = True
-            logger.debug(f"SSH连接成功: {self.username}@{self.hostname}:{self.port}")
-            return True, "SSH连接成功"
+               # logger.debug(f"[SSH] 尝试密码认证连接到 {self.username}@{self.hostname}:{self.port}")
+                connect_kwargs = {
+                    'hostname': self.hostname,
+                    'username': self.username,
+                    'port': self.port,
+                    'timeout': self.timeout,
+                    'password': self.password,
+                    'look_for_keys': False,  # 密码认证时不查找密钥
+                    'allow_agent': False
+                }
+                self.ssh_client.connect(**connect_kwargs)
+                self.connected = True
+             #   logger.debug(f"[SSH] 密码认证成功: {self.username}@{self.hostname}:{self.port}")
+                return True, "SSH密码连接成功"
+            else:
+              #  logger.error(f"[SSH] 免密认证失败且未提供密码: {self.hostname}")
+                return False, "免密认证失败且未提供密码"
             
         except paramiko.AuthenticationException:
-            error_msg = "SSH认证失败，请检查用户名、密码或密钥"
-            logger.error(f"SSH认证失败: {self.hostname}")
+            error_msg = "SSH密码认证失败，请检查用户名和密码"
+          #  logger.error(f"[SSH] 密码认证失败: {self.hostname}")
             return False, error_msg
         except paramiko.SSHException as e:
             error_msg = f"SSH连接异常: {str(e)}"
-            logger.error(f"SSH连接异常: {self.hostname} - {str(e)}")
+           # logger.error(f"[SSH] 连接异常: {self.hostname} - {str(e)}")
             return False, error_msg
         except Exception as e:
             error_msg = f"SSH连接失败: {str(e)}"
-            logger.error(f"SSH连接失败: {self.hostname} - {str(e)}")
+           # logger.error(f"[SSH] 连接失败: {self.hostname} - {str(e)}")
             return False, error_msg
     
     def execute_command(self, command: str, timeout: int = 30) -> Tuple[bool, str, str, int]:
@@ -103,13 +129,13 @@ class SSHClient:
             stderr_data = stderr.read().decode('utf-8', errors='ignore').strip()
             
             success = exit_status == 0
-            logger.debug(f"SSH命令执行完成: {command} (退出码: {exit_status})")
+           # logger.debug(f"SSH命令执行完成: {command} (退出码: {exit_status})")
             
             return success, stdout_data, stderr_data, exit_status
             
         except Exception as e:
             error_msg = f"执行SSH命令失败: {str(e)}"
-            logger.error(f"SSH命令执行异常: {command} - {str(e)}")
+           # logger.error(f"SSH命令执行异常: {command} - {str(e)}")
             return False, "", error_msg, -1
     
     def upload_file(self, local_path: str, remote_path: str) -> Tuple[bool, str]:
@@ -164,12 +190,12 @@ class SSHClient:
             with SCPClient(self.ssh_client.get_transport()) as scp:
                 scp.get(remote_path, local_path)
             
-            logger.debug(f"文件下载成功: {remote_path} -> {local_path}")
+         #   logger.debug(f"文件下载成功: {remote_path} -> {local_path}")
             return True, "文件下载成功"
             
         except Exception as e:
             error_msg = f"文件下载失败: {str(e)}"
-            logger.error(f"SCP下载异常: {remote_path} -> {local_path} - {str(e)}")
+          #  logger.error(f"SCP下载异常: {remote_path} -> {local_path} - {str(e)}")
             return False, error_msg
     
     def check_file_exists(self, remote_path: str) -> bool:
@@ -228,7 +254,7 @@ class SSHClient:
         if self.ssh_client:
             self.ssh_client.close()
             self.connected = False
-            logger.debug(f"SSH连接已关闭: {self.hostname}")
+          #  logger.debug(f"SSH连接已关闭: {self.hostname}")
     
     def __enter__(self):
         """上下文管理器入口"""
@@ -333,7 +359,7 @@ def check_ssh_connectivity(hostname: str, username: str, password: str = None, t
             success, stdout, stderr, exit_code = ssh.execute_command('echo "ssh_test"', timeout=5)
             return success and stdout.strip() == 'ssh_test'
     except Exception as e:
-        logger.debug(f"SSH连通性检查失败: {hostname} - {str(e)}")
+       # logger.debug(f"SSH连通性检查失败: {hostname} - {str(e)}")
         return False
 
 
