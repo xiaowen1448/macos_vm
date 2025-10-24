@@ -107,14 +107,14 @@
         font-weight: 600;
     }
     
-    .ju-status-icon {
-        width: 20px;
-        height: 20px;
+    .ju-status-icon, .wuma-view-status-icon {
+        width: 18px;
+        height: 18px;
         border-radius: 50%;
         display: inline-flex;
         align-items: center;
-        justify-content: left;
-        font-size: 8px;
+        justify-content: center;
+        font-size: 14px;
         border: 1px solid transparent;
         cursor: default;
         transition: all 0.2s ease;
@@ -123,20 +123,20 @@
         line-height: 1;
     }
     
-    .ju-status-icon.success {
+    .ju-status-icon.success, .wuma-view-status-icon.success {
         background-color: #28a745;
         color: white;
         border-color: #1e7e34;
     }
     
-    .ju-status-icon.danger {
+    .ju-status-icon.danger, .wuma-view-status-icon.danger {
         background-color: #dc3545;
         color: white;
         border-color: #c82333;
     }
     
-    .ju-status-icon:hover {
-        transform: scale(1.2);
+    .ju-status-icon:hover, .wuma-view-status-icon:hover {
+        transform: scale(1.1);
     }
     
     /* 确保多选按钮可见和可点击 */
@@ -160,38 +160,7 @@
         text-align: center;
     }
     
-    .wuma-view-status-icon {
-        width: 20px;
-        height: 20px;
-        border-radius: 50%;
-        display: inline-flex;
-        align-items: center;
-        justify-content: left;
-        font-size: 8px;
-        border: 1px solid transparent;
-        cursor: default;
-        transition: all 0.2s ease;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-        padding: 0;
-        line-height: 1;
-    }
-    
-    .wuma-view-status-icon.success {
-        background-color: #28a745;
-        color: white;
-        border-color: #1e7e34;
-    }
-    
-    .wuma-view-status-icon.danger {
-        background-color: #dc3545;
-        color: white;
-        border-color: #c82333;
-    }
-    
-    .wuma-view-status-icon:hover {
-        transform: scale(1.2);
-        box-shadow: 0 2px 4px rgba(0,0,0,0.15);
-    }
+    /* 五码图标样式已在前面的.ju-status-icon, .wuma-view-status-icon中统一定义 */
     
     /* 发送脚本按钮样式 */
     .btn-outline-success:disabled {
