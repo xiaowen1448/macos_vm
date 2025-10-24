@@ -728,14 +728,6 @@ def monitor_and_restart_process_after_reboot(vm_ip, process_id, transfer_icloud_
     import os
   #  logger.info(f'[INFO] 开始监控虚拟机重启后状态 - IP: {vm_ip}, 进程ID: {process_id}')
     
-    # 等待虚拟机完全就绪
-    vm_ready = wait_for_vm_ready(vm_ip)
-    if not vm_ready:
-     #   logger.error(f'[ERROR] 虚拟机启动超时，无法重启进程 - IP: {vm_ip}, 进程ID: {process_id}')
-        return False
-    
-   # logger.info(f'[INFO] 虚拟机已就绪，准备重启进程 - 进程ID: {process_id}')
-    
     # 查找进程信息
     process = None
     for p in processes:
@@ -746,6 +738,20 @@ def monitor_and_restart_process_after_reboot(vm_ip, process_id, transfer_icloud_
     if not process:
       #  logger.error(f'[ERROR] 找不到指定进程 - 进程ID: {process_id}')
         return False
+    
+    # 等待虚拟机完全就绪（这会尝试执行restart_scptapp.scpt脚本）
+    vm_ready = wait_for_vm_ready(vm_ip)
+    if not vm_ready:
+     #   logger.error(f'[ERROR] 虚拟机启动超时，无法重启进程 - IP: {vm_ip}, 进程ID: {process_id}')
+        return False
+    
+   # logger.info(f'[INFO] 虚拟机已就绪，准备重启进程 - 进程ID: {process_id}')
+    
+    # 虚拟机已就绪且restart_scptapp.scpt脚本执行成功，立即更新状态为执行中
+    process['status'] = '执行中'
+    update_process_status(process_id, '执行中')
+    logger.info(f'[INFO] 更新进程状态为执行中 - 进程ID: {process_id}')
+    write_log(process_id, f'进程重启执行: {process["name"]}')
     
     # 如果需要传输icloud.txt文件（仅在创建进程时）
     if transfer_icloud_file:
@@ -839,13 +845,8 @@ def monitor_and_restart_process_after_reboot(vm_ip, process_id, transfer_icloud_
             logger.error(f'[ERROR] 从远程下载icloud.txt失败: {str(e)}')
             # 即使下载失败，我们仍然尝试启动进程，因为可能有之前的临时文件可用
     
-    # 更新进程状态并启动进程
+    # 继续启动进程
     try:
-        # 更新状态为执行中
-        process['status'] = '执行中'
-        update_process_status(process_id, '执行中')
-        logger.info(f'[INFO] 更新进程状态为执行中 - 进程ID: {process_id}')
-        write_log(process_id, f'进程重启执行: {process["name"]}')
         
         # 创建线程执行进程
         thread = threading.Thread(target=execute_process, args=(process_id, transfer_icloud_file))
@@ -1597,6 +1598,11 @@ def execute_process(process_id, transfer_icloud_file=False):
             # 登录流程
             login_success = False
             while not login_success:
+                # 在执行登录脚本前，同步远端的三个文件：icloud.txt, icloud2.txt, error.txt
+                write_log(process_id, '登录前同步远端文件: icloud.txt, icloud2.txt, error.txt')
+                sync_results = sync_remote_files()
+                write_log(process_id, f'文件同步结果: {json.dumps(sync_results)}')
+                
                 login_result = run_scpt_script(vm_ip, 'appleid_login.scpt', process_id)
                 write_log(process_id, f'登录结果: {json.dumps(login_result)}')
                 
@@ -2091,95 +2097,196 @@ def start_process():
         process_id = request.json.get('process_id')
         logger.debug(f'[DEBUG] 请求启动进程ID: {process_id}')
         
-        for process in processes:
-            if process['id'] == process_id:
-                # 检查是否已在运行
-                if process_id in running_tasks:
-                    logger.warning(f'[WARNING] 进程已在运行中 - 进程ID: {process_id}')
-                    return jsonify({
-                        "success": False,
-                        "message": "进程正在运行中"
-                    })
-                
-                logger.debug(f'[DEBUG] 找到进程 - 进程名称: {process["name"]}, 当前状态: {process["status"]}')
-                
-                # 获取虚拟机IP（假设client字段包含IP信息）
-                vm_ip = process['client']
-                logger.info(f'[INFO] 检查虚拟机连通性 - IP: {vm_ip}')
-                
-                # 检查虚拟机IP是否存活
-                try:
-                    # 使用socket检查IP是否可达
-                    ping_success = False
-                    try:
-                        # 尝试连接到SSH端口
-                        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                            s.settimeout(1)
-                            if s.connect_ex((vm_ip, 22)) == 0:
-                                ping_success = True
-                        # 如果SSH端口不可达，尝试UDP
-                        if not ping_success:
-                            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-                                s.settimeout(1)
-                                try:
-                                    s.sendto(b'ping', (vm_ip, 80))
-                                    ping_success = True
-                                except:
-                                    ping_success = False
-                    except:
-                        ping_success = False
-                    
-                    if not ping_success:
-                        logger.error(f'[ERROR] 虚拟机IP不可达 - {vm_ip}')
-                        # 更新状态为失败
-                        process['status'] = '失败'
-                        # 写入日志
-                        write_log(process_id, f'进程启动失败: 虚拟机IP {vm_ip} 不可达')
-                        return jsonify({
-                            "success": False,
-                            "message": f"启动失败: 虚拟机IP {vm_ip} 不可达"
-                        })
-                    
-                    logger.info(f'[INFO] 虚拟机IP连通性检查通过')
-                except Exception as e:
-                    logger.error(f'[ERROR] 检查虚拟机连通性时出错: {str(e)}')
-                    process['status'] = '失败'
-                    write_log(process_id, f'进程启动失败: 检查虚拟机连通性时出错 - {str(e)}')
-                    return jsonify({
-                        "success": False,
-                        "message": f"检查虚拟机连通性失败: {str(e)}"
-                    })
-                
-                # 更新状态为启动中
-                process['status'] = '启动中'
-                # 同时更新数据库中的状态
-                update_process_status(process_id, '启动中')
-                logger.debug(f'[DEBUG] 更新进程状态为启动中 - 进程ID: {process_id}')
-                write_log(process_id, f'进程开始启动')
-                
-                # 创建线程执行进程
-                logger.debug(f'[DEBUG] 创建执行线程 - 进程ID: {process_id}')
-                thread = threading.Thread(target=monitor_and_restart_process_after_reboot, args=(vm_ip, process_id, False))
-                thread.daemon = True
-                thread.start()
-                running_tasks[process_id] = thread
-                logger.debug(f'[DEBUG] 线程已启动，任务已添加到运行队列')
-                
-                return jsonify({
-                    "success": True,
-                    "message": "进程已启动"
-                })
+        # 首先从数据库获取最新的进程状态，确保数据一致性
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute('SELECT status, client FROM processes WHERE id = ?', (process_id,))
+        db_result = c.fetchone()
+        conn.close()
         
-        logger.error(f'[ERROR] 找不到指定进程 - 进程ID: {process_id}')
+        if not db_result:
+            logger.error(f'[ERROR] 数据库中找不到指定进程 - 进程ID: {process_id}')
+            return jsonify({
+                "success": False,
+                "message": "找不到指定进程"
+            })
+        
+        db_status, vm_ip = db_result[0], db_result[1]
+        logger.debug(f'[DEBUG] 数据库中进程状态: {db_status}, VM IP: {vm_ip}')
+        
+        # 检查是否已在运行（内存中）
+        if process_id in running_tasks:
+            logger.warning(f'[WARNING] 进程已在运行中 - 进程ID: {process_id}')
+            return jsonify({
+                "success": False,
+                "message": "进程正在运行中"
+            })
+        
+        # 幂等性检查：如果进程已经是启动中或执行中状态，直接返回成功
+        if db_status in ['启动中', '执行中']:
+            logger.info(f'[INFO] 进程已经处于运行相关状态，无需重复启动 - 进程ID: {process_id}, 当前状态: {db_status}')
+            return jsonify({
+                "success": True,
+                "message": f"进程已经处于{db_status}状态"
+            })
+        
+        # 查找内存中的进程引用
+        process = None
+        for p in processes:
+            if p['id'] == process_id:
+                process = p
+                break
+        
+        if not process:
+            # 如果内存中没有找到进程，创建一个基本进程对象
+            process = {'id': process_id, 'status': db_status, 'client': vm_ip}
+        
+        logger.debug(f'[DEBUG] 找到进程 - 进程ID: {process_id}, 当前状态: {db_status}')
+        logger.info(f'[INFO] 检查虚拟机连通性 - IP: {vm_ip}')
+        
+        # 检查虚拟机IP是否存活
+        try:
+            # 使用socket检查IP是否可达
+            ping_success = False
+            try:
+                # 尝试连接到SSH端口
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.settimeout(1)
+                    if s.connect_ex((vm_ip, 22)) == 0:
+                        ping_success = True
+                # 如果SSH端口不可达，尝试UDP
+                if not ping_success:
+                    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                        s.settimeout(1)
+                        try:
+                            s.sendto(b'ping', (vm_ip, 80))
+                            ping_success = True
+                        except:
+                            ping_success = False
+            except:
+                ping_success = False
+            
+            if not ping_success:
+                logger.error(f'[ERROR] 虚拟机IP不可达 - {vm_ip}')
+                # 更新状态为失败
+                process['status'] = '失败'
+                # 更新数据库状态
+                update_process_status(process_id, '失败')
+                # 写入日志
+                write_log(process_id, f'进程启动失败: 虚拟机IP {vm_ip} 不可达')
+                return jsonify({
+                    "success": False,
+                    "message": f"启动失败: 虚拟机IP {vm_ip} 不可达"
+                })
+            
+            logger.info(f'[INFO] 虚拟机IP连通性检查通过')
+        except Exception as e:
+            logger.error(f'[ERROR] 检查虚拟机连通性时出错: {str(e)}')
+            # 更新状态为失败
+            process['status'] = '失败'
+            # 更新数据库状态
+            update_process_status(process_id, '失败')
+            write_log(process_id, f'进程启动失败: 检查虚拟机连通性时出错 - {str(e)}')
+            return jsonify({
+                "success": False,
+                "message": f"检查虚拟机连通性失败: {str(e)}"
+            })
+        
+        # 清除可能存在的停止标志
+        if process_id in stop_flags:
+            del stop_flags[process_id]
+            logger.debug(f'[DEBUG] 清除进程停止标志 - 进程ID: {process_id}')
+        
+        # 先更新数据库中的状态为启动中
+        update_process_status(process_id, '启动中')
+        # 然后更新内存中的状态
+        process['status'] = '启动中'
+        
+        logger.debug(f'[DEBUG] 更新进程状态为启动中 - 进程ID: {process_id}')
+        write_log(process_id, f'进程开始启动')
+        
+        # 创建线程执行进程
+        logger.debug(f'[DEBUG] 创建执行线程 - 进程ID: {process_id}')
+        thread = threading.Thread(target=monitor_and_restart_process_after_reboot, args=(vm_ip, process_id, False))
+        thread.daemon = True
+        thread.start()
+        running_tasks[process_id] = thread
+        logger.debug(f'[DEBUG] 线程已启动，任务已添加到运行队列')
+        
         return jsonify({
-            "success": False,
-            "message": "找不到指定进程"
+            "success": True,
+            "message": "进程启动命令已发送，正在启动"
         })
+        
     except Exception as e:
-        logger.error(f'[ERROR] 启动进程异常: {str(e)}')
+        logger.error(f'[ERROR] 启动进程异常: {str(e)}', exc_info=True)
+        # 尝试更新状态为失败
+        try:
+            if 'process_id' in locals():
+                update_process_status(process_id, '失败')
+                write_log(process_id, f'进程启动异常: {str(e)}')
+        except:
+            pass
+        
         return jsonify({
             "success": False,
             "message": f"启动进程失败: {str(e)}"
+        })
+
+@icloud_process_bp.route('/api/icloud/process/<process_id>', methods=['GET'])
+def get_process_details(process_id):
+    """获取单个进程的详细信息，用于前端异步轮询状态更新"""
+   # logger.debug(f'[DEBUG] 请求获取进程详情 - 进程ID: {process_id}')
+    
+    try:
+        # 从数据库获取进程的最新状态和信息
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute('''
+            SELECT id, name, client, apple_id_filename, apple_id_count, status, create_time, scripts 
+            FROM processes 
+            WHERE id = ?
+        ''', (process_id,))
+        process_data = c.fetchone()
+        conn.close()
+        
+        if not process_data:
+            logger.error(f'[ERROR] 找不到指定进程 - 进程ID: {process_id}')
+            return jsonify({
+                "success": False,
+                "message": "找不到指定进程"
+            })
+        
+        # 构造进程信息字典
+        process = {
+            'id': process_data[0],
+            'name': process_data[1],
+            'client': process_data[2],
+            'apple_id_filename': process_data[3],
+            'apple_id_count': process_data[4],
+            'status': process_data[5],
+            'create_time': process_data[6],
+            'scripts': process_data[7]
+        }
+        
+        # 如果内存中有进程信息，可以合并最新状态
+        for p in processes:
+            if p['id'] == process_id:
+                # 优先使用内存中的状态，因为可能更新更快
+                process['status'] = p.get('status', process['status'])
+                break
+        
+       # logger.debug(f'[DEBUG] 成功获取进程详情 - 进程ID: {process_id}, 状态: {process["status"]}')
+        return jsonify({
+            "success": True,
+            "process": process
+        })
+        
+    except Exception as e:
+        logger.error(f'[ERROR] 获取进程详情异常: {str(e)}', exc_info=True)
+        return jsonify({
+            "success": False,
+            "message": f"获取进程详情失败: {str(e)}"
         })
 
 @icloud_process_bp.route('/api/icloud/process/stop', methods=['POST'])
@@ -2189,108 +2296,141 @@ def stop_process():
         process_id = request.json.get('process_id')
         logger.debug(f'[DEBUG] 请求停止进程ID: {process_id}')
         
-        # 使用配置中的用户名
+        # 首先从数据库获取最新的进程状态，确保数据一致性
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute('SELECT status, client FROM processes WHERE id = ?', (process_id,))
+        db_result = c.fetchone()
+        conn.close()
         
-        for process in processes:
-            if process['id'] == process_id:
-                logger.debug(f'[DEBUG] 找到进程 - 进程名称: {process["name"]}, 当前状态: {process["status"]}')
+        if not db_result:
+            logger.error(f'[ERROR] 数据库中找不到指定进程 - 进程ID: {process_id}')
+            return jsonify({
+                "success": False,
+                "message": "找不到指定进程"
+            })
+        
+        db_status, vm_ip = db_result[0], db_result[1]
+        logger.debug(f'[DEBUG] 数据库中进程状态: {db_status}, VM IP: {vm_ip}')
+        
+        # 查找内存中的进程引用
+        process = None
+        for p in processes:
+            if p['id'] == process_id:
+                process = p
+                break
+        
+        if not process:
+            # 如果内存中没有找到进程，创建一个基本进程对象
+            process = {'id': process_id, 'status': db_status, 'client': vm_ip}
+        
+        # 幂等性检查：如果进程已经是停止状态，直接返回成功
+        if db_status in ['已停止', '已完成', '失败']:
+            logger.info(f'[INFO] 进程已经处于停止状态，无需重复停止 - 进程ID: {process_id}, 当前状态: {db_status}')
+            return jsonify({
+                "success": True,
+                "message": f"进程已经处于停止状态: {db_status}"
+            })
+        
+        logger.debug(f'[DEBUG] 开始停止进程 - 进程ID: {process_id}')
+        
+        # 尝试从远程下载最新的icloud.txt文件（如果进程正在执行中）
+        if db_status == '执行中' or process.get('status') == '执行中':
+            logger.info(f'[INFO] 进程停止前，从远程下载最新的icloud.txt - VM IP: {vm_ip}')
+            write_log(process_id, '进程停止前，从远程下载最新的icloud.txt...')
+            
+            # 从远程下载icloud.txt到本地临时文件（使用单独的try-except，确保不影响主流程）
+            try:
+                download_file_from_remote(vm_ip, ICLOUD_TXT_PATH, TEMP_PLIST_PATH)
+            except Exception as download_error:
+                logger.error(f'[ERROR] 下载icloud.txt文件失败: {str(download_error)}')
+        
+        # 设置停止标志，通知进程线程自行终止
+        stop_flags[process_id] = True
+        logger.info(f'[INFO] 设置进程停止标志 - 进程ID: {process_id}')
+        
+        # 更新状态为已停止（先更新数据库，确保持久化）
+        update_process_status(process_id, '已停止')
+        
+        # 更新内存中的进程状态
+        process['status'] = '已停止'
+        logger.debug(f'[DEBUG] 更新进程状态为已停止 - 进程ID: {process_id}')
+        write_log(process_id, '进程被手动停止')
+        
+        # 从运行任务中移除（如果存在）
+        if process_id in running_tasks:
+            logger.debug(f'[DEBUG] 从运行任务中移除进程 - 进程ID: {process_id}')
+            del running_tasks[process_id]
+        
+        # 创建一个单独的线程来执行SSH操作，避免阻塞响应
+        def execute_ssh_stop_script():
+            try:
+                logger.info(f'[INFO] 尝试通过SSH停止远端app客户端 - IP: {vm_ip}')
+                # 导入配置获取脚本目录和密码
+                import os
+                from config import macos_script_dir, restart_scptRunner, vm_password
                 
-                # 尝试从远程下载最新的icloud.txt文件（如果进程正在执行中）
-                if process['status'] == '执行中':
-                    vm_ip = process['client']
-                    logger.info(f'[INFO] 进程停止前，从远程下载最新的icloud.txt - VM IP: {vm_ip}')
-                    write_log(process_id, '进程停止前，从远程下载最新的icloud.txt...')
+                # 获取脚本文件名
+                script_filename = 'stop_scptapp.scpt'
+                
+                # 构建本地脚本完整路径
+                local_script_path = os.path.join(macos_script_dir, script_filename)
+                logger.debug(f'[DEBUG] 本地脚本路径: {local_script_path}')
+                
+                # 在虚拟机上的脚本路径，使用config.py中的restart_scptRunner配置
+                vm_script_path = f'{restart_scptRunner}{script_filename}'
+                logger.debug(f'[DEBUG] 虚拟机脚本路径: {vm_script_path}')
+                
+                # 尝试连接SSH并执行脚本，添加密码参数以确保认证成功
+                with SSHClient(hostname=vm_ip, username=vm_username, password=vm_password, timeout=5) as ssh_client:
+                    # 检查虚拟机上是否存在脚本文件
+                    check_cmd = f'test -f {vm_script_path} && echo "exists" || echo "not exists"'
+                    success_check, output_check, _, _ = ssh_client.execute_command(check_cmd, timeout=10)
                     
-                    # 从远程下载icloud.txt到本地临时文件
-                    download_file_from_remote(vm_ip, ICLOUD_TXT_PATH, TEMP_PLIST_PATH)
-                else:
-                    # 即使进程不在执行中，也获取VM IP以执行重启脚本
-                    vm_ip = process['client']
-                
-                # 设置停止标志，通知进程线程自行终止
-                stop_flags[process_id] = True
-                logger.info(f'[INFO] 设置进程停止标志 - 进程ID: {process_id}')
-                
-                # 更新状态为已停止
-                process['status'] = '已停止'
-                # 同时更新数据库中的状态
-                update_process_status(process_id, '已停止')
-                
-                logger.debug(f'[DEBUG] 更新进程状态为已停止 - 进程ID: {process_id}')
-                write_log(process_id, '进程被手动停止')
-                
-                # 从运行任务中移除（如果存在）
-                if process_id in running_tasks:
-                    logger.debug(f'[DEBUG] 从运行任务中移除进程 - 进程ID: {process_id}')
-                    del running_tasks[process_id]
-                
-                # 尝试通过SSH调用restart_scptapp.scpt重启远端app客户端
-                try:
-                    logger.info(f'[INFO] 尝试通过SSH重启远端app客户端 - IP: {vm_ip}')
-                    # 导入配置获取脚本目录和密码
-                    import os
-                    from config import macos_script_dir, restart_scptRunner, vm_password
-                    
-                    # 获取脚本文件名
-                    script_filename = 'stop_scptapp.scpt'
-                    
-                    # 构建本地脚本完整路径
-                    local_script_path = os.path.join(macos_script_dir, script_filename)
-                    logger.debug(f'[DEBUG] 本地脚本路径: {local_script_path}')
-                    
-                    # 在虚拟机上的脚本路径，使用config.py中的restart_scptRunner配置
-                    vm_script_path = f'{restart_scptRunner}{script_filename}'
-                    logger.debug(f'[DEBUG] 虚拟机脚本路径: {vm_script_path}')
-                    
-                    # 尝试连接SSH并执行脚本，添加密码参数以确保认证成功
-                    with SSHClient(hostname=vm_ip, username=vm_username, password=vm_password, timeout=5) as ssh_client:
-                        # 检查虚拟机上是否存在脚本文件
-                        check_cmd = f'test -f {vm_script_path} && echo "exists" || echo "not exists"'
-                        success_check, output_check, _, _ = ssh_client.execute_command(check_cmd, timeout=10)
+                    if success_check and "exists" in output_check:
+                        # 脚本文件存在，直接执行
+                        cmd = f'osascript {vm_script_path}'
+                        success, output, error, exit_code = ssh_client.execute_command(cmd, timeout=30)
                         
-                        if success_check and "exists" in output_check:
-                            # 脚本文件存在，直接执行
-                            cmd = f'osascript {vm_script_path}'
-                            success, output, error, exit_code = ssh_client.execute_command(cmd, timeout=30)
-                            
-                            if success and exit_code == 0:
-                                logger.info(f'[INFO] 成功调用stop_scptapp.scpt停止远端app客户端 - IP: {vm_ip}')
-                            else:
-                                logger.warning(f'[WARNING] 调用stop_scptapp.scpt失败 - 退出码: {exit_code}, 错误: {error}')
+                        if success and exit_code == 0:
+                            logger.info(f'[INFO] 成功调用stop_scptapp.scpt停止远端app客户端 - IP: {vm_ip}')
                         else:
-                            # 如果脚本不存在，尝试从本地上传
-                            if os.path.exists(local_script_path):
-                                logger.info(f'[INFO] 尝试上传脚本到虚拟机 - {vm_script_path}')
-                                upload_success = ssh_client.upload_file(local_script_path, vm_script_path)
-                                if upload_success:
-                                    logger.info(f'[INFO] 脚本上传成功，尝试执行')
-                                    # 上传成功后执行脚本
-                                    cmd = f'osascript {vm_script_path}'
-                                    success, output, error, exit_code = ssh_client.execute_command(cmd, timeout=30)
-                                    
-                                    if success and exit_code == 0:
-                                        logger.info(f'[INFO] 成功调用stop_scptapp.scpt停止远端app客户端 - IP: {vm_ip}')
-                                    else:
-                                        logger.warning(f'[WARNING] 调用上传的stop_scptapp.scpt失败 - 退出码: {exit_code}, 错误: {error}')
+                            logger.warning(f'[WARNING] 调用stop_scptapp.scpt失败 - 退出码: {exit_code}, 错误: {error}')
+                    else:
+                        # 如果脚本不存在，尝试从本地上传
+                        if os.path.exists(local_script_path):
+                            logger.info(f'[INFO] 尝试上传脚本到虚拟机 - {vm_script_path}')
+                            upload_success = ssh_client.upload_file(local_script_path, vm_script_path)
+                            if upload_success:
+                                logger.info(f'[INFO] 脚本上传成功，尝试执行')
+                                # 上传成功后执行脚本
+                                cmd = f'osascript {vm_script_path}'
+                                success, output, error, exit_code = ssh_client.execute_command(cmd, timeout=30)
+                                
+                                if success and exit_code == 0:
+                                    logger.info(f'[INFO] 成功调用stop_scptapp.scpt停止远端app客户端 - IP: {vm_ip}')
                                 else:
-                                    logger.error(f'[ERROR] 脚本上传失败 - 无法复制到虚拟机')
+                                    logger.warning(f'[WARNING] 调用上传的stop_scptapp.scpt失败 - 退出码: {exit_code}, 错误: {error}')
                             else:
-                                logger.error(f'[ERROR] 本地脚本文件不存在: {local_script_path}')
-                except Exception as e:
-                    logger.error(f'[ERROR] 尝试重启远端app客户端时发生异常: {str(e)}', exc_info=True)
-                
-                return jsonify({
-                    "success": True,
-                    "message": "进程停止命令已发送，正在终止执行"
-                })
+                                logger.error(f'[ERROR] 脚本上传失败 - 无法复制到虚拟机')
+                        else:
+                            logger.error(f'[ERROR] 本地脚本文件不存在: {local_script_path}')
+            except Exception as e:
+                logger.error(f'[ERROR] 尝试停止远端app客户端时发生异常: {str(e)}', exc_info=True)
         
-        logger.error(f'[ERROR] 找不到指定进程 - 进程ID: {process_id}')
+        # 启动SSH操作线程
+        ssh_thread = threading.Thread(target=execute_ssh_stop_script)
+        ssh_thread.daemon = True
+        ssh_thread.start()
+        
+        # 立即返回成功响应，不等待SSH操作完成
         return jsonify({
-            "success": False,
-            "message": "找不到指定进程"
+            "success": True,
+            "message": "进程停止命令已发送，正在终止执行"
         })
+        
     except Exception as e:
-        logger.error(f'[ERROR] 停止进程异常: {str(e)}')
+        logger.error(f'[ERROR] 停止进程异常: {str(e)}', exc_info=True)
         return jsonify({
             "success": False,
             "message": f"停止进程失败: {str(e)}"

@@ -223,8 +223,28 @@ function changePage(page) {
     renderProcessList();
 }
 
+// 活动操作状态跟踪，避免重复操作
+const activeOperations = new Set();
+
+// 进程状态轮询定时器映射
+const statusPollingTimers = {};
+
 function startProcess(processId) {
     if (!confirm('确定要启动该进程吗？')) return;
+    
+    // 避免重复操作
+    if (activeOperations.has(`start_${processId}`)) {
+        console.log('进程启动操作已在进行中，请勿重复点击');
+        alert('操作已在进行中，请稍候');
+        return;
+    }
+    
+    // 标记操作为活动状态
+    activeOperations.add(`start_${processId}`);
+    
+    // 获取并更新对应行的UI状态
+    updateProcessRowStatus(processId, '启动中...', 'warning');
+    
     console.log('准备启动进程，进程ID:', processId);
     fetch('/api/icloud/process/start', {
         method: 'POST',
@@ -242,22 +262,55 @@ function startProcess(processId) {
     .then(data => {
         console.log('API响应数据:', data);
         if (data.success) {
-            console.log('进程启动成功，刷新进程列表');
-            loadProcessList();
+            console.log('进程启动命令已发送，开始异步更新状态');
+            
+            // 开始轮询更新进程状态
+            startProcessStatusPolling(processId);
+            
+            // 3秒后刷新一次列表，确保UI一致性
+            setTimeout(() => {
+                loadProcessList();
+            }, 3000);
         } else {
             console.log('进程启动失败:', data.message);
+            updateProcessRowStatus(processId, '启动失败', 'danger');
             alert('启动失败: ' + data.message);
+            // 5秒后恢复正常状态显示
+            setTimeout(() => {
+                loadProcessList();
+            }, 5000);
         }
     })
     .catch(error => {
         console.error('启动进程网络错误:', error);
         console.log('启动进程失败，请检查网络连接');
+        updateProcessRowStatus(processId, '网络错误', 'danger');
         alert('网络错误，请检查控制台日志');
+    })
+    .finally(() => {
+        // 操作完成，移除活动标记
+        setTimeout(() => {
+            activeOperations.delete(`start_${processId}`);
+        }, 1000);
     });
 }
 
 function stopProcess(processId) {
     if (!confirm('确定要停止该进程吗？')) return;
+    
+    // 避免重复操作
+    if (activeOperations.has(`stop_${processId}`)) {
+        console.log('进程停止操作已在进行中，请勿重复点击');
+        alert('操作已在进行中，请稍候');
+        return;
+    }
+    
+    // 标记操作为活动状态
+    activeOperations.add(`stop_${processId}`);
+    
+    // 获取并更新对应行的UI状态
+    updateProcessRowStatus(processId, '停止中...', 'warning');
+    
     fetch('/api/icloud/process/stop', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -265,14 +318,167 @@ function stopProcess(processId) {
     })
     .then(response => response.json())
     .then(data => {
-        console.log(data.message);
-        if (data.success) loadProcessList();
+        console.log('停止进程响应:', data.message);
+        if (data.success) {
+            // 开始轮询更新进程状态
+            startProcessStatusPolling(processId, true); // 传入stop=true表示停止操作
+            
+            // 3秒后刷新一次列表，确保UI一致性
+            setTimeout(() => {
+                loadProcessList();
+            }, 3000);
+        } else {
+            updateProcessRowStatus(processId, '停止失败', 'danger');
+            alert('停止失败: ' + data.message);
+        }
     })
     .catch(error => {
         console.error('停止进程失败:', error);
         console.log('停止进程失败，请检查网络连接');
+        updateProcessRowStatus(processId, '网络错误', 'danger');
+        alert('网络错误，请重试');
+    })
+    .finally(() => {
+        // 操作完成，移除活动标记
+        setTimeout(() => {
+            activeOperations.delete(`stop_${processId}`);
+        }, 1000);
     });
 }
+
+// 更新进程行的状态显示
+function updateProcessRowStatus(processId, statusText, statusClass) {
+    // 查找对应进程ID的行
+    const row = document.querySelector(`tr[data-process-id="${processId}"]`);
+    if (row) {
+        // 查找状态单元格并更新
+        const statusCell = row.querySelector('.process-status');
+        if (statusCell) {
+            // 移除所有状态类
+            statusCell.className = statusCell.className.replace(/badge-\w+/g, '');
+            // 添加新的状态类
+            statusCell.classList.add(`badge-${statusClass}`);
+            statusCell.textContent = statusText;
+        }
+        
+        // 获取所有操作按钮
+        const startBtn = row.querySelector(`button[data-start-id="${processId}"]`);
+        const stopBtn = row.querySelector(`button[data-stop-id="${processId}"]`);
+        const deleteBtn = row.querySelector(`button[data-delete-id="${processId}"]`);
+        
+        // 根据状态设置按钮禁用状态
+        if (statusText === '执行中') {
+            // 执行中状态：禁用启动和删除按钮，启用停止按钮
+            if (startBtn) startBtn.disabled = true;
+            if (stopBtn) stopBtn.disabled = false;
+            if (deleteBtn) deleteBtn.disabled = true;
+        } else if (statusText === '已停止') {
+            // 已停止状态：禁用停止按钮，启用启动按钮
+            if (startBtn) startBtn.disabled = false;
+            if (stopBtn) stopBtn.disabled = true;
+            if (deleteBtn) deleteBtn.disabled = false;
+        } else if (statusText === '启动中' || statusText === '停止中') {
+            // 正在进行操作：禁用所有按钮
+            if (startBtn) startBtn.disabled = true;
+            if (stopBtn) stopBtn.disabled = true;
+            if (deleteBtn) deleteBtn.disabled = true;
+        } else {
+            // 其他状态：根据活动操作标记决定是否禁用
+            const isActive = activeOperations.has(`start_${processId}`) || 
+                             activeOperations.has(`stop_${processId}`) || 
+                             activeOperations.has(`delete_${processId}`);
+            
+            if (startBtn) startBtn.disabled = isActive;
+            if (stopBtn) stopBtn.disabled = isActive || statusText === '已停止';
+            if (deleteBtn) deleteBtn.disabled = isActive;
+        }
+    }
+}
+
+// 开始轮询更新进程状态
+function startProcessStatusPolling(processId, isStopOperation = false) {
+    // 清除已有的定时器
+    if (statusPollingTimers[processId]) {
+        clearInterval(statusPollingTimers[processId]);
+    }
+    
+    let pollingCount = 0;
+    const maxPollingCount = 15; // 最多轮询15次
+    
+    // 创建新的定时器
+    statusPollingTimers[processId] = setInterval(() => {
+        pollingCount++;
+        
+        // 获取最新的进程状态
+        fetch(`/api/icloud/process/${processId}`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.process) {
+                const newStatus = data.process.status;
+                console.log(`轮询获取进程${processId}状态:`, newStatus);
+                
+                // 更新UI状态
+                updateProcessRowStatus(processId, newStatus, getStatusClass(newStatus));
+                
+                // 根据操作类型决定何时停止轮询
+                if (isStopOperation) {
+                    // 停止操作：当状态变为"已停止"时停止轮询
+                    if (newStatus === '已停止') {
+                        stopPolling(processId);
+                    }
+                } else {
+                    // 启动操作：当状态变为"执行中"或"已完成"等稳定状态时停止轮询
+                    if (newStatus === '执行中' || newStatus === '已完成' || newStatus === '失败') {
+                        stopPolling(processId);
+                    }
+                }
+            }
+        })
+        .catch(error => {
+            console.error(`获取进程${processId}状态失败:`, error);
+        });
+        
+        // 超过最大轮询次数，停止轮询
+        if (pollingCount >= maxPollingCount) {
+            stopPolling(processId);
+            // 最后刷新一次列表
+            loadProcessList();
+        }
+    }, 5000); // 每5秒轮询一次
+}
+
+// 停止轮询
+function stopPolling(processId) {
+    if (statusPollingTimers[processId]) {
+        clearInterval(statusPollingTimers[processId]);
+        delete statusPollingTimers[processId];
+        console.log(`停止进程${processId}状态轮询`);
+    }
+}
+
+// 根据状态获取对应的CSS类名
+function getStatusClass(status) {
+    const statusMap = {
+        '执行中': 'success',
+        '已停止': 'secondary',
+        '已完成': 'info',
+        '失败': 'danger',
+        '启动中': 'warning',
+        '停止中': 'warning',
+        '网络错误': 'danger'
+    };
+    return statusMap[status] || 'light';
+}
+
+// 页面卸载前清理所有轮询
+window.addEventListener('beforeunload', () => {
+    Object.keys(statusPollingTimers).forEach(processId => {
+        stopPolling(processId);
+    });
+});
 
 function deleteProcess(processId) {
     // 添加确认对话框
@@ -825,19 +1031,25 @@ function renderProcessList() {
         const fileCount = process.file_count || process.apple_id_count || '未知';
         
         const tr = document.createElement('tr');
+        // 添加data-process-id属性，用于异步状态更新
+        tr.dataset.processId = process.id;
+        
         tr.innerHTML = `
             <td>${process.name}</td>
             <td>${process.id}</td>
             <td>
-                <span class="badge bg-${getStatusBadgeClass(process.status)}">${process.status}</span>
+                <!-- 添加process-status类，用于异步状态更新 -->
+                <span class="badge bg-${getStatusBadgeClass(process.status)} process-status">${process.status}</span>
             </td>
             <td>${process.create_time}</td>
             <td>
                 <div class="btn-group btn-group-sm" role="group">
-                        <button class="btn btn-success btn-sm" onclick="startProcess('${process.id}')">
+                        <!-- 添加data-start-id属性，用于异步状态更新 -->
+                        <button class="btn btn-success btn-sm" onclick="startProcess('${process.id}')" data-start-id="${process.id}">
                             <i class="fas fa-play mr-1"></i> 启动
                         </button>
-                        <button class="btn btn-warning btn-sm" onclick="stopProcess('${process.id}')">
+                        <!-- 添加data-stop-id属性，用于异步状态更新 -->
+                        <button class="btn btn-warning btn-sm" onclick="stopProcess('${process.id}')" data-stop-id="${process.id}">
                             <i class="fas fa-stop mr-1"></i> 停止
                         </button>
                     <button class="btn btn-info mb-1" onclick="showProcessDetail('${process.id}')">
