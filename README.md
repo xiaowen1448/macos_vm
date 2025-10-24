@@ -6,6 +6,18 @@
 **技术栈**: Python Flask + PyQt5 + Bootstrap + WebSocket  
 **主要功能**: macOS 虚拟机的批量管理、克隆、配置和监控  
 
+<img width="1840" height="1080" alt="image" src="https://github.com/user-attachments/assets/e6c67726-bb95-4892-88f4-d8157a57ad74" />
+
+<img width="1840" height="1080" alt="image" src="https://github.com/user-attachments/assets/97431338-215b-4d99-9afc-720f7534b1eb" />
+
+<img width="1840" height="1080" alt="image" src="https://github.com/user-attachments/assets/aeb89804-d4d0-45cc-9c48-7062b122b156" />
+
+<img width="1840" height="1080" alt="image" src="https://github.com/user-attachments/assets/d9e9c2ec-26db-47c4-950b-0c51f6244841" />
+
+
+<img width="1840" height="1080" alt="image" src="https://github.com/user-attachments/assets/4183277f-e552-47ce-8678-b54067b58c92" />
+
+
 ## 项目架构
 
 ### 核心组件
