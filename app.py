@@ -7690,7 +7690,7 @@ def api_appleid_files():
                             'size': stat.st_size,
                             'modified': datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
                         })
-                        logger.info(f"发现Apple ID文件: {filename}")
+                     #   logger.info(f"发现Apple ID文件: {filename}")
                     except Exception as e:
                         logger.warning(f"获取文件信息失败 {filename}: {str(e)}")
 
@@ -7740,10 +7740,10 @@ def api_appleid_file_content():
             try:
                 with open(file_path, 'r', encoding=encoding) as f:
                     content = f.read().strip()
-                logger.info(f"成功使用 {encoding} 编码读取文件 {filename}")
+               # logger.info(f"成功使用 {encoding} 编码读取文件 {filename}")
                 break
             except UnicodeDecodeError:
-                logger.warning(f"使用 {encoding} 编码读取文件 {filename} 失败，尝试下一种编码")
+              #  logger.warning(f"使用 {encoding} 编码读取文件 {filename} 失败，尝试下一种编码")
                 continue
             except Exception as e:
                 logger.error(f"读取文件 {filename} 时发生错误: {str(e)}")
