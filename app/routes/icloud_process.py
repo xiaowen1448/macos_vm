@@ -11,8 +11,8 @@ import logging
 import sqlite3
 import socket
 from pathlib import Path
-# 导入配置模块，使用appleid_unused_dir路径
-from config import appleid_unused_dir
+# 导入配置模块，使用appleid_unused_dir路径和其他配置项
+from config import appleid_unused_dir, icloud_txt_path, icloud2_txt_path
 # 导入SSH工具类
 from utils.ssh_utils import SSHClient
 
@@ -32,7 +32,9 @@ except ImportError:
 # 配置项
 SCRIPT_DIR = '/Users/wx/Documents/macos_script/macos_scpt/macos11/'
 SCPTRUNNER_PORT = 8787
-ICLOUD_TXT_PATH = '/Users/wx/Desktop/icloud.txt'
+# 从config模块导入的路径配置
+ICLOUD_TXT_PATH = icloud_txt_path
+ICLOUD2_TXT_PATH = icloud2_txt_path
 TEMP_PLIST_PATH = os.path.join(os.environ.get('TEMP', '/tmp'), 'temp_plist.txt')
 LOG_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'logs'))
 
@@ -255,6 +257,60 @@ def count_valid_apple_ids(apple_id_text_or_file):
     logger.debug(f'[DEBUG] 辅助函数 - 统计完成 - 有效行数: {apple_id_count}, 总行数: {len(apple_ids)}, 文件名: {file_name}')
     return apple_id_count, file_name
 
+# 辅助函数：计算总Apple ID数量（icloud.txt和icloud2.txt的总和）
+def calculate_total_apple_ids(vm_ip, temp_plist_path=TEMP_PLIST_PATH):
+    """计算总Apple ID数量，包括未处理(icloud.txt)和已处理(icloud2.txt)的总和
+    
+    Args:
+        vm_ip: 虚拟机IP地址
+        temp_plist_path: 本地临时文件路径
+    
+    Returns:
+        tuple: (total_count, unprocessed_count, processed_count)
+    """
+    logger.debug(f'[DEBUG] 开始计算总Apple ID数量 - VM IP: {vm_ip}')
+    
+    # 初始化计数
+    unprocessed_count = 0
+    processed_count = 0
+    
+    try:
+        # 1. 获取未处理的Apple ID数量（icloud.txt）
+        if os.path.exists(temp_plist_path):
+            with open(temp_plist_path, 'r', encoding='utf-8') as f:
+                apple_id_content = f.read()
+            
+            # 统计有效Apple ID数量
+            unprocessed_count, _ = count_valid_apple_ids(apple_id_content)
+            logger.debug(f'[DEBUG] 未处理Apple ID数量: {unprocessed_count}')
+        else:
+            logger.warning(f'[WARNING] 本地临时文件不存在: {temp_plist_path}')
+        
+        # 2. 同步并获取已处理的Apple ID数量（icloud2.txt）
+        icloud2_local_path = sync_icloud2_file(vm_ip)
+        if icloud2_local_path and os.path.exists(icloud2_local_path):
+            with open(icloud2_local_path, 'r', encoding='utf-8') as f:
+                icloud2_content = f.read()
+            
+            # 统计有效Apple ID数量
+            processed_count, _ = count_valid_apple_ids(icloud2_content)
+            logger.debug(f'[DEBUG] 已处理Apple ID数量: {processed_count}')
+            
+            # 清理临时文件
+            os.remove(icloud2_local_path)
+        else:
+            logger.warning(f'[WARNING] 无法同步icloud2.txt文件或文件不存在')
+        
+        # 计算总数
+        total_count = unprocessed_count + processed_count
+        logger.info(f'[INFO] 总Apple ID数量计算完成 - 总数: {total_count}, 未处理: {unprocessed_count}, 已处理: {processed_count}')
+        
+        return total_count, unprocessed_count, processed_count
+    except Exception as e:
+        logger.error(f'[ERROR] 计算总Apple ID数量时发生异常: {str(e)}')
+        # 出错时返回未处理数量作为总数
+        return unprocessed_count, unprocessed_count, 0
+
 # 辅助函数：写入日志
 def write_log(process_id, message):
     process_log_dir = os.path.join(LOG_DIR, process_id)
@@ -394,8 +450,18 @@ def download_file_from_remote(vm_ip, remote_path, local_path):
 
 # 辅助函数：传输appleid文本文件
 def transfer_appleid_file(vm_ip, apple_id_text):
-    logger.debug(f'[DEBUG] 准备传输Apple ID文件 - VM IP: {vm_ip}, 目标路径: {ICLOUD_TXT_PATH}')
+    """传输未处理的Apple ID文本到虚拟机
+    
+    Args:
+        vm_ip: 虚拟机IP地址
+        apple_id_text: 未处理的Apple ID文本内容
+    
+    Returns:
+        bool: 传输是否成功
+    """
+    logger.debug(f'[DEBUG] 准备传输未处理的Apple ID文件 - VM IP: {vm_ip}, 目标路径: {ICLOUD_TXT_PATH}')
     temp_file = None
+    success = False  # 初始化success变量
     try:
         # 创建临时文件
         temp_file = os.path.join(os.environ.get('TEMP', '/tmp'), 'icloud.txt')
@@ -405,16 +471,30 @@ def transfer_appleid_file(vm_ip, apple_id_text):
         logger.debug(f'[DEBUG] 临时文件创建成功，内容长度: {len(apple_id_text)} 字符')
         
         # 使用SSHClient传输文件
-        with SSHClient(hostname=vm_ip, username='wx') as ssh_client:
-            start_time = time.time()
-            success = ssh_client.upload_file(temp_file, ICLOUD_TXT_PATH)
-            elapsed_time = time.time() - start_time
-            logger.debug(f'[DEBUG] 文件上传完成，状态: {success}, 耗时: {elapsed_time:.2f}秒')
+        try:
+            with SSHClient(hostname=vm_ip, username='wx') as ssh_client:
+                start_time = time.time()
+                success, upload_msg = ssh_client.upload_file(temp_file, ICLOUD_TXT_PATH)
+                elapsed_time = time.time() - start_time
+                logger.debug(f'[DEBUG] 文件上传完成，状态: {success}, 消息: {upload_msg}, 耗时: {elapsed_time:.2f}秒')
+                
+                # 验证文件是否成功上传
+                if success:
+                    file_exists = ssh_client.check_file_exists(ICLOUD_TXT_PATH)
+                    if not file_exists:
+                        logger.error(f'[ERROR] 验证失败：文件未在远程路径找到')
+                        success = False
+        except Exception as e:
+            logger.error(f'[ERROR] SSH连接失败: {str(e)}')
+            return False
         
         # 删除临时文件
         if os.path.exists(temp_file):
             os.remove(temp_file)
             logger.debug(f'[DEBUG] 临时文件已删除: {temp_file}')
+        
+        if success:
+            logger.info(f'[INFO] 未处理的Apple ID文件传输成功到虚拟机')
         
         return success
     except Exception as e:
@@ -424,6 +504,40 @@ def transfer_appleid_file(vm_ip, apple_id_text):
             os.remove(temp_file)
             logger.debug(f'[DEBUG] 异常情况下临时文件已删除: {temp_file}')
         return False
+
+# 辅助函数：同步icloud2.txt文件（已处理的Apple ID）
+def sync_icloud2_file(vm_ip, local_path=None):
+    """从虚拟机同步icloud2.txt文件到本地
+    
+    Args:
+        vm_ip: 虚拟机IP地址
+        local_path: 本地保存路径，如果为None则使用临时目录
+    
+    Returns:
+        str: 本地文件路径，如果同步失败返回None
+    """
+    logger.debug(f'[DEBUG] 准备同步icloud2.txt文件 - VM IP: {vm_ip}, 源路径: {ICLOUD2_TXT_PATH}')
+    
+    if not local_path:
+        local_path = os.path.join(os.environ.get('TEMP', '/tmp'), 'icloud2.txt')
+    
+    try:
+        with SSHClient(hostname=vm_ip, username='wx') as ssh_client:
+            # 检查远程文件是否存在
+            file_exists = ssh_client.run_command(f'test -f "{ICLOUD2_TXT_PATH}" && echo "exists" || echo "not_exists"')
+            if file_exists.strip() != 'exists':
+                logger.warning(f'[WARNING] 远程icloud2.txt文件不存在: {ICLOUD2_TXT_PATH}')
+                return None
+            
+            start_time = time.time()
+            success = ssh_client.download_file(ICLOUD2_TXT_PATH, local_path)
+            elapsed_time = time.time() - start_time
+            logger.debug(f'[DEBUG] icloud2.txt下载完成，状态: {success}, 耗时: {elapsed_time:.2f}秒, 本地路径: {local_path}')
+            
+            return local_path if success else None
+    except Exception as e:
+        logger.error(f'[ERROR] 同步icloud2.txt文件时发生异常: {str(e)}')
+        return None
 
 # 辅助函数：等待虚拟机启动完成
 
@@ -605,6 +719,25 @@ def monitor_and_restart_process_after_reboot(vm_ip, process_id, transfer_icloud_
                 apple_ids = apple_id_content.strip().split('\n')
                 non_empty_apple_ids = [id.strip() for id in apple_ids if id.strip()]
                 logger.info(f'[INFO] 远程icloud.txt中发现 {len(non_empty_apple_ids)} 个有效Apple ID')
+                
+                # 同步icloud2.txt文件以获取已处理的Apple ID数量
+                logger.info(f'[INFO] 重新启动时同步icloud2.txt文件 - 进程ID: {process_id}')
+                icloud2_local_path = sync_icloud2_file(vm_ip)
+                if icloud2_local_path and os.path.exists(icloud2_local_path):
+                    with open(icloud2_local_path, 'r', encoding='utf-8') as f:
+                        icloud2_content = f.read()
+                    # 统计已处理的Apple ID数量
+                    processed_count, _ = count_valid_apple_ids(icloud2_content)
+                    total_count = len(non_empty_apple_ids) + processed_count
+                    logger.info(f'[INFO] 重启时同步完成 - 总数: {total_count}, 未处理: {len(non_empty_apple_ids)}, 已处理: {processed_count}')
+                    # 更新进程信息
+                    process['total_count'] = total_count
+                    process['processed_count'] = processed_count
+                    process['progress'] = int((processed_count / total_count) * 100) if total_count > 0 else 0
+                    # 清理临时文件
+                    os.remove(icloud2_local_path)
+                else:
+                    logger.warning(f'[WARNING] 重启时无法同步icloud2.txt文件')
             else:
                 logger.warning(f'[WARNING] 从远程下载icloud.txt失败，尝试使用本地原始Apple ID文件')
                 # 尝试使用本地原始Apple ID文件
@@ -1218,16 +1351,22 @@ def execute_process(process_id, transfer_icloud_file=False):
                 del stop_flags[process_id]
             return
         
-        # 初始化已处理计数器和进度
-        processed_count = 0
-        total_count = len(non_empty_apple_ids)
-        logger.info(f'[INFO] 开始处理 {total_count} 个Apple ID')
-        write_log(process_id, f'开始处理 {total_count} 个Apple ID')
+        # 计算总Apple ID数量（包括icloud.txt和icloud2.txt）
+        total_count, unprocessed_count, processed_count = calculate_total_apple_ids(vm_ip)
+        
+        # 如果无法获取完整计数，回退到仅计算未处理数量
+        if total_count == 0:
+            total_count = len(non_empty_apple_ids)
+            processed_count = 0
+            logger.warning(f'[WARNING] 无法计算完整总数量，使用未处理数量作为总数: {total_count}')
+        
+        logger.info(f'[INFO] 开始处理 - 总数: {total_count}, 未处理: {unprocessed_count}, 已处理: {processed_count}')
+        write_log(process_id, f'开始处理 - 总数: {total_count}, 未处理: {unprocessed_count}, 已处理: {processed_count}')
         
         # 更新进程进度信息
         process['total_count'] = total_count
         process['processed_count'] = processed_count
-        process['progress'] = 0
+        process['progress'] = int((processed_count / total_count) * 100) if total_count > 0 else 0
         
         # 进程启动时，先执行初始检查和注销流程
         logger.info(f'[INFO] 开始初始检查：执行查询脚本最多3次，每次间隔2秒')
@@ -1710,15 +1849,21 @@ def add_process():
         # 从前端传递的apple_id中提取文件名
         file_name = apple_id_filename.split('/')[-1].split('\\')[-1]
         
+        # 导入配置
+        from config import appleid_unused_dir
+        
+        # 构建完整的文件路径
+        file_path = os.path.join(appleid_unused_dir, apple_id_filename)
+        
         # 统计Apple ID数量
         apple_id_count = 0
         try:
-            from config import appleid_unused_dir
-            file_path = os.path.join(appleid_unused_dir, apple_id_filename)
             if os.path.exists(file_path):
                 with open(file_path, 'r', encoding='utf-8') as f:
                     apple_id_count = sum(1 for line in f if line.strip())
-              #  logger.debug(f"统计文件'{apple_id_filename}'行数: {apple_id_count}")
+                logger.debug(f"统计文件'{apple_id_filename}'行数: {apple_id_count}")
+            else:
+                logger.warning(f"Apple ID文件不存在: {file_path}")
         except Exception as e:
             logger.error(f"统计文件行数时出错: {str(e)}")
         
@@ -1772,6 +1917,29 @@ def add_process():
         # 添加到内存中的进程列表
         processes.append(new_process)
         logger.info(f"进程添加成功，当前进程总数: {len(processes)}")
+        
+        # 传输Apple ID文件到客户端
+        logger.info(f"开始传输Apple ID文件到客户端 {process_client}")
+        try:
+            # 检查文件是否存在
+            if os.path.exists(file_path):
+                # 读取Apple ID文件内容
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    apple_id_text = f.read()
+                
+                logger.info(f"成功读取Apple ID文件 {apple_id_filename}，内容长度: {len(apple_id_text)} 字符")
+                
+                # 调用transfer_appleid_file函数传输文件内容
+                transfer_success = transfer_appleid_file(process_client, apple_id_text)
+                
+                if transfer_success:
+                    logger.info(f"Apple ID文件 {apple_id_filename} 成功传输到客户端 {process_client}")
+                else:
+                    logger.warning(f"Apple ID文件 {apple_id_filename} 传输到客户端 {process_client} 失败")
+            else:
+                logger.error(f"Apple ID文件不存在，无法传输: {file_path}")
+        except Exception as e:
+            logger.error(f"传输Apple ID文件时出错: {str(e)}")
         
         return jsonify({
             "success": True,

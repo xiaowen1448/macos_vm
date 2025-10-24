@@ -80,3 +80,10 @@ vnc_start_port = 5918
 vnc_default_password = '123456'
 
 macos_script_dir=f'{project_root}\\..\\macos_script\\macos_scpt\\macos11'
+
+#待处理原文本
+icloud_txt_path=f'/Users/wx/Desktop/icloud.txt'
+
+
+#已处理的文本
+icloud2_txt_path=f'/Users/wx/Desktop/icloud2.txt'
