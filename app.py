@@ -480,56 +480,58 @@ def get_vmrun_path():
 
 # 通用函数 - 扫描脚本文件
 def scan_scripts_from_directories():
-    """从配置的多个目录扫描脚本文件"""
+    """从配置的多个目录递归扫描脚本文件"""
     scripts = []
 
     # 使用新的多目录配置
     for scripts_dir in script_upload_dirs:
         if os.path.exists(scripts_dir):
-            logger.debug(f"扫描脚本目录: {scripts_dir}")
-            for filename in os.listdir(scripts_dir):
-                # 支持.sh和.scpt文件
-                if filename.endswith('.sh') or filename.endswith('.scpt'):
-                    file_path = os.path.join(scripts_dir, filename)
-                    try:
-                        # 获取文件信息
-                        stat = os.stat(file_path)
-                        size = stat.st_size
-                        modified_time = datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+            logger.debug(f"递归扫描脚本目录: {scripts_dir}")
+            # 使用os.walk递归遍历所有子目录
+            for root, _, files in os.walk(scripts_dir):
+                for filename in files:
+                    # 支持.sh和.scpt文件
+                    if filename.endswith('.sh') or filename.endswith('.scpt'):
+                        file_path = os.path.join(root, filename)
+                        try:
+                            # 获取文件信息
+                            stat = os.stat(file_path)
+                            size = stat.st_size
+                            modified_time = datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
 
-                        # 格式化文件大小
-                        if size < 1024:
-                            size_str = f"{size}B"
-                        elif size < 1024 * 1024:
-                            size_str = f"{size // 1024}KB"
-                        else:
-                            size_str = f"{size // (1024 * 1024)}MB"
+                            # 格式化文件大小
+                            if size < 1024:
+                                size_str = f"{size}B"
+                            elif size < 1024 * 1024:
+                                size_str = f"{size // 1024}KB"
+                            else:
+                                size_str = f"{size // (1024 * 1024)}MB"
 
-                        # 尝试读取脚本备注（从同名的.txt文件）
-                        note_file = file_path.replace('.sh', '.txt').replace('.scpt', '.txt')
-                        note = ""
-                        if os.path.exists(note_file):
-                            try:
-                                with open(note_file, 'r', encoding='utf-8') as f:
-                                    note = f.read().strip()
-                            except Exception as e:
-                                logger.warning(f"读取备注文件失败 {note_file}: {str(e)}")
+                            # 尝试读取脚本备注（从同名的.txt文件）
+                            note_file = file_path.replace('.sh', '.txt').replace('.scpt', '.txt')
+                            note = ""
+                            if os.path.exists(note_file):
+                                try:
+                                    with open(note_file, 'r', encoding='utf-8') as f:
+                                        note = f.read().strip()
+                                except Exception as e:
+                                    logger.warning(f"读取备注文件失败 {note_file}: {str(e)}")
 
-                        # 确定脚本类型
-                        script_type = 'shell' if filename.endswith('.sh') else 'applescript'
+                            # 确定脚本类型
+                            script_type = 'shell' if filename.endswith('.sh') else 'applescript'
 
-                        scripts.append({
-                            'name': filename,
-                            'size': size_str,
-                            'modified_time': modified_time,
-                            'path': file_path,
-                            'note': note,
-                            'type': script_type,
-                            'directory': scripts_dir
-                        })
-                    except Exception as e:
-                        logger.error(f"处理脚本文件 {filename} 时出错: {str(e)}")
-                        continue
+                            scripts.append({
+                                'name': filename,
+                                'size': size_str,
+                                'modified_time': modified_time,
+                                'path': file_path,
+                                'note': note,
+                                'type': script_type,
+                                'directory': scripts_dir
+                            })
+                        except Exception as e:
+                            logger.error(f"处理脚本文件 {file_path} 时出错: {str(e)}")
+                            continue
         else:
             logger.warning(f"脚本目录不存在: {scripts_dir}")
 
