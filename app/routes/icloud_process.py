@@ -359,109 +359,223 @@ def run_scpt_script(vm_ip, script_name, process_id=None):
         logger.info(f'[INFO] 检测到进程停止标志，跳过执行脚本 - 进程ID: {process_id}, 脚本: {script_name}')
         return {'result': '进程已停止，跳过执行脚本'}
     
-    # 检测重复的scpt脚本进程前先检查停止标志
+    # 检测scpt脚本进程前先检查停止标志
     if process_id and stop_flags.get(process_id, False):
-        logger.info(f'[INFO] 检测到进程停止标志，跳过重复进程检测 - 进程ID: {process_id}, 脚本: {script_name}')
+        logger.info(f'[INFO] 检测到进程停止标志，跳过进程检测 - 进程ID: {process_id}, 脚本: {script_name}')
     else:
-        logger.info(f'[INFO] 检测是否存在重复的scpt脚本进程 - VM IP: {vm_ip}')
         vm_username = 'wx'  # 虚拟机用户名
         try:
             # 执行ps命令检查scpt相关进程
             ps_cmd = "ps aux | grep scpt | grep -v grep"
-            success, output, error, exit_code = None, None, None, None
             
-            # 使用SSHClient执行命令
-            with SSHClient(hostname=vm_ip, username=vm_username, timeout=5) as ssh_client:
-                success, output, error, exit_code = ssh_client.execute_command(ps_cmd, timeout=10)
+            # 循环等待，直到没有其他scpt脚本进程在运行
+            max_wait_time = 300  # 最大等待时间（秒）
+            wait_interval = 5  # 检查间隔（秒）
+            start_wait_time = time.time()
+            has_other_processes = True
             
-            # 分析输出，查找重复的scpt脚本进程
-            lines = []
-            script_processes = []
-            script_names = {}
-            has_login_script = False
-            has_logout_script = False
-            
-            if success and exit_code == 0:
-                lines = output.strip().split('\n')
-            
-            # 分析进程信息
-            for line in lines:
-                if '/usr/bin/osascript' in line and '/macos_script/macos_scpt/macos11/' in line:
-                    script_processes.append(line)
-                    
-                    # 提取脚本名称
-                    for script_file in ['appleid_login.scpt', 'logout_icloud.scpt', 'queryiCloudAccount.scpt', 'login_restart.scpt']:
-                        if script_file in line:
-                            if script_file not in script_names:
-                                script_names[script_file] = 0
-                            script_names[script_file] += 1
-                            
-                            # 检查是否同时存在登录和注销脚本
-                            if script_file == 'appleid_login.scpt':
-                                has_login_script = True
-                            elif script_file == 'logout_icloud.scpt':
-                                has_logout_script = True
-                            break
-            
-            # 需要重置环境的条件：
-            # 1. 任何脚本有重复实例（相同名称的脚本运行多个）
-            # 2. appleid_login.scpt和logout_icloud.scpt同时存在
-            need_reset = False
-            reset_reason = ""
-            
-            # 检查是否有重复的脚本实例
-            for script, count in script_names.items():
-                if count > 1:
-                    need_reset = True
-                    reset_reason = f"检测到{script}脚本重复运行（{count}个实例）"
+            while has_other_processes:
+                # 检查是否达到最大等待时间
+                if time.time() - start_wait_time > max_wait_time:
+                    logger.warning(f'[WARNING] 等待其他scpt脚本进程结束超时，继续执行')
                     break
-            
-            # 检查是否同时存在登录和注销脚本
-            if not need_reset and has_login_script and has_logout_script:
-                need_reset = True
-                reset_reason = "检测到appleid_login.scpt和logout_icloud.scpt同时运行"
-            
-            # 如果需要重置环境，执行restart_scptapp.scpt
-            if need_reset:
-                # 执行前再次检查停止标志
+                
+                # 检查是否有停止标志
                 if process_id and stop_flags.get(process_id, False):
-                    logger.info(f'[INFO] 检测到进程停止标志，跳过环境重置 - 进程ID: {process_id}')
-                else:
-                    logger.warning(f'[WARNING] {reset_reason}，执行restart_scptapp.scpt重置环境')
-                    logger.debug(f'[DEBUG] 当前运行的脚本进程:\n' + '\n'.join(script_processes))
-                    
-                    # 导入配置获取脚本目录
-                    from config import macos_script_dir, restart_scptRunner
-                    
-                    try:
-                        # 获取脚本文件名
-                        restart_script = 'restart_scptapp.scpt'
+                    logger.info(f'[INFO] 检测到进程停止标志，停止等待 - 进程ID: {process_id}')
+                    break
+                
+                # 使用SSHClient执行命令检查scpt进程
+                with SSHClient(hostname=vm_ip, username=vm_username, timeout=5) as ssh_client:
+                    success, output, error, exit_code = ssh_client.execute_command(ps_cmd, timeout=10)
+                
+                # 分析输出，查找是否有scpt脚本进程在运行
+                lines = []
+                script_processes = []
+                script_names = {}
+                has_login_script = False
+                has_logout_script = False
+                
+                if success and exit_code == 0:
+                    lines = output.strip().split('\n')
+                
+                # 分析进程信息
+                for line in lines:
+                    if '/usr/bin/osascript' in line and '/macos_script/macos_scpt/macos11/' in line:
+                        script_processes.append(line)
                         
-                        # 构建本地脚本完整路径
-                        local_script_path = os.path.join(macos_script_dir, restart_script)
-                        
-                        # 在虚拟机上的脚本路径
-                        vm_script_path = f'{restart_scptRunner}{restart_script}'
-                        
-                        with SSHClient(hostname=vm_ip, username=vm_username, timeout=5) as ssh_client:
-                            # 执行前再次检查停止标志
-                            if process_id and stop_flags.get(process_id, False):
-                                logger.info(f'[INFO] 检测到进程停止标志，跳过执行restart_scptapp.scpt - 进程ID: {process_id}')
-                            else:
-                                # 执行restart_scptapp.scpt
-                                cmd = f'osascript {vm_script_path}'
-                                restart_success, restart_output, restart_error, restart_exit_code = ssh_client.execute_command(cmd, timeout=30)
+                        # 提取脚本名称
+                        for script_file in ['appleid_login.scpt', 'logout_icloud.scpt', 'queryiCloudAccount.scpt', 'login_restart.scpt']:
+                            if script_file in line:
+                                if script_file not in script_names:
+                                    script_names[script_file] = 0
+                                script_names[script_file] += 1
                                 
-                                if restart_success and restart_exit_code == 0:
-                                    logger.info(f'[INFO] 成功执行restart_scptapp.scpt重置环境')
-                                    # 给服务一些时间重启
-                                    time.sleep(10)
-                                else:
-                                    logger.warning(f'[WARNING] 执行restart_scptapp.scpt失败 - 退出码: {restart_exit_code}, 错误: {restart_error}')
-                    except Exception as restart_e:
-                        logger.error(f'[ERROR] 执行restart_scptapp.scpt时发生异常: {str(restart_e)}')
+                                # 检查是否同时存在登录和注销脚本
+                                if script_file == 'appleid_login.scpt':
+                                    has_login_script = True
+                                elif script_file == 'logout_icloud.scpt':
+                                    has_logout_script = True
+                                break
+                
+                # 检查是否有其他scpt脚本进程在运行
+                if len(script_processes) > 0:
+                    logger.info(f'[INFO] 检测到{len(script_processes)}个正在运行的scpt脚本进程，等待它们完成')
+                    logger.debug(f'[DEBUG] 当前运行的脚本进程:\n' + '\n'.join(script_processes))
+                    time.sleep(wait_interval)
+                    has_other_processes = True
+                else:
+                    logger.info(f'[INFO] 没有检测到其他scpt脚本进程，可以执行脚本')
+                    has_other_processes = False
+                
+                # 检查是否需要重置环境（即使没有其他进程，也可能需要处理异常情况）
+                if not has_other_processes:
+                    # 需要重置环境的条件：
+                    # 1. 任何脚本有重复实例（相同名称的脚本运行多个）
+                    # 2. appleid_login.scpt和logout_icloud.scpt同时存在
+                    need_reset = False
+                    reset_reason = ""
+                    
+                    # 检查是否有重复的脚本实例
+                    for script, count in script_names.items():
+                        if count > 1:
+                            need_reset = True
+                            reset_reason = f"检测到{script}脚本重复运行（{count}个实例）"
+                            break
+                    
+                    # 检查是否同时存在登录和注销脚本
+                    if not need_reset and has_login_script and has_logout_script:
+                        need_reset = True
+                        reset_reason = "检测到appleid_login.scpt和logout_icloud.scpt同时运行"
+                    
+                    # 如果需要重置环境，执行restart_scptapp.scpt
+                    if need_reset:
+                        # 执行前再次检查停止标志
+                        if process_id and stop_flags.get(process_id, False):
+                            logger.info(f'[INFO] 检测到进程停止标志，跳过环境重置 - 进程ID: {process_id}')
+                            has_other_processes = False  # 不再等待
+                        else:
+                            logger.warning(f'[WARNING] {reset_reason}，执行restart_scptapp.scpt重置环境')
+                            logger.debug(f'[DEBUG] 当前运行的脚本进程:\n' + '\n'.join(script_processes))
+                            
+                            # 导入配置获取脚本目录
+                            from config import macos_script_dir, restart_scptRunner
+                            
+                            try:
+                                # 获取脚本文件名
+                                restart_script = 'restart_scptapp.scpt'
+                                
+                                # 构建本地脚本完整路径
+                                local_script_path = os.path.join(macos_script_dir, restart_script)
+                                
+                                # 在虚拟机上的脚本路径
+                                vm_script_path = f'{restart_scptRunner}{restart_script}'
+                                
+                                with SSHClient(hostname=vm_ip, username=vm_username, timeout=5) as ssh_client:
+                                    # 执行前再次检查停止标志
+                                    if process_id and stop_flags.get(process_id, False):
+                                        logger.info(f'[INFO] 检测到进程停止标志，跳过执行restart_scptapp.scpt - 进程ID: {process_id}')
+                                        has_other_processes = False  # 不再等待
+                                    else:
+                                        # 在执行restart_scptapp.scpt之前，先检查是否有scpt进程在运行
+                                        ps_cmd = "ps aux | grep scpt | grep -v grep"
+                                        check_success, check_output, _, _ = ssh_client.execute_command(ps_cmd, timeout=10)
+                                        if check_success and not check_output.strip():
+                                            logger.warning(f'[WARNING] 未检测到scpt进程运行，跳过执行restart_scptapp.scpt')
+                                            restart_success = False
+                                            restart_exit_code = 1
+                                        else:
+                                            # 执行restart_scptapp.scpt
+                                            cmd = f'osascript {vm_script_path}'
+                                            restart_success, restart_output, restart_error, restart_exit_code = ssh_client.execute_command(cmd, timeout=30)
+                                        
+                                        if restart_success and restart_exit_code == 0:
+                                            logger.info(f'[INFO] 成功执行restart_scptapp.scpt重置环境')
+                                            # 等待服务重启
+                                            time.sleep(5)
+                                            
+                                            # 循环检测是否还有重复的scpt进程，直到没有重复进程或达到最大尝试次数
+                                            max_checks = 5
+                                            check_count = 0
+                                            has_duplicate = True
+                                            
+                                            while has_duplicate and check_count < max_checks:
+                                                if process_id and stop_flags.get(process_id, False):
+                                                    logger.info(f'[INFO] 检测到进程停止标志，停止等待重复进程消失 - 进程ID: {process_id}')
+                                                    break
+                                                    
+                                                logger.info(f'[INFO] 检查是否还有重复的scpt进程 (尝试 {check_count + 1}/{max_checks})')
+                                                check_success, check_output, _, _ = ssh_client.execute_command(ps_cmd, timeout=10)
+                                                
+                                                if check_success:
+                                                    check_lines = check_output.strip().split('\n') if check_output else []
+                                                    current_script_processes = []
+                                                    current_script_names = {}
+                                                    
+                                                    for line in check_lines:
+                                                        if '/usr/bin/osascript' in line and '/macos_script/macos_scpt/macos11/' in line:
+                                                            current_script_processes.append(line)
+                                                            for script_file in ['appleid_login.scpt', 'logout_icloud.scpt', 'queryiCloudAccount.scpt', 'login_restart.scpt']:
+                                                                if script_file in line:
+                                                                    if script_file not in current_script_names:
+                                                                        current_script_names[script_file] = 0
+                                                                    current_script_names[script_file] += 1
+                                                                    break
+                                                    
+                                                    # 检查是否还有重复脚本
+                                                    has_duplicate = False
+                                                    for script, count in current_script_names.items():
+                                                        if count > 1:
+                                                            has_duplicate = True
+                                                            logger.warning(f'[WARNING] 仍然检测到{script}脚本重复运行（{count}个实例）')
+                                                            break
+                                                    
+                                                    # 检查是否同时存在登录和注销脚本
+                                                    if not has_duplicate:
+                                                        has_current_login = 'appleid_login.scpt' in current_script_names
+                                                        has_current_logout = 'logout_icloud.scpt' in current_script_names
+                                                        has_duplicate = has_current_login and has_current_logout
+                                                        if has_duplicate:
+                                                            logger.warning(f'[WARNING] 仍然检测到appleid_login.scpt和logout_icloud.scpt同时运行')
+                                                
+                                                if has_duplicate:
+                                                    check_count += 1
+                                                    if check_count < max_checks:
+                                                        logger.info(f'[INFO] 等待3秒后再次检查')
+                                                        time.sleep(3)
+                                                    else:
+                                                        logger.error(f'[ERROR] 达到最大检查次数，仍然存在重复进程')
+                                                else:
+                                                    logger.info(f'[INFO] 确认没有重复的scpt进程，可以继续执行')
+                                                    break
+                                        else:
+                                            logger.warning(f'[WARNING] 执行restart_scptapp.scpt失败 - 退出码: {restart_exit_code}, 错误: {restart_error}')
+                                        # 失败后重试一次
+                                        # logger.info(f'[INFO] 重试执行restart_scptapp.scpt')    
+                                        try:
+                                            # 在重试前再次检查是否有scpt进程在运行
+                                            ps_cmd = "ps aux | grep scpt | grep -v grep"
+                                            check_success, check_output, _, _ = ssh_client.execute_command(ps_cmd, timeout=10)
+                                            if check_success and not check_output.strip():
+                                                logger.warning(f'[WARNING] 未检测到scpt进程运行，跳过重试执行restart_scptapp.scpt')
+                                                retry_success = False
+                                                retry_exit_code = 1
+                                            else:
+                                                retry_success, retry_output, retry_error, retry_exit_code = ssh_client.execute_command(cmd, timeout=30)
+                                                if retry_success and retry_exit_code == 0:
+                                                    logger.info(f'[INFO] 重试执行restart_scptapp.scpt成功')
+                                                else:
+                                                    logger.error(f'[ERROR] 重试执行restart_scptapp.scpt仍然失败 - 退出码: {retry_exit_code}, 错误: {retry_error}')
+                                                time.sleep(10)
+                                        except Exception as retry_e:
+                                            logger.error(f'[ERROR] 重试执行restart_scptapp.scpt时发生异常: {str(retry_e)}')
+                            except Exception as restart_e:
+                                logger.error(f'[ERROR] 执行restart_scptapp.scpt时发生异常: {str(restart_e)}')
+                            
+                            # 重置环境后，需要重新开始等待过程，确保没有进程在运行
+                            has_other_processes = True
         except Exception as e:
-            logger.error(f'[ERROR] 检测重复scpt脚本进程时发生异常: {str(e)}')
+            logger.error(f'[ERROR] 检测scpt脚本进程时发生异常: {str(e)}')
             # 继续执行，不阻止脚本运行
     
     # 为appleid_login.scpt设置单独的超时
@@ -532,7 +646,7 @@ def run_scpt_script(vm_ip, script_name, process_id=None):
             ssh_command = "osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/restart_scptapp.scpt"
             success, output = run_ssh_remote_command(vm_ip, "wx", ssh_command)
             if success:
-              #  logger.info(f'[INFO] Scptrunner客户端已通过SSH成功重启')
+                #  logger.info(f'[INFO] Scptrunner客户端已通过SSH成功重启')
                 # 重启后等待一段时间，然后尝试重新执行脚本
                 time.sleep(10)
                 
@@ -627,14 +741,14 @@ def transfer_appleid_file(vm_ip, apple_id_text):
         
         if success:
          #   logger.info(f'[INFO] 未处理的Apple ID文件传输成功到虚拟机')
-             return success
+            return success
     except Exception as e:
       #  logger.error(f'[ERROR] 传输Apple ID文件时发生异常: {str(e)}')
         # 清理临时文件
         if temp_file and os.path.exists(temp_file):
             os.remove(temp_file)
           #  logger.debug(f'[DEBUG] 异常情况下临时文件已删除: {temp_file}')
-        return False
+    return False
 
 # 辅助函数：同步icloud2.txt文件（已处理的Apple ID）
 def sync_icloud2_file(vm_ip, local_path=None):
@@ -806,7 +920,13 @@ def wait_for_vm_ready(vm_ip, timeout=300):
                             check_cmd = f'test -f {vm_script_path} && echo "exists" || echo "not exists"'
                             success_check, output_check, _, _ = ssh_client.execute_command(check_cmd, timeout=10)
                             
-                            if success_check and "exists" in output_check:
+                            # 在执行restart_scptapp.scpt之前，先检查是否有scpt进程在运行
+                            ps_cmd = "ps aux | grep scpt | grep -v grep"
+                            check_success, check_output, _, _ = ssh_client.execute_command(ps_cmd, timeout=10)
+                            if check_success and not check_output.strip():
+                                logger.warning(f'[WARNING] 未检测到scpt进程运行，跳过执行restart_scptapp.scpt')
+                                success = False  # 避免执行restart_scptapp.scpt
+                            elif success_check and "exists" in output_check:
                                 # 脚本文件存在，直接执行
                                 cmd = f'osascript {vm_script_path}'
                                 success, output, error, exit_code = ssh_client.execute_command(cmd, timeout=30)
@@ -816,7 +936,7 @@ def wait_for_vm_ready(vm_ip, timeout=300):
                                     # 给服务一些时间启动
                                     time.sleep(10)
                                 else:
-                                    logger.warning(f'[WARNING] 调用stop_scptapp.scpt失败 - 退出码: {exit_code}, 错误: {error}')
+                                    logger.warning(f'[WARNING] 调用restart_scptapp.scpt失败 - 退出码: {exit_code}, 错误: {error}')
                             else:
                                 # 如果脚本不存在，尝试从本地上传
                                 if os.path.exists(local_script_path):
@@ -838,9 +958,9 @@ def wait_for_vm_ready(vm_ip, timeout=300):
                                 else:
                                     logger.error(f'[ERROR] 本地脚本文件不存在: {local_script_path}')
                     except Exception as ssh_error:
-                        logger.error(f'[ERROR] SSH调用restart_scptapp.scpt时出错: {str(ssh_error)}')
-                        import traceback
-                        logger.debug(f'[DEBUG] 异常堆栈: {traceback.format_exc()}')
+                            logger.error(f'[ERROR] SSH调用restart_scptapp.scpt时出错: {str(ssh_error)}')
+                            import traceback
+                            logger.debug(f'[DEBUG] 异常堆栈: {traceback.format_exc()}')
                 
                 # 8787端口未开放，但IP已可达，可能服务尚未启动，尝试等待更长时间
                 time.sleep(15)  # 稍微延长等待时间
@@ -1818,19 +1938,28 @@ def execute_process(process_id, transfer_icloud_file=False):
                         write_log(process_id, f'尝试上传restart_scptapp.scpt脚本到虚拟机...')
                         upload_success = ssh_client.upload_file(local_script_path, vm_script_path)
                         if upload_success:
-                            logger.info(f'[INFO] 脚本上传成功，尝试执行')
-                            write_log(process_id, '脚本上传成功，尝试执行...')
-                            # 上传成功后执行脚本
-                            cmd = f'osascript {vm_script_path}'
-                            success, output, error, exit_code = ssh_client.execute_command(cmd, timeout=30)
-                            
-                            if success and exit_code == 0:
-                                logger.info(f'[INFO] 成功调用restart_scptapp.scpt启动远端app客户端 - IP: {vm_ip}')
-                                write_log(process_id, '成功执行restart_scptapp.scpt脚本')
-                                time.sleep(10)
-                            else:
-                                logger.warning(f'[WARNING] 调用上传的restart_scptapp.scpt失败 - 退出码: {exit_code}, 错误: {error}')
-                                write_log(process_id, f'调用上传的restart_scptapp.scpt失败: {error}')
+                                logger.info(f'[INFO] 脚本上传成功，尝试执行')
+                                write_log(process_id, '脚本上传成功，尝试执行...')
+                                
+                                # 在执行restart_scptapp.scpt之前，先检查是否有scpt进程在运行
+                                ps_cmd = "ps aux | grep scpt | grep -v grep"
+                                check_success, check_output, _, _ = ssh_client.execute_command(ps_cmd, timeout=10)
+                                if check_success and not check_output.strip():
+                                    logger.warning(f'[WARNING] 未检测到scpt进程运行，跳过执行restart_scptapp.scpt')
+                                    write_log(process_id, '未检测到scpt进程运行，跳过执行restart_scptapp.scpt')
+                                    success = False  # 避免执行restart_scptapp.scpt
+                                else:
+                                    # 上传成功后执行脚本
+                                    cmd = f'osascript {vm_script_path}'
+                                    success, output, error, exit_code = ssh_client.execute_command(cmd, timeout=30)
+                                    if success and exit_code == 0:
+                                        logger.info(f'[INFO] 成功调用restart_scptapp.scpt启动远端app客户端 - IP: {vm_ip}')
+                                        write_log(process_id, '成功执行restart_scptapp.scpt脚本')
+                                        time.sleep(10)
+                                    else:
+                                        logger.warning(f'[WARNING] 调用上传的restart_scptapp.scpt失败 - 退出码: {exit_code}, 错误: {error}')
+                                        write_log(process_id, f'调用上传的restart_scptapp.scpt失败: {error}')
+                          
                         else:
                             logger.error(f'[ERROR] 脚本上传失败 - 无法复制到虚拟机')
                             write_log(process_id, '脚本上传失败 - 无法复制到虚拟机')
@@ -2743,34 +2872,53 @@ def stop_process():
                     check_cmd = f'test -f {vm_script_path} && echo "exists" || echo "not exists"'
                     success_check, output_check, _, _ = ssh_client.execute_command(check_cmd, timeout=10)
                     
+                    # 确保脚本可用（存在或上传）
+                    script_available = False
                     if success_check and "exists" in output_check:
-                        # 脚本文件存在，直接执行
-                        cmd = f'osascript {vm_script_path}'
-                        success, output, error, exit_code = ssh_client.execute_command(cmd, timeout=30)
-                        
-                        if success and exit_code == 0:
-                            logger.info(f'[INFO] 成功调用stop_scptapp.scpt停止远端app客户端 - IP: {vm_ip}')
+                        script_available = True
+                    elif os.path.exists(local_script_path):
+                        logger.info(f'[INFO] 尝试上传脚本到虚拟机 - {vm_script_path}')
+                        upload_success = ssh_client.upload_file(local_script_path, vm_script_path)
+                        if upload_success:
+                            logger.info(f'[INFO] 脚本上传成功')
+                            script_available = True
                         else:
-                            logger.warning(f'[WARNING] 调用stop_scptapp.scpt失败 - 退出码: {exit_code}, 错误: {error}')
+                            logger.error(f'[ERROR] 脚本上传失败 - 无法复制到虚拟机')
                     else:
-                        # 如果脚本不存在，尝试从本地上传
-                        if os.path.exists(local_script_path):
-                            logger.info(f'[INFO] 尝试上传脚本到虚拟机 - {vm_script_path}')
-                            upload_success = ssh_client.upload_file(local_script_path, vm_script_path)
-                            if upload_success:
-                                logger.info(f'[INFO] 脚本上传成功，尝试执行')
-                                # 上传成功后执行脚本
-                                cmd = f'osascript {vm_script_path}'
-                                success, output, error, exit_code = ssh_client.execute_command(cmd, timeout=30)
+                        logger.error(f'[ERROR] 本地脚本文件不存在: {local_script_path}')
+                    
+                    # 如果脚本可用，循环尝试执行直到成功或达到最大次数
+                    if script_available:
+                        cmd = f'osascript {vm_script_path}'
+                        max_attempts = 3
+                        attempt = 0
+                        stop_success = False
+                        
+                        while attempt < max_attempts and not stop_success:
+                            attempt += 1
+                            logger.info(f'[INFO] 执行stop_scptapp.scpt (尝试 {attempt}/{max_attempts})')
+                            success, output, error, exit_code = ssh_client.execute_command(cmd, timeout=30)
+                            
+                            # 即使exit_code不为0，也检查输出是否包含'Success'或'所有运行中的应用已处理完成'来判断实际是否成功
+                            output_str = output.strip() if output else ''
+                            if success and (exit_code == 0 or 'Success' in output_str or '所有运行中的应用已处理完成' in output_str):
+                                logger.info(f'[INFO] 成功调用stop_scptapp.scpt停止远端app客户端 - IP: {vm_ip}')
+                                stop_success = True
                                 
-                                if success and exit_code == 0:
-                                    logger.info(f'[INFO] 成功调用stop_scptapp.scpt停止远端app客户端 - IP: {vm_ip}')
+                                # 验证是否真正停止了进程
+                                ps_cmd = "ps aux | grep scpt | grep -v grep"
+                                check_success, check_output, _, _ = ssh_client.execute_command(ps_cmd, timeout=10)
+                                if check_success and check_output.strip():
+                                    logger.warning(f'[WARNING] 执行stop_scptapp.scpt后仍然存在scpt进程')
                                 else:
-                                    logger.warning(f'[WARNING] 调用上传的stop_scptapp.scpt失败 - 退出码: {exit_code}, 错误: {error}')
+                                    logger.info(f'[INFO] 确认scpt进程已停止')
                             else:
-                                logger.error(f'[ERROR] 脚本上传失败 - 无法复制到虚拟机')
-                        else:
-                            logger.error(f'[ERROR] 本地脚本文件不存在: {local_script_path}')
+                                logger.warning(f'[WARNING] 调用stop_scptapp.scpt失败 (尝试 {attempt}/{max_attempts}) - 退出码: {exit_code}, 错误: {error}')
+                                if attempt < max_attempts:
+                                    logger.info(f'[INFO] 等待3秒后重试')
+                                    time.sleep(3)
+                                else:
+                                    logger.error(f'[ERROR] 达到最大尝试次数，停止进程失败')
             except Exception as e:
                 logger.error(f'[ERROR] 尝试停止远端app客户端时发生异常: {str(e)}', exc_info=True)
         
