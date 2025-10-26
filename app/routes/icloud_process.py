@@ -335,7 +335,7 @@ def run_ssh_remote_command(vm_ip, username, command):
     try:
         # 使用SSHClient执行命令
         with SSHClient(hostname=vm_ip, username=username) as ssh_client:
-            success, stdout, stderr, exit_code = ssh_client.execute_command(command, timeout=60)
+            success, stdout, stderr, exit_code = ssh_client.execute_command(command, timeout=90)
             
         if success:
             logger.debug(f'[DEBUG] SSH命令执行成功 - 输出: {stdout.strip()}')
@@ -349,16 +349,17 @@ def run_ssh_remote_command(vm_ip, username, command):
 
 # 辅助函数：执行scpt脚本
 def run_scpt_script(vm_ip, script_name, process_id=None):
+    from config import appleid_login_timeout, icloud_wait_after_query
     logger.debug(f'[DEBUG] 准备执行脚本 - VM IP: {vm_ip}, 脚本名称: {script_name}')
     url = f'http://{vm_ip}:{SCPTRUNNER_PORT}/run?path={SCRIPT_DIR}{script_name}'
     #logger.debug(f'[DEBUG] 请求URL: {url}')
     
-    # 为appleid_login.scpt设置单独的60秒超时
+    # 为appleid_login.scpt设置单独的超时
     if script_name == 'appleid_login.scpt':
-        timeout = 60
+        timeout = appleid_login_timeout
         logger.info(f'[INFO] 使用特定超时设置: {timeout}秒 - 脚本: {script_name}')
     else:
-        timeout = 60  # 其他脚本使用300秒超时
+        timeout = 90  # 其他脚本使用默认超时
     
     try:
         start_time = time.time()
@@ -384,8 +385,8 @@ def run_scpt_script(vm_ip, script_name, process_id=None):
                 logger.info(f'[INFO] login_restart.scpt执行结果: {json.dumps(restart_result)}')
                 
                 # 重启后等待一段时间，然后重新执行appleid_login.scpt
-                logger.info(f'[INFO] login_restart.scpt执行完成，等待5秒后重新执行appleid_login.scpt')
-                time.sleep(5)
+                logger.info(f'[INFO] login_restart.scpt执行完成，等待{icloud_wait_after_query}秒后重新执行appleid_login.scpt')
+                time.sleep(icloud_wait_after_query)
                 
                 # 检查是否有停止标志，如果有则不重新执行脚本
                 if process_id and stop_flags.get(process_id, False):
@@ -559,14 +560,39 @@ def sync_icloud2_file(vm_ip, local_path=None):
 
 def wait_for_vm_ready(vm_ip, timeout=300):
     logger.info(f'[INFO] 开始等待虚拟机启动 - IP: {vm_ip}, 超时时间: {timeout}秒')
-    start_time = time.time()
-    attempt = 0
     
     # 定义虚拟机用户名
     vm_username = 'wx'  # 虚拟机用户名
     
-    # 导入os模块用于文件路径操作
+    # 导入必要的模块
     import os
+    from config import temp_dir
+    
+    start_time = time.time()
+    attempt = 0
+    
+    # 检查是否是五码更换后的重启
+    is_wuma_restart = False
+    process_id = None
+    
+    # 查找对应的进程ID
+    for process in processes:
+        if process.get('client') == vm_ip:
+            process_id = process.get('id')
+            break
+    
+    # 检查五码重启标志
+    if process_id:
+        wuma_restart_flag_file = os.path.join(temp_dir, f'wuma_restart_{process_id}.flag')
+        if os.path.exists(wuma_restart_flag_file):
+            is_wuma_restart = True
+            logger.info(f"[INFO] 检测到五码更换后的重启 - 进程ID: {process_id}")
+            # 删除标志文件
+            try:
+                os.remove(wuma_restart_flag_file)
+                logger.debug(f"[DEBUG] 已删除五码重启标志文件")
+            except Exception as e:
+                logger.warning(f"[WARNING] 删除五码重启标志文件失败: {str(e)}")
     
 
     while time.time() - start_time < timeout:
@@ -639,63 +665,67 @@ def wait_for_vm_ready(vm_ip, timeout=300):
             else:
                 logger.warning(f'[WARNING] 8787端口未开放 - IP: {vm_ip}')
                 
-                # 尝试通过SSH调用restart_scptapp.scpt启动远端app客户端
-                try:
-                    logger.info(f'[INFO] 尝试通过SSH启动远端app客户端 - IP: {vm_ip}')
-                    # 导入配置获取脚本目录
-                    from config import macos_script_dir, restart_scptRunner
-                    
-                    # 获取脚本文件名（仅文件名部分）
-                    script_filename = 'restart_scptapp.scpt'
-                    
-                    # 构建本地脚本完整路径
-                    local_script_path = os.path.join(macos_script_dir, script_filename)
-                    logger.debug(f'[DEBUG] 本地脚本路径: {local_script_path}')
-                    
-                    # 在虚拟机上的脚本路径，使用config.py中的restart_scptRunner配置
-                    vm_script_path = f'{restart_scptRunner}{script_filename}'
-                 #   logger.debug(f'[DEBUG] 虚拟机脚本路径: {vm_script_path}')
-                    
-                    with SSHClient(hostname=vm_ip, username=vm_username, timeout=5) as ssh_client:
-                        # 首先检查虚拟机上是否存在脚本文件
-                        check_cmd = f'test -f {vm_script_path} && echo "exists" || echo "not exists"'
-                        success_check, output_check, _, _ = ssh_client.execute_command(check_cmd, timeout=10)
+                # 检查是否是五码更换后的重启，如果是则跳过stop_scptapp.scpt调用
+                if is_wuma_restart:
+                    logger.info(f'[INFO] 五码更换后的重启，跳过stop_scptapp.scpt调用 - IP: {vm_ip}')
+                else:
+                    # 尝试通过SSH调用restart_scptapp.scpt启动远端app客户端
+                    try:
+                        logger.info(f'[INFO] 尝试通过SSH启动远端app客户端 - IP: {vm_ip}')
+                        # 导入配置获取脚本目录
+                        from config import macos_script_dir, restart_scptRunner
                         
-                        if success_check and "exists" in output_check:
-                            # 脚本文件存在，直接执行
-                            cmd = f'osascript {vm_script_path}'
-                            success, output, error, exit_code = ssh_client.execute_command(cmd, timeout=30)
+                        # 获取脚本文件名（仅文件名部分）
+                        script_filename = 'restart_scptapp.scpt'
+                        
+                        # 构建本地脚本完整路径
+                        local_script_path = os.path.join(macos_script_dir, script_filename)
+                        logger.debug(f'[DEBUG] 本地脚本路径: {local_script_path}')
+                        
+                        # 在虚拟机上的脚本路径，使用config.py中的restart_scptRunner配置
+                        vm_script_path = f'{restart_scptRunner}{script_filename}'
+                     #   logger.debug(f'[DEBUG] 虚拟机脚本路径: {vm_script_path}')
+                        
+                        with SSHClient(hostname=vm_ip, username=vm_username, timeout=5) as ssh_client:
+                            # 首先检查虚拟机上是否存在脚本文件
+                            check_cmd = f'test -f {vm_script_path} && echo "exists" || echo "not exists"'
+                            success_check, output_check, _, _ = ssh_client.execute_command(check_cmd, timeout=10)
                             
-                            if success and exit_code == 0:
-                                logger.info(f'[INFO] 成功调用restart_scptapp.scpt启动远端app客户端 - IP: {vm_ip}')
-                                # 给服务一些时间启动
-                                time.sleep(10)
-                            else:
-                                logger.warning(f'[WARNING] 调用stop_scptapp.scpt失败 - 退出码: {exit_code}, 错误: {error}')
-                        else:
-                            # 如果脚本不存在，尝试从本地上传
-                            if os.path.exists(local_script_path):
-                                logger.info(f'[INFO] 尝试上传脚本到虚拟机 - {vm_script_path}')
-                                upload_success = ssh_client.upload_file(local_script_path, vm_script_path)
-                                if upload_success:
-                                    logger.info(f'[INFO] 脚本上传成功，尝试执行')
-                                    # 上传成功后执行脚本
-                                    cmd = f'osascript {vm_script_path}'
-                                    success, output, error, exit_code = ssh_client.execute_command(cmd, timeout=30)
-                                    
-                                    if success and exit_code == 0:
-                                        logger.info(f'[INFO] 成功调用restart_scptapp.scpt启动远端app客户端 - IP: {vm_ip}')
-                                        time.sleep(10)
-                                    else:
-                                        logger.warning(f'[WARNING] 调用上传的restart_scptapp.scpt失败 - 退出码: {exit_code}, 错误: {error}')
+                            if success_check and "exists" in output_check:
+                                # 脚本文件存在，直接执行
+                                cmd = f'osascript {vm_script_path}'
+                                success, output, error, exit_code = ssh_client.execute_command(cmd, timeout=30)
+                                
+                                if success and exit_code == 0:
+                                    logger.info(f'[INFO] 成功调用restart_scptapp.scpt启动远端app客户端 - IP: {vm_ip}')
+                                    # 给服务一些时间启动
+                                    time.sleep(10)
                                 else:
-                                    logger.error(f'[ERROR] 脚本上传失败 - 无法复制到虚拟机')
+                                    logger.warning(f'[WARNING] 调用stop_scptapp.scpt失败 - 退出码: {exit_code}, 错误: {error}')
                             else:
-                                logger.error(f'[ERROR] 本地脚本文件不存在: {local_script_path}')
-                except Exception as ssh_error:
-                    logger.error(f'[ERROR] SSH调用restart_scptapp.scpt时出错: {str(ssh_error)}')
-                    import traceback
-                    logger.debug(f'[DEBUG] 异常堆栈: {traceback.format_exc()}')
+                                # 如果脚本不存在，尝试从本地上传
+                                if os.path.exists(local_script_path):
+                                    logger.info(f'[INFO] 尝试上传脚本到虚拟机 - {vm_script_path}')
+                                    upload_success = ssh_client.upload_file(local_script_path, vm_script_path)
+                                    if upload_success:
+                                        logger.info(f'[INFO] 脚本上传成功，尝试执行')
+                                        # 上传成功后执行脚本
+                                        cmd = f'osascript {vm_script_path}'
+                                        success, output, error, exit_code = ssh_client.execute_command(cmd, timeout=30)
+                                        
+                                        if success and exit_code == 0:
+                                            logger.info(f'[INFO] 成功调用restart_scptapp.scpt启动远端app客户端 - IP: {vm_ip}')
+                                            time.sleep(10)
+                                        else:
+                                            logger.warning(f'[WARNING] 调用上传的restart_scptapp.scpt失败 - 退出码: {exit_code}, 错误: {error}')
+                                    else:
+                                        logger.error(f'[ERROR] 脚本上传失败 - 无法复制到虚拟机')
+                                else:
+                                    logger.error(f'[ERROR] 本地脚本文件不存在: {local_script_path}')
+                    except Exception as ssh_error:
+                        logger.error(f'[ERROR] SSH调用restart_scptapp.scpt时出错: {str(ssh_error)}')
+                        import traceback
+                        logger.debug(f'[DEBUG] 异常堆栈: {traceback.format_exc()}')
                 
                 # 8787端口未开放，但IP已可达，可能服务尚未启动，尝试等待更长时间
                 time.sleep(15)  # 稍微延长等待时间
@@ -752,6 +782,51 @@ def monitor_and_restart_process_after_reboot(vm_ip, process_id, transfer_icloud_
     update_process_status(process_id, '执行中')
     logger.info(f'[INFO] 更新进程状态为执行中 - 进程ID: {process_id}')
     write_log(process_id, f'进程重启执行: {process["name"]}')
+    
+    # 进程重启前，同步远程的三个文件到本地logs进程目录appleid目录
+    logger.info(f'[INFO] 进程重启前，同步远程的三个文件: icloud.txt, icloud2.txt, error.txt')
+    write_log(process_id, '进程重启前，同步远程文件: icloud.txt, icloud2.txt, error.txt')
+    
+    # 同步文件函数
+    def sync_remote_files_to_local():
+        """同步远端的三个文件到本地logs进程目录appleid目录"""
+        appleid_log_dir = os.path.join(LOG_DIR, process_id, 'appleid')
+        os.makedirs(appleid_log_dir, exist_ok=True)
+        
+        local_files = {
+            'icloud.txt': os.path.join(appleid_log_dir, 'icloud.txt'),
+            'icloud2.txt': os.path.join(appleid_log_dir, 'icloud2.txt'),
+            'error.txt': os.path.join(appleid_log_dir, 'error.txt')
+        }
+        remote_files = {
+            'icloud.txt': ICLOUD_TXT_PATH,
+            'icloud2.txt': ICLOUD2_TXT_PATH,
+            'error.txt': ERROR_TXT_PATH
+        }
+        
+        sync_results = {}
+        for file_name, remote_path in remote_files.items():
+            try:
+                local_path = local_files[file_name]
+                if download_file_from_remote(vm_ip, remote_path, local_path):
+                    logger.info(f'[INFO] 成功同步文件: {file_name} 到 {local_path}')
+                    sync_results[file_name] = 'success'
+                else:
+                    logger.warning(f'[WARNING] 同步文件: {file_name} 失败')
+                    sync_results[file_name] = 'failed'
+            except Exception as e:
+                logger.error(f'[ERROR] 同步文件 {file_name} 时发生异常: {str(e)}')
+                sync_results[file_name] = f'error: {str(e)}'
+        
+        return sync_results
+    
+    # 执行文件同步
+    try:
+        sync_results = sync_remote_files_to_local()
+        write_log(process_id, f'文件同步结果: {json.dumps(sync_results)}')
+    except Exception as sync_error:
+        logger.error(f'[ERROR] 同步文件时发生异常: {str(sync_error)}')
+        write_log(process_id, f'文件同步异常: {str(sync_error)}')
     
     # 如果需要传输icloud.txt文件（仅在创建进程时）
     if transfer_icloud_file:
@@ -1203,6 +1278,17 @@ def change_wuma(vm_ip, wuma_config):
         if not process_id:
             logger.error(f"[ERROR] 未能获取进程ID，无法监控重启后的进程")
             return False
+        
+        # 记录这是五码更换后的重启，用于后续跳过stop_scptapp.scpt调用
+        # 使用一个简单的文件标志
+        from config import temp_dir
+        wuma_restart_flag_file = os.path.join(temp_dir, f'wuma_restart_{process_id}.flag')
+        try:
+            with open(wuma_restart_flag_file, 'w') as f:
+                f.write(str(time.time()))
+            logger.info(f"[INFO] 已标记为五码更换后的重启 - 进程ID: {process_id}")
+        except Exception as e:
+            logger.warning(f"[WARNING] 创建五码重启标志文件失败: {str(e)}")
             
         # 使用新的监控函数来处理虚拟机重启后的进程重启
         # 对于五码更换场景，我们通常只需要重启虚拟机，不需要再次传输icloud.txt文件
@@ -1598,10 +1684,26 @@ def execute_process(process_id, transfer_icloud_file=False):
             # 登录流程
             login_success = False
             while not login_success:
+                # 在执行任何操作前，先检查停止标志
+                if stop_flags.get(process_id, False):
+                    logger.info(f'[INFO] 收到停止命令，终止进程执行 - 进程ID: {process_id}')
+                    write_log(process_id, '收到停止命令，终止进程执行')
+                    process['status'] = '已停止'
+                    update_process_status(process_id, '已停止')
+                    break
+                
                 # 在执行登录脚本前，同步远端的三个文件：icloud.txt, icloud2.txt, error.txt
                 write_log(process_id, '登录前同步远端文件: icloud.txt, icloud2.txt, error.txt')
                 sync_results = sync_remote_files()
                 write_log(process_id, f'文件同步结果: {json.dumps(sync_results)}')
+                
+                # 再次检查停止标志，防止在同步文件过程中收到停止命令
+                if stop_flags.get(process_id, False):
+                    logger.info(f'[INFO] 收到停止命令，终止进程执行 - 进程ID: {process_id}')
+                    write_log(process_id, '收到停止命令，终止进程执行')
+                    process['status'] = '已停止'
+                    update_process_status(process_id, '已停止')
+                    break
                 
                 login_result = run_scpt_script(vm_ip, 'appleid_login.scpt', process_id)
                 write_log(process_id, f'登录结果: {json.dumps(login_result)}')
@@ -1632,11 +1734,15 @@ def execute_process(process_id, transfer_icloud_file=False):
                         logger.error(f'[ERROR] 重启登录失败')
                         write_log(process_id, f'重启登录失败')
                         break
-                elif login_message == 'Success':
-                    # 登录成功
+                elif '开始处理Apple ID' in login_message or login_message == 'Success':
+                    # 当返回包含"开始处理Apple ID"格式的内容或直接返回"Success"时，都视为登录成功
                     login_success = True
-                    logger.info(f'[INFO] 登录成功')
-                    write_log(process_id, f'登录成功')
+                    if '开始处理Apple ID' in login_message:
+                        logger.info(f'[INFO] 登录成功并开始处理Apple ID')
+                        write_log(process_id, f'登录成功并开始处理Apple ID')
+                    else:
+                        logger.info(f'[INFO] 登录脚本返回Success，继续执行查询和注销')
+                        write_log(process_id, f'登录脚本返回Success，继续执行查询和注销')
                 elif 'MOBILEME_CREATE_UNAVAILABLE_MAC' in login_message:
                     # 需要更换五码
                     logger.warning(f'[WARNING] 检测到需要更换五码 - Apple ID: {apple_id}')
@@ -1676,9 +1782,10 @@ def execute_process(process_id, transfer_icloud_file=False):
                 continue
             
             # 登录成功后，间隔10秒
-            logger.info(f'[INFO] 登录成功，等待10秒后执行查询')
-            write_log(process_id, f'登录成功，等待10秒后执行查询...')
-            time.sleep(10)
+            from config import icloud_wait_after_login
+            logger.info(f'[INFO] 登录成功，等待{icloud_wait_after_login}秒后执行查询')
+            write_log(process_id, f'登录成功，等待{icloud_wait_after_login}秒后执行查询...')
+            time.sleep(icloud_wait_after_login)
             
             # 检查停止标志
             if stop_flags.get(process_id, False):
@@ -1720,10 +1827,11 @@ def execute_process(process_id, transfer_icloud_file=False):
                 write_log(process_id, f'三次查询均未成功')
                 continue
             
-            # 查询成功后，等待5秒执行注销
-            logger.info(f'[INFO] 查询成功，等待5秒后执行注销')
-            write_log(process_id, f'查询成功，等待5秒后执行注销...')
-            time.sleep(5)
+            from config import icloud_wait_after_query
+            # 查询成功后，等待指定时间执行注销
+            logger.info(f'[INFO] 查询成功，等待{icloud_wait_after_query}秒后执行注销')
+            write_log(process_id, f'查询成功，等待{icloud_wait_after_query}秒后执行注销...')
+            time.sleep(icloud_wait_after_query)
             
             # 检查停止标志
             if stop_flags.get(process_id, False):
@@ -1752,9 +1860,10 @@ def execute_process(process_id, transfer_icloud_file=False):
                 
                 if logout_result.get('result') == 'success':
                     # 注销成功后查询是否真正注销
-                    logger.info(f'[INFO] 注销脚本执行成功，等待10秒后验证是否真正注销')
-                    write_log(process_id, f'注销脚本执行成功，等待10秒后验证是否真正注销...')
-                    time.sleep(10)
+                    from config import icloud_wait_after_login
+                    logger.info(f'[INFO] 注销脚本执行成功，等待{icloud_wait_after_login}秒后验证是否真正注销')
+                    write_log(process_id, f'注销脚本执行成功，等待{icloud_wait_after_login}秒后验证是否真正注销...')
+                    time.sleep(icloud_wait_after_login)
                     
                     # 检查停止标志
                     if stop_flags.get(process_id, False):
@@ -1814,24 +1923,17 @@ def execute_process(process_id, transfer_icloud_file=False):
             write_log(process_id, f'文件同步完成，成功: {successful_syncs}/3，详细结果: {json.dumps(sync_results)}')
             logger.info(f'[INFO] 文件同步完成，成功: {successful_syncs}/3 个文件')
             
-            # 更新剩余未执行的Apple ID到远程icloud.txt
+            # 注意：不再更新远程icloud.txt文件，以远端文件为基础
+            # 仅在本地维护剩余Apple ID列表，用于进度跟踪
             remaining_apple_ids = non_empty_apple_ids[idx+1:]
-            logger.info(f'[INFO] 更新远程icloud.txt，剩余 {len(remaining_apple_ids)} 个Apple ID')
-            write_log(process_id, f'更新远程icloud.txt，剩余 {len(remaining_apple_ids)} 个Apple ID...')
+            logger.info(f'[INFO] 剩余待处理Apple ID: {len(remaining_apple_ids)} 个')
+            write_log(process_id, f'剩余待处理Apple ID: {len(remaining_apple_ids)} 个')
             
-            # 将剩余的Apple ID写回临时文件并传输到远程
+            # 将剩余的Apple ID写回本地临时文件，仅用于本地进度管理
             remaining_content = '\n'.join(remaining_apple_ids)
             with open(TEMP_PLIST_PATH, 'w', encoding='utf-8') as f:
                 f.write(remaining_content)
             logger.debug(f'[DEBUG] 已更新本地临时文件，剩余内容长度: {len(remaining_content)} 字符')
-            
-            # 传输更新后的内容到远程
-            if not transfer_appleid_file(vm_ip, remaining_content):
-                logger.warning(f'[WARNING] 更新远程icloud.txt失败，但继续处理')
-                write_log(process_id, '更新远程icloud.txt失败，但继续处理')
-            else:
-                logger.info(f'[INFO] 成功更新远程icloud.txt')
-                write_log(process_id, '成功更新远程icloud.txt')
         
         # 所有操作完成或被停止
         # 检查进程状态，如果是因为异常中断不应标记为已完成
@@ -2333,6 +2435,51 @@ def stop_process():
             })
         
         logger.debug(f'[DEBUG] 开始停止进程 - 进程ID: {process_id}')
+        
+        # 进程停止前，同步远程的三个文件到本地logs进程目录appleid目录
+        logger.info(f'[INFO] 进程停止前，同步远程的三个文件: icloud.txt, icloud2.txt, error.txt')
+        write_log(process_id, '进程停止前，同步远程文件: icloud.txt, icloud2.txt, error.txt')
+        
+        # 同步文件函数
+        def sync_remote_files_on_stop():
+            """同步远端的三个文件到本地logs进程目录appleid目录"""
+            appleid_log_dir = os.path.join(LOG_DIR, process_id, 'appleid')
+            os.makedirs(appleid_log_dir, exist_ok=True)
+            
+            local_files = {
+                'icloud.txt': os.path.join(appleid_log_dir, 'icloud.txt'),
+                'icloud2.txt': os.path.join(appleid_log_dir, 'icloud2.txt'),
+                'error.txt': os.path.join(appleid_log_dir, 'error.txt')
+            }
+            remote_files = {
+                'icloud.txt': ICLOUD_TXT_PATH,
+                'icloud2.txt': ICLOUD2_TXT_PATH,
+                'error.txt': ERROR_TXT_PATH
+            }
+            
+            sync_results = {}
+            for file_name, remote_path in remote_files.items():
+                try:
+                    local_path = local_files[file_name]
+                    if download_file_from_remote(vm_ip, remote_path, local_path):
+                        logger.info(f'[INFO] 成功同步文件: {file_name} 到 {local_path}')
+                        sync_results[file_name] = 'success'
+                    else:
+                        logger.warning(f'[WARNING] 同步文件: {file_name} 失败')
+                        sync_results[file_name] = 'failed'
+                except Exception as e:
+                    logger.error(f'[ERROR] 同步文件 {file_name} 时发生异常: {str(e)}')
+                    sync_results[file_name] = f'error: {str(e)}'
+            
+            return sync_results
+        
+        # 执行文件同步
+        try:
+            sync_results = sync_remote_files_on_stop()
+            write_log(process_id, f'文件同步结果: {json.dumps(sync_results)}')
+        except Exception as sync_error:
+            logger.error(f'[ERROR] 同步文件时发生异常: {str(sync_error)}')
+            write_log(process_id, f'文件同步异常: {str(sync_error)}')
         
         # 尝试从远程下载最新的icloud.txt文件（如果进程正在执行中）
         if db_status == '执行中' or process.get('status') == '执行中':

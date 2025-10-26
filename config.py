@@ -11,6 +11,8 @@ template_dir = f'{project_root}\\TemplateVM'
 clone_dir = f'{project_root}\\NewVM\\10.12_clone'
 # 临时虚拟机目录
 vm_temp_dir = f'{project_root}\\NewVM\\10.12_clone'
+# 临时文件目录
+temp_dir = f'{project_root}\\temp'
 vm_base_dir= f'{project_root}\\NewVM'
 # 克隆后成品虚拟机路径
 vm_chengpin_dir = f'{project_root}\\NewVM\chengpin_vm'
@@ -91,3 +93,11 @@ icloud_txt_path=f'/Users/wx/Desktop/icloud.txt'
 icloud2_txt_path=f'/Users/wx/Desktop/icloud2.txt'
 #错误id文本
 error_txt_path=f'/Users/wx/Desktop/error.txt'
+
+# iCloud处理时间配置
+# 查询成功后等待执行注销的时间（秒）
+icloud_wait_after_query = 5
+# AppleID登录脚本超时设置（秒）
+appleid_login_timeout = 90
+# 登录成功后等待执行查询的时间（秒）
+icloud_wait_after_login = 10
