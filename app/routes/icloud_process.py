@@ -359,6 +359,62 @@ def run_scpt_script(vm_ip, script_name, process_id=None):
         logger.info(f'[INFO] 检测到进程停止标志，跳过执行脚本 - 进程ID: {process_id}, 脚本: {script_name}')
         return {'result': '进程已停止，跳过执行脚本'}
     
+    # 检测重复的scpt脚本进程
+    logger.info(f'[INFO] 检测是否存在重复的scpt脚本进程 - VM IP: {vm_ip}')
+    vm_username = 'wx'  # 虚拟机用户名
+    try:
+        # 执行ps命令检查scpt相关进程
+        ps_cmd = "ps aux | grep scpt | grep -v grep"
+        success, output, error, exit_code = None, None, None, None
+        
+        # 使用SSHClient执行命令
+        with SSHClient(hostname=vm_ip, username=vm_username, timeout=5) as ssh_client:
+            success, output, error, exit_code = ssh_client.execute_command(ps_cmd, timeout=10)
+        
+        # 分析输出，查找重复的scpt脚本进程
+        if success and exit_code == 0:
+            lines = output.strip().split('\n')
+            script_processes = []
+            
+            for line in lines:
+                if '/usr/bin/osascript' in line and '/macos_script/macos_scpt/macos11/' in line:
+                    script_processes.append(line)
+            
+            # 如果发现多个scpt脚本进程，执行restart_scptapp.scpt
+            if len(script_processes) > 1:
+                logger.warning(f'[WARNING] 检测到{len(script_processes)}个运行中的scpt脚本进程，执行restart_scptapp.scpt重置环境')
+                logger.debug(f'[DEBUG] 重复进程详情:\n' + '\n'.join(script_processes))
+                
+                # 导入配置获取脚本目录
+                from config import macos_script_dir, restart_scptRunner
+                
+                try:
+                    # 获取脚本文件名
+                    restart_script = 'restart_scptapp.scpt'
+                    
+                    # 构建本地脚本完整路径
+                    local_script_path = os.path.join(macos_script_dir, restart_script)
+                    
+                    # 在虚拟机上的脚本路径
+                    vm_script_path = f'{restart_scptRunner}{restart_script}'
+                    
+                    with SSHClient(hostname=vm_ip, username=vm_username, timeout=5) as ssh_client:
+                        # 执行restart_scptapp.scpt
+                        cmd = f'osascript {vm_script_path}'
+                        restart_success, restart_output, restart_error, restart_exit_code = ssh_client.execute_command(cmd, timeout=30)
+                        
+                        if restart_success and restart_exit_code == 0:
+                            logger.info(f'[INFO] 成功执行restart_scptapp.scpt重置环境')
+                            # 给服务一些时间重启
+                            time.sleep(10)
+                        else:
+                            logger.warning(f'[WARNING] 执行restart_scptapp.scpt失败 - 退出码: {restart_exit_code}, 错误: {restart_error}')
+                except Exception as restart_e:
+                    logger.error(f'[ERROR] 执行restart_scptapp.scpt时发生异常: {str(restart_e)}')
+    except Exception as e:
+        logger.error(f'[ERROR] 检测重复scpt脚本进程时发生异常: {str(e)}')
+        # 继续执行，不阻止脚本运行
+    
     # 为appleid_login.scpt设置单独的超时
     if script_name == 'appleid_login.scpt':
         timeout = appleid_login_timeout
