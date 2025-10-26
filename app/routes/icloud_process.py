@@ -359,25 +359,30 @@ def run_scpt_script(vm_ip, script_name, process_id=None):
         logger.info(f'[INFO] 检测到进程停止标志，跳过执行脚本 - 进程ID: {process_id}, 脚本: {script_name}')
         return {'result': '进程已停止，跳过执行脚本'}
     
-    # 检测重复的scpt脚本进程
-    logger.info(f'[INFO] 检测是否存在重复的scpt脚本进程 - VM IP: {vm_ip}')
-    vm_username = 'wx'  # 虚拟机用户名
-    try:
-        # 执行ps命令检查scpt相关进程
-        ps_cmd = "ps aux | grep scpt | grep -v grep"
-        success, output, error, exit_code = None, None, None, None
-        
-        # 使用SSHClient执行命令
-        with SSHClient(hostname=vm_ip, username=vm_username, timeout=5) as ssh_client:
-            success, output, error, exit_code = ssh_client.execute_command(ps_cmd, timeout=10)
-        
-        # 分析输出，查找重复的scpt脚本进程
-        if success and exit_code == 0:
-            lines = output.strip().split('\n')
+    # 检测重复的scpt脚本进程前先检查停止标志
+    if process_id and stop_flags.get(process_id, False):
+        logger.info(f'[INFO] 检测到进程停止标志，跳过重复进程检测 - 进程ID: {process_id}, 脚本: {script_name}')
+    else:
+        logger.info(f'[INFO] 检测是否存在重复的scpt脚本进程 - VM IP: {vm_ip}')
+        vm_username = 'wx'  # 虚拟机用户名
+        try:
+            # 执行ps命令检查scpt相关进程
+            ps_cmd = "ps aux | grep scpt | grep -v grep"
+            success, output, error, exit_code = None, None, None, None
+            
+            # 使用SSHClient执行命令
+            with SSHClient(hostname=vm_ip, username=vm_username, timeout=5) as ssh_client:
+                success, output, error, exit_code = ssh_client.execute_command(ps_cmd, timeout=10)
+            
+            # 分析输出，查找重复的scpt脚本进程
+            lines = []
             script_processes = []
             script_names = {}
             has_login_script = False
             has_logout_script = False
+            
+            if success and exit_code == 0:
+                lines = output.strip().split('\n')
             
             # 分析进程信息
             for line in lines:
@@ -418,38 +423,46 @@ def run_scpt_script(vm_ip, script_name, process_id=None):
             
             # 如果需要重置环境，执行restart_scptapp.scpt
             if need_reset:
-                logger.warning(f'[WARNING] {reset_reason}，执行restart_scptapp.scpt重置环境')
-                logger.debug(f'[DEBUG] 当前运行的脚本进程:\n' + '\n'.join(script_processes))
-                
-                # 导入配置获取脚本目录
-                from config import macos_script_dir, restart_scptRunner
-                
-                try:
-                    # 获取脚本文件名
-                    restart_script = 'restart_scptapp.scpt'
+                # 执行前再次检查停止标志
+                if process_id and stop_flags.get(process_id, False):
+                    logger.info(f'[INFO] 检测到进程停止标志，跳过环境重置 - 进程ID: {process_id}')
+                else:
+                    logger.warning(f'[WARNING] {reset_reason}，执行restart_scptapp.scpt重置环境')
+                    logger.debug(f'[DEBUG] 当前运行的脚本进程:\n' + '\n'.join(script_processes))
                     
-                    # 构建本地脚本完整路径
-                    local_script_path = os.path.join(macos_script_dir, restart_script)
+                    # 导入配置获取脚本目录
+                    from config import macos_script_dir, restart_scptRunner
                     
-                    # 在虚拟机上的脚本路径
-                    vm_script_path = f'{restart_scptRunner}{restart_script}'
-                    
-                    with SSHClient(hostname=vm_ip, username=vm_username, timeout=5) as ssh_client:
-                        # 执行restart_scptapp.scpt
-                        cmd = f'osascript {vm_script_path}'
-                        restart_success, restart_output, restart_error, restart_exit_code = ssh_client.execute_command(cmd, timeout=30)
+                    try:
+                        # 获取脚本文件名
+                        restart_script = 'restart_scptapp.scpt'
                         
-                        if restart_success and restart_exit_code == 0:
-                            logger.info(f'[INFO] 成功执行restart_scptapp.scpt重置环境')
-                            # 给服务一些时间重启
-                            time.sleep(10)
-                        else:
-                            logger.warning(f'[WARNING] 执行restart_scptapp.scpt失败 - 退出码: {restart_exit_code}, 错误: {restart_error}')
-                except Exception as restart_e:
-                    logger.error(f'[ERROR] 执行restart_scptapp.scpt时发生异常: {str(restart_e)}')
-    except Exception as e:
-        logger.error(f'[ERROR] 检测重复scpt脚本进程时发生异常: {str(e)}')
-        # 继续执行，不阻止脚本运行
+                        # 构建本地脚本完整路径
+                        local_script_path = os.path.join(macos_script_dir, restart_script)
+                        
+                        # 在虚拟机上的脚本路径
+                        vm_script_path = f'{restart_scptRunner}{restart_script}'
+                        
+                        with SSHClient(hostname=vm_ip, username=vm_username, timeout=5) as ssh_client:
+                            # 执行前再次检查停止标志
+                            if process_id and stop_flags.get(process_id, False):
+                                logger.info(f'[INFO] 检测到进程停止标志，跳过执行restart_scptapp.scpt - 进程ID: {process_id}')
+                            else:
+                                # 执行restart_scptapp.scpt
+                                cmd = f'osascript {vm_script_path}'
+                                restart_success, restart_output, restart_error, restart_exit_code = ssh_client.execute_command(cmd, timeout=30)
+                                
+                                if restart_success and restart_exit_code == 0:
+                                    logger.info(f'[INFO] 成功执行restart_scptapp.scpt重置环境')
+                                    # 给服务一些时间重启
+                                    time.sleep(10)
+                                else:
+                                    logger.warning(f'[WARNING] 执行restart_scptapp.scpt失败 - 退出码: {restart_exit_code}, 错误: {restart_error}')
+                    except Exception as restart_e:
+                        logger.error(f'[ERROR] 执行restart_scptapp.scpt时发生异常: {str(restart_e)}')
+        except Exception as e:
+            logger.error(f'[ERROR] 检测重复scpt脚本进程时发生异常: {str(e)}')
+            # 继续执行，不阻止脚本运行
     
     # 为appleid_login.scpt设置单独的超时
     if script_name == 'appleid_login.scpt':
@@ -1829,12 +1842,15 @@ def execute_process(process_id, transfer_icloud_file=False):
             write_log(process_id, f'SSH调用restart_scptapp.scpt时出错: {str(ssh_error)}')
         
         for idx, apple_id in enumerate(non_empty_apple_ids, 1):
-            # 检查停止标志
+            # 检查停止标志 - 循环开始立即检查
             if stop_flags.get(process_id, False):
                 logger.info(f'[INFO] 收到停止命令，终止进程执行 - 进程ID: {process_id}')
                 write_log(process_id, '收到停止命令，终止进程执行')
                 process['status'] = '已停止'
                 update_process_status(process_id, '已停止')
+                # 清理停止标志并退出
+                if process_id in stop_flags:
+                    del stop_flags[process_id]
                 break
                 
             logger.info(f'[INFO] 开始处理Apple ID ({idx}/{len(non_empty_apple_ids)}): {apple_id[:50]}...')
@@ -1848,6 +1864,9 @@ def execute_process(process_id, transfer_icloud_file=False):
                 write_log(process_id, '收到停止命令，终止进程执行')
                 process['status'] = '已停止'
                 update_process_status(process_id, '已停止')
+                # 清理停止标志并退出
+                if process_id in stop_flags:
+                    del stop_flags[process_id]
                 break
             
             # 登录流程
@@ -1859,6 +1878,9 @@ def execute_process(process_id, transfer_icloud_file=False):
                     write_log(process_id, '收到停止命令，终止进程执行')
                     process['status'] = '已停止'
                     update_process_status(process_id, '已停止')
+                    # 清理停止标志并退出
+                    if process_id in stop_flags:
+                        del stop_flags[process_id]
                     break
                 
                 # 在执行登录脚本前，同步远端的三个文件：icloud.txt, icloud2.txt, error.txt
@@ -1872,6 +1894,9 @@ def execute_process(process_id, transfer_icloud_file=False):
                     write_log(process_id, '收到停止命令，终止进程执行')
                     process['status'] = '已停止'
                     update_process_status(process_id, '已停止')
+                    # 清理停止标志并退出
+                    if process_id in stop_flags:
+                        del stop_flags[process_id]
                     break
                 
                 login_result = run_scpt_script(vm_ip, 'appleid_login.scpt', process_id)
@@ -1883,6 +1908,9 @@ def execute_process(process_id, transfer_icloud_file=False):
                     write_log(process_id, '收到停止命令，终止进程执行')
                     process['status'] = '已停止'
                     update_process_status(process_id, '已停止')
+                    # 清理停止标志并退出
+                    if process_id in stop_flags:
+                        del stop_flags[process_id]
                     break
                 
                 login_message = login_result.get('result', '')
@@ -1946,6 +1974,9 @@ def execute_process(process_id, transfer_icloud_file=False):
             
             # 如果登录失败或被停止，跳过后续步骤
             if stop_flags.get(process_id, False):
+                # 清理停止标志并退出
+                if process_id in stop_flags:
+                    del stop_flags[process_id]
                 break
             if not login_success:
                 continue
@@ -1962,6 +1993,9 @@ def execute_process(process_id, transfer_icloud_file=False):
                 write_log(process_id, '收到停止命令，终止进程执行')
                 process['status'] = '已停止'
                 update_process_status(process_id, '已停止')
+                # 清理停止标志并退出
+                if process_id in stop_flags:
+                    del stop_flags[process_id]
                 break
             
             # 执行查询脚本，最多3次
@@ -1976,6 +2010,9 @@ def execute_process(process_id, transfer_icloud_file=False):
                     write_log(process_id, '收到停止命令，终止进程执行')
                     process['status'] = '已停止'
                     update_process_status(process_id, '已停止')
+                    # 清理停止标志并退出
+                    if process_id in stop_flags:
+                        del stop_flags[process_id]
                     break
                 
                 query_result = run_scpt_script(vm_ip, 'queryiCloudAccount.scpt')
@@ -1989,6 +2026,9 @@ def execute_process(process_id, transfer_icloud_file=False):
             
             # 检查停止标志
             if stop_flags.get(process_id, False):
+                # 清理停止标志并退出
+                if process_id in stop_flags:
+                    del stop_flags[process_id]
                 break
             
             if not query_success:
