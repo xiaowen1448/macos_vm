@@ -375,15 +375,51 @@ def run_scpt_script(vm_ip, script_name, process_id=None):
         if success and exit_code == 0:
             lines = output.strip().split('\n')
             script_processes = []
+            script_names = {}
+            has_login_script = False
+            has_logout_script = False
             
+            # 分析进程信息
             for line in lines:
                 if '/usr/bin/osascript' in line and '/macos_script/macos_scpt/macos11/' in line:
                     script_processes.append(line)
+                    
+                    # 提取脚本名称
+                    for script_file in ['appleid_login.scpt', 'logout_icloud.scpt', 'queryiCloudAccount.scpt', 'login_restart.scpt']:
+                        if script_file in line:
+                            if script_file not in script_names:
+                                script_names[script_file] = 0
+                            script_names[script_file] += 1
+                            
+                            # 检查是否同时存在登录和注销脚本
+                            if script_file == 'appleid_login.scpt':
+                                has_login_script = True
+                            elif script_file == 'logout_icloud.scpt':
+                                has_logout_script = True
+                            break
             
-            # 如果发现多个scpt脚本进程，执行restart_scptapp.scpt
-            if len(script_processes) > 1:
-                logger.warning(f'[WARNING] 检测到{len(script_processes)}个运行中的scpt脚本进程，执行restart_scptapp.scpt重置环境')
-                logger.debug(f'[DEBUG] 重复进程详情:\n' + '\n'.join(script_processes))
+            # 需要重置环境的条件：
+            # 1. 任何脚本有重复实例（相同名称的脚本运行多个）
+            # 2. appleid_login.scpt和logout_icloud.scpt同时存在
+            need_reset = False
+            reset_reason = ""
+            
+            # 检查是否有重复的脚本实例
+            for script, count in script_names.items():
+                if count > 1:
+                    need_reset = True
+                    reset_reason = f"检测到{script}脚本重复运行（{count}个实例）"
+                    break
+            
+            # 检查是否同时存在登录和注销脚本
+            if not need_reset and has_login_script and has_logout_script:
+                need_reset = True
+                reset_reason = "检测到appleid_login.scpt和logout_icloud.scpt同时运行"
+            
+            # 如果需要重置环境，执行restart_scptapp.scpt
+            if need_reset:
+                logger.warning(f'[WARNING] {reset_reason}，执行restart_scptapp.scpt重置环境')
+                logger.debug(f'[DEBUG] 当前运行的脚本进程:\n' + '\n'.join(script_processes))
                 
                 # 导入配置获取脚本目录
                 from config import macos_script_dir, restart_scptRunner
