@@ -354,6 +354,11 @@ def run_scpt_script(vm_ip, script_name, process_id=None):
     url = f'http://{vm_ip}:{SCPTRUNNER_PORT}/run?path={SCRIPT_DIR}{script_name}'
     #logger.debug(f'[DEBUG] 请求URL: {url}')
     
+    # 首先检查是否有停止标志，如果有则不执行脚本
+    if process_id and stop_flags.get(process_id, False):
+        logger.info(f'[INFO] 检测到进程停止标志，跳过执行脚本 - 进程ID: {process_id}, 脚本: {script_name}')
+        return {'result': '进程已停止，跳过执行脚本'}
+    
     # 为appleid_login.scpt设置单独的超时
     if script_name == 'appleid_login.scpt':
         timeout = appleid_login_timeout
@@ -362,6 +367,11 @@ def run_scpt_script(vm_ip, script_name, process_id=None):
         timeout = 90  # 其他脚本使用默认超时
     
     try:
+        # 再次检查停止标志，确保在请求前检查
+        if process_id and stop_flags.get(process_id, False):
+            logger.info(f'[INFO] 检测到进程停止标志，跳过执行脚本 - 进程ID: {process_id}, 脚本: {script_name}')
+            return {'result': '进程已停止，跳过执行脚本'}
+        
         start_time = time.time()
         response = requests.get(url, timeout=timeout)
         elapsed_time = time.time() - start_time
@@ -604,7 +614,7 @@ def wait_for_vm_ready(vm_ip, timeout=300):
         
         try:
             # 检查IP是否存活
-            logger.debug(f'[DEBUG] 正在检查虚拟机连通性 - IP: {vm_ip}')
+            #logger.debug(f'[DEBUG] 正在检查虚拟机连通性 - IP: {vm_ip}')
             # 使用socket检查IP是否可达
             ping_success = False
             try:
@@ -623,18 +633,18 @@ def wait_for_vm_ready(vm_ip, timeout=300):
                         except:
                             ping_success = False
             except Exception as e:
-                logger.warning(f'[WARNING] 连接检查异常: {str(e)}')
+               # logger.warning(f'[WARNING] 连接检查异常: {str(e)}')
                 ping_success = False
             
             if not ping_success:
-                logger.warning(f'[WARNING] 虚拟机IP连接失败 - IP: {vm_ip}')
+               # logger.warning(f'[WARNING] 虚拟机IP连接失败 - IP: {vm_ip}')
                 time.sleep(10)  # 10秒间隔重试
                 continue
             
-            logger.info(f'[INFO] 虚拟机IP连接成功 - IP: {vm_ip}')
+           # logger.info(f'[INFO] 虚拟机IP连接成功 - IP: {vm_ip}')
             
             # 检查8787端口（进程端口）是否开放 - 使用socket
-            logger.debug(f'[DEBUG] 检查8787端口 - IP: {vm_ip}')
+           # logger.debug(f'[DEBUG] 检查8787端口 - IP: {vm_ip}')
             port_open = False
             
             try:
@@ -647,16 +657,16 @@ def wait_for_vm_ready(vm_ip, timeout=300):
                 logger.warning(f'[WARNING] 端口检查失败: {str(port_error)}')
             
             if port_open:
-                logger.info(f'[INFO] 8787端口检查成功 - IP: {vm_ip}')
+              #  logger.info(f'[INFO] 8787端口检查成功 - IP: {vm_ip}')
                 # 端口已开放，检查SSH连接
-                logger.debug(f'[DEBUG] 检查SSH连接 - IP: {vm_ip}')
+               # logger.debug(f'[DEBUG] 检查SSH连接 - IP: {vm_ip}')
                 
                 try:
                     # 使用SSHClient检查SSH连接
                     with SSHClient(hostname=vm_ip, username=vm_username, timeout=5) as ssh_client:
                         success, output, error, exit_code = ssh_client.execute_command("echo connected", timeout=8)
                         if success:
-                            logger.info(f'[INFO] 虚拟机已完全就绪 - IP: {vm_ip}, 所有检查均通过')
+                         #   logger.info(f'[INFO] 虚拟机已完全就绪 - IP: {vm_ip}, 所有检查均通过')
                             return True
                         else:
                             logger.warning(f'[WARNING] SSH命令执行失败 - 退出码: {exit_code}, 输出: {error}')
@@ -1658,6 +1668,73 @@ def execute_process(process_id, transfer_icloud_file=False):
         else:
             logger.info(f'[INFO] 初始检查三次查询均未返回success，直接开始处理Apple ID')
             write_log(process_id, '初始检查三次查询均未返回success，直接开始处理Apple ID')
+        
+        # 虚拟机重启后，在开始执行Apple ID登录流程前，执行restart_scptapp.scpt脚本
+        logger.info(f'[INFO] 准备执行restart_scptapp.scpt脚本，确保Scptrunner客户端正常运行')
+        write_log(process_id, '执行restart_scptapp.scpt脚本，确保Scptrunner客户端正常运行...')
+        
+        # 导入配置获取脚本目录
+        from config import macos_script_dir, restart_scptRunner
+        vm_username = 'wx'  # 虚拟机用户名
+        
+        try:
+            # 获取脚本文件名（仅文件名部分）
+            script_filename = 'restart_scptapp.scpt'
+            
+            # 构建本地脚本完整路径
+            local_script_path = os.path.join(macos_script_dir, script_filename)
+            logger.debug(f'[DEBUG] 本地脚本路径: {local_script_path}')
+            
+            # 在虚拟机上的脚本路径，使用config.py中的restart_scptRunner配置
+            vm_script_path = f'{restart_scptRunner}{script_filename}'
+            
+            with SSHClient(hostname=vm_ip, username=vm_username, timeout=5) as ssh_client:
+                # 首先检查虚拟机上是否存在脚本文件
+                check_cmd = f'test -f {vm_script_path} && echo "exists" || echo "not exists"'
+                success_check, output_check, _, _ = ssh_client.execute_command(check_cmd, timeout=10)
+                
+                if success_check and "exists" in output_check:
+                    # 脚本文件存在，直接执行
+                    cmd = f'osascript {vm_script_path}'
+                    success, output, error, exit_code = ssh_client.execute_command(cmd, timeout=30)
+                    
+                    if success and exit_code == 0:
+                        logger.info(f'[INFO] 成功调用restart_scptapp.scpt启动远端app客户端 - IP: {vm_ip}')
+                        write_log(process_id, '成功执行restart_scptapp.scpt脚本')
+                        # 给服务一些时间启动
+                        time.sleep(10)
+                    else:
+                        logger.warning(f'[WARNING] 调用restart_scptapp.scpt失败 - 退出码: {exit_code}, 错误: {error}')
+                        write_log(process_id, f'调用restart_scptapp.scpt失败: {error}')
+                else:
+                    # 如果脚本不存在，尝试从本地上传
+                    if os.path.exists(local_script_path):
+                        logger.info(f'[INFO] 尝试上传脚本到虚拟机 - {vm_script_path}')
+                        write_log(process_id, f'尝试上传restart_scptapp.scpt脚本到虚拟机...')
+                        upload_success = ssh_client.upload_file(local_script_path, vm_script_path)
+                        if upload_success:
+                            logger.info(f'[INFO] 脚本上传成功，尝试执行')
+                            write_log(process_id, '脚本上传成功，尝试执行...')
+                            # 上传成功后执行脚本
+                            cmd = f'osascript {vm_script_path}'
+                            success, output, error, exit_code = ssh_client.execute_command(cmd, timeout=30)
+                            
+                            if success and exit_code == 0:
+                                logger.info(f'[INFO] 成功调用restart_scptapp.scpt启动远端app客户端 - IP: {vm_ip}')
+                                write_log(process_id, '成功执行restart_scptapp.scpt脚本')
+                                time.sleep(10)
+                            else:
+                                logger.warning(f'[WARNING] 调用上传的restart_scptapp.scpt失败 - 退出码: {exit_code}, 错误: {error}')
+                                write_log(process_id, f'调用上传的restart_scptapp.scpt失败: {error}')
+                        else:
+                            logger.error(f'[ERROR] 脚本上传失败 - 无法复制到虚拟机')
+                            write_log(process_id, '脚本上传失败 - 无法复制到虚拟机')
+                    else:
+                        logger.error(f'[ERROR] 本地脚本文件不存在: {local_script_path}')
+                        write_log(process_id, f'本地脚本文件不存在: {local_script_path}')
+        except Exception as ssh_error:
+            logger.error(f'[ERROR] SSH调用restart_scptapp.scpt时出错: {str(ssh_error)}')
+            write_log(process_id, f'SSH调用restart_scptapp.scpt时出错: {str(ssh_error)}')
         
         for idx, apple_id in enumerate(non_empty_apple_ids, 1):
             # 检查停止标志
