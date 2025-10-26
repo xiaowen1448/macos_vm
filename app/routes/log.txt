@@ -1,0 +1,433 @@
+连接失败: 192.168.254.142:8787
+2025-10-27 00:49:20,811 [DEBUG] run_scpt_script:574 - [DEBUG] 尝试通过SSH重启Scptrunner客户端 - VM IP: 192.168.254.142
+2025-10-27 00:49:20,812 [DEBUG] run_ssh_remote_command:334 - [DEBUG] 准备通过SSH远程执行命令 - VM IP: 192.168.254.142, 用户名: wx, 命令: osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/restart_scptapp.scpt
+2025-10-27 00:49:24,106 [INFO] execute_process:1856 - [INFO] 成功调用restart_scptapp.scpt启动远端app客户端 - IP: 192.168.254.142
+2025-10-27 00:49:24,303 [DEBUG] run_ssh_remote_command:341 - [DEBUG] SSH命令执行成功 - 输出:
+2025-10-27 00:49:34,107 [INFO] execute_process:1914 - [INFO] 开始处理Apple ID (1/56): kurtmiller8191@gmail.com----85Y#fr0xPo----pindevic...
+2025-10-27 00:49:34,303 [DEBUG] run_scpt_script:587 - [DEBUG] 尝试重新执行脚本 - VM IP: 192.168.254.142, 脚本名称: appleid_login.scpt
+2025-10-27 00:49:34,304 [DEBUG] _new_conn:241 - Starting new HTTP connection (1): 192.168.254.142:8787
+2025-10-27 00:49:34,627 [DEBUG] run_scpt_script:353 - [DEBUG] 准备执行脚本 - VM IP: 192.168.254.142, 脚本名称: appleid_login.scpt
+2025-10-27 00:49:34,814 [INFO] run_scpt_script:443 - [INFO] 检测到1个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:49:34,814 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                 728   6.4  0.6  4338252  12664   ??  S     9:49AM   0:00.08 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:49:45,010 [INFO] run_scpt_script:443 - [INFO] 检测到1个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:49:45,010 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                 728   0.3  0.6  4338252  12824   ??  S     9:49AM   0:00.12 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:49:55,188 [INFO] run_scpt_script:443 - [INFO] 检测到1个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:49:55,188 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                 728   0.1  0.6  4338252  12832   ??  S     9:49AM   0:00.16 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:50:05,379 [INFO] run_scpt_script:443 - [INFO] 检测到1个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:50:05,379 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                 728   1.0  0.6  4338252  12844   ??  S     9:49AM   0:00.21 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:50:15,558 [INFO] run_scpt_script:443 - [INFO] 检测到1个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:50:15,558 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                 728   0.4  0.6  4338252  12856   ??  S     9:49AM   0:00.25 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:50:25,749 [INFO] run_scpt_script:443 - [INFO] 检测到1个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:50:25,749 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                 728   0.1  0.6  4338252  12868   ??  S     9:49AM   0:00.29 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:50:36,049 [INFO] run_scpt_script:443 - [INFO] 检测到1个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:50:36,050 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                 728   0.4  0.6  4338252  12880   ??  S     9:49AM   0:00.33 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:50:46,251 [INFO] run_scpt_script:443 - [INFO] 检测到1个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:50:46,251 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                 728   0.2  0.6  4338252  12896   ??  S     9:49AM   0:00.38 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:50:56,418 [INFO] run_scpt_script:443 - [INFO] 检测到1个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:50:56,418 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                 728   0.3  0.6  4338252  12908   ??  S     9:49AM   0:00.42 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:51:06,600 [INFO] run_scpt_script:443 - [INFO] 检测到1个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:51:06,600 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                 728   0.7  0.6  4338252  12920   ??  S     9:49AM   0:00.46 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:51:16,775 [INFO] run_scpt_script:443 - [INFO] 检测到1个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:51:16,775 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                 728   0.2  0.6  4338252  12936   ??  S     9:49AM   0:00.50 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:51:26,939 [INFO] run_scpt_script:443 - [INFO] 检测到1个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:51:28,306 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                 728   0.4  0.6  4338252  12944   ??  S     9:49AM   0:00.55 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:51:38,478 [INFO] run_scpt_script:443 - [INFO] 检测到1个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:51:38,478 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                 728   0.2  0.6  4338252  12960   ??  S     9:49AM   0:00.60 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:51:48,655 [INFO] run_scpt_script:443 - [INFO] 检测到1个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:51:48,655 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                 728   0.4  0.6  4338252  12972   ??  S     9:49AM   0:00.64 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:51:58,834 [INFO] run_scpt_script:443 - [INFO] 检测到1个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:51:58,834 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                 728   0.1  0.6  4338252  12984   ??  S     9:49AM   0:00.68 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:52:08,998 [INFO] run_scpt_script:443 - [INFO] 检测到1个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:52:08,998 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                 728   0.5  0.6  4338252  12992   ??  S     9:49AM   0:00.73 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:52:19,178 [INFO] run_scpt_script:443 - [INFO] 检测到1个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:52:19,707 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                 728   0.2  0.6  4338252  13004   ??  S     9:49AM   0:00.77 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:52:29,884 [INFO] run_scpt_script:443 - [INFO] 检测到1个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:52:29,884 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                 728   0.3  0.6  4338252  13004   ??  S     9:49AM   0:00.81 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:52:40,055 [INFO] run_scpt_script:443 - [INFO] 检测到1个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:52:40,056 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                 728   0.1  0.6  4338252  13008   ??  S     9:49AM   0:00.85 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:52:50,236 [INFO] run_scpt_script:443 - [INFO] 检测到1个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:52:50,236 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                 728   0.2  0.6  4338252  13012   ??  S     9:49AM   0:00.89 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+
+ 检测到1个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:54:26,108 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                 728   0.6  0.6  4338252  13064   ??  S     9:49AM   0:01.28 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:54:34,306 [ERROR] run_scpt_script:595 - [ERROR] 重新执行脚本失败: HTTPConnectionPool(host='192.168.254.142', port=8787): Read timed out. (read timeout=300)
+2025-10-27 00:54:34,307 [INFO] execute_process:2029 - [INFO] 登录结果: 连接失败，已尝试重启但仍失败: HTTPConnectionPool(host='192.168.254.142', port=8787): Read timed out. (read timeout=300)
+2025-10-27 00:54:34,307 [INFO] execute_process:1914 - [INFO] 开始处理Apple ID (6/59): wesleyphillips8443@gmail.com----iD#gYwa50a----pind...
+2025-10-27 00:54:34,748 [DEBUG] run_scpt_script:353 - [DEBUG] 准备执行脚本 - VM IP: 192.168.254.142, 脚本名称: appleid_login.scpt
+2025-10-27 00:54:34,910 [INFO] run_scpt_script:443 - [INFO] 检测到1个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:54:34,910 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                 728   0.0  0.6  4338252  13068   ??  S     9:49AM   0:01.31 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:54:36,109 [WARNING] run_scpt_script:380 - [WARNING] 等待其他scpt脚本进程结束超时，继续执行
+2025-10-27 00:54:36,109 [INFO] run_scpt_script:513 - [INFO] 使用特定超时设置: 90秒 - 脚本: appleid_login.scpt
+2025-10-27 00:54:36,111 [DEBUG] _new_conn:241 - Starting new HTTP connection (1): 192.168.254.142:8787
+2025-10-27 00:54:45,085 [INFO] run_scpt_script:443 - [INFO] 检测到2个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:54:45,085 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                 728   0.5  0.6  4338252  13072   ??  S     9:49AM   0:01.35 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+wx                1039   0.2  0.6  4338252  13212   ??  S     9:54AM   0:00.12 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:54:55,276 [INFO] run_scpt_script:443 - [INFO] 检测到2个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:54:55,277 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                1039   0.3  0.6  4338252  13220   ??  S     9:54AM   0:00.16 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+wx                 728   0.1  0.6  4338252  13076   ??  S     9:49AM   0:01.40 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:55:05,455 [INFO] run_scpt_script:443 - [INFO] 检测到2个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:55:05,455 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                 728   0.4  0.6  4338252  13080   ??  S     9:49AM   0:01.43 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+wx                1039   0.1  0.6  4338252  13228   ??  S     9:54AM   0:00.20 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:55:15,646 [INFO] run_scpt_script:443 - [INFO] 检测到2个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:55:15,647 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                1039   0.4  0.6  4338252  13236   ??  S     9:54AM   0:00.24 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+wx                 728   0.2  0.6  4338252  13080   ??  S     9:49AM   0:01.47 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:55:25,848 [INFO] run_scpt_script:443 - [INFO] 检测到2个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:55:25,848 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                 728   0.4  0.6  4338252  13084   ??  S     9:49AM   0:01.51 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+wx                1039   0.1  0.6  4338252  13244   ??  S     9:54AM   0:00.28 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:55:36,016 [INFO] run_scpt_script:443 - [INFO] 检测到2个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:55:36,016 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                1039   0.6  0.6  4338252  13256   ??  S     9:54AM   0:00.33 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+wx                 728   0.2  0.6  4338252  13088   ??  S     9:49AM   0:01.55 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:55:46,193 [INFO] run_scpt_script:443 - [INFO] 检测到2个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:55:46,194 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                 728   0.4  0.6  4338252  13096   ??  S     9:49AM   0:01.60 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+wx                1039   0.2  0.6  4338252  13264   ??  S     9:54AM   0:00.37 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:55:56,375 [INFO] run_scpt_script:443 - [INFO] 检测到2个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:55:56,375 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                1039   0.6  0.6  4338252  13272   ??  S     9:54AM   0:00.41 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+wx                 728   0.2  0.6  4338252  13100   ??  S     9:49AM   0:01.63 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:56:06,116 [ERROR] run_scpt_script:532 - [ERROR] 脚本执行超时: 192.168.254.142 - appleid_login.scpt, 超时时间: 90秒
+2025-10-27 00:56:06,117 [INFO] run_scpt_script:536 - [INFO] appleid_login.scpt超时，执行login_restart.scpt
+2025-10-27 00:56:06,118 [DEBUG] _new_conn:241 - Starting new HTTP connection (1): 192.168.254.142:8787
+2025-10-27 00:56:06,549 [INFO] run_scpt_script:443 - [INFO] 检测到3个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:56:06,549 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                1122   6.6  0.4  4336816   9028   ??  S     9:56AM   0:00.06 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/login_restart.scpt
+wx                 728   0.2  0.6  4338252  13108   ??  S     9:49AM   0:01.67 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+wx                1039   0.1  0.6  4338252  13280   ??  S     9:54AM   0:00.45 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:56:07,655 [DEBUG] _make_request:544 - http://192.168.254.142:8787 "GET /run?path=/Users/wx/Documents/macos_script/macos_scpt/macos11/login_restart.scpt HTTP/1.1" 200 20
+2025-10-27 00:56:07,655 [INFO] run_scpt_script:543 - [INFO] login_restart.scpt执行结果: {"result": "Success"}
+2025-10-27 00:56:07,656 [INFO] run_scpt_script:546 - [INFO] login_restart.scpt执行完成，等待5秒后重新执行appleid_login.scpt
+2025-10-27 00:56:12,658 [INFO] run_scpt_script:555 - [INFO] 重新执行appleid_login.scpt
+2025-10-27 00:56:12,659 [DEBUG] _new_conn:241 - Starting new HTTP connection (1): 192.168.254.142:8787
+2025-10-27 00:56:16,727 [INFO] run_scpt_script:443 - [INFO] 检测到3个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:56:16,727 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                1039   0.0  0.6  4338252  13280   ??  S     9:54AM   0:00.45 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+wx                 728   0.0  0.6  4338252  13108   ??  S     9:49AM   0:01.67 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+wx                1148   0.0  0.6  4337728  13108   ??  S     9:56AM   0:00.09 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:56:26,900 [INFO] run_scpt_script:443 - [INFO] 检测到3个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:56:26,900 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                 728   0.9  0.6  4338256  13216   ??  S     9:49AM   0:01.73 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+wx                1039   0.9  0.6  4338256  13320   ??  S     9:54AM   0:00.50 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+wx                1148   0.0  0.6  4338252  13264   ??  S     9:56AM   0:00.14 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:56:37,073 [INFO] run_scpt_script:443 - [INFO] 检测到3个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:56:37,073 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                1039   0.0  0.6  4337732  13288   ??  S     9:54AM   0:00.52 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+wx                 728   0.0  0.6  4337208  13164   ??  S     9:49AM   0:01.75 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+wx                1148   0.0  0.6  4337728  13232   ??  S     9:56AM   0:00.16 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:56:47,270 [INFO] run_scpt_script:443 - [INFO] 检测到3个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:56:47,270 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                1039   0.0  0.6  4337732  13288   ??  S     9:54AM   0:00.52 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+wx                 728   0.0  0.6  4337208  13164   ??  S     9:49AM   0:01.75 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+wx                1148   0.0  0.6  4337728  13232   ??  S     9:56AM   0:00.17 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+
+检测到3个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:56:47,270 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                1039   0.0  0.6  4337732  13288   ??  S     9:54AM   0:00.52 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+wx                 728   0.0  0.6  4337208  13164   ??  S     9:49AM   0:01.75 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+wx                1148   0.0  0.6  4337728  13232   ??  S     9:56AM   0:00.17 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:56:57,451 [INFO] run_scpt_script:443 - [INFO] 检测到3个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:57:07,014 [DEBUG] _make_request:544 - http://192.168.254.142:8787 "GET /run?path=/Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt HTTP/1.1" 200 20
+2025-10-27 00:57:08,086 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                1039   0.0  0.6  4340132  13448   ??  S     9:54AM   0:00.82 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+wx                 728   0.0  0.6  4340132  13464   ??  S     9:49AM   0:02.02 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+wx                1148   0.0  0.6  4340128  13340   ??  S     9:56AM   0:00.43 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt
+2025-10-27 00:57:08,087 [INFO] run_scpt_script:559 - [INFO] 重新执行appleid_login.scpt成功: {"result": "Success"}
+2025-10-27 00:57:08,088 [INFO] execute_process:1999 - [INFO] 登录脚本返回Success，继续执行查询和注销
+2025-10-27 00:57:08,089 [INFO] execute_process:2044 - [INFO] 登录成功，等待10秒后执行查询
+2025-10-27 00:57:18,090 [INFO] execute_process:2060 - [INFO] 执行restart_scptapp.scpt结束后台scpt进程
+2025-10-27 00:57:18,264 [INFO] run_scpt_script:451 - [INFO] 没有检测到其他scpt脚本进程，可以执行脚本
+2025-10-27 00:57:18,264 [INFO] run_scpt_script:513 - [INFO] 使用特定超时设置: 90秒 - 脚本: appleid_login.scpt
+2025-10-27 00:57:18,265 [DEBUG] _new_conn:241 - Starting new HTTP connection (1): 192.168.254.142:8787
+2025-10-27 00:57:20,313 [ERROR] run_scpt_script:568 - [ERROR] 连接失败: 192.168.254.142:8787
+2025-10-27 00:57:20,313 [DEBUG] run_scpt_script:574 - [DEBUG] 尝试通过SSH重启Scptrunner客户端 - VM IP: 192.168.254.142
+2025-10-27 00:57:20,313 [DEBUG] run_ssh_remote_command:334 - [DEBUG] 准备通过SSH远程执行命令 - VM IP: 192.168.254.142, 用户名: wx, 命令: osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/restart_scptapp.scpt
+2025-10-27 00:57:21,545 [INFO] execute_process:2077 - [INFO] 成功执行restart_scptapp.scpt结束后台进程
+2025-10-27 00:57:23,693 [DEBUG] run_ssh_remote_command:341 - [DEBUG] SSH命令执行成功 - 输出:
+2025-10-27 00:57:26,546 [INFO] execute_process:2091 - [INFO] 执行查询脚本 (尝试 1/3)
+2025-10-27 00:57:26,546 [DEBUG] run_scpt_script:353 - [DEBUG] 准备执行脚本 - VM IP: 192.168.254.142, 脚本名称: queryiCloudAccount.scpt
+2025-10-27 00:57:26,748 [INFO] run_scpt_script:451 - [INFO] 没有检测到其他scpt脚本进程，可以执行脚本
+2025-10-27 00:57:26,749 [DEBUG] _new_conn:241 - Starting new HTTP connection (1): 192.168.254.142:8787
+2025-10-27 00:57:26,845 [DEBUG] _make_request:544 - http://192.168.254.142:8787 "GET /run?path=/Users/wx/Documents/macos_script/macos_scpt/macos11/queryiCloudAccount.scpt HTTP/1.1" 200 20
+2025-10-27 00:57:26,845 [DEBUG] run_scpt_script:529 - [DEBUG] 脚本执行结果: {"result": "success"}
+2025-10-27 00:57:26,846 [INFO] execute_process:2128 - [INFO] 查询成功，等待5秒后执行注销
+2025-10-27 00:57:31,847 [INFO] execute_process:2143 - [INFO] 执行注销脚本
+2025-10-27 00:57:31,865 [DEBUG] run_scpt_script:353 - [DEBUG] 准备执行脚本 - VM IP: 192.168.254.142, 脚本名称: logout_icloud.scpt
+2025-10-27 00:57:32,047 [INFO] run_scpt_script:451 - [INFO] 没有检测到其他scpt脚本进程，可以执行脚本
+2025-10-27 00:57:32,048 [DEBUG] _new_conn:241 - Starting new HTTP connection (1): 192.168.254.142:8787
+2025-10-27 00:57:33,694 [DEBUG] run_scpt_script:587 - [DEBUG] 尝试重新执行脚本 - VM IP: 192.168.254.142, 脚本名称: appleid_login.scpt
+2025-10-27 00:57:33,695 [DEBUG] _new_conn:241 - Starting new HTTP connection (1): 192.168.254.142:8787
+2025-10-27 00:57:53,038 [DEBUG] _make_request:544 - http://192.168.254.142:8787 "GET /run?path=/Users/wx/Documents/macos_script/macos_scpt/macos11/appleid_login.scpt HTTP/1.1" 200 13
+2025-10-27 00:57:53,038 [DEBUG] run_scpt_script:592 - [DEBUG] 重新执行脚本成功: {"result": ""}
+2025-10-27 00:57:53,039 [INFO] execute_process:1978 - [INFO] 登录消息为空，执行重启登录
+2025-10-27 00:57:53,039 [DEBUG] run_scpt_script:353 - [DEBUG] 准备执行脚本 - VM IP: 192.168.254.142, 脚本名称: login_restart.scpt
+2025-10-27 00:57:53,206 [INFO] run_scpt_script:443 - [INFO] 检测到1个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:57:53,206 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                1304   0.0  0.6  4338844  12576   ??  S     9:57AM   0:00.18 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/logout_icloud.scpt
+2025-10-27 00:58:03,734 [INFO] run_scpt_script:443 - [INFO] 检测到1个正在运行的scpt脚本进程，等待它们完成
+2025-10-27 00:58:03,734 [DEBUG] run_scpt_script:444 - [DEBUG] 当前运行的脚本进程:
+wx                1304   2.0  0.5  4338844  10528   ??  S     9:57AM   0:00.26 /usr/bin/osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/logout_icloud.scpt
+2025-10-27 00:58:12,658 [DEBUG] _make_request:544 - http://192.168.254.142:8787 "GET /run?path=/Users/wx/Documents/macos_script/macos_scpt/macos11/logout_icloud.scpt HTTP/1.1" 200 20
+2025-10-27 00:58:12,659 [DEBUG] run_scpt_script:529 - [DEBUG] 脚本执行结果: {"result": "success"}
+2025-10-27 00:58:12,663 [INFO] execute_process:2160 - [INFO] 注销脚本执行成功，等待10秒后验证是否真正注销
+2025-10-27 00:58:13,928 [INFO] run_scpt_script:451 - [INFO] 没有检测到其他scpt脚本进程，可以执行脚本
+2025-10-27 00:58:13,929 [DEBUG] _new_conn:241 - Starting new HTTP connection (1): 192.168.254.142:8787
+2025-10-27 00:58:15,359 [DEBUG] _make_request:544 - http://192.168.254.142:8787 "GET /run?path=/Users/wx/Documents/macos_script/macos_scpt/macos11/login_restart.scpt HTTP/1.1" 200 20
+2025-10-27 00:58:15,360 [DEBUG] run_scpt_script:529 - [DEBUG] 脚本执行结果: {"result": "Success"}
+2025-10-27 00:58:15,361 [ERROR] execute_process:1989 - [ERROR] 重启登录失败
+2025-10-27 00:58:15,362 [INFO] execute_process:1914 - [INFO] 开始处理Apple ID (7/59): robertwerner2160@gmail.com----0#QJVz6adiy----pinde...
+2025-10-27 00:58:15,855 [DEBUG] run_scpt_script:353 - [DEBUG] 准备执行脚本 - VM IP: 192.168.254.142, 脚本名称: appleid_login.scpt
+2025-10-27 00:58:16,015 [INFO] run_scpt_script:451 - [INFO] 没有检测到其他scpt脚本进程，可以执行脚本
+2025-10-27 00:58:16,015 [INFO] run_scpt_script:513 - [INFO] 使用特定超时设置: 90秒 - 脚本: appleid_login.scpt
+2025-10-27 00:58:16,016 [DEBUG] _new_conn:241 - Starting new HTTP connection (1): 192.168.254.142:8787
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
