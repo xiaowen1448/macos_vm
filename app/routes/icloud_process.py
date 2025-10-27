@@ -51,6 +51,42 @@ running_tasks = {}
 # 存储进程输出日志的字典（用于兼容旧版本）
 process_output_logs = {}
 
+# 启动线程清理后台任务
+def start_thread_cleanup_task():
+    """启动一个后台线程，定期清理已结束的线程"""
+    def cleanup_threads():
+        while True:
+            try:
+                # 获取所有需要清理的进程ID
+                to_remove = []
+                for process_id, thread in running_tasks.items():
+                    if not thread.is_alive():
+                        to_remove.append(process_id)
+                
+                # 移除已结束的线程
+                for process_id in to_remove:
+                    logger.info(f'[INFO] 清理已结束的线程 - 进程ID: {process_id}')
+                    del running_tasks[process_id]
+                    # 同时更新对应进程的状态（如果需要）
+                    for p in processes:
+                        if p['id'] == process_id and p['status'] in ['启动中', '执行中']:
+                            p['status'] = '已停止'
+                            update_process_status(process_id, '已停止')
+                            break
+            except Exception as e:
+                logger.error(f'[ERROR] 清理线程时发生异常: {str(e)}')
+            
+            # 每60秒执行一次清理
+            time.sleep(60)
+    
+    # 创建并启动清理线程
+    cleanup_thread = threading.Thread(target=cleanup_threads, daemon=True)
+    cleanup_thread.start()
+    logger.info(f'[INFO] 线程清理后台任务已启动')
+
+# 启动线程清理任务
+start_thread_cleanup_task()
+
 # 获取VM信息路由
 @icloud_process_bp.route('/vm_icloud')
 @login_required
@@ -234,7 +270,6 @@ def count_valid_apple_ids(apple_id_text_or_file):
         apple_id_text = None
     
     if not apple_id_text:
-      #  logger.debug(f'[DEBUG] 辅助函数 - 无Apple ID文本，返回0')
         return 0, file_name
     
     # 分割文本并统计有效行
@@ -245,17 +280,10 @@ def count_valid_apple_ids(apple_id_text_or_file):
         line_stripped = line.strip()
         if line_stripped:
             parts = line_stripped.split('----')
-          #  logger.debug(f'[DEBUG] 辅助函数 - 行 {idx} 分割后部分数量: {len(parts)}, 内容: {line_stripped[:50]}...')
             if len(parts) >= 4:
                 valid_apple_ids.append(line_stripped)
-           #     logger.debug(f'[DEBUG] 辅助函数 - 行 {idx} 有效，添加到计数中')
-            else:
-                logger.debug(f'[DEBUG] 辅助函数 - 行 {idx} 无效，部分数量不足4个')
-        else:
-            logger.debug(f'[DEBUG] 辅助函数 - 行 {idx} 为空行，跳过')
     
     apple_id_count = len(valid_apple_ids)
-  #  logger.debug(f'[DEBUG] 辅助函数 - 统计完成 - 有效行数: {apple_id_count}, 总行数: {len(apple_ids)}, 文件名: {file_name}')
     return apple_id_count, file_name
 
 # 辅助函数：计算总Apple ID数量（icloud.txt和icloud2.txt的总和）
@@ -304,7 +332,6 @@ def calculate_total_apple_ids(vm_ip, temp_plist_path=TEMP_PLIST_PATH):
         
         # 计算总数
         total_count = unprocessed_count + processed_count
-       # logger.info(f'[INFO] 总Apple ID数量计算完成 - 总数: {total_count}, 未处理: {unprocessed_count}, 已处理: {processed_count}')
         
         return total_count, unprocessed_count, processed_count
     except Exception as e:
@@ -315,7 +342,6 @@ def calculate_total_apple_ids(vm_ip, temp_plist_path=TEMP_PLIST_PATH):
 # 辅助函数：写入日志
 def write_log(process_id, message):
     process_log_dir = os.path.join(LOG_DIR, process_id)
-    # logger.debug(f'[DEBUG] 准备写入日志 - 进程ID: {process_id}, 日志目录: {process_log_dir}')
     os.makedirs(process_log_dir, exist_ok=True)
     log_file = os.path.join(process_log_dir, f'{datetime.now().strftime("%Y%m%d")}.log')
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -325,20 +351,23 @@ def write_log(process_id, message):
         with open(log_file, 'a', encoding='utf-8') as f:
             log_entry = f'[{timestamp}] {message_str}\n'
             f.write(log_entry)
-        # logger.debug(f'[DEBUG] 日志写入成功 - 进程ID: {process_id}, 文件: {log_file}')
     except Exception as e:
         logger.error(f'[ERROR] 日志写入失败: {str(e)}')
 
 # 辅助函数：通过SSH远程执行脚本
 def run_ssh_remote_command(vm_ip, username, command):
-    logger.debug(f'[DEBUG] 准备通过SSH远程执行命令 - VM IP: {vm_ip}, 用户名: {username}, 命令: {command}')
     try:
-        # 使用SSHClient执行命令
-        with SSHClient(hostname=vm_ip, username=username) as ssh_client:
+        # 从config模块导入vm_password（如果存在）
+        try:
+            from config import vm_password
+        except ImportError:
+            vm_password = None
+        
+        # 使用SSHClient执行命令，传递密码参数
+        with SSHClient(hostname=vm_ip, username=username, password=vm_password) as ssh_client:
             success, stdout, stderr, exit_code = ssh_client.execute_command(command, timeout=90)
             
         if success:
-            logger.debug(f'[DEBUG] SSH命令执行成功 - 输出: {stdout.strip()}')
             return True, stdout.strip()
         else:
             logger.error(f'[ERROR] SSH命令执行失败 - 错误码: {exit_code}, 错误输出: {stderr.strip()}')
@@ -350,9 +379,7 @@ def run_ssh_remote_command(vm_ip, username, command):
 # 辅助函数：执行scpt脚本
 def run_scpt_script(vm_ip, script_name, process_id=None):
     from config import appleid_login_timeout, icloud_wait_after_query
-    logger.debug(f'[DEBUG] 准备执行脚本 - VM IP: {vm_ip}, 脚本名称: {script_name}')
     url = f'http://{vm_ip}:{SCPTRUNNER_PORT}/run?path={SCRIPT_DIR}{script_name}'
-    #logger.debug(f'[DEBUG] 请求URL: {url}')
     
     # 首先检查是否有停止标志，如果有则不执行脚本
     if process_id and stop_flags.get(process_id, False):
@@ -385,8 +412,15 @@ def run_scpt_script(vm_ip, script_name, process_id=None):
                     logger.info(f'[INFO] 检测到进程停止标志，停止等待 - 进程ID: {process_id}')
                     break
                 
+                # 从config模块导入vm_password（如果存在）
+                try:
+                    from config import vm_password
+                except ImportError:
+                    vm_password = None
+                    logger.debug(f'[DEBUG] 未找到vm_password配置，将尝试免密认证')
+                
                 # 使用SSHClient执行命令检查scpt进程
-                with SSHClient(hostname=vm_ip, username=vm_username, timeout=5) as ssh_client:
+                with SSHClient(hostname=vm_ip, username=vm_username, password=vm_password, timeout=5) as ssh_client:
                     success, output, error, exit_code = ssh_client.execute_command(ps_cmd, timeout=10)
                 
                 # 分析输出，查找是否有scpt脚本进程在运行
@@ -440,14 +474,11 @@ def run_scpt_script(vm_ip, script_name, process_id=None):
                     # 1. 距离上次打印超过5秒
                     # 2. 或者进程列表发生了变化
                     if (current_time - run_scpt_script._last_log_time > 5) or (process_key != run_scpt_script._last_process_key):
-                        logger.info(f'[INFO] 检测到{len(script_processes)}个正在运行的scpt脚本进程，等待它们完成')
-                        logger.debug(f'[DEBUG] 当前运行的脚本进程:\n' + process_key)
                         run_scpt_script._last_log_time = current_time
                         run_scpt_script._last_process_key = process_key
                     
                     # 检测到多个正在运行的scpt脚本进程，执行restart_scptapp.scpt
                     if len(script_processes) > 1:
-                        logger.warning(f'[WARNING] 检测到{len(script_processes)}个正在运行的scpt脚本进程，执行restart_scptapp.scpt重置环境')
                         # 通过SSH执行restart_scptapp.scpt
                         try:
                             ssh_command = "osascript /Users/wx/Documents/macos_script/macos_scpt/macos11/restart_scptapp.scpt"
@@ -607,7 +638,7 @@ def run_scpt_script(vm_ip, script_name, process_id=None):
                     logger.debug(f'[DEBUG] 重新执行脚本成功: {json.dumps(result)}')
                     return result
                 except Exception as retry_e:
-                    logger.error(f'[ERROR] 重新执行脚本失败: {str(retry_e)}')
+                  #  logger.error(f'[ERROR] 重新执行脚本失败: {str(retry_e)}')
                     return {'result': f'连接失败，已尝试重启但仍失败: {str(retry_e)}'}
             else:
                 logger.error(f'[ERROR] SSH重启Scptrunner客户端失败: {output}')
@@ -826,7 +857,14 @@ def wait_for_vm_ready(vm_ip, timeout=300):
                 
                 try:
                     # 使用SSHClient检查SSH连接
-                    with SSHClient(hostname=vm_ip, username=vm_username, timeout=5) as ssh_client:
+                    # 从config模块导入vm_password（如果存在）
+                    try:
+                        from config import vm_password
+                    except ImportError:
+                        vm_password = None
+                        logger.debug(f'[DEBUG] 未找到vm_password配置，将尝试免密认证')
+                    
+                    with SSHClient(hostname=vm_ip, username=vm_username, password=vm_password, timeout=5) as ssh_client:
                         success, output, error, exit_code = ssh_client.execute_command("echo connected", timeout=8)
                         if success:
                          #   logger.info(f'[INFO] 虚拟机已完全就绪 - IP: {vm_ip}, 所有检查均通过')
@@ -859,7 +897,14 @@ def wait_for_vm_ready(vm_ip, timeout=300):
                         vm_script_path = f'{restart_scptRunner}{script_filename}'
                      #   logger.debug(f'[DEBUG] 虚拟机脚本路径: {vm_script_path}')
                         
-                        with SSHClient(hostname=vm_ip, username=vm_username, timeout=5) as ssh_client:
+                        # 从config模块导入vm_password（如果存在）
+                        try:
+                            from config import vm_password
+                        except ImportError:
+                            vm_password = None
+                            logger.debug(f'[DEBUG] 未找到vm_password配置，将尝试免密认证')
+                        
+                        with SSHClient(hostname=vm_ip, username=vm_username, password=vm_password, timeout=5) as ssh_client:
                             # 首先检查虚拟机上是否存在脚本文件
                             check_cmd = f'test -f {vm_script_path} && echo "exists" || echo "not exists"'
                             success_check, output_check, _, _ = ssh_client.execute_command(check_cmd, timeout=10)
@@ -1099,22 +1144,18 @@ def monitor_and_restart_process_after_reboot(vm_ip, process_id, transfer_icloud_
             logger.error(f'[ERROR] 从远程下载icloud.txt失败: {str(e)}')
             # 即使下载失败，我们仍然尝试启动进程，因为可能有之前的临时文件可用
     
-    # 继续启动进程
+    # 继续启动进程（直接执行，不创建新线程，因为已经在独立线程中运行）
     try:
+        # 直接调用execute_process函数，不需要再创建新线程
+        execute_process(process_id, transfer_icloud_file)
         
-        # 创建线程执行进程
-        thread = threading.Thread(target=execute_process, args=(process_id, transfer_icloud_file))
-        thread.daemon = True
-        running_tasks[process_id] = thread
-        thread.start()
-        
-      #  logger.info(f'[INFO] 进程重启成功 - 进程ID: {process_id}, 进程名称: {process["name"]}')
+        logger.info(f'[INFO] 进程已在独立线程中启动 - 进程ID: {process_id}')
         return True
     except Exception as e:
-        logger.error(f'[ERROR] 重启进程时发生异常: {str(e)}')
+        logger.error(f'[ERROR] 启动进程时发生异常: {str(e)}')
         process['status'] = '失败'
         update_process_status(process_id, '失败')
-        write_log(process_id, f'进程重启失败: {str(e)}')
+        write_log(process_id, f'进程启动失败: {str(e)}')
         return False
 
 # 辅助函数：执行五码更换
@@ -1857,7 +1898,14 @@ def execute_process(process_id, transfer_icloud_file=False):
             # 在虚拟机上的脚本路径，使用config.py中的restart_scptRunner配置
             vm_script_path = f'{restart_scptRunner}{script_filename}'
             
-            with SSHClient(hostname=vm_ip, username=vm_username, timeout=5) as ssh_client:
+            # 从config模块导入vm_password（如果存在）
+            try:
+                from config import vm_password
+            except ImportError:
+                vm_password = None
+                logger.debug(f'[DEBUG] 未找到vm_password配置，将尝试免密认证')
+            
+            with SSHClient(hostname=vm_ip, username=vm_username, password=vm_password, timeout=5) as ssh_client:
                 # 首先检查虚拟机上是否存在脚本文件
                 check_cmd = f'test -f {vm_script_path} && echo "exists" || echo "not exists"'
                 success_check, output_check, _, _ = ssh_client.execute_command(check_cmd, timeout=10)
@@ -1913,6 +1961,29 @@ def execute_process(process_id, transfer_icloud_file=False):
         except Exception as ssh_error:
             logger.error(f'[ERROR] SSH调用restart_scptapp.scpt时出错: {str(ssh_error)}')
             write_log(process_id, f'SSH调用restart_scptapp.scpt时出错: {str(ssh_error)}')
+        
+        # 在执行完restart_scptapp.scpt后，先查询当前是否已登录Apple ID
+        logger.info(f'[INFO] restart_scptapp.scpt执行完成，查询当前是否已登录Apple ID')
+        write_log(process_id, '执行restart_scptapp.scpt后，查询当前登录状态...')
+        
+        post_restart_query_result = run_scpt_script(vm_ip, 'queryiCloudAccount.scpt')
+        write_log(process_id, f'restart_scptapp.scpt后查询结果: {json.dumps(post_restart_query_result)}')
+        
+        # 如果已登录，执行注销操作
+        if post_restart_query_result.get('result') == 'success':
+            logger.info(f'[INFO] 检测到已登录状态，执行注销操作')
+            write_log(process_id, '检测到已登录状态，执行注销操作...')
+            
+            # 执行注销脚本
+            logout_result = run_scpt_script(vm_ip, 'logout_icloud.scpt')
+            write_log(process_id, f'注销结果: {json.dumps(logout_result)}')
+            
+            # 验证是否注销成功
+            logger.info(f'[INFO] 验证注销状态')
+            write_log(process_id, '验证注销状态...')
+            
+            verify_result = run_scpt_script(vm_ip, 'queryiCloudAccount.scpt')
+            write_log(process_id, f'注销验证结果: {json.dumps(verify_result)}')
         
         for idx, apple_id in enumerate(non_empty_apple_ids, 1):
             # 检查停止标志 - 循环开始立即检查
@@ -1972,6 +2043,20 @@ def execute_process(process_id, transfer_icloud_file=False):
                         del stop_flags[process_id]
                     break
                 
+                # 在执行登录脚本前，先查询当前是否已经登录了Apple ID
+                logger.info(f'[INFO] 执行预登录查询，检查当前是否已登录Apple ID')
+                write_log(process_id, '执行预登录查询，检查当前是否已登录Apple ID...')
+                pre_login_query_result = run_scpt_script(vm_ip, 'queryiCloudAccount.scpt')
+                write_log(process_id, f'预登录查询结果: {json.dumps(pre_login_query_result)}')
+                
+                if pre_login_query_result.get('result') == 'success':
+                    # 如果已经登录了Apple ID，则跳过登录步骤
+                    logger.info(f'[INFO] 检测到当前已登录Apple ID，跳过登录步骤')
+                    write_log(process_id, '检测到当前已登录Apple ID，跳过登录步骤')
+                    login_success = True
+                    continue
+                
+                # 只有在未登录状态下才执行登录脚本
                 login_result = run_scpt_script(vm_ip, 'appleid_login.scpt', process_id)
                 write_log(process_id, f'登录结果: {json.dumps(login_result)}')
                 
@@ -2083,7 +2168,14 @@ def execute_process(process_id, transfer_icloud_file=False):
                 restart_script = 'restart_scptapp.scpt'
                 vm_script_path = f'{restart_scptRunner}{restart_script}'
                 
-                with SSHClient(hostname=vm_ip, username=vm_username, timeout=5) as ssh_client:
+                # 从config模块导入vm_password（如果存在）
+                try:
+                    from config import vm_password
+                except ImportError:
+                    vm_password = None
+                    logger.debug(f'[DEBUG] 未找到vm_password配置，将尝试免密认证')
+                
+                with SSHClient(hostname=vm_ip, username=vm_username, password=vm_password, timeout=5) as ssh_client:
                     # 执行restart_scptapp.scpt
                     cmd = f'osascript {vm_script_path}'
                     restart_success, restart_output, restart_error, restart_exit_code = ssh_client.execute_command(cmd, timeout=30)
@@ -2527,13 +2619,19 @@ def start_process():
         db_status, vm_ip = db_result[0], db_result[1]
         logger.debug(f'[DEBUG] 数据库中进程状态: {db_status}, VM IP: {vm_ip}')
         
-        # 检查是否已在运行（内存中）
+        # 检查是否已在运行（内存中），并验证线程是否仍然活跃
         if process_id in running_tasks:
-            logger.warning(f'[WARNING] 进程已在运行中 - 进程ID: {process_id}')
-            return jsonify({
-                "success": False,
-                "message": "进程正在运行中"
-            })
+            thread = running_tasks[process_id]
+            if thread.is_alive():
+                logger.warning(f'[WARNING] 进程已在运行中 - 进程ID: {process_id}')
+                return jsonify({
+                    "success": False,
+                    "message": "进程正在运行中"
+                })
+            else:
+                # 线程已结束但仍在running_tasks中，清理旧线程
+                logger.info(f'[INFO] 清理已结束的线程 - 进程ID: {process_id}')
+                del running_tasks[process_id]
         
         # 幂等性检查：如果进程已经是启动中或执行中状态，直接返回成功
         if db_status in ['启动中', '执行中']:
@@ -2618,12 +2716,19 @@ def start_process():
         logger.debug(f'[DEBUG] 更新进程状态为启动中 - 进程ID: {process_id}')
         write_log(process_id, f'进程开始启动')
         
-        # 创建线程执行进程
+        # 创建独立线程执行进程，确保每个进程在独立线程中运行
         logger.debug(f'[DEBUG] 创建执行线程 - 进程ID: {process_id}')
-        thread = threading.Thread(target=monitor_and_restart_process_after_reboot, args=(vm_ip, process_id, False))
-        thread.daemon = True
-        thread.start()
+        thread = threading.Thread(
+            target=monitor_and_restart_process_after_reboot, 
+            args=(vm_ip, process_id, False),
+            daemon=True
+        )
+        # 立即保存到running_tasks字典
         running_tasks[process_id] = thread
+        # 启动线程
+        thread.start()
+        
+        logger.info(f'[INFO] 进程线程已创建并启动 - 进程ID: {process_id}, 线程ID: {thread.ident}')
         logger.debug(f'[DEBUG] 线程已启动，任务已添加到运行队列')
         
         return jsonify({
