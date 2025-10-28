@@ -1,0 +1,22 @@
+# clash_template.yml
+port: 7890
+socks-port: 7891
+allow-lan: false
+mode: Rule
+log-level: info
+
+# 代理节点列表
+proxies:
+  - { name: '🇸🇬 新加坡 01', type: trojan, server: 3cb57cb8.sched.sma-dk.ali-oss.cn, port: 12021, password: b9dbc076-6b5c-4eee-af2d-04ecc7d1254e, udp: true, sni: cdn.alibaba.com, skip-cert-verify: true }
+
+# 代理组
+proxy-groups:
+  - name: Proxy
+    type: select
+    proxies:
+      - '🇸🇬 新加坡 01'
+      - DIRECT
+
+# 规则
+rules:
+  - MATCH,Proxy

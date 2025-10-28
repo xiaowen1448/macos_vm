@@ -5,25 +5,27 @@
     <div class="row">
         <div class="col-lg-12">
             <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">VPN节点管理与测速</h6>
+                <div class="card-header py-3 bg-primary">
+                    <h6 class="m-0 font-weight-bold text-white">VPN节点管理与测速</h6>
                 </div>
                 <div class="card-body">
-                    <!-- 操作按钮区域 -->
-                    <div class="mb-4">
-                        <button id="importConfigBtn" class="btn btn-success mr-2">
-                            <i class="fas fa-upload"></i> 导入VPN配置
+                    <!-- 操作按钮区域 - 最小化间距和高度 -->
+                    <div class="mb-0" style="display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-bottom: 6px;">
+                        <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                            <button id="importConfigBtn" class="btn btn-success">
+                                <i class="fas fa-upload"></i> 导入VPN配置
+                            </button>
+                            <button id="batchTestBtn" class="btn btn-primary">
+                            <i class="fas fa-tachometer-alt"></i> 批量测速
                         </button>
-                        <button id="testAllBtn" class="btn btn-primary mr-2">
-                            <i class="fas fa-tachometer-alt"></i> 全部测速
-                        </button>
-                        <button id="assignBtn" class="btn btn-info mr-2">
-                            <i class="fas fa-exchange-alt"></i> 分配IP
-                        </button>
-                        <button id="refreshBtn" class="btn btn-secondary">
-                            <i class="fas fa-sync-alt"></i> 刷新列表
-                        </button>
-                        <div class="float-right">
+                            <button id="refreshBtn" class="btn btn-secondary">
+                                <i class="fas fa-sync-alt"></i> 刷新列表
+                            </button>
+                            <button id="batchDeleteBtn" class="btn btn-danger" disabled>
+                                <i class="fas fa-trash-alt"></i> 批量删除
+                            </button>
+                        </div>
+                        <div style="margin-left: auto; display: flex; flex-wrap: wrap; gap: 10px;">
                             <select id="filterRegion" class="form-control form-control-sm d-inline-block w-auto">
                                 <option value="all">全部地区</option>
                                 <option value="hk">香港</option>
@@ -33,7 +35,7 @@
                                 <option value="us">美国</option>
                                 <option value="ca">加拿大</option>
                             </select>
-                            <select id="filterProtocol" class="form-control form-control-sm d-inline-block w-auto ml-2">
+                            <select id="filterProtocol" class="form-control form-control-sm d-inline-block w-auto">
                                 <option value="all">全部协议</option>
                                 <option value="trojan">Trojan</option>
                                 <option value="vmess">VMess</option>
@@ -42,692 +44,486 @@
                         </div>
                     </div>
                     
-                    <!-- 节点列表区域 -->
-                    <div class="table-responsive">
+                    <!-- 节点列表区域 - 调整布局确保分页可见 -->
+                    <div class="table-responsive" style="margin-bottom: 15px;">
                         <table class="table table-bordered table-hover" id="nodeTable" width="100%" cellspacing="0">
                             <thead class="thead-light">
                                 <tr>
-                                    <th><input type="checkbox" id="selectAllNodes"></th>
-                                    <th>节点名称</th>
-                                    <th>地区</th>
-                                    <th>协议</th>
-                                    <th>类型</th>
-                                    <th>延迟(ms)</th>
-                                    <th>速度(MB/s)</th>
-                                    <th>剩余流量</th>
-                                    <th>有效期</th>
-                                    <th>状态</th>
-                                    <th>操作</th>
+                                    <th width="5%"><input type="checkbox" id="selectAllNodes">  全选</th>
+                                    <th width="30%">节点名称</th>
+                                    <th width="15%">地区</th>
+                                    <th width="10%">协议</th>
+                                    <th width="10%">延迟(ms)</th>
+                                    <th width="30%">操作</th>
                                 </tr>
                             </thead>
                             <tbody id="nodeList">
                                 <!-- 节点数据将通过JavaScript动态加载 -->
                                 <tr>
-                                    <td colspan="11" class="text-center">请导入VPN配置或点击刷新按钮加载节点</td>
+                                    <td colspan="6" class="text-center">请导入VPN配置或点击刷新按钮加载节点</td>
                                 </tr>
                             </tbody>
-                        </table>
+                </table>
+            </div>
+            <!-- 分页控件 -->
+            <div class="d-flex justify-content-between align-items-center mt-3">
+                <div class="d-flex align-items-center">
+                    <div class="text-muted me-3">
+                        <i class="fas fa-info-circle me-1"></i>
+                        显示 <span id="startRecord" class="fw-bold">0</span> - <span id="endRecord" class="fw-bold">0</span> 条，共 <span id="totalRecords" class="fw-bold">0</span> 条记录
                     </div>
-                    
-                    <!-- 分页控件 -->
-                    <div class="mt-3">
-                        <nav aria-label="Page navigation">
-                            <ul class="pagination justify-content-center" id="pagination">
-                                <!-- 分页按钮将通过JavaScript动态生成 -->
-                            </ul>
-                        </nav>
+                    <div class="d-flex align-items-center">
+                        <label class="form-label mb-0 me-2">每页显示:</label>
+                        <select class="form-select form-select-sm" id="pageSizeSelect" style="width: auto;" onchange="changePageSize()">
+                            <option value="5" selected>5</option>
+                            <option value="10">10</option>
+                            <option value="20">20</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                        <button class="btn btn-outline-secondary btn-sm ms-2" onclick="resetToAuto()" title="重置为自动分页">
+                            <i class="fas fa-magic"></i>
+                        </button>
                     </div>
+                </div>
+                <nav aria-label="节点列表分页">
+                    <ul class="pagination pagination-sm mb-0" id="pagination">
+                        <!-- 分页按钮将在这里动态生成 -->
+                    </ul>
+                </nav>
+            </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- 导入配置模态框 -->
-<div class="modal fade" id="importConfigModal" tabindex="-1" role="dialog" aria-labelledby="importConfigModalLabel" aria-hidden="true">
-    <div class="modal-dialog" role="document">
+<!-- 导入VPN配置模态框 -->
+<div class="modal fade" id="importConfigModal" tabindex="-1" aria-labelledby="importConfigModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="importConfigModalLabel">导入VPN配置</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="importConfigModalLabel">
+                    <i class="fas fa-cloud-upload-alt me-2"></i>导入VPN配置文件
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <div class="form-group">
-                    <label for="configFile">选择配置文件</label>
-                    <input type="file" class="form-control-file" id="configFile" accept=".json,.yaml,.yml,.txt">
+                <div class="mb-4">
+                    <label class="form-label font-weight-bold">选择配置文件</label>
+                    <input type="file" class="form-control" id="configFile" accept=".yaml,.yml,.json,.txt" onchange="validateConfigFile()">
+                    <div id="configFileStatus" class="mt-1 text-muted">未选择任何文件</div>
                 </div>
-                <div class="form-group">
-                    <label for="configText">或直接粘贴配置内容</label>
-                    <textarea class="form-control" id="configText" rows="10" placeholder="在此粘贴VPN配置内容..."></textarea>
-                </div>
-                <div class="alert alert-info" role="alert">
-                    支持格式：Clash、V2Ray、Trojan等主流VPN配置格式
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">关闭</button>
-                <button type="button" class="btn btn-primary" id="doImportBtn">确认导入</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- 测速结果详情模态框 -->
-<div class="modal fade" id="speedTestModal" tabindex="-1" role="dialog" aria-labelledby="speedTestModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="speedTestModalLabel">测速结果详情</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            <div class="modal-body">
-                <div id="speedTestResult">
-                    <!-- 测速结果将通过JavaScript动态加载 -->
+                
+                <div class="alert alert-info p-3">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>支持格式：</strong>
+                    <br>Clash（yaml/yml）、V2Ray、Trojan等主流VPN配置格式
+                    <br>建议：使用Clash格式配置文件以获得最佳体验
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">关闭</button>
+            <div class="modal-footer justify-content-between">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                <button type="button" class="btn btn-primary" id="doImportBtn" disabled>确认导入</button>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-// API接口基础URL
-const API_BASE_URL = '/api';
-
-// 全局变量
-let nodes = [];
-let filteredNodes = [];
-let currentPage = 1;
-const nodesPerPage = 10;
-
-// DOM加载完成后执行
-$(document).ready(function() {
-    // 初始化页面
-    initPage();
+// 显示加载状态函数
+function showLoading(text = '正在处理请求...') {
+    // 检查是否已存在加载元素并移除
+    let loadingElement = document.getElementById('loadingOverlay');
+    if (loadingElement) {
+        document.body.removeChild(loadingElement);
+    }
     
-    // 绑定事件监听器
-    bindEventListeners();
-});
-
-// 初始化页面
-function initPage() {
-    // 从API加载节点数据
-    loadNodes();
+    // 创建新的加载覆盖层
+    loadingElement = document.createElement('div');
+    loadingElement.id = 'loadingOverlay';
+    loadingElement.className = 'fixed inset-0 bg-black bg-opacity-50 z-50 flex flex-col items-center justify-center';
+    loadingElement.style.position = 'fixed';
+    loadingElement.style.top = '0';
+    loadingElement.style.left = '0';
+    loadingElement.style.width = '100%';
+    loadingElement.style.height = '100%';
+    loadingElement.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+    loadingElement.style.zIndex = '9999';
+    loadingElement.style.display = 'flex';
+    loadingElement.style.flexDirection = 'column';
+    loadingElement.style.alignItems = 'center';
+    loadingElement.style.justifyContent = 'center';
+    
+    // 创建加载内容
+    const loadingContent = document.createElement('div');
+    loadingContent.className = 'bg-white p-5 rounded-lg shadow-lg text-center';
+    loadingContent.style.backgroundColor = 'white';
+    loadingContent.style.padding = '20px';
+    loadingContent.style.borderRadius = '8px';
+    loadingContent.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.2)';
+    loadingContent.style.textAlign = 'center';
+    
+    // 创建加载图标
+    const spinner = document.createElement('div');
+    spinner.className = 'spinner-border text-primary mb-3';
+    spinner.style.width = '3rem';
+    spinner.style.height = '3rem';
+    spinner.role = 'status';
+    
+    const spinnerSpan = document.createElement('span');
+    spinnerSpan.className = 'sr-only';
+    spinnerSpan.textContent = '加载中...';
+    spinner.appendChild(spinnerSpan);
+    
+    // 创建加载文本
+    const loadingText = document.createElement('div');
+    loadingText.id = 'loadingText';
+    loadingText.className = 'text-dark';
+    loadingText.style.color = '#333';
+    loadingText.style.fontSize = '16px';
+    loadingText.style.fontWeight = '500';
+    
+    // 设置加载文本
+    loadingText.textContent = text;
+    
+    // 组装加载内容
+    loadingContent.appendChild(spinner);
+    loadingContent.appendChild(loadingText);
+    loadingElement.appendChild(loadingContent);
+    document.body.appendChild(loadingElement);
+    
+    return loadingElement; // 返回加载元素，便于后续操作
 }
 
-// 绑定事件监听器
-function bindEventListeners() {
-    // 导入配置按钮点击事件
-    $('#importConfigBtn').click(function() {
-        $('#importConfigModal').modal('show');
-    });
+// 右上角浮窗通知函数
+function showNotification(message, type = 'success') {
+    // 创建通知容器
+    const notificationContainer = document.createElement('div');
+    notificationContainer.className = `notification ${type}`;
+    notificationContainer.style.position = 'fixed';
+    notificationContainer.style.top = '20px';
+    notificationContainer.style.right = '20px';
+    notificationContainer.style.zIndex = '9999';
+    notificationContainer.style.padding = '15px 20px';
+    notificationContainer.style.borderRadius = '8px';
+    notificationContainer.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+    notificationContainer.style.fontWeight = '500';
+    notificationContainer.style.fontSize = '14px';
+    notificationContainer.style.transition = 'all 0.3s ease';
+    notificationContainer.style.opacity = '0';
+    notificationContainer.style.transform = 'translateX(100%)';
     
-    // 确认导入按钮点击事件
-    $('#doImportBtn').click(function() {
-        importConfig();
-    });
+    // 设置背景颜色和图标
+    if (type === 'success') {
+        notificationContainer.style.backgroundColor = '#52c41a';
+        notificationContainer.style.color = 'white';
+        notificationContainer.innerHTML = `<i class="fas fa-check-circle mr-2"></i>${message}`;
+    } else if (type === 'error') {
+        notificationContainer.style.backgroundColor = '#ff4d4f';
+        notificationContainer.style.color = 'white';
+        notificationContainer.innerHTML = `<i class="fas fa-times-circle mr-2"></i>${message}`;
+    } else if (type === 'warning') {
+        notificationContainer.style.backgroundColor = '#faad14';
+        notificationContainer.style.color = 'white';
+        notificationContainer.innerHTML = `<i class="fas fa-exclamation-circle mr-2"></i>${message}`;
+    } else if (type === 'info') {
+        notificationContainer.style.backgroundColor = '#1890ff';
+        notificationContainer.style.color = 'white';
+        notificationContainer.innerHTML = `<i class="fas fa-info-circle mr-2"></i>${message}`;
+    }
     
-    // 全部测速按钮点击事件
-    $('#testAllBtn').click(function() {
-        testAllNodes();
-    });
+    // 添加到页面
+    document.body.appendChild(notificationContainer);
     
-    // 分配IP按钮点击事件
-    $('#assignBtn').click(function() {
-        assignIPs();
-    });
+    // 显示通知
+    setTimeout(() => {
+        notificationContainer.style.opacity = '1';
+        notificationContainer.style.transform = 'translateX(0)';
+    }, 10);
     
-    // 刷新按钮点击事件
-    $('#refreshBtn').click(function() {
-        refreshNodeList();
-    });
+    // 设置定时关闭
+    setTimeout(() => {
+        notificationContainer.style.opacity = '0';
+        notificationContainer.style.transform = 'translateX(100%)';
+        
+        // 动画结束后移除元素
+        setTimeout(() => {
+            if (notificationContainer.parentNode === document.body) {
+                document.body.removeChild(notificationContainer);
+            }
+        }, 300);
+    }, 3000);
     
-    // 全选复选框点击事件
-    $('#selectAllNodes').click(function() {
-        const isChecked = $(this).prop('checked');
-        $('.node-checkbox').prop('checked', isChecked);
-    });
-    
-    // 地区筛选下拉框改变事件
-    $('#filterRegion').change(function() {
-        filterNodes();
-    });
-    
-    // 协议筛选下拉框改变事件
-    $('#filterProtocol').change(function() {
-        filterNodes();
+    // 添加点击关闭
+    notificationContainer.addEventListener('click', () => {
+        notificationContainer.style.opacity = '0';
+        notificationContainer.style.transform = 'translateX(100%)';
+        
+        setTimeout(() => {
+            if (notificationContainer.parentNode === document.body) {
+                document.body.removeChild(notificationContainer);
+            }
+        }, 300);
     });
 }
 
-// 渲染节点列表
-function renderNodeList() {
-    const startIndex = (currentPage - 1) * nodesPerPage;
-    const endIndex = startIndex + nodesPerPage;
-    const pageNodes = filteredNodes.slice(startIndex, endIndex);
+// 隐藏加载状态函数
+function hideLoading() {
+    const loadingElement = document.getElementById('loadingOverlay');
+    if (loadingElement && loadingElement.parentNode === document.body) {
+        // 直接移除而不是仅仅隐藏，确保加载状态被正确清理
+        document.body.removeChild(loadingElement);
+    }
+}
+
+// 验证配置文件并启用/禁用导入按钮
+function validateConfigFile() {
+    const fileInput = document.getElementById('configFile');
+    const fileStatus = document.getElementById('configFileStatus');
+    const importBtn = document.getElementById('doImportBtn');
     
-    const nodeList = $('#nodeList');
-    nodeList.empty();
-    
-    if (pageNodes.length === 0) {
-        nodeList.append('<tr><td colspan="11" class="text-center">没有找到符合条件的节点</td></tr>');
+    if (fileInput.files.length === 0) {
+        fileStatus.textContent = '未选择任何文件';
+        fileStatus.classList.remove('text-success', 'text-danger');
+        importBtn.disabled = true;
         return;
     }
     
-    pageNodes.forEach(node => {
-        const row = $('<tr>').addClass(node.status === 'active' ? 'table-success' : 'table-danger');
-        
-        // 复选框
-        row.append($('<td>').append($('<input>').attr('type', 'checkbox').addClass('node-checkbox').attr('data-id', node.id)));
-        
-        // 节点名称
-        row.append($('<td>').html(`<span class="badge badge-primary">${node.name}</span>`));
-        
-        // 地区
-        const regionIcon = getRegionIcon(node.region);
-        row.append($('<td>').html(`${regionIcon} ${node.region}`));
-        
-        // 协议和类型
-        row.append($('<td>').text(node.protocol));
-        row.append($('<td>').text(node.type));
-        
-        // 延迟（带颜色）
-        const delayClass = getDelayClass(node.delay);
-        row.append($('<td>').html(`<span class="${delayClass}">${node.delay}</span>`));
-        
-        // 速度（带颜色和进度条）
-        const speedClass = getSpeedClass(node.speed);
-        row.append($('<td>').html(`
-            <div class="d-flex align-items-center">
-                <span class="${speedClass}" style="width: 60px;">${node.speed}</span>
-                <div class="progress ml-2 flex-grow-1" style="height: 8px;">
-                    <div class="progress-bar ${speedClass.replace('text-', 'bg-')}" role="progressbar" style="width: ${Math.min(node.speed * 2, 100)}%" aria-valuenow="${node.speed}" aria-valuemin="0" aria-valuemax="50"></div>
-                </div>
-            </div>
-        `));
-        
-        // 剩余流量
-        row.append($('<td>').text(node.traffic));
-        
-        // 有效期
-        row.append($('<td>').text(node.expiry));
-        
-        // 状态
-        const statusBadge = node.status === 'active' 
-            ? '<span class="badge badge-success">在线</span>'
-            : '<span class="badge badge-danger">离线</span>';
-        row.append($('<td>').html(statusBadge));
-        
-        // 操作按钮
-        row.append($('<td>').html(`
-            <button class="btn btn-sm btn-info test-node-btn" data-id="${node.id}">测速</button>
-            <button class="btn btn-sm btn-warning assign-node-btn" data-id="${node.id}">分配</button>
-            <button class="btn btn-sm btn-danger delete-node-btn" data-id="${node.id}">删除</button>
-        `));
-        
-        nodeList.append(row);
-    });
+    const file = fileInput.files[0];
+    const validExtensions = ['.yaml', '.yml', '.json', '.txt'];
+    const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
     
-    // 绑定节点行内按钮事件
-    $('.test-node-btn').click(function() {
-        const nodeId = $(this).data('id');
-        testSingleNode(nodeId);
-    });
-    
-    $('.assign-node-btn').click(function() {
-        const nodeId = $(this).data('id');
-        assignSingleIP(nodeId);
-    });
-    
-    $('.delete-node-btn').click(function() {
-        const nodeId = $(this).data('id');
-        deleteNode(nodeId);
-    });
-}
-
-// 渲染分页控件
-function renderPagination() {
-    const totalPages = Math.ceil(filteredNodes.length / nodesPerPage);
-    const pagination = $('#pagination');
-    pagination.empty();
-    
-    // 上一页按钮
-    const prevLi = $('<li>').addClass('page-item').addClass(currentPage === 1 ? 'disabled' : '');
-    prevLi.append($('<a>').addClass('page-link').attr('href', '#').text('上一页').click(function(e) {
-        e.preventDefault();
-        if (currentPage > 1) {
-            currentPage--;
-            renderNodeList();
-            renderPagination();
-        }
-    }));
-    pagination.append(prevLi);
-    
-    // 页码按钮
-    const startPage = Math.max(1, currentPage - 2);
-    const endPage = Math.min(totalPages, startPage + 4);
-    
-    for (let i = startPage; i <= endPage; i++) {
-        const pageLi = $('<li>').addClass('page-item').addClass(i === currentPage ? 'active' : '');
-        pageLi.append($('<a>').addClass('page-link').attr('href', '#').text(i).click(function(e) {
-            e.preventDefault();
-            currentPage = i;
-            renderNodeList();
-            renderPagination();
-        }));
-        pagination.append(pageLi);
-    }
-    
-    // 下一页按钮
-    const nextLi = $('<li>').addClass('page-item').addClass(currentPage === totalPages ? 'disabled' : '');
-    nextLi.append($('<a>').addClass('page-link').attr('href', '#').text('下一页').click(function(e) {
-        e.preventDefault();
-        if (currentPage < totalPages) {
-            currentPage++;
-            renderNodeList();
-            renderPagination();
-        }
-    }));
-    pagination.append(nextLi);
-}
-
-// 导入配置
-function importConfig() {
-    const configFile = $('#configFile')[0].files[0];
-    const configText = $('#configText').val().trim();
-    
-    // 验证输入
-    if (!configFile && !configText) {
-        showToast('请选择配置文件或粘贴配置内容', 'warning');
-        return;
-    }
-    
-    $('#importConfigModal').modal('hide');
-    showToast('正在导入配置...', 'info');
-    
-    // 创建表单数据
-    const formData = new FormData();
-    if (configFile) {
-        formData.append('config_file', configFile);
-    }
-    if (configText) {
-        formData.append('config_text', configText);
-    }
-    
-    // 调用API导入配置
-    $.ajax({
-        url: `${API_BASE_URL}/nodes/import`,
-        type: 'POST',
-        data: formData,
-        contentType: false,
-        processData: false,
-        success: function(response) {
-            if (response.success) {
-                showToast(response.message, 'success');
-                loadNodes(); // 重新加载节点列表
-            } else {
-                showToast(response.message, 'danger');
-            }
-        },
-        error: function() {
-            showToast('导入失败，请稍后重试', 'danger');
-        },
-        complete: function() {
-            // 清空导入表单
-            $('#configFile').val('');
-            $('#configText').val('');
-        }
-    });
-}
-
-// 测试单个节点
-function testSingleNode(nodeId) {
-    const node = nodes.find(n => n.id === nodeId);
-    if (!node) return;
-    
-    showToast(`正在测试节点 ${node.name}...`, 'info');
-    
-    // 调用API进行测速
-    $.ajax({
-        url: `${API_BASE_URL}/nodes/test`,
-        type: 'POST',
-        contentType: 'application/json',
-        data: JSON.stringify({ node_ids: [nodeId] }),
-        success: function(response) {
-            if (response.success && response.data.length > 0) {
-                // 更新节点数据
-                const updatedNode = response.data[0];
-                const index = nodes.findIndex(n => n.id === nodeId);
-                if (index !== -1) {
-                    nodes[index] = updatedNode;
-                }
-                
-                // 更新列表
-                filterNodes();
-                
-                // 显示测速结果详情
-                showSpeedTestResult(updatedNode);
-                
-                showToast(`节点 ${node.name} 测速完成`, 'success');
-            } else {
-                showToast('测速失败: ' + (response.message || '未知错误'), 'danger');
-            }
-        },
-        error: function() {
-            showToast('测速失败，请稍后重试', 'danger');
-        }
-    });
-}
-
-// 测试所有节点
-function testAllNodes() {
-    if (nodes.length === 0) {
-        showToast('没有可测试的节点', 'warning');
-        return;
-    }
-    
-    showToast('正在对所有节点进行测速，请稍候...', 'info');
-    
-    // 获取所有节点ID
-    const nodeIds = nodes.map(node => node.id);
-    
-    // 调用API批量测速
-    $.ajax({
-        url: `${API_BASE_URL}/nodes/test`,
-        type: 'POST',
-        contentType: 'application/json',
-        data: JSON.stringify({ node_ids: nodeIds }),
-        success: function(response) {
-            if (response.success) {
-                // 更新节点数据
-                response.data.forEach(updatedNode => {
-                    const index = nodes.findIndex(n => n.id === updatedNode.id);
-                    if (index !== -1) {
-                        nodes[index] = updatedNode;
-                    }
-                });
-                
-                // 更新列表
-                filterNodes();
-                
-                showToast('所有节点测速完成！', 'success');
-            } else {
-                showToast('测速失败: ' + (response.message || '未知错误'), 'danger');
-            }
-        },
-        error: function() {
-            showToast('测速失败，请稍后重试', 'danger');
-        }
-    });
-}
-
-// 分配单个IP
-function assignSingleIP(nodeId) {
-    const node = nodes.find(n => n.id === nodeId);
-    if (!node) return;
-    
-    showToast(`正在为 ${node.name} 分配IP...`, 'info');
-    
-    // 调用API分配IP
-    $.ajax({
-        url: `${API_BASE_URL}/nodes/assign`,
-        type: 'POST',
-        contentType: 'application/json',
-        data: JSON.stringify({ node_ids: [nodeId] }),
-        success: function(response) {
-            if (response.success) {
-                // 更新节点数据
-                response.data.forEach(updatedNode => {
-                    const index = nodes.findIndex(n => n.id === updatedNode.id);
-                    if (index !== -1) {
-                        nodes[index] = updatedNode;
-                    }
-                });
-                
-                // 更新列表
-                filterNodes();
-                
-                showToast(`IP分配成功！节点 ${node.name} 已分配新的代理IP`, 'success');
-            } else {
-                showToast('IP分配失败: ' + (response.message || '未知错误'), 'danger');
-            }
-        },
-        error: function() {
-            showToast('IP分配失败，请稍后重试', 'danger');
-        }
-    });
-}
-
-// 批量分配IP
-function assignIPs() {
-    const selectedNodeIds = $('.node-checkbox:checked').map(function() {
-        return $(this).data('id');
-    }).get();
-    
-    if (selectedNodeIds.length === 0) {
-        showToast('请先选择要分配IP的节点', 'warning');
-        return;
-    }
-    
-    showToast(`正在为 ${selectedNodeIds.length} 个节点分配IP...`, 'info');
-    
-    // 调用API批量分配IP
-    $.ajax({
-        url: `${API_BASE_URL}/nodes/assign`,
-        type: 'POST',
-        contentType: 'application/json',
-        data: JSON.stringify({ node_ids: selectedNodeIds }),
-        success: function(response) {
-            if (response.success) {
-                // 更新节点数据
-                response.data.forEach(updatedNode => {
-                    const index = nodes.findIndex(n => n.id === updatedNode.id);
-                    if (index !== -1) {
-                        nodes[index] = updatedNode;
-                    }
-                });
-                
-                // 更新列表
-                filterNodes();
-                
-                showToast(`批量IP分配成功！已为 ${selectedNodeIds.length} 个节点分配新的代理IP`, 'success');
-            } else {
-                showToast('IP分配失败: ' + (response.message || '未知错误'), 'danger');
-            }
-        },
-        error: function() {
-            showToast('IP分配失败，请稍后重试', 'danger');
-        }
-    });
-}
-
-// 删除节点
-function deleteNode(nodeId) {
-    if (confirm('确定要删除这个节点吗？')) {
-        // 调用API删除节点
-        $.ajax({
-            url: `${API_BASE_URL}/nodes/${nodeId}`,
-            type: 'DELETE',
-            success: function(response) {
-                if (response.success) {
-                    // 从本地数据中移除
-                    nodes = nodes.filter(node => node.id !== nodeId);
-                    filterNodes();
-                    showToast('节点删除成功', 'success');
-                } else {
-                    showToast('节点删除失败: ' + (response.message || '未知错误'), 'danger');
-                }
-            },
-            error: function() {
-                showToast('节点删除失败，请稍后重试', 'danger');
-            }
-        });
+    if (validExtensions.includes(fileExtension)) {
+        fileStatus.textContent = '已选择: ' + file.name;
+        fileStatus.classList.remove('text-danger');
+        fileStatus.classList.add('text-success');
+        importBtn.disabled = false;
+    } else {
+        fileStatus.textContent = '不支持的文件格式: ' + file.name;
+        fileStatus.classList.remove('text-success');
+        fileStatus.classList.add('text-danger');
+        importBtn.disabled = true;
     }
 }
 
-// 刷新节点列表
-function refreshNodeList() {
-    showToast('正在刷新节点列表...', 'info');
-    loadNodes();
-}
-
-// 从API加载节点数据
-function loadNodes() {
-    $.ajax({
-        url: `${API_BASE_URL}/nodes`,
-        type: 'GET',
-        success: function(response) {
-            if (response.success) {
-                nodes = response.data;
-                filterNodes(); // 应用筛选条件
-                showToast('节点列表加载成功', 'success');
-            } else {
-                showToast('节点列表加载失败: ' + (response.message || '未知错误'), 'danger');
-            }
-        },
-        error: function() {
-            showToast('节点列表加载失败，请检查网络连接', 'danger');
-        }
-    });
-}
-
-// 筛选节点
-function filterNodes() {
-    const regionFilter = $('#filterRegion').val();
-    const protocolFilter = $('#filterProtocol').val();
-    
-    // 构建查询参数
-    const queryParams = new URLSearchParams();
-    if (regionFilter !== 'all') {
-        queryParams.append('region', regionFilter);
-    }
-    if (protocolFilter !== 'all') {
-        queryParams.append('protocol', protocolFilter);
+// 获取延迟对应的样式类
+function getDelayClass(delay) {
+    // 添加防御性检查，处理undefined或null值
+    if (delay === undefined || delay === null || isNaN(delay)) {
+        return 'text-danger font-weight-bold';
     }
     
-    // 调用API进行筛选
-    $.ajax({
-        url: `${API_BASE_URL}/nodes?${queryParams.toString()}`,
-        type: 'GET',
-        success: function(response) {
-            if (response.success) {
-                filteredNodes = response.data;
-                
-                // 重置到第一页
-                currentPage = 1;
-                
-                // 重新渲染列表和分页
-                renderNodeList();
-                renderPagination();
-            } else {
-                showToast('筛选失败: ' + (response.message || '未知错误'), 'danger');
-            }
-        },
-        error: function() {
-            // 如果API调用失败，使用本地筛选作为后备方案
-            localFilter(regionFilter, protocolFilter);
-        }
-    });
+    if (delay < 100) {
+        return 'text-success font-weight-bold';
+    } else if (delay < 300) {
+        return 'text-warning font-weight-bold';
+    } else {
+        return 'text-danger font-weight-bold';
+    }
 }
 
-// 本地筛选作为后备方案
-function localFilter(regionFilter, protocolFilter) {
-    filteredNodes = nodes.filter(node => {
-        const regionMatch = regionFilter === 'all' || node.region.includes(regionFilter === 'hk' ? '香港' : 
-                                                                     regionFilter === 'tw' ? '台湾' :
-                                                                     regionFilter === 'sg' ? '新加坡' :
-                                                                     regionFilter === 'jp' ? '日本' :
-                                                                     regionFilter === 'us' ? '美国' :
-                                                                     regionFilter === 'ca' ? '加拿大' : '');
-        
-        const protocolMatch = protocolFilter === 'all' || node.protocol.toLowerCase().includes(protocolFilter.toLowerCase());
-        
-        return regionMatch && protocolMatch;
-    });
+// 更新分页显示的记录信息
+function updatePaginationInfo(startIndex, endIndex, totalCount) {
+    document.getElementById('startRecord').textContent = startIndex + 1;
+    document.getElementById('endRecord').textContent = endIndex;
+    document.getElementById('totalRecords').textContent = totalCount;
+}
+
+// 改变分页大小
+function changePageSize() {
+    const newPageSize = parseInt(document.getElementById('pageSizeSelect').value);
     
-    // 重置到第一页
+    // 如果分页大小发生变化，重新加载数据
+    if (newPageSize !== pageSize) {
+        console.log('改变分页大小:', { oldSize: pageSize, newSize: newPageSize });
+        
+        pageSize = newPageSize;
+        currentPage = 1; // 重置到第一页
+        
+        // 重新加载当前页面的数据
+        // 这里需要调用现有的数据加载函数，假设为loadNodes()
+        if (typeof loadNodes === 'function') {
+            loadNodes(currentPage);
+        }
+    }
+}
+
+// 重置为自动分页
+function resetToAuto() {
+    // 计算最佳分页大小（可以根据wuma.html中的calculateOptimalPageSize函数实现）
+    // 这里简单使用默认值5
+    
+    document.getElementById('pageSizeSelect').value = '5';
+    pageSize = 5;
     currentPage = 1;
     
-    // 重新渲染列表和分页
-    renderNodeList();
-    renderPagination();
-}
-
-// 显示测速结果详情
-function showSpeedTestResult(node) {
-    const speedTestResult = $('#speedTestResult');
-    speedTestResult.html(`
-        <div class="card">
-            <div class="card-header">
-                <h6 class="font-weight-bold">${node.name} - 测速详情</h6>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label>节点名称:</label> ${node.name}
-                        </div>
-                        <div class="mb-3">
-                            <label>地区:</label> ${node.region}
-                        </div>
-                        <div class="mb-3">
-                            <label>协议:</label> ${node.protocol} ${node.type}
-                        </div>
-                        <div class="mb-3">
-                            <label>延迟:</label> <span class="${getDelayClass(node.delay)}">${node.delay} ms</span>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label>下载速度:</label> <span class="${getSpeedClass(node.speed)}">${node.speed} MB/s</span>
-                        </div>
-                        <div class="mb-3">
-                            <label>剩余流量:</label> ${node.traffic}
-                        </div>
-                        <div class="mb-3">
-                            <label>有效期:</label> ${node.expiry}
-                        </div>
-                        <div class="mb-3">
-                            <label>状态:</label> ${node.status === 'active' ? '<span class="badge badge-success">在线</span>' : '<span class="badge badge-danger">离线</span>'}
-                        </div>
-                    </div>
-                </div>
-                <div class="progress" style="height: 20px;">
-                    <div class="progress-bar ${getSpeedClass(node.speed).replace('text-', 'bg-')}" role="progressbar" style="width: ${Math.min(node.speed * 2, 100)}%" aria-valuenow="${node.speed}" aria-valuemin="0" aria-valuemax="50">
-                        ${node.speed} MB/s
-                    </div>
-                </div>
-            </div>
-        </div>
-    `);
+    console.log('重置为自动分页，分页大小:', 5);
     
-    $('#speedTestModal').modal('show');
+    // 重新加载当前页面的数据
+    if (typeof loadNodes === 'function') {
+        loadNodes(currentPage);
+    }
 }
 
-// 获取地区图标
-function getRegionIcon(region) {
-    const iconMap = {
-        '香港': '<i class="fas fa-flag" style="color: #ff0000;"></i>',
-        '台湾': '<i class="fas fa-flag" style="color: #0000ff;"></i>',
-        '新加坡': '<i class="fas fa-flag" style="color: #ff0000;"></i>',
-        '日本': '<i class="fas fa-flag" style="color: #ff0000;"></i>',
-        '美国': '<i class="fas fa-flag" style="color: #ff0000;"></i>',
-        '加拿大': '<i class="fas fa-flag" style="color: #ff0000;"></i>'
-    };
+// CSS样式 - 动态加载指示器和滚动条优化
+const style = document.createElement('style');
+style.textContent = `
+    /* 加载指示器样式 - 修复对齐问题 */
+    .loading-spinner {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        width: 100%;
+        padding: 4px 0;
+        margin: 0;
+    }
     
-    return iconMap[region] || '<i class="fas fa-flag"></i>';
+    .spinner {
+        width: 14px;
+        height: 14px;
+        border: 2px solid #f3f3f3;
+        border-top: 2px solid #3498db;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        flex-shrink: 0;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    /* 加载状态样式 */
+    .loading {
+        color: #3498db;
+        text-align: center;
+        padding: 0 !important;
+    }
+    
+    /* 表格容器样式优化 - 确保滚动条正常显示 */
+    #nodeList {
+        width: 100%;
+        table-layout: fixed;
+        margin-bottom: 0 !important;
+    }
+    
+    #nodeList td, #nodeList th {
+        word-wrap: break-word;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        text-align: center;
+        vertical-align: middle !important;
+        padding: 8px 4px !important;
+    }
+    
+    /* 表格容器容器 */
+    .table-responsive {
+        max-height: 500px !important;
+        overflow-y: auto !important;
+        overflow-x: auto !important;
+        margin-bottom: 15px !important;
+        position: relative;
+    }
+    
+    /* 分页控件样式优化 */
+    .pagination {
+        margin-bottom: 0;
+        display: flex;
+        list-style: none;
+        padding: 0;
+        flex-wrap: nowrap;
+        margin-left: 0;
+    }
+    
+    .pagination .page-item {
+        margin: 0;
+    }
+    
+    .pagination .page-link {
+        padding: 0.375rem 0.75rem;
+        font-size: 0.875rem;
+        white-space: nowrap;
+        box-sizing: border-box;
+        min-width: 32px;
+        text-align: center;
+    }
+    
+    .pagination .page-item.active .page-link {
+        background-color: #007bff;
+        border-color: #007bff;
+    }
+    
+    .pagination .page-item.disabled .page-link {
+        color: #6c757d;
+        pointer-events: none;
+        background-color: #fff;
+        border-color: #dee2e6;
+    }
+    
+    /* 分页容器样式 */
+    .pagination-container {
+        width: 100%;
+        overflow-x: auto;
+        padding: 5px 0;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    #pagination-content {
+        min-width: 100%;
+        display: flex;
+        justify-content: flex-end;
+        overflow-x: visible;
+        white-space: nowrap;
+    }
+    
+    /* 页码信息样式 */
+    .pagination-info {
+        color: #666;
+        font-size: 14px;
+        white-space: nowrap;
+        padding: 8px 16px;
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+    }
+    
+    /* 延迟列样式 */
+    td:nth-child(5) {
+        text-align: center !important;
+        min-width: 80px;
+    }
+    
+    /* 确保内容区域不被遮挡 */
+    .card-body {
+        overflow: visible;
+    }
+`;
+document.head.appendChild(style);
+
+// 获取延迟显示值
+function getDelayDisplay(delay) {
+    // 添加防御性检查，处理undefined或null值
+    if (delay === undefined || delay === null || isNaN(delay)) {
+        return '-';
+    }
+    return delay + 'ms';
 }
 
-// 获取延迟对应的CSS类
-function getDelayClass(delay) {
-    if (delay < 100) return 'text-success font-weight-bold';
-    if (delay < 200) return 'text-warning font-weight-bold';
-    return 'text-danger font-weight-bold';
+// 初始化节点数据延迟字段
+function initializeNodeDelays(nodes) {
+    if (!nodes || !Array.isArray(nodes)) return [];
+    
+    return nodes.map(node => {
+        // 确保每个节点都有延迟字段，默认为null
+        if (node.delay === undefined || node.delay === null || isNaN(node.delay)) {
+            node.delay = null;
+        }
+        return node;
+    });
 }
 
 // 获取速度对应的CSS类
@@ -738,40 +534,615 @@ function getSpeedClass(speed) {
     return 'text-danger font-weight-bold';
 }
 
-// 显示提示消息
-function showToast(message, type = 'info') {
-    // 创建toast元素
-    const toastId = 'toast-' + Date.now();
-    const toast = $(
-        `<div id="${toastId}" class="toast position-fixed bottom-0 right-0 m-3" role="alert" aria-live="assertive" aria-atomic="true">
-            <div class="toast-header bg-${type === 'success' ? 'success' : type === 'error' || type === 'danger' ? 'danger' : type === 'warning' ? 'warning' : 'info'} text-white">
-                <strong class="mr-auto">${type === 'success' ? '成功' : type === 'error' || type === 'danger' ? '错误' : type === 'warning' ? '警告' : '信息'}</strong>
-                <button type="button" class="ml-2 mb-1 close text-white" data-dismiss="toast" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            <div class="toast-body">
-                ${message}
-            </div>
-        </div>`
-    );
+// 页面加载完成后初始化
+window.addEventListener('DOMContentLoaded', function() {
+    // 初始化节点数据延迟字段
+    const nodes = [];
     
-    // 添加到body
-    $('body').append(toast);
-    
-    // 显示toast
-    toast.toast({
-        animation: true,
-        autohide: true,
-        delay: 3000
+    // 为刷新按钮添加点击事件
+    document.getElementById('refreshBtn')?.addEventListener('click', function() {
+        loadNodes();
     });
-    toast.toast('show');
     
-    // 自动移除
-    setTimeout(() => {
-        toast.remove();
-    }, 3500);
+    // 为批量测速按钮添加点击事件
+    document.getElementById('batchTestBtn')?.addEventListener('click', function() {
+        testAllNodes();
+    });
+    
+    // 为批量删除按钮添加点击事件
+    document.getElementById('batchDeleteBtn')?.addEventListener('click', function() {
+        batchDeleteNodes();
+    });
+    
+    // 为导入配置按钮添加点击事件
+    document.getElementById('importConfigBtn')?.addEventListener('click', function() {
+        const importModal = new bootstrap.Modal(document.getElementById('importConfigModal'));
+        importModal.show();
+    });
+    
+    // 为确认导入按钮添加点击事件
+    document.getElementById('doImportBtn')?.addEventListener('click', function() {
+        importConfigFile();
+    });
+    
+    // 为全选复选框添加事件
+    document.getElementById('selectAllNodes')?.addEventListener('change', function() {
+        const isChecked = this.checked;
+        const checkboxes = document.querySelectorAll('.node-checkbox');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = isChecked;
+        });
+        // 更新批量删除按钮状态
+        updateBatchDeleteButtonStatus();
+    });
+    
+    // 为地区筛选下拉菜单添加事件
+    document.getElementById('filterRegion')?.addEventListener('change', function() {
+        filterNodes();
+    });
+    
+    // 为协议筛选下拉菜单添加事件
+    document.getElementById('filterProtocol')?.addEventListener('change', function() {
+        filterNodes();
+    });
+    
+    // 初始加载节点列表
+    loadNodes();
+});
+
+// 全局节点数据存储
+let nodeData = [];
+// 分页相关变量
+let currentPage = 1;
+let pageSize = 20; // 每页显示的节点数量
+let totalPages = 1;
+
+// 加载节点列表 - 从后端API获取真实数据
+function loadNodes() {
+    showLoading('正在加载节点列表...');
+    
+    // 从后端API获取节点数据
+    fetch('/api/nodes')
+        .then(response => response.json())
+        .then(data => {
+            hideLoading();
+            
+            if (data.success && data.data) {
+                // 初始化节点延迟字段
+                const initializedNodes = initializeNodeDelays(data.data);
+                
+                // 保存到全局变量
+                nodeData = initializedNodes;
+                
+                // 重置当前页为第一页
+                currentPage = 1;
+                
+                // 计算总页数
+                totalPages = Math.ceil(nodeData.length / pageSize);
+                
+                // 渲染当前页的节点列表
+                renderNodeList(getCurrentPageNodes());
+                
+                // 渲染分页控件
+                renderPagination();
+                
+                showNotification(`节点列表加载成功，共 ${initializedNodes.length} 个节点`, 'success');
+            } else {
+                // 如果没有数据，清空全局变量
+                nodeData = [];
+                currentPage = 1;
+                totalPages = 1;
+                
+                // 显示空状态
+                renderNodeList([]);
+                renderPagination(); // 重置分页控件
+                
+                showNotification('未找到节点数据，请先导入配置文件', 'info');
+            }
+        })
+        .catch(error => {
+            hideLoading();
+            showNotification(`加载节点列表失败: ${error.message}`, 'error');
+            console.error('加载节点列表错误:', error);
+        });
 }
+
+// 渲染节点列表
+function renderNodeList(nodes) {
+    // 确保表格容器有滚动条样式
+    const tableContainer = document.querySelector('.table-responsive');
+    if (tableContainer) {
+        tableContainer.style.maxHeight = '500px';
+        tableContainer.style.overflowY = 'auto';
+        tableContainer.style.overflowX = 'auto';
+        tableContainer.style.position = 'relative';
+        tableContainer.style.marginBottom = '15px';
+    }
+    
+    const nodeListElement = document.getElementById('nodeList');
+    if (!nodeListElement) return;
+    
+    if (!nodes || nodes.length === 0) {
+        nodeListElement.innerHTML = '<tr><td colspan="6" class="text-center">暂无节点数据</td></tr>';
+        return;
+    }
+    
+    let html = '';
+    nodes.forEach(node => {
+        // 使用getDelayDisplay函数显示延迟值
+        const delayDisplay = getDelayDisplay(node.delay);
+        const delayClass = getDelayClass(node.delay);
+        
+        html += `
+        <tr>
+            <td><input type="checkbox" class="node-checkbox" data-id="${node.id}"></td>
+            <td>${node.name || '未知节点'}</td>
+            <td>${node.region || '未知地区'}</td>
+            <td>${node.protocol || '未知协议'}</td>
+            <td class="${delayClass}">${delayDisplay}</td>
+            <td>
+                <button class="btn btn-sm btn-info test-node-btn" data-id="${node.id}">测速</button>
+                <button class="btn btn-sm btn-warning assign-node-btn" data-id="${node.id}">分配</button>
+                <button class="btn btn-sm btn-danger delete-node-btn" data-id="${node.id}">删除</button>
+            </td>
+        </tr>
+        `;
+    });
+    
+    nodeListElement.innerHTML = html;
+    
+    // 为按钮添加事件监听器
+    addNodeButtonListeners();
+}
+
+// 筛选节点数据
+function filterNodes() {
+    // 获取筛选条件
+    const regionFilter = document.getElementById('filterRegion')?.value || 'all';
+    const protocolFilter = document.getElementById('filterProtocol')?.value || 'all';
+    
+    // 重置当前页为第一页
+    currentPage = 1;
+    
+    // 重新渲染节点列表和分页控件
+    renderNodeList(getCurrentPageNodes());
+    renderPagination();
+}
+
+// 获取当前页的节点数据（包含筛选）
+function getCurrentPageNodes() {
+    // 获取筛选条件
+    const regionFilter = document.getElementById('filterRegion')?.value || 'all';
+    const protocolFilter = document.getElementById('filterProtocol')?.value || 'all';
+    
+    // 应用筛选条件
+    let filteredNodes = nodeData.filter(node => {
+        // 地区筛选
+        const regionMatch = regionFilter === 'all' || 
+                          (node.region && node.region.toLowerCase().includes(regionFilter.toLowerCase()));
+        
+        // 协议筛选
+        const protocolMatch = protocolFilter === 'all' || 
+                            (node.protocol && node.protocol.toLowerCase().includes(protocolFilter.toLowerCase()));
+        
+        // 两个条件都要满足
+        return regionMatch && protocolMatch;
+    });
+    
+    // 计算总页数
+    totalPages = Math.ceil(filteredNodes.length / pageSize);
+    
+    // 确保当前页不超过总页数
+    if (currentPage > totalPages && totalPages > 0) {
+        currentPage = totalPages;
+    }
+    
+    // 获取当前页的数据
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    return filteredNodes.slice(startIndex, endIndex);
+}
+
+// 渲染分页控件
+function renderPagination() {
+    const paginationElement = document.getElementById('pagination');
+    if (!paginationElement) return;
+    
+    // 如果没有数据，隐藏分页控件
+    if (nodeData.length === 0) {
+        paginationElement.innerHTML = '';
+        return;
+    }
+    
+    let html = '';
+    
+    // 上一页按钮
+    html += `
+    <li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
+        <a class="page-link" href="#" aria-label="上一页" onclick="goToPage(${currentPage - 1}); return false;">
+            <span aria-hidden="true">&laquo;</span>
+        </a>
+    </li>
+    `;
+    
+    // 页码按钮 - 简化为只显示当前页、首页和末页
+    if (totalPages <= 5) {
+        // 如果总页数不超过5页，显示所有页码
+        for (let i = 1; i <= totalPages; i++) {
+            html += `
+            <li class="page-item ${i === currentPage ? 'active' : ''}">
+                <a class="page-link" href="#" onclick="goToPage(${i}); return false;">${i}</a>
+            </li>
+            `;
+        }
+    } else {
+        // 如果总页数超过5页，显示首页、前一页、当前页、后一页和末页
+        // 首页
+        html += `
+        <li class="page-item ${currentPage === 1 ? 'active' : ''}">
+            <a class="page-link" href="#" onclick="goToPage(1); return false;">1</a>
+        </li>
+        `;
+        
+        // 如果当前页离首页较远，显示省略号
+        if (currentPage > 3) {
+            html += '<li class="page-item disabled"><a class="page-link" href="#">...</a></li>';
+        }
+        
+        // 显示当前页及其前后各一页
+        for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
+            html += `
+            <li class="page-item ${i === currentPage ? 'active' : ''}">
+                <a class="page-link" href="#" onclick="goToPage(${i}); return false;">${i}</a>
+            </li>
+            `;
+        }
+        
+        // 如果当前页离末页较远，显示省略号
+        if (currentPage < totalPages - 2) {
+            html += '<li class="page-item disabled"><a class="page-link" href="#">...</a></li>';
+        }
+        
+        // 末页
+        html += `
+        <li class="page-item ${currentPage === totalPages ? 'active' : ''}">
+            <a class="page-link" href="#" onclick="goToPage(${totalPages}); return false;">${totalPages}</a>
+        </li>
+        `;
+    }
+    
+    // 下一页按钮
+    html += `
+    <li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
+        <a class="page-link" href="#" aria-label="下一页" onclick="goToPage(${currentPage + 1}); return false;">
+            <span aria-hidden="true">&raquo;</span>
+        </a>
+    </li>
+    `;
+    
+    paginationElement.innerHTML = html;
+    
+    // 计算当前页面的记录范围
+    const currentPageNodes = getCurrentPageNodes();
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = Math.min(startIndex + pageSize, nodeData.length);
+    
+    // 更新分页信息
+    updatePaginationInfo(startIndex, endIndex, nodeData.length);
+}
+
+// 跳转到指定页面
+function goToPage(page) {
+    // 验证页面范围
+    if (page < 1 || page > totalPages) {
+        return;
+    }
+    
+    // 更新当前页
+    currentPage = page;
+    
+    // 重新渲染节点列表和分页控件
+    renderNodeList(getCurrentPageNodes());
+    renderPagination();
+}
+
+// 为节点操作按钮添加事件监听器
+function addNodeButtonListeners() {
+    // 测速按钮
+    document.querySelectorAll('.test-node-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const nodeId = this.getAttribute('data-id');
+            testNode(nodeId);
+        });
+    });
+    
+    // 分配按钮
+    // 测速按钮
+    document.querySelectorAll('.test-node-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const nodeId = this.getAttribute('data-id');
+            testNode(nodeId);
+        });
+    });
+    
+    // 分配按钮
+    document.querySelectorAll('.assign-node-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const nodeId = this.getAttribute('data-id');
+            assignNode(nodeId);
+        });
+    });
+    
+    // 删除按钮
+    document.querySelectorAll('.delete-node-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const nodeId = this.getAttribute('data-id');
+            deleteNode(nodeId);
+        });
+    });
+    
+    // 节点复选框事件
+    document.querySelectorAll('.node-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', updateBatchDeleteButtonStatus);
+    });
+}
+
+// 测试单个节点
+function testNode(nodeId) {
+    // 显示加载指示器
+    showLoadingIndicator(nodeId);
+    
+    // 模拟测速请求
+    setTimeout(function() {
+        const randomDelay = Math.floor(Math.random() * 300) + 50;
+        
+        // 更新节点延迟
+        updateNodeDelay(nodeId, randomDelay);
+    }, 1500);
+}
+
+
+// 显示加载指示器
+function showLoadingIndicator(nodeId) {
+    const rows = document.querySelectorAll('#nodeList tr');
+    rows.forEach(row => {
+        const checkbox = row.querySelector('.node-checkbox');
+        if (checkbox && checkbox.getAttribute('data-id') === nodeId) {
+            const delayCell = row.querySelector('td:nth-child(5)');
+            if (delayCell) {
+                // 保存原始类名
+                delayCell.dataset.originalClass = delayCell.className;
+                // 创建加载动画HTML
+                const loadingHtml = `
+                    <div class="loading-spinner">
+                        <div class="spinner"></div>
+                        <span>测速中...</span>
+                    </div>
+                `;
+                delayCell.innerHTML = loadingHtml;
+                delayCell.className = 'loading';
+            }
+        }
+    });
+}
+
+// 批量测试节点
+function testAllNodes() {
+    // 获取选中的节点ID
+    const selectedCheckboxes = document.querySelectorAll('.node-checkbox:checked');
+    let nodeIdsToTest = [];
+    
+    if (selectedCheckboxes.length > 0) {
+        // 如果有选中的节点，测试选中的节点
+        nodeIdsToTest = Array.from(selectedCheckboxes).map(cb => cb.getAttribute('data-id'));
+    } else {
+        // 如果没有选中的节点，测试当前页面显示的所有节点
+        const currentPageNodes = document.querySelectorAll('.node-checkbox');
+        nodeIdsToTest = Array.from(currentPageNodes).map(cb => cb.getAttribute('data-id'));
+    }
+    
+    if (nodeIdsToTest.length === 0) {
+        return;
+    }
+    
+    // 为每个节点显示加载指示器
+    nodeIdsToTest.forEach(nodeId => {
+        showLoadingIndicator(nodeId);
+    });
+    
+    // 模拟批量测速
+    nodeIdsToTest.forEach(nodeId => {
+        // 使用不同的延迟时间，让测试看起来更真实
+        const delayTime = 500 + Math.random() * 1500;
+        
+        setTimeout(() => {
+            const randomDelay = Math.floor(Math.random() * 300) + 50;
+            updateNodeDelay(nodeId, randomDelay);
+        }, delayTime);
+    });
+}
+
+// 更新节点延迟
+function updateNodeDelay(nodeId, delay) {
+    const rows = document.querySelectorAll('#nodeList tr');
+    
+    // 更新DOM中的节点延迟
+    rows.forEach(row => {
+        const checkbox = row.querySelector('.node-checkbox');
+        if (checkbox && checkbox.getAttribute('data-id') === nodeId) {
+            const delayCell = row.querySelector('td:nth-child(5)');
+            if (delayCell) {
+                // 恢复原始类名或使用新的延迟类
+                if (delayCell.dataset.originalClass) {
+                    delayCell.className = delayCell.dataset.originalClass;
+                } else {
+                    delayCell.className = getDelayClass(delay);
+                }
+                // 直接设置文本内容，确保居中显示
+                const delayDisplay = getDelayDisplay(delay);
+                delayCell.innerHTML = `<span style="display: inline-block; vertical-align: middle;">${delayDisplay}</span>`;
+            }
+        }
+    });
+    
+    // 同时更新全局数据中的节点延迟
+    const nodeIndex = nodeData.findIndex(node => node.id === nodeId);
+    if (nodeIndex !== -1) {
+        nodeData[nodeIndex].delay = delay;
+    }
+}
+
+// 分配节点
+function assignNode(nodeId) {
+    showNotification(`节点 ${nodeId} 分配功能待实现`, 'info');
+}
+
+// 删除节点
+function deleteNode(nodeId) {
+    if (confirm(`确定要删除节点 ${nodeId} 吗？`)) {
+        showLoading('正在删除节点...');
+        
+        // 从全局数据中移除节点
+        const originalLength = nodeData.length;
+        nodeData = nodeData.filter(node => node.id != nodeId);
+        
+        if (nodeData.length === originalLength) {
+            // 如果没有成功删除，显示错误
+            hideLoading();
+            showNotification('删除节点失败，节点不存在', 'error');
+            return;
+        }
+        
+        // 重新计算总页数
+        totalPages = Math.ceil(nodeData.length / pageSize);
+        
+        // 如果当前页没有数据了（被删除后），调整到上一页
+        if (currentPage > totalPages && totalPages > 0) {
+            currentPage = totalPages;
+        }
+        
+        // 重新渲染节点列表和分页控件
+        renderNodeList(getCurrentPageNodes());
+        renderPagination();
+        
+        // 更新批量删除按钮状态
+        updateBatchDeleteButtonStatus();
+        
+        hideLoading();
+        showNotification(`节点 ${nodeId} 删除成功`, 'success');
+    }
+}
+
+// 批量删除节点
+function batchDeleteNodes() {
+    // 获取当前页面选中的节点ID
+    const selectedCheckboxes = document.querySelectorAll('.node-checkbox:checked');
+    const selectedNodeIds = Array.from(selectedCheckboxes).map(cb => cb.getAttribute('data-id'));
+    
+    if (selectedNodeIds.length === 0) {
+        showNotification('请先选择要删除的节点', 'error');
+        return;
+    }
+    
+    if (confirm(`确定要删除选中的 ${selectedNodeIds.length} 个节点吗？`)) {
+        showLoading('正在批量删除节点...');
+        
+        // 从全局数据中移除选中的节点
+        const originalLength = nodeData.length;
+        nodeData = nodeData.filter(node => !selectedNodeIds.includes(node.id));
+        
+        const deletedCount = originalLength - nodeData.length;
+        
+        // 重新计算总页数
+        totalPages = Math.ceil(nodeData.length / pageSize);
+        
+        // 如果当前页没有数据了（被删除后），调整到上一页
+        if (currentPage > totalPages && totalPages > 0) {
+            currentPage = totalPages;
+        }
+        
+        // 重新渲染节点列表和分页控件
+        renderNodeList(getCurrentPageNodes());
+        renderPagination();
+        
+        // 更新批量删除按钮状态
+        updateBatchDeleteButtonStatus();
+        
+        // 更新全选复选框状态
+        document.getElementById('selectAllNodes').checked = false;
+        
+        hideLoading();
+        showNotification(`成功删除 ${deletedCount} 个节点`, 'success');
+    }
+}
+
+// 更新批量删除按钮状态
+function updateBatchDeleteButtonStatus() {
+    const batchDeleteBtn = document.getElementById('batchDeleteBtn');
+    if (!batchDeleteBtn) return;
+    
+    const selectedCheckboxes = document.querySelectorAll('.node-checkbox:checked');
+    batchDeleteBtn.disabled = selectedCheckboxes.length === 0;
+}
+
+// 导入配置文件
+function importConfigFile() {
+    // 确保先移除可能存在的旧加载元素
+    hideLoading();
+    
+    // 获取选择的文件
+    const fileInput = document.getElementById('configFile');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        showNotification('请先选择一个配置文件', 'error');
+        return;
+    }
+    
+    showLoading('正在上传和解析配置文件...');
+    
+    // 创建FormData对象
+    const formData = new FormData();
+    formData.append('config_file', file);
+    formData.append('debug', 'true'); // 开启调试模式以获取详细日志
+    
+    // 发送文件到后端API
+    fetch('/api/nodes/import', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading();
+        
+        if (data.success) {
+            // 关闭模态框
+            const importModal = bootstrap.Modal.getInstance(document.getElementById('importConfigModal'));
+            if (importModal) {
+                importModal.hide();
+            }
+            
+            // 重置表单和按钮状态
+            document.getElementById('configFile').value = '';
+            document.getElementById('configFileStatus').textContent = '未选择任何文件';
+            document.getElementById('configFileStatus').classList.remove('text-success', 'text-danger');
+            document.getElementById('doImportBtn').disabled = true;
+            
+            showNotification(data.message, 'success');
+            
+            // 重新从后端加载节点列表
+            loadNodes();
+        } else {
+            showNotification(`导入失败: ${data.message}`, 'error');
+        }
+    })
+    .catch(error => {
+        hideLoading();
+        showNotification(`导入过程中发生错误: ${error.message}`, 'error');
+        console.error('导入配置文件错误:', error);
+    });
+}
+
 </script>
 
 <style>
@@ -799,15 +1170,338 @@ function showToast(message, type = 'info') {
     border-color: #dc3545;
 }
 
+/* 主要内容容器添加水平滚动条，确保内容超出时可以滚动 */
+.card-body {
+    overflow-x: auto !important;
+    position: relative;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+/* 确保表格容器样式正确，避免与外部滚动条冲突 */
+.table-responsive {
+    overflow-x: visible !important;
+    margin-bottom: 15px;
+    width: 100%;
+}
+
+/* 表格本身设置最小宽度，确保内容不会被过度压缩 */
+.table {
+    min-width: 900px;
+    width: 100%;
+}
+
+/* 分页容器优化，确保在小屏幕上也能显示完整 */
+.pagination-container {
+    overflow-x: auto !important;
+    white-space: nowrap;
+    padding-bottom: 10px;
+    min-width: 500px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* 批量删除按钮样式 */
+#batchDeleteBtn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+#batchDeleteBtn:hover:not(:disabled) {
+    background-color: #c82333;
+    border-color: #bd2130;
+}
+
 /* 进度条样式 */
 .progress-bar {
     transition: width 0.6s ease;
 }
 
+/* 分页控件样式 */
+.pagination-container {
+    display: flex;
+    justify-content: center;
+    margin-top: 15px;
+    width: 100%;
+    min-width: 500px; /* 确保有足够的最小宽度 */
+}
+
+.pagination {
+    margin: 0;
+}
+
+.pagination .page-link {
+    padding: 6px 12px;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.pagination .page-item.active .page-link {
+    background-color: #007bff;
+    border-color: #007bff;
+}
+
+.pagination .page-item.disabled .page-link {
+    color: #6c757d;
+    background-color: #f8f9fa;
+    border-color: #dee2e6;
+}
+
+/* 修复模态框关闭问题 - 确保模态框和背景层级正确 */
+.modal-backdrop {
+    z-index: 1040 !important;
+}
+
+.modal {
+    z-index: 1050 !important;
+}
+
+/* 确保关闭按钮可点击 */
+.close {
+    z-index: 1060 !important;
+    cursor: pointer !important;
+    background-color: white !important;
+    border-radius: 50% !important;
+    width: 30px !important;
+    height: 30px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    position: relative !important;
+}
+
+/* 确保模态框内容可点击 */
+.modal-content {
+    position: relative !important;
+    z-index: 1055 !important;
+}
+
+/* 确保底部按钮可点击 */
+.close-btn {
+    position: relative !important;
+    z-index: 1060 !important;
+    cursor: pointer !important;
+}
+
+/* 表格响应式调整 */
+  .table-responsive {
+      display: block;
+      width: 100%;
+      overflow-x: auto;
+  }
+  
+  /* 确保按钮可点击，最小化尺寸 */
+  .btn {
+      min-width: 55px;
+      min-height: 26px;
+      padding: 3px 8px !important;
+      font-size: 11px !important;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      position: relative; /* 确保z-index生效 */
+      z-index: 1; /* 确保按钮在最上层 */
+      margin-bottom: 1px;
+      margin-right: 1px;
+  }
+
+/* 分页控件调整 - 最小化高度和内边距 */
+  .pagination-container {
+      overflow-x: auto;
+      white-space: nowrap;
+      padding-bottom: 5px;
+      text-align: center;
+      margin-top: 5px;
+  }
+
+.pagination {
+      display: inline-flex;
+      justify-content: center;
+      margin: 0;
+  }
+  
+  /* 最小化分页按钮 */
+  .pagination > li > a,
+  .pagination > li > span {
+      padding: 3px 8px;
+      font-size: 11px;
+      line-height: 1;
+      height: 24px;
+  }
+  
+  /* 最小化表格包装器 */
+  .table-responsive {
+      margin-bottom: 5px;
+  }
+
+/* 页面比例调整 - 进一步缩小并减小高度 */
+  body {
+      font-size: 88%; /* 大幅缩小页面比例 */
+      padding-bottom: 8px; /* 最小化底部空间 */
+      line-height: 1.1; /* 进一步减小行高 */
+      margin: 0;
+  }
+
+/* 调整内容包装器，最小化整体高度 */
+  .container-fluid {
+      padding-left: 5px;
+      padding-right: 5px;
+      min-height: auto;
+      padding-bottom: 10px;
+  }
+
+.card {
+    margin-bottom: 20px;
+}
+
+/* 表格列宽调整 - 确保每列有合适的宽度 */
+  table#nodeTable {
+      table-layout: fixed; /* 固定布局，避免列宽不均 */
+      width: 100%;
+  }
+  
+  /* 表格单元格调整 - 最小化内边距和行高 */
+  .table th,
+  .table td {
+      padding: 0.15rem 0.3rem;
+      line-height: 1.0;
+      font-size: 11px;
+  }
+  
+  /* 最小化表格行高 */
+  table#nodeTable tbody tr {
+      height: 32px; /* 更小的固定行高 */
+  }
+  
+  /* 最小化表头高度 */
+  table#nodeTable thead {
+      height: 28px;
+  }
+  
+  /* 最小化卡片内边距 */
+  .card-body {
+      padding: 5px !important;
+      margin: 0;
+  }
+  
+  /* 最小化下拉框高度 */
+  select.form-control {
+      height: 24px;
+      padding: 1px 6px;
+      font-size: 11px;
+  }
+  
+  /* 最小化搜索框高度 */
+  input.form-control {
+      height: 24px;
+      padding: 2px 6px;
+      font-size: 11px;
+  }
+  
+  /* 最小化卡片边距 */
+  .card {
+      margin-bottom: 5px;
+      padding: 0;
+  }
+
+table#nodeTable th,
+table#nodeTable td {
+    white-space: nowrap;
+    padding: 8px 6px;
+    font-size: 14px;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+/* 明确设置每列宽度，确保布局合理 */
+table#nodeTable th:nth-child(1),
+table#nodeTable td:nth-child(1) { width: 40px; }     /* 复选框 */
+table#nodeTable th:nth-child(2),
+table#nodeTable td:nth-child(2) { width: 120px; }    /* 节点名称 */
+table#nodeTable th:nth-child(3),
+table#nodeTable td:nth-child(3) { width: 80px; }     /* 地区 */
+table#nodeTable th:nth-child(4),
+table#nodeTable td:nth-child(4) { width: 80px; }     /* 协议 */
+table#nodeTable th:nth-child(5),
+table#nodeTable td:nth-child(5) { width: 60px; }     /* 类型 */
+table#nodeTable th:nth-child(6),
+table#nodeTable td:nth-child(6) { width: 80px; }     /* 延迟 */
+table#nodeTable th:nth-child(7),
+table#nodeTable td:nth-child(7) { width: 100px; }    /* 速度 */
+table#nodeTable th:nth-child(8),
+table#nodeTable td:nth-child(8) { width: 120px; }    /* 剩余流量 */
+table#nodeTable th:nth-child(9),
+table#nodeTable td:nth-child(9) { width: 120px; }    /* 有效期 */
+table#nodeTable th:nth-child(10),
+table#nodeTable td:nth-child(10) { width: 80px; }    /* 状态 */
+table#nodeTable th:nth-child(11),
+table#nodeTable td:nth-child(11) { width: 120px; }   /* 操作 */
+
 /* 响应式调整 */
+  @media (max-width: 1200px) {
+      body {
+          font-size: 92%;
+      }
+      
+      .card-body {
+          padding: 0.75rem;
+          overflow-x: auto;
+      }
+      
+      .btn {
+          padding: 3px 6px !important;
+          font-size: 10px !important;
+          margin-right: 2px;
+          margin-bottom: 2px;
+          min-width: 50px;
+          min-height: 24px;
+      }
+      
+      #filterRegion, #filterProtocol {
+          margin-bottom: 8px;
+          font-size: 0.9rem;
+      }
+      
+      table#nodeTable th,
+      table#nodeTable td {
+          padding: 6px 4px;
+          font-size: 13px;
+          white-space: nowrap; /* 确保内容不换行 */
+      }
+      
+      /* 在小屏幕上，调整分页控件布局 */
+      .d-flex.justify-content-between {
+          flex-direction: column;
+          align-items: center;
+          gap: 10px;
+          width: 100%;
+      }
+      
+      .d-flex.align-items-center {
+          flex-wrap: wrap;
+          justify-content: center;
+          gap: 10px;
+          width: 100%;
+      }
+      
+      .pagination {
+          white-space: nowrap;
+          margin-bottom: 0 !important;
+          overflow-x: auto;
+          display: flex;
+          padding: 5px 0;
+      }
+  }
+
 @media (max-width: 768px) {
+    body {
+        font-size: 90%;
+    }
+    
     .card-body {
-        padding: 1rem;
+        padding: 0.5rem;
     }
     
     .btn {
@@ -818,6 +1512,29 @@ function showToast(message, type = 'info') {
         margin-bottom: 10px;
         width: 100%;
     }
+    
+    table#nodeTable th,
+    table#nodeTable td {
+        font-size: 12px;
+    }
+    
+    /* 小屏幕分页控件优化 */
+    .pagination {
+        overflow-x: auto;
+        display: flex;
+        white-space: nowrap;
+        margin-bottom: 0 !important;
+        padding: 5px 0;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .pagination .page-link {
+        font-size: 0.8rem;
+        padding: 0.25rem 0.5rem;
+        min-width: 28px;
+    }
 }
 </style>
+
+
 {% endblock %}
