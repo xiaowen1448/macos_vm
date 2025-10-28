@@ -18,9 +18,7 @@
                             <button id="batchTestBtn" class="btn btn-primary">
                             <i class="fas fa-tachometer-alt"></i> 批量测速
                         </button>
-                            <button id="refreshBtn" class="btn btn-secondary">
-                                <i class="fas fa-sync-alt"></i> 刷新列表
-                            </button>
+
                             <button id="batchDeleteBtn" class="btn btn-danger" disabled>
                                 <i class="fas fa-trash-alt"></i> 批量删除
                             </button>
@@ -60,7 +58,7 @@
                             <tbody id="nodeList">
                                 <!-- 节点数据将通过JavaScript动态加载 -->
                                 <tr>
-                                    <td colspan="6" class="text-center">请导入VPN配置或点击刷新按钮加载节点</td>
+                                    <td colspan="6" class="text-center">请导入VPN配置加载节点</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -75,15 +73,13 @@
                     <div class="d-flex align-items-center">
                         <label class="form-label mb-0 me-2">每页显示:</label>
                         <select class="form-select form-select-sm" id="pageSizeSelect" style="width: auto;" onchange="changePageSize()">
-                            <option value="5" selected>5</option>
-                            <option value="10">10</option>
+                            <option value="10" selected>10</option>
                             <option value="20">20</option>
                             <option value="50">50</option>
                             <option value="100">100</option>
+                            <option value="300">300</option>
                         </select>
-                        <button class="btn btn-outline-secondary btn-sm ms-2" onclick="resetToAuto()" title="重置为自动分页">
-                            <i class="fas fa-magic"></i>
-                        </button>
+
                     </div>
                 </div>
                 <nav aria-label="节点列表分页">
@@ -347,22 +343,7 @@ function changePageSize() {
     }
 }
 
-// 重置为自动分页
-function resetToAuto() {
-    // 计算最佳分页大小（可以根据wuma.html中的calculateOptimalPageSize函数实现）
-    // 这里简单使用默认值5
-    
-    document.getElementById('pageSizeSelect').value = '5';
-    pageSize = 5;
-    currentPage = 1;
-    
-    console.log('重置为自动分页，分页大小:', 5);
-    
-    // 重新加载当前页面的数据
-    if (typeof loadNodes === 'function') {
-        loadNodes(currentPage);
-    }
-}
+
 
 // 地区筛选功能
 function setupFilterHandlers() {
@@ -597,11 +578,7 @@ window.addEventListener('DOMContentLoaded', function() {
     // 初始化节点数据延迟字段
     const nodes = [];
     
-    // 为刷新按钮添加点击事件
-    document.getElementById('refreshBtn')?.addEventListener('click', function() {
-        loadNodes();
-    });
-    
+
     // 为批量测速按钮添加点击事件
     document.getElementById('batchTestBtn')?.addEventListener('click', function() {
         testAllNodes();
