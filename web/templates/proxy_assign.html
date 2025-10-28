@@ -63,10 +63,10 @@
                                     <td colspan="6" class="text-center">请导入VPN配置或点击刷新按钮加载节点</td>
                                 </tr>
                             </tbody>
-                </table>
-            </div>
-            <!-- 分页控件 -->
-            <div class="d-flex justify-content-between align-items-center mt-3">
+                        </table>
+                    </div>
+                    <!-- 分页控件 -->
+                    <div class="d-flex justify-content-between align-items-center mt-3 mb-4">
                 <div class="d-flex align-items-center">
                     <div class="text-muted me-3">
                         <i class="fas fa-info-circle me-1"></i>
@@ -91,8 +91,6 @@
                         <!-- 分页按钮将在这里动态生成 -->
                     </ul>
                 </nav>
-            </div>
-                </div>
             </div>
         </div>
     </div>
@@ -366,6 +364,33 @@ function resetToAuto() {
     }
 }
 
+// 地区筛选功能
+function setupFilterHandlers() {
+    const filterRegion = document.getElementById('filterRegion');
+    const filterProtocol = document.getElementById('filterProtocol');
+    
+    if (filterRegion) {
+        filterRegion.addEventListener('change', function() {
+            currentPage = 1;
+            if (typeof loadNodes === 'function') {
+                loadNodes(currentPage);
+            }
+        });
+    }
+    
+    if (filterProtocol) {
+        filterProtocol.addEventListener('change', function() {
+            currentPage = 1;
+            if (typeof loadNodes === 'function') {
+                loadNodes(currentPage);
+            }
+        });
+    }
+}
+
+// 页面加载时设置筛选处理器
+document.addEventListener('DOMContentLoaded', setupFilterHandlers);
+
 // CSS样式 - 动态加载指示器和滚动条优化
 const style = document.createElement('style');
 style.textContent = `
@@ -427,7 +452,7 @@ style.textContent = `
         position: relative;
     }
     
-    /* 分页控件样式优化 */
+    /* 分页控件样式优化 - 只保留外部边框 */
     .pagination {
         margin-bottom: 0;
         display: flex;
@@ -435,39 +460,65 @@ style.textContent = `
         padding: 0;
         flex-wrap: nowrap;
         margin-left: 0;
+        background-color: #f8f9fa;
+        border-radius: 4px;
+        border: 1px solid #dee2e6;
+        overflow: hidden;
     }
     
     .pagination .page-item {
         margin: 0;
+        border-right: 1px solid #dee2e6;
+    }
+    
+    .pagination .page-item:last-child {
+        border-right: none;
     }
     
     .pagination .page-link {
-        padding: 0.375rem 0.75rem;
+        padding: 8px 12px;
         font-size: 0.875rem;
         white-space: nowrap;
         box-sizing: border-box;
-        min-width: 32px;
+        min-width: 40px;
         text-align: center;
+        border-radius: 0;
+        margin: 0;
+        border: none;
+        transition: all 0.2s ease;
+        background-color: transparent;
+        color: #495057;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .pagination .page-link:hover {
+        background-color: #e9ecef;
     }
     
     .pagination .page-item.active .page-link {
         background-color: #007bff;
-        border-color: #007bff;
+        color: white;
+        font-weight: 500;
+        border: none;
     }
     
     .pagination .page-item.disabled .page-link {
         color: #6c757d;
         pointer-events: none;
-        background-color: #fff;
-        border-color: #dee2e6;
+        background-color: transparent;
+        border: none;
     }
     
     /* 分页容器样式 */
     .pagination-container {
         width: 100%;
         overflow-x: auto;
-        padding: 5px 0;
+        padding: 10px 0 20px 0;
         -webkit-overflow-scrolling: touch;
+        margin-bottom: 20px;
     }
     
     #pagination-content {
@@ -476,6 +527,19 @@ style.textContent = `
         justify-content: flex-end;
         overflow-x: visible;
         white-space: nowrap;
+    }
+    
+    /* 分页信息样式 */
+    .pagination-info {
+        white-space: nowrap;
+        overflow: visible;
+        flex-shrink: 0;
+    }
+    
+    /* 修复分页区域文字显示问题 */
+    .d-flex.justify-content-between .text-muted {
+        white-space: nowrap;
+        overflow: visible;
     }
     
     /* 页码信息样式 */
@@ -586,6 +650,33 @@ window.addEventListener('DOMContentLoaded', function() {
         filterNodes();
     });
     
+    // 为页面大小选择器添加事件
+    document.getElementById('pageSizeSelect')?.addEventListener('change', function() {
+        pageSize = parseInt(this.value);
+        currentPage = 1; // 重置为第一页
+        renderNodeList(getCurrentPageNodes());
+        renderPagination();
+    });
+    
+    // 为重置自动分页按钮添加事件
+    document.getElementById('resetAutoPageBtn')?.addEventListener('click', resetToOptimalPageSize);
+    
+    // 窗口大小改变时重新计算最佳分页大小
+    window.addEventListener('resize', function() {
+        // 延迟执行以避免频繁计算
+        if (window.resizeTimeout) clearTimeout(window.resizeTimeout);
+        window.resizeTimeout = setTimeout(function() {
+            // 检查是否启用了自动分页模式（可以通过localStorage或其他标志）
+            const autoPaginationEnabled = localStorage.getItem('autoPaginationEnabled') !== 'false';
+            if (autoPaginationEnabled) {
+                resetToOptimalPageSize();
+            }
+        }, 300);
+    });
+    
+    // 初始计算最佳分页大小
+    resetToOptimalPageSize();
+    
     // 初始加载节点列表
     loadNodes();
 });
@@ -596,6 +687,97 @@ let nodeData = [];
 let currentPage = 1;
 let pageSize = 20; // 每页显示的节点数量
 let totalPages = 1;
+
+// 计算最佳分页大小
+function calculateOptimalPageSize() {
+    // 获取可用区域高度
+    const cardBody = document.querySelector('.card-body');
+    const tableHeader = document.querySelector('#nodeTable thead');
+    const paginationArea = document.querySelector('.d-flex.justify-content-between');
+    
+    if (!cardBody || !tableHeader || !paginationArea) {
+        return 5; // 默认值，最小分页大小
+    }
+    
+    // 获取视口高度
+    const viewportHeight = window.innerHeight;
+    
+    // 计算可用高度（减去顶部导航栏、卡片头部、统计区域、分页区域等）
+    const topNavHeight = 80; // 顶部导航栏高度
+    const cardHeaderHeight = 80; // 卡片头部高度（包含padding）
+    const headerHeight = tableHeader.offsetHeight;
+    const paginationAreaHeight = paginationArea.offsetHeight;
+    const paginationHeight = 60; // 分页控件高度（包括按钮和间距）
+    const padding = 120; // 预留更多空间，确保分页控件完全显示
+    
+    const availableHeight = viewportHeight - topNavHeight - cardHeaderHeight - headerHeight - paginationHeight - padding;
+    
+    // 估算表格行高（包括边框和内边距）
+    const estimatedRowHeight = 52; // 每行大约52px（Bootstrap表格行高）
+    
+    // 计算可以显示的行数
+    const maxRows = Math.floor(availableHeight / estimatedRowHeight);
+    
+    // 确保至少显示5行，最多显示30行（更保守）
+    const optimalPageSize = Math.max(5, Math.min(maxRows, 30));
+    
+    // 如果计算出的值不在预设选项中，选择最接近的选项
+    const options = [5, 10, 20, 50, 100];
+    let closestOption = 5; // 默认值，最小分页大小
+    
+    // 找到最接近的选项
+    for (let i = 0; i < options.length; i++) {
+        if (options[i] >= optimalPageSize) {
+            closestOption = options[i];
+            break;
+        }
+        if (i === options.length - 1) {
+            closestOption = options[i]; // 如果都小于，选择最大值
+        }
+    }
+    
+    // 如果计算出的值太小，使用默认值
+    if (optimalPageSize < 5) {
+        return 5;
+    }
+    
+    return closestOption;
+}
+
+// 重置为自动分页大小
+function resetToOptimalPageSize() {
+    pageSize = calculateOptimalPageSize();
+    currentPage = 1;
+    
+    // 更新页面大小选择器
+    const pageSizeSelect = document.getElementById('pageSizeSelect');
+    if (pageSizeSelect) {
+        // 检查是否有精确匹配的选项
+        let hasExactMatch = false;
+        for (let i = 0; i < pageSizeSelect.options.length; i++) {
+            if (parseInt(pageSizeSelect.options[i].value) === pageSize) {
+                pageSizeSelect.selectedIndex = i;
+                hasExactMatch = true;
+                break;
+            }
+        }
+        
+        // 如果没有精确匹配，添加一个新选项
+        if (!hasExactMatch) {
+            const option = document.createElement('option');
+            option.value = pageSize;
+            option.textContent = pageSize + ' 条/页';
+            option.selected = true;
+            pageSizeSelect.appendChild(option);
+        }
+    }
+    
+    // 重新渲染节点列表和分页控件
+    renderNodeList(getCurrentPageNodes());
+    renderPagination();
+    
+    console.log(`已重置为最佳分页大小: ${pageSize} 条/页`);
+}
 
 // 加载节点列表 - 从后端API获取真实数据
 function loadNodes() {
@@ -626,7 +808,8 @@ function loadNodes() {
                 // 渲染分页控件
                 renderPagination();
                 
-                showNotification(`节点列表加载成功，共 ${initializedNodes.length} 个节点`, 'success');
+                console.log(`节点列表加载成功，共 ${initializedNodes.length} 个节点`);
+               // showNotification(`节点列表加载成功，共 ${initializedNodes.length} 个节点`, 'success');
             } else {
                 // 如果没有数据，清空全局变量
                 nodeData = [];
@@ -645,6 +828,19 @@ function loadNodes() {
             showNotification(`加载节点列表失败: ${error.message}`, 'error');
             console.error('加载节点列表错误:', error);
         });
+}
+
+// 更新分页信息显示
+function updatePaginationInfo(startIndex, endIndex, totalCount) {
+    const paginationInfo = document.getElementById('paginationInfo');
+    if (!paginationInfo) return;
+    
+    if (totalCount === 0) {
+        paginationInfo.textContent = '显示 0 条记录中的 0-0 条';
+    } else {
+        // 加1是因为索引从0开始，而显示时从1开始
+        paginationInfo.textContent = `显示 ${totalCount} 条记录中的 ${startIndex + 1}-${endIndex} 条`;
+    }
 }
 
 // 渲染节点列表
@@ -748,6 +944,14 @@ function renderPagination() {
     const paginationElement = document.getElementById('pagination');
     if (!paginationElement) return;
     
+    // 获取筛选后的节点数量
+    const filteredNodes = getCurrentPageNodes();
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = Math.min(startIndex + pageSize, nodeData.length);
+    
+    // 更新分页信息
+    updatePaginationInfo(startIndex, endIndex, nodeData.length);
+    
     // 如果没有数据，隐藏分页控件
     if (nodeData.length === 0) {
         paginationElement.innerHTML = '';
@@ -760,53 +964,26 @@ function renderPagination() {
     html += `
     <li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
         <a class="page-link" href="#" aria-label="上一页" onclick="goToPage(${currentPage - 1}); return false;">
-            <span aria-hidden="true">&laquo;</span>
+            上一页
         </a>
     </li>
     `;
     
-    // 页码按钮 - 简化为只显示当前页、首页和末页
-    if (totalPages <= 5) {
-        // 如果总页数不超过5页，显示所有页码
-        for (let i = 1; i <= totalPages; i++) {
-            html += `
-            <li class="page-item ${i === currentPage ? 'active' : ''}">
-                <a class="page-link" href="#" onclick="goToPage(${i}); return false;">${i}</a>
-            </li>
-            `;
-        }
-    } else {
-        // 如果总页数超过5页，显示首页、前一页、当前页、后一页和末页
-        // 首页
+    // 添加页码数字，只显示三个页码
+    let startPage = Math.max(1, currentPage - 1);
+    let endPage = Math.min(totalPages, startPage + 2);
+    
+    // 调整起始页码，确保始终显示三个页码
+    if (endPage - startPage < 2) {
+        startPage = Math.max(1, endPage - 2);
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
         html += `
-        <li class="page-item ${currentPage === 1 ? 'active' : ''}">
-            <a class="page-link" href="#" onclick="goToPage(1); return false;">1</a>
-        </li>
-        `;
-        
-        // 如果当前页离首页较远，显示省略号
-        if (currentPage > 3) {
-            html += '<li class="page-item disabled"><a class="page-link" href="#">...</a></li>';
-        }
-        
-        // 显示当前页及其前后各一页
-        for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
-            html += `
-            <li class="page-item ${i === currentPage ? 'active' : ''}">
-                <a class="page-link" href="#" onclick="goToPage(${i}); return false;">${i}</a>
-            </li>
-            `;
-        }
-        
-        // 如果当前页离末页较远，显示省略号
-        if (currentPage < totalPages - 2) {
-            html += '<li class="page-item disabled"><a class="page-link" href="#">...</a></li>';
-        }
-        
-        // 末页
-        html += `
-        <li class="page-item ${currentPage === totalPages ? 'active' : ''}">
-            <a class="page-link" href="#" onclick="goToPage(${totalPages}); return false;">${totalPages}</a>
+        <li class="page-item ${currentPage === i ? 'active' : ''}">
+            <a class="page-link" href="#" onclick="goToPage(${i}); return false;">
+                ${i}
+            </a>
         </li>
         `;
     }
@@ -815,20 +992,12 @@ function renderPagination() {
     html += `
     <li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
         <a class="page-link" href="#" aria-label="下一页" onclick="goToPage(${currentPage + 1}); return false;">
-            <span aria-hidden="true">&raquo;</span>
+            下一页
         </a>
     </li>
     `;
     
     paginationElement.innerHTML = html;
-    
-    // 计算当前页面的记录范围
-    const currentPageNodes = getCurrentPageNodes();
-    const startIndex = (currentPage - 1) * pageSize;
-    const endIndex = Math.min(startIndex + pageSize, nodeData.length);
-    
-    // 更新分页信息
-    updatePaginationInfo(startIndex, endIndex, nodeData.length);
 }
 
 // 跳转到指定页面
@@ -1486,12 +1655,26 @@ table#nodeTable td:nth-child(11) { width: 120px; }   /* 操作 */
           width: 100%;
       }
       
+      /* 分页控件样式 - 与wuma.html保持一致 */
       .pagination {
-          white-space: nowrap;
-          margin-bottom: 0 !important;
-          overflow-x: auto;
-          display: flex;
-          padding: 5px 0;
+        margin-bottom: 0;
+      }
+      
+      .pagination .page-link {
+        padding: 0.375rem 0.75rem;
+        font-size: 0.875rem;
+      }
+      
+      .pagination .page-item.active .page-link {
+        background-color: #007bff;
+        border-color: #007bff;
+      }
+      
+      .pagination .page-item.disabled .page-link {
+        color: #6c757d;
+        pointer-events: none;
+        background-color: #fff;
+        border-color: #dee2e6;
       }
   }
 
@@ -1518,20 +1701,18 @@ table#nodeTable td:nth-child(11) { width: 120px; }   /* 操作 */
         font-size: 12px;
     }
     
-    /* 小屏幕分页控件优化 */
+    /* 小屏幕分页控件优化 - 与wuma.html保持一致 */
     .pagination {
         overflow-x: auto;
         display: flex;
         white-space: nowrap;
-        margin-bottom: 0 !important;
-        padding: 5px 0;
+        margin-bottom: 0;
         -webkit-overflow-scrolling: touch;
     }
     
     .pagination .page-link {
-        font-size: 0.8rem;
-        padding: 0.25rem 0.5rem;
-        min-width: 28px;
+        padding: 0.375rem 0.75rem;
+        font-size: 0.875rem;
     }
 }
 </style>
