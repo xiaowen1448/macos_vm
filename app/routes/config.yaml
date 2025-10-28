@@ -1,0 +1,41 @@
+# clash_template.yml
+port: 7890
+socks-port: 7891
+allow-lan: false
+mode: Rule
+log-level: info
+
+# 代理节点列表
+proxies:
+  - name: '上海电信转台湾BGP2[M][Trojan][倍率:1]'
+    type: trojan
+    server: 114.28.137.78
+    port: 65304
+    password: d7a40f86-991a-3241-899e-918399efe9b0
+    sni: dl.shcttwbgp2.baidu.com
+    udp: true
+    ip-version: ipv6-prefer
+    skip-cert-verify: true
+
+  - name: '上海电信转台湾BGP[M][Trojan][倍率:1]'
+    type: trojan
+    server: st1-conn7sja.ccddn8.store
+    port: 65304
+    password: d7a40f86-991a-3241-899e-918399efe9b0
+    sni: dl.shcttwbgp.baidu.com
+    udp: true
+    ip-version: ipv6-prefer
+    skip-cert-verify: true
+
+# 代理组
+proxy-groups:
+  - name: Proxy
+    type: select
+    proxies:
+      - '上海电信转台湾BGP2[M][Trojan][倍率:1]'  # 默认首选节点
+      - '上海电信转台湾BGP[M][Trojan][倍率:1]'
+      - DIRECT
+
+# 规则
+rules:
+  - MATCH,Proxy

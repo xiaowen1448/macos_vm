@@ -1,0 +1,823 @@
+{% extends "base.html" %}
+{% block title %}代理IP分配管理{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">VPN节点管理与测速</h6>
+                </div>
+                <div class="card-body">
+                    <!-- 操作按钮区域 -->
+                    <div class="mb-4">
+                        <button id="importConfigBtn" class="btn btn-success mr-2">
+                            <i class="fas fa-upload"></i> 导入VPN配置
+                        </button>
+                        <button id="testAllBtn" class="btn btn-primary mr-2">
+                            <i class="fas fa-tachometer-alt"></i> 全部测速
+                        </button>
+                        <button id="assignBtn" class="btn btn-info mr-2">
+                            <i class="fas fa-exchange-alt"></i> 分配IP
+                        </button>
+                        <button id="refreshBtn" class="btn btn-secondary">
+                            <i class="fas fa-sync-alt"></i> 刷新列表
+                        </button>
+                        <div class="float-right">
+                            <select id="filterRegion" class="form-control form-control-sm d-inline-block w-auto">
+                                <option value="all">全部地区</option>
+                                <option value="hk">香港</option>
+                                <option value="tw">台湾</option>
+                                <option value="sg">新加坡</option>
+                                <option value="jp">日本</option>
+                                <option value="us">美国</option>
+                                <option value="ca">加拿大</option>
+                            </select>
+                            <select id="filterProtocol" class="form-control form-control-sm d-inline-block w-auto ml-2">
+                                <option value="all">全部协议</option>
+                                <option value="trojan">Trojan</option>
+                                <option value="vmess">VMess</option>
+                                <option value="ss">Shadowsocks</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <!-- 节点列表区域 -->
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover" id="nodeTable" width="100%" cellspacing="0">
+                            <thead class="thead-light">
+                                <tr>
+                                    <th><input type="checkbox" id="selectAllNodes"></th>
+                                    <th>节点名称</th>
+                                    <th>地区</th>
+                                    <th>协议</th>
+                                    <th>类型</th>
+                                    <th>延迟(ms)</th>
+                                    <th>速度(MB/s)</th>
+                                    <th>剩余流量</th>
+                                    <th>有效期</th>
+                                    <th>状态</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="nodeList">
+                                <!-- 节点数据将通过JavaScript动态加载 -->
+                                <tr>
+                                    <td colspan="11" class="text-center">请导入VPN配置或点击刷新按钮加载节点</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- 分页控件 -->
+                    <div class="mt-3">
+                        <nav aria-label="Page navigation">
+                            <ul class="pagination justify-content-center" id="pagination">
+                                <!-- 分页按钮将通过JavaScript动态生成 -->
+                            </ul>
+                        </nav>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 导入配置模态框 -->
+<div class="modal fade" id="importConfigModal" tabindex="-1" role="dialog" aria-labelledby="importConfigModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="importConfigModalLabel">导入VPN配置</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="configFile">选择配置文件</label>
+                    <input type="file" class="form-control-file" id="configFile" accept=".json,.yaml,.yml,.txt">
+                </div>
+                <div class="form-group">
+                    <label for="configText">或直接粘贴配置内容</label>
+                    <textarea class="form-control" id="configText" rows="10" placeholder="在此粘贴VPN配置内容..."></textarea>
+                </div>
+                <div class="alert alert-info" role="alert">
+                    支持格式：Clash、V2Ray、Trojan等主流VPN配置格式
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">关闭</button>
+                <button type="button" class="btn btn-primary" id="doImportBtn">确认导入</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 测速结果详情模态框 -->
+<div class="modal fade" id="speedTestModal" tabindex="-1" role="dialog" aria-labelledby="speedTestModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="speedTestModalLabel">测速结果详情</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="speedTestResult">
+                    <!-- 测速结果将通过JavaScript动态加载 -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// API接口基础URL
+const API_BASE_URL = '/api';
+
+// 全局变量
+let nodes = [];
+let filteredNodes = [];
+let currentPage = 1;
+const nodesPerPage = 10;
+
+// DOM加载完成后执行
+$(document).ready(function() {
+    // 初始化页面
+    initPage();
+    
+    // 绑定事件监听器
+    bindEventListeners();
+});
+
+// 初始化页面
+function initPage() {
+    // 从API加载节点数据
+    loadNodes();
+}
+
+// 绑定事件监听器
+function bindEventListeners() {
+    // 导入配置按钮点击事件
+    $('#importConfigBtn').click(function() {
+        $('#importConfigModal').modal('show');
+    });
+    
+    // 确认导入按钮点击事件
+    $('#doImportBtn').click(function() {
+        importConfig();
+    });
+    
+    // 全部测速按钮点击事件
+    $('#testAllBtn').click(function() {
+        testAllNodes();
+    });
+    
+    // 分配IP按钮点击事件
+    $('#assignBtn').click(function() {
+        assignIPs();
+    });
+    
+    // 刷新按钮点击事件
+    $('#refreshBtn').click(function() {
+        refreshNodeList();
+    });
+    
+    // 全选复选框点击事件
+    $('#selectAllNodes').click(function() {
+        const isChecked = $(this).prop('checked');
+        $('.node-checkbox').prop('checked', isChecked);
+    });
+    
+    // 地区筛选下拉框改变事件
+    $('#filterRegion').change(function() {
+        filterNodes();
+    });
+    
+    // 协议筛选下拉框改变事件
+    $('#filterProtocol').change(function() {
+        filterNodes();
+    });
+}
+
+// 渲染节点列表
+function renderNodeList() {
+    const startIndex = (currentPage - 1) * nodesPerPage;
+    const endIndex = startIndex + nodesPerPage;
+    const pageNodes = filteredNodes.slice(startIndex, endIndex);
+    
+    const nodeList = $('#nodeList');
+    nodeList.empty();
+    
+    if (pageNodes.length === 0) {
+        nodeList.append('<tr><td colspan="11" class="text-center">没有找到符合条件的节点</td></tr>');
+        return;
+    }
+    
+    pageNodes.forEach(node => {
+        const row = $('<tr>').addClass(node.status === 'active' ? 'table-success' : 'table-danger');
+        
+        // 复选框
+        row.append($('<td>').append($('<input>').attr('type', 'checkbox').addClass('node-checkbox').attr('data-id', node.id)));
+        
+        // 节点名称
+        row.append($('<td>').html(`<span class="badge badge-primary">${node.name}</span>`));
+        
+        // 地区
+        const regionIcon = getRegionIcon(node.region);
+        row.append($('<td>').html(`${regionIcon} ${node.region}`));
+        
+        // 协议和类型
+        row.append($('<td>').text(node.protocol));
+        row.append($('<td>').text(node.type));
+        
+        // 延迟（带颜色）
+        const delayClass = getDelayClass(node.delay);
+        row.append($('<td>').html(`<span class="${delayClass}">${node.delay}</span>`));
+        
+        // 速度（带颜色和进度条）
+        const speedClass = getSpeedClass(node.speed);
+        row.append($('<td>').html(`
+            <div class="d-flex align-items-center">
+                <span class="${speedClass}" style="width: 60px;">${node.speed}</span>
+                <div class="progress ml-2 flex-grow-1" style="height: 8px;">
+                    <div class="progress-bar ${speedClass.replace('text-', 'bg-')}" role="progressbar" style="width: ${Math.min(node.speed * 2, 100)}%" aria-valuenow="${node.speed}" aria-valuemin="0" aria-valuemax="50"></div>
+                </div>
+            </div>
+        `));
+        
+        // 剩余流量
+        row.append($('<td>').text(node.traffic));
+        
+        // 有效期
+        row.append($('<td>').text(node.expiry));
+        
+        // 状态
+        const statusBadge = node.status === 'active' 
+            ? '<span class="badge badge-success">在线</span>'
+            : '<span class="badge badge-danger">离线</span>';
+        row.append($('<td>').html(statusBadge));
+        
+        // 操作按钮
+        row.append($('<td>').html(`
+            <button class="btn btn-sm btn-info test-node-btn" data-id="${node.id}">测速</button>
+            <button class="btn btn-sm btn-warning assign-node-btn" data-id="${node.id}">分配</button>
+            <button class="btn btn-sm btn-danger delete-node-btn" data-id="${node.id}">删除</button>
+        `));
+        
+        nodeList.append(row);
+    });
+    
+    // 绑定节点行内按钮事件
+    $('.test-node-btn').click(function() {
+        const nodeId = $(this).data('id');
+        testSingleNode(nodeId);
+    });
+    
+    $('.assign-node-btn').click(function() {
+        const nodeId = $(this).data('id');
+        assignSingleIP(nodeId);
+    });
+    
+    $('.delete-node-btn').click(function() {
+        const nodeId = $(this).data('id');
+        deleteNode(nodeId);
+    });
+}
+
+// 渲染分页控件
+function renderPagination() {
+    const totalPages = Math.ceil(filteredNodes.length / nodesPerPage);
+    const pagination = $('#pagination');
+    pagination.empty();
+    
+    // 上一页按钮
+    const prevLi = $('<li>').addClass('page-item').addClass(currentPage === 1 ? 'disabled' : '');
+    prevLi.append($('<a>').addClass('page-link').attr('href', '#').text('上一页').click(function(e) {
+        e.preventDefault();
+        if (currentPage > 1) {
+            currentPage--;
+            renderNodeList();
+            renderPagination();
+        }
+    }));
+    pagination.append(prevLi);
+    
+    // 页码按钮
+    const startPage = Math.max(1, currentPage - 2);
+    const endPage = Math.min(totalPages, startPage + 4);
+    
+    for (let i = startPage; i <= endPage; i++) {
+        const pageLi = $('<li>').addClass('page-item').addClass(i === currentPage ? 'active' : '');
+        pageLi.append($('<a>').addClass('page-link').attr('href', '#').text(i).click(function(e) {
+            e.preventDefault();
+            currentPage = i;
+            renderNodeList();
+            renderPagination();
+        }));
+        pagination.append(pageLi);
+    }
+    
+    // 下一页按钮
+    const nextLi = $('<li>').addClass('page-item').addClass(currentPage === totalPages ? 'disabled' : '');
+    nextLi.append($('<a>').addClass('page-link').attr('href', '#').text('下一页').click(function(e) {
+        e.preventDefault();
+        if (currentPage < totalPages) {
+            currentPage++;
+            renderNodeList();
+            renderPagination();
+        }
+    }));
+    pagination.append(nextLi);
+}
+
+// 导入配置
+function importConfig() {
+    const configFile = $('#configFile')[0].files[0];
+    const configText = $('#configText').val().trim();
+    
+    // 验证输入
+    if (!configFile && !configText) {
+        showToast('请选择配置文件或粘贴配置内容', 'warning');
+        return;
+    }
+    
+    $('#importConfigModal').modal('hide');
+    showToast('正在导入配置...', 'info');
+    
+    // 创建表单数据
+    const formData = new FormData();
+    if (configFile) {
+        formData.append('config_file', configFile);
+    }
+    if (configText) {
+        formData.append('config_text', configText);
+    }
+    
+    // 调用API导入配置
+    $.ajax({
+        url: `${API_BASE_URL}/nodes/import`,
+        type: 'POST',
+        data: formData,
+        contentType: false,
+        processData: false,
+        success: function(response) {
+            if (response.success) {
+                showToast(response.message, 'success');
+                loadNodes(); // 重新加载节点列表
+            } else {
+                showToast(response.message, 'danger');
+            }
+        },
+        error: function() {
+            showToast('导入失败，请稍后重试', 'danger');
+        },
+        complete: function() {
+            // 清空导入表单
+            $('#configFile').val('');
+            $('#configText').val('');
+        }
+    });
+}
+
+// 测试单个节点
+function testSingleNode(nodeId) {
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node) return;
+    
+    showToast(`正在测试节点 ${node.name}...`, 'info');
+    
+    // 调用API进行测速
+    $.ajax({
+        url: `${API_BASE_URL}/nodes/test`,
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ node_ids: [nodeId] }),
+        success: function(response) {
+            if (response.success && response.data.length > 0) {
+                // 更新节点数据
+                const updatedNode = response.data[0];
+                const index = nodes.findIndex(n => n.id === nodeId);
+                if (index !== -1) {
+                    nodes[index] = updatedNode;
+                }
+                
+                // 更新列表
+                filterNodes();
+                
+                // 显示测速结果详情
+                showSpeedTestResult(updatedNode);
+                
+                showToast(`节点 ${node.name} 测速完成`, 'success');
+            } else {
+                showToast('测速失败: ' + (response.message || '未知错误'), 'danger');
+            }
+        },
+        error: function() {
+            showToast('测速失败，请稍后重试', 'danger');
+        }
+    });
+}
+
+// 测试所有节点
+function testAllNodes() {
+    if (nodes.length === 0) {
+        showToast('没有可测试的节点', 'warning');
+        return;
+    }
+    
+    showToast('正在对所有节点进行测速，请稍候...', 'info');
+    
+    // 获取所有节点ID
+    const nodeIds = nodes.map(node => node.id);
+    
+    // 调用API批量测速
+    $.ajax({
+        url: `${API_BASE_URL}/nodes/test`,
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ node_ids: nodeIds }),
+        success: function(response) {
+            if (response.success) {
+                // 更新节点数据
+                response.data.forEach(updatedNode => {
+                    const index = nodes.findIndex(n => n.id === updatedNode.id);
+                    if (index !== -1) {
+                        nodes[index] = updatedNode;
+                    }
+                });
+                
+                // 更新列表
+                filterNodes();
+                
+                showToast('所有节点测速完成！', 'success');
+            } else {
+                showToast('测速失败: ' + (response.message || '未知错误'), 'danger');
+            }
+        },
+        error: function() {
+            showToast('测速失败，请稍后重试', 'danger');
+        }
+    });
+}
+
+// 分配单个IP
+function assignSingleIP(nodeId) {
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node) return;
+    
+    showToast(`正在为 ${node.name} 分配IP...`, 'info');
+    
+    // 调用API分配IP
+    $.ajax({
+        url: `${API_BASE_URL}/nodes/assign`,
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ node_ids: [nodeId] }),
+        success: function(response) {
+            if (response.success) {
+                // 更新节点数据
+                response.data.forEach(updatedNode => {
+                    const index = nodes.findIndex(n => n.id === updatedNode.id);
+                    if (index !== -1) {
+                        nodes[index] = updatedNode;
+                    }
+                });
+                
+                // 更新列表
+                filterNodes();
+                
+                showToast(`IP分配成功！节点 ${node.name} 已分配新的代理IP`, 'success');
+            } else {
+                showToast('IP分配失败: ' + (response.message || '未知错误'), 'danger');
+            }
+        },
+        error: function() {
+            showToast('IP分配失败，请稍后重试', 'danger');
+        }
+    });
+}
+
+// 批量分配IP
+function assignIPs() {
+    const selectedNodeIds = $('.node-checkbox:checked').map(function() {
+        return $(this).data('id');
+    }).get();
+    
+    if (selectedNodeIds.length === 0) {
+        showToast('请先选择要分配IP的节点', 'warning');
+        return;
+    }
+    
+    showToast(`正在为 ${selectedNodeIds.length} 个节点分配IP...`, 'info');
+    
+    // 调用API批量分配IP
+    $.ajax({
+        url: `${API_BASE_URL}/nodes/assign`,
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ node_ids: selectedNodeIds }),
+        success: function(response) {
+            if (response.success) {
+                // 更新节点数据
+                response.data.forEach(updatedNode => {
+                    const index = nodes.findIndex(n => n.id === updatedNode.id);
+                    if (index !== -1) {
+                        nodes[index] = updatedNode;
+                    }
+                });
+                
+                // 更新列表
+                filterNodes();
+                
+                showToast(`批量IP分配成功！已为 ${selectedNodeIds.length} 个节点分配新的代理IP`, 'success');
+            } else {
+                showToast('IP分配失败: ' + (response.message || '未知错误'), 'danger');
+            }
+        },
+        error: function() {
+            showToast('IP分配失败，请稍后重试', 'danger');
+        }
+    });
+}
+
+// 删除节点
+function deleteNode(nodeId) {
+    if (confirm('确定要删除这个节点吗？')) {
+        // 调用API删除节点
+        $.ajax({
+            url: `${API_BASE_URL}/nodes/${nodeId}`,
+            type: 'DELETE',
+            success: function(response) {
+                if (response.success) {
+                    // 从本地数据中移除
+                    nodes = nodes.filter(node => node.id !== nodeId);
+                    filterNodes();
+                    showToast('节点删除成功', 'success');
+                } else {
+                    showToast('节点删除失败: ' + (response.message || '未知错误'), 'danger');
+                }
+            },
+            error: function() {
+                showToast('节点删除失败，请稍后重试', 'danger');
+            }
+        });
+    }
+}
+
+// 刷新节点列表
+function refreshNodeList() {
+    showToast('正在刷新节点列表...', 'info');
+    loadNodes();
+}
+
+// 从API加载节点数据
+function loadNodes() {
+    $.ajax({
+        url: `${API_BASE_URL}/nodes`,
+        type: 'GET',
+        success: function(response) {
+            if (response.success) {
+                nodes = response.data;
+                filterNodes(); // 应用筛选条件
+                showToast('节点列表加载成功', 'success');
+            } else {
+                showToast('节点列表加载失败: ' + (response.message || '未知错误'), 'danger');
+            }
+        },
+        error: function() {
+            showToast('节点列表加载失败，请检查网络连接', 'danger');
+        }
+    });
+}
+
+// 筛选节点
+function filterNodes() {
+    const regionFilter = $('#filterRegion').val();
+    const protocolFilter = $('#filterProtocol').val();
+    
+    // 构建查询参数
+    const queryParams = new URLSearchParams();
+    if (regionFilter !== 'all') {
+        queryParams.append('region', regionFilter);
+    }
+    if (protocolFilter !== 'all') {
+        queryParams.append('protocol', protocolFilter);
+    }
+    
+    // 调用API进行筛选
+    $.ajax({
+        url: `${API_BASE_URL}/nodes?${queryParams.toString()}`,
+        type: 'GET',
+        success: function(response) {
+            if (response.success) {
+                filteredNodes = response.data;
+                
+                // 重置到第一页
+                currentPage = 1;
+                
+                // 重新渲染列表和分页
+                renderNodeList();
+                renderPagination();
+            } else {
+                showToast('筛选失败: ' + (response.message || '未知错误'), 'danger');
+            }
+        },
+        error: function() {
+            // 如果API调用失败，使用本地筛选作为后备方案
+            localFilter(regionFilter, protocolFilter);
+        }
+    });
+}
+
+// 本地筛选作为后备方案
+function localFilter(regionFilter, protocolFilter) {
+    filteredNodes = nodes.filter(node => {
+        const regionMatch = regionFilter === 'all' || node.region.includes(regionFilter === 'hk' ? '香港' : 
+                                                                     regionFilter === 'tw' ? '台湾' :
+                                                                     regionFilter === 'sg' ? '新加坡' :
+                                                                     regionFilter === 'jp' ? '日本' :
+                                                                     regionFilter === 'us' ? '美国' :
+                                                                     regionFilter === 'ca' ? '加拿大' : '');
+        
+        const protocolMatch = protocolFilter === 'all' || node.protocol.toLowerCase().includes(protocolFilter.toLowerCase());
+        
+        return regionMatch && protocolMatch;
+    });
+    
+    // 重置到第一页
+    currentPage = 1;
+    
+    // 重新渲染列表和分页
+    renderNodeList();
+    renderPagination();
+}
+
+// 显示测速结果详情
+function showSpeedTestResult(node) {
+    const speedTestResult = $('#speedTestResult');
+    speedTestResult.html(`
+        <div class="card">
+            <div class="card-header">
+                <h6 class="font-weight-bold">${node.name} - 测速详情</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label>节点名称:</label> ${node.name}
+                        </div>
+                        <div class="mb-3">
+                            <label>地区:</label> ${node.region}
+                        </div>
+                        <div class="mb-3">
+                            <label>协议:</label> ${node.protocol} ${node.type}
+                        </div>
+                        <div class="mb-3">
+                            <label>延迟:</label> <span class="${getDelayClass(node.delay)}">${node.delay} ms</span>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label>下载速度:</label> <span class="${getSpeedClass(node.speed)}">${node.speed} MB/s</span>
+                        </div>
+                        <div class="mb-3">
+                            <label>剩余流量:</label> ${node.traffic}
+                        </div>
+                        <div class="mb-3">
+                            <label>有效期:</label> ${node.expiry}
+                        </div>
+                        <div class="mb-3">
+                            <label>状态:</label> ${node.status === 'active' ? '<span class="badge badge-success">在线</span>' : '<span class="badge badge-danger">离线</span>'}
+                        </div>
+                    </div>
+                </div>
+                <div class="progress" style="height: 20px;">
+                    <div class="progress-bar ${getSpeedClass(node.speed).replace('text-', 'bg-')}" role="progressbar" style="width: ${Math.min(node.speed * 2, 100)}%" aria-valuenow="${node.speed}" aria-valuemin="0" aria-valuemax="50">
+                        ${node.speed} MB/s
+                    </div>
+                </div>
+            </div>
+        </div>
+    `);
+    
+    $('#speedTestModal').modal('show');
+}
+
+// 获取地区图标
+function getRegionIcon(region) {
+    const iconMap = {
+        '香港': '<i class="fas fa-flag" style="color: #ff0000;"></i>',
+        '台湾': '<i class="fas fa-flag" style="color: #0000ff;"></i>',
+        '新加坡': '<i class="fas fa-flag" style="color: #ff0000;"></i>',
+        '日本': '<i class="fas fa-flag" style="color: #ff0000;"></i>',
+        '美国': '<i class="fas fa-flag" style="color: #ff0000;"></i>',
+        '加拿大': '<i class="fas fa-flag" style="color: #ff0000;"></i>'
+    };
+    
+    return iconMap[region] || '<i class="fas fa-flag"></i>';
+}
+
+// 获取延迟对应的CSS类
+function getDelayClass(delay) {
+    if (delay < 100) return 'text-success font-weight-bold';
+    if (delay < 200) return 'text-warning font-weight-bold';
+    return 'text-danger font-weight-bold';
+}
+
+// 获取速度对应的CSS类
+function getSpeedClass(speed) {
+    speed = parseFloat(speed);
+    if (speed > 30) return 'text-success font-weight-bold';
+    if (speed > 20) return 'text-warning font-weight-bold';
+    return 'text-danger font-weight-bold';
+}
+
+// 显示提示消息
+function showToast(message, type = 'info') {
+    // 创建toast元素
+    const toastId = 'toast-' + Date.now();
+    const toast = $(
+        `<div id="${toastId}" class="toast position-fixed bottom-0 right-0 m-3" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header bg-${type === 'success' ? 'success' : type === 'error' || type === 'danger' ? 'danger' : type === 'warning' ? 'warning' : 'info'} text-white">
+                <strong class="mr-auto">${type === 'success' ? '成功' : type === 'error' || type === 'danger' ? '错误' : type === 'warning' ? '警告' : '信息'}</strong>
+                <button type="button" class="ml-2 mb-1 close text-white" data-dismiss="toast" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="toast-body">
+                ${message}
+            </div>
+        </div>`
+    );
+    
+    // 添加到body
+    $('body').append(toast);
+    
+    // 显示toast
+    toast.toast({
+        animation: true,
+        autohide: true,
+        delay: 3000
+    });
+    toast.toast('show');
+    
+    // 自动移除
+    setTimeout(() => {
+        toast.remove();
+    }, 3500);
+}
+</script>
+
+<style>
+/* 自定义样式 */
+.node-checkbox {
+    cursor: pointer;
+}
+
+.test-node-btn, .assign-node-btn, .delete-node-btn {
+    margin-right: 5px;
+}
+
+.test-node-btn:hover {
+    background-color: #17a2b8;
+    border-color: #17a2b8;
+}
+
+.assign-node-btn:hover {
+    background-color: #e0a800;
+    border-color: #e0a800;
+}
+
+.delete-node-btn:hover {
+    background-color: #dc3545;
+    border-color: #dc3545;
+}
+
+/* 进度条样式 */
+.progress-bar {
+    transition: width 0.6s ease;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .card-body {
+        padding: 1rem;
+    }
+    
+    .btn {
+        margin-bottom: 5px;
+    }
+    
+    #filterRegion, #filterProtocol {
+        margin-bottom: 10px;
+        width: 100%;
+    }
+}
+</style>
+{% endblock %}
