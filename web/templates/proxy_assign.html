@@ -371,19 +371,13 @@ function setupFilterHandlers() {
     
     if (filterRegion) {
         filterRegion.addEventListener('change', function() {
-            currentPage = 1;
-            if (typeof loadNodes === 'function') {
-                loadNodes(currentPage);
-            }
+            filterNodes();
         });
     }
     
     if (filterProtocol) {
         filterProtocol.addEventListener('change', function() {
-            currentPage = 1;
-            if (typeof loadNodes === 'function') {
-                loadNodes(currentPage);
-            }
+            filterNodes();
         });
     }
 }
@@ -832,14 +826,21 @@ function loadNodes() {
 
 // 更新分页信息显示
 function updatePaginationInfo(startIndex, endIndex, totalCount) {
-    const paginationInfo = document.getElementById('paginationInfo');
-    if (!paginationInfo) return;
+    const startRecord = document.getElementById('startRecord');
+    const endRecord = document.getElementById('endRecord');
+    const totalRecords = document.getElementById('totalRecords');
+    
+    if (!startRecord || !endRecord || !totalRecords) return;
     
     if (totalCount === 0) {
-        paginationInfo.textContent = '显示 0 条记录中的 0-0 条';
+        startRecord.textContent = '0';
+        endRecord.textContent = '0';
+        totalRecords.textContent = '0';
     } else {
         // 加1是因为索引从0开始，而显示时从1开始
-        paginationInfo.textContent = `显示 ${totalCount} 条记录中的 ${startIndex + 1}-${endIndex} 条`;
+        startRecord.textContent = startIndex + 1;
+        endRecord.textContent = endIndex;
+        totalRecords.textContent = totalCount;
     }
 }
 
@@ -913,9 +914,23 @@ function getCurrentPageNodes() {
     
     // 应用筛选条件
     let filteredNodes = nodeData.filter(node => {
-        // 地区筛选
-        const regionMatch = regionFilter === 'all' || 
-                          (node.region && node.region.toLowerCase().includes(regionFilter.toLowerCase()));
+        // 地区筛选 - 确保根据节点显示的地区名称进行匹配
+        let regionMatch = false;
+        if (regionFilter === 'all') {
+            regionMatch = true;
+        } else if (node.region) {
+            // 将筛选条件映射到地区名称进行匹配
+            const regionMap = {
+                'hk': '香港',
+                'tw': '台湾', 
+                'sg': '新加坡',
+                'jp': '日本',
+                'us': '美国',
+                'ca': '加拿大'
+            };
+            const regionName = regionMap[regionFilter.toLowerCase()] || regionFilter;
+            regionMatch = node.region.includes(regionName);
+        }
         
         // 协议筛选
         const protocolMatch = protocolFilter === 'all' || 
@@ -944,18 +959,57 @@ function renderPagination() {
     const paginationElement = document.getElementById('pagination');
     if (!paginationElement) return;
     
-    // 获取筛选后的节点数量
-    const filteredNodes = getCurrentPageNodes();
-    const startIndex = (currentPage - 1) * pageSize;
-    const endIndex = Math.min(startIndex + pageSize, nodeData.length);
+    // 获取筛选条件
+    const regionFilter = document.getElementById('filterRegion')?.value || 'all';
+    const protocolFilter = document.getElementById('filterProtocol')?.value || 'all';
     
-    // 更新分页信息
-    updatePaginationInfo(startIndex, endIndex, nodeData.length);
+    // 应用筛选条件
+    let filteredNodes = nodeData.filter(node => {
+        // 地区筛选 - 确保根据节点显示的地区名称进行匹配
+        let regionMatch = false;
+        if (regionFilter === 'all') {
+            regionMatch = true;
+        } else if (node.region) {
+            // 将筛选条件映射到地区名称进行匹配
+            const regionMap = {
+                'hk': '香港',
+                'tw': '台湾', 
+                'sg': '新加坡',
+                'jp': '日本',
+                'us': '美国',
+                'ca': '加拿大'
+            };
+            const regionName = regionMap[regionFilter.toLowerCase()] || regionFilter;
+            regionMatch = node.region.includes(regionName);
+        }
+        
+        // 协议筛选
+        const protocolMatch = protocolFilter === 'all' || 
+                            (node.protocol && node.protocol.toLowerCase().includes(protocolFilter.toLowerCase()));
+        
+        // 两个条件都要满足
+        return regionMatch && protocolMatch;
+    });
+    
+    // 计算当前页索引
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = Math.min(startIndex + pageSize, filteredNodes.length);
+    
+    // 更新分页信息，使用筛选后的节点数量
+    updatePaginationInfo(startIndex, endIndex, filteredNodes.length);
     
     // 如果没有数据，隐藏分页控件
-    if (nodeData.length === 0) {
+    if (filteredNodes.length === 0) {
         paginationElement.innerHTML = '';
         return;
+    }
+    
+    // 计算总页数（基于筛选后的数据）
+    totalPages = Math.ceil(filteredNodes.length / pageSize);
+    
+    // 确保当前页不超过总页数
+    if (currentPage > totalPages && totalPages > 0) {
+        currentPage = totalPages;
     }
     
     let html = '';
