@@ -30,12 +30,7 @@ proxy_assign_bp = Blueprint('proxy_assign', __name__)
 # 模拟节点数据存储
 nodes_db = []
 
-@proxy_assign_bp.route('/proxy_assign')
-def proxy_assign():
-    """
-    代理IP分配页面
-    """
-    return render_template('proxy_assign.html')
+# 代理IP分配页面路由已移至vm.py文件中
 
 @proxy_assign_bp.route('/api/nodes', methods=['GET'])
 def get_nodes():

@@ -11,7 +11,8 @@ from PyQt5.QtWebEngineWidgets import QWebEngineView
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import QUrl
 
-# 配置日志
+# 导入日志工具
+from app.utils.log_utils import get_logger
 import os
 import datetime
 from config import logs_dir
@@ -24,15 +25,8 @@ os.makedirs(log_dir, exist_ok=True)
 current_date = datetime.datetime.now().strftime('%Y-%m-%d')
 webview_log_file = os.path.join(log_dir, f'webview_debug_{current_date}.log')
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s [%(levelname)s] %(funcName)s:%(lineno)d - %(message)s',
-    handlers=[
-        logging.FileHandler(webview_log_file, encoding='utf-8'),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
+# 获取配置好的日志记录器
+logger = get_logger(__name__, log_file=webview_log_file)
 
 class MainWindow(QMainWindow):
     def __init__(self):

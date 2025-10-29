@@ -7,7 +7,7 @@ import subprocess
 from flask import Blueprint, request, jsonify
 import logging
 from config import *
-from utils.ssh_utils import setup_ssh_trust
+from app.utils.ssh_utils import setup_ssh_trust
 from functools import wraps
 
 # 导入login_required装饰器
@@ -22,8 +22,11 @@ def login_required(f):
 # 创建蓝图
 mupan_bp = Blueprint('mupan', __name__)
 
-# 配置日志
-logger = logging.getLogger(__name__)
+# 导入日志工具
+from app.utils.log_utils import get_logger
+
+# 获取日志记录器
+logger = get_logger(__name__)
 
 # VMware工具路径配置
 VMRUN_PATH = f"{vmrun_path}"
@@ -248,9 +251,6 @@ def api_mupan_list():
         })
 
 
-
-# 配置日志
-logger = logging.getLogger(__name__)
 
 # VMware工具路径配置
 VMRUN_PATH = f"{vmrun_path}"
@@ -1003,7 +1003,7 @@ def check_ssh_trust():
         logger.info(f"虚拟机 {vm_name} 的IP地址: {vm_ip}")
         
         # 检查SSH互信状态
-        from utils.ssh_utils import check_ssh_trust_status
+        from app.utils.ssh_utils import check_ssh_trust_status
         trusted = check_ssh_trust_status(vm_ip, vm_username)
         
         return jsonify({

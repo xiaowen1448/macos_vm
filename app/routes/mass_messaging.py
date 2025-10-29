@@ -8,13 +8,16 @@ import requests
 import json
 import sqlite3
 from config import *
-from utils.ssh_utils import SSHClient
+from app.utils.ssh_utils import SSHClient
 
 # 创建蓝图
 mass_messaging_bp = Blueprint('mass_messaging', __name__)
 
-# 创建logger实例
-logger = logging.getLogger(__name__)
+# 导入日志工具
+from app.utils.log_utils import get_logger
+
+# 获取日志记录器
+logger = get_logger(__name__)
 
 # 登录验证装饰器（需要从主应用导入）
 def login_required(f):
@@ -25,11 +28,7 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-@mass_messaging_bp.route('/mass_messaging')
-@login_required
-def mass_messaging_page():
-    """群发管理页面"""
-    return render_template('mass_messaging.html')
+# 群发管理页面路由已移至vm.py文件中
 
 # 群发管理API路由
 @mass_messaging_bp.route('/api/mass_messaging/templates', methods=['GET'])

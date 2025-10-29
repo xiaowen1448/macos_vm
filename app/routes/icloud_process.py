@@ -14,7 +14,7 @@ from pathlib import Path
 # 导入配置模块，使用appleid_unused_dir路径和其他配置项
 from config import appleid_unused_dir, icloud_txt_path, restart_scptRunner, icloud2_txt_path, error_txt_path, vm_username
 # 导入SSH工具类
-from utils.ssh_utils import SSHClient
+from app.utils.ssh_utils import SSHClient
 
 # 配置日志
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -87,11 +87,7 @@ def start_thread_cleanup_task():
 # 启动线程清理任务
 start_thread_cleanup_task()
 
-# 获取VM信息路由
-@icloud_process_bp.route('/vm_icloud')
-@login_required
-def vm_icloud():
-    return render_template('vm_icloud.html')
+# 获取VM信息路由已移至vm.py文件中
 
 def get_db_connection():
     """获取数据库连接"""

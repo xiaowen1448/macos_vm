@@ -12,7 +12,10 @@ import paramiko
 from typing import Tuple, Optional
 from scp import SCPClient
 
-logger = logging.getLogger(__name__)
+# 导入日志工具
+from app.utils.log_utils import get_logger
+
+logger = get_logger(__name__)
 
 class SSHClient:
     """SSH客户端工具类"""
@@ -383,3 +386,60 @@ def check_ssh_trust_status(hostname: str, username: str, timeout: int = 10) -> b
     except Exception as e:
         logger.debug(f"SSH互信状态检查失败: {hostname} - {str(e)}")
         return False
+
+
+
+def send_file_via_sftp(local_path, remote_path, ip, username, timeout=30):
+    """使用paramiko SFTP发送文件到远程主机"""
+    try:
+        # 创建SSH客户端
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+        try:
+            # 首先尝试密钥认证
+            ssh.connect(ip, username=username, timeout=timeout, look_for_keys=True, allow_agent=True)
+        except paramiko.AuthenticationException:
+            # 密钥认证失败，尝试密码认证并自动设置互信
+            logger.info(f"密钥认证失败，尝试密码认证: {ip}")
+            try:
+                ssh.connect(ip, username=username, password=vm_password, timeout=timeout)
+                logger.info(f"密码认证成功，开始设置SSH互信: {ip}")
+
+                # 设置SSH互信
+                success, message = setup_ssh_trust(ip, username, vm_password)
+                if success:
+                    logger.info(f"SSH互信设置成功: {ip}")
+                    # 清理缓存
+                    vm_cache.clear_cache(get_vm_name_by_ip(ip), 'online_status')
+                else:
+                    logger.warning(f"SSH互信设置失败: {ip} - {message}")
+            except Exception as pwd_e:
+                ssh.close()
+                return False, f"密码认证也失败: {str(pwd_e)}"
+
+        # 创建SFTP客户端
+        sftp = ssh.open_sftp()
+
+        # 确保远程目录存在
+        remote_dir = os.path.dirname(remote_path)
+        if remote_dir:
+            try:
+                sftp.mkdir(remote_dir)
+            except IOError:
+                # 目录可能已存在，忽略错误
+                pass
+
+        # 传输文件
+        sftp.put(local_path, remote_path)
+
+        # 关闭连接
+        sftp.close()
+        ssh.close()
+
+        return True, "文件传输成功"
+
+    except ImportError:
+        return False, "需要安装paramiko库: pip install paramiko"
+    except Exception as e:
+        return False, f"SFTP传输失败: {str(e)}"

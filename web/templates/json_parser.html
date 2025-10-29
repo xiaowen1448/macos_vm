@@ -425,16 +425,16 @@
                     <div class="accordion-body p-0">
                         <ul class="nav flex-column">
                             <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('clone_vm_page') }}">虚拟机批量克隆</a>
+                                <a class="nav-link" href="{{ url_for('vm.clone_vm_page') }}">虚拟机批量克隆</a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('vm_management_page') }}">虚拟机信息管理</a>
+                                <a class="nav-link" href="{{ url_for('vm.vm_management_page') }}">虚拟机信息管理</a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('vm_script_page') }}">虚拟机脚本管理</a>
+                                <a class="nav-link" href="{{ url_for('vm.vm_script_page') }}">虚拟机脚本管理</a>
                             </li>
                          <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('icloud_process.vm_icloud') }}">iCloud管理</a>                            
+                        <a class="nav-link" href="{{ url_for('vm.vm_icloud') }}">iCloud管理</a>                            
                         </li>                          
                         </ul>
                     </div>
@@ -450,10 +450,10 @@
                     <div class="accordion-body p-0">
                         <ul class="nav flex-column">
                             <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('client_management_page') }}">ScptRunner客户端管理</a>
+                                <a class="nav-link" href="{{ url_for('vm.client_management_page') }}">ScptRunner客户端管理</a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link active" href="{{ url_for('json_parser_page') }}"><i class="fas fa-code me-2"></i>JSON解析功能</a>
+                                <a class="nav-link active" href="{{ url_for('vm.json_parser_page') }}"><i class="fas fa-code me-2"></i>JSON解析功能</a>
                             </li>
                         </ul>
                     </div>
@@ -470,10 +470,10 @@
                     <div class="accordion-body p-0">
                         <ul class="nav flex-column">
                             <li class="nav-item">
-                                <a class="nav-link active" href="{{ url_for('phone_management_page') }}"><i class="fas fa-phone me-2"></i>手机号管理</a>
+                                <a class="nav-link active" href="{{ url_for('vm.phone_management_page') }}"><i class="fas fa-phone me-2"></i>手机号管理</a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('mass_messaging.mass_messaging_page') }}"><i class="fas fa-broadcast-tower me-2"></i>群发管理</a>
+                                <a class="nav-link" href="{{ url_for('vm.mass_messaging_page') }}"><i class="fas fa-broadcast-tower me-2"></i>群发管理</a>
                             </li>
                         </ul>
                     </div>
@@ -489,13 +489,13 @@
                     <div class="accordion-body p-0">
                         <ul class="nav flex-column">
                             <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('wuma_page') }}">虚拟机五码管理</a>
+                                <a class="nav-link" href="{{ url_for('vm.wuma_page') }}">虚拟机五码管理</a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('mupan_page') }}">虚拟机母盘管理</a>
+                                <a class="nav-link" href="{{ url_for('vm.mupan_page') }}">虚拟机母盘管理</a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('id_management_page') }}">Apple ID管理</a>
+                                <a class="nav-link" href="{{ url_for('vm.id_management_page') }}">Apple ID管理</a>
                             </li>
                         </ul>
                     </div>
@@ -511,13 +511,13 @@
                     <div class="accordion-body p-0">
                         <ul class="nav flex-column">
                             <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('encrypt_code_page') }}">代码加密</a>
+                                <a class="nav-link" href="{{ url_for('vm.encrypt_code_page') }}">代码加密</a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('encrypt_wuma_page') }}">五码加密</a>
+                                <a class="nav-link" href="{{ url_for('vm.encrypt_wuma_page') }}">五码加密</a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('encrypt_id_page') }}">id加密</a>
+                                <a class="nav-link" href="{{ url_for('vm.encrypt_id_page') }}">id加密</a>
                             </li>
                         </ul>
                     </div>
@@ -533,7 +533,7 @@
                     <div class="accordion-body p-0">
                         <ul class="nav flex-column">
                             <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('proxy_assign_page') }}">代理IP分配</a>
+                                <a class="nav-link" href="{{ url_for('vm.proxy_assign') }}">代理IP分配</a>
                             </li>
                         </ul>
                     </div>
@@ -549,10 +549,10 @@
                     <div class="accordion-body p-0">
                         <ul class="nav flex-column">
                             <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('soft_version_page') }}">软件版本管理</a>
+                                <a class="nav-link" href="{{ url_for('vm.soft_version_page') }}">软件版本管理</a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('soft_env_page') }}">软件环境配置</a>
+                                <a class="nav-link" href="{{ url_for('vm.soft_env_page') }}">软件环境配置</a>
                             </li>
                         </ul>
                     </div>
