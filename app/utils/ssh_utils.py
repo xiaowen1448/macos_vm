@@ -8,9 +8,15 @@ SSH工具类 - 使用paramiko实现SSH和SCP功能
 import os
 import stat
 import logging
+import sys
 import paramiko
 from typing import Tuple, Optional
+# 导入日志工具和全局logger
+from app.utils.log_utils import logger, logging
+from app.utils.vm_cache import vm_cache, VMStatusCache
 from scp import SCPClient
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+from config import *
 
 # 导入日志工具
 from app.utils.log_utils import get_logger
@@ -443,3 +449,69 @@ def send_file_via_sftp(local_path, remote_path, ip, username, timeout=30):
         return False, "需要安装paramiko库: pip install paramiko"
     except Exception as e:
         return False, f"SFTP传输失败: {str(e)}"
+
+
+def check_ssh_status(ip):
+    """检查SSH连接状态"""
+    if not ip:
+        return 'offline'
+
+    try:
+        # 简单的ping测试
+        result = subprocess.run(['ping', '-n', '1', ip], capture_output=True, text=True, timeout=10)
+        if result.returncode == 0:
+            return 'online'
+        else:
+            return 'offline'
+
+    except Exception as e:
+        logger.info(f"[DEBUG] SSH状态检查失败: {str(e)}")
+        return 'offline'
+
+
+def check_ssh_port_open(ip, port=22):
+    """检查SSH端口是否开放"""
+    if not ip:
+        return False
+
+    try:
+        # 创建socket连接
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(8)  # 增加超时时间到8秒
+
+        # 尝试连接SSH端口
+        result = sock.connect_ex((ip, port))
+        sock.close()
+
+        if result == 0:
+            # logger.debug(f"SSH端口 {port} 开放: {ip}")
+            return True
+        else:
+            # 如果端口连接失败，再尝试一次确认
+            logger.debug(f"SSH端口 {port} 首次检测失败，进行二次确认: {ip}")
+            try:
+                sock2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock2.settimeout(5)  # 二次检测用较短超时
+                result2 = sock2.connect_ex((ip, port))
+                sock2.close()
+
+                if result2 == 0:
+                    logger.debug(f"SSH端口 {port} 二次检测成功: {ip}")
+                    return True
+                else:
+                    logger.debug(f"SSH端口 {port} 确认未开放: {ip}")
+                    return False
+            except Exception as e2:
+                logger.debug(f"SSH端口二次检测异常: {str(e2)}")
+                return False
+
+    except Exception as e:
+        logger.debug(f"检查SSH端口失败: {str(e)}")
+        return False
+
+
+def check_ssh_trust_status_old(ip, username=vm_username):
+    """旧的SSH互信状态检查实现（已弃用）"""
+    # 使用新的SSH工具类实现
+    from utils.ssh_utils import check_ssh_trust_status as new_check_ssh_trust_status
+    return new_check_ssh_trust_status(ip, username)

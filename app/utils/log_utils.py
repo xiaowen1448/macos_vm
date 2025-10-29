@@ -26,29 +26,46 @@ def setup_logger(logger_name=None, log_file=None, level=LOG_LEVEL):
     logger = logging.getLogger(logger_name)
     logger.setLevel(level)
     
-    # 避免重复添加处理器
-    if logger.handlers:
-        return logger
+    # 强制清除所有处理器，确保不会有重复
+    logger.handlers.clear()
+    # 防止从父logger继承handler
+    logger.propagate = False
     
     # 创建格式化器
     formatter = logging.Formatter(LOG_FORMAT, DATE_FORMAT)
     
-    # 创建控制台处理器
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(formatter)
-    logger.addHandler(console_handler)
+    # 检查是否已有控制台处理器，如果没有则添加
+    has_console_handler = False
+    for handler in logger.handlers:
+        if isinstance(handler, logging.StreamHandler):
+            has_console_handler = True
+            break
+    
+    if not has_console_handler:
+        # 创建控制台处理器
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setFormatter(formatter)
+        logger.addHandler(console_handler)
     
     # 如果指定了日志文件，创建文件处理器
     if log_file:
-        # 确保日志目录存在
-        log_dir = os.path.dirname(log_file)
-        if log_dir and not os.path.exists(log_dir):
-            os.makedirs(log_dir, exist_ok=True)
+        # 检查是否已有相同路径的文件处理器
+        has_file_handler = False
+        for handler in logger.handlers:
+            if isinstance(handler, logging.FileHandler) and handler.baseFilename == log_file:
+                has_file_handler = True
+                break
         
-        # 创建文件处理器
-        file_handler = logging.FileHandler(log_file, encoding='utf-8')
-        file_handler.setFormatter(formatter)
-        logger.addHandler(file_handler)
+        if not has_file_handler:
+            # 确保日志目录存在
+            log_dir = os.path.dirname(log_file)
+            if log_dir and not os.path.exists(log_dir):
+                os.makedirs(log_dir, exist_ok=True)
+            
+            # 创建文件处理器
+            file_handler = logging.FileHandler(log_file, encoding='utf-8')
+            file_handler.setFormatter(formatter)
+            logger.addHandler(file_handler)
     
     return logger
 
@@ -75,4 +92,4 @@ def get_default_logger():
     return get_logger('default')
 
 # 创建全局logger实例，其他模块可以直接导入使用
-logger = get_logger('macos_vm')
+logger = setup_logger('macos_vm')
