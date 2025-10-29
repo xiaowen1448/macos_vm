@@ -1,5 +1,7 @@
 from flask import Blueprint, jsonify, request
 from datetime import datetime
+# 导入带session超时检查的login_required装饰器
+from app.utils.common_utils import login_required
 
 # 创建蓝图
 process_bp = Blueprint('process', __name__)
@@ -19,30 +21,35 @@ processes = [
 
 # 进程管理路由
 @process_bp.route('/api/process/list')
+@login_required
 def get_process_list():
     # 重定向到icloud_process.py中的完整实现
     from flask import redirect, url_for
     return redirect(url_for('icloud_process.get_process_list'))
 
 @process_bp.route('/api/process/add', methods=['POST'])
+@login_required
 def add_process():
     # 重定向到icloud_process.py中的完整实现
     from flask import redirect, url_for
     return redirect(url_for('icloud_process.add_process'), code=307)  # 307保持原始方法
 
 @process_bp.route('/api/process/start', methods=['POST'])
+@login_required
 def start_process():
     # 重定向到icloud_process.py中的完整实现
     from flask import redirect, url_for
     return redirect(url_for('icloud_process.start_process'), code=307)  # 307保持原始方法
 
 @process_bp.route('/api/process/stop', methods=['POST'])
+@login_required
 def stop_process():
     # 重定向到icloud_process.py中的完整实现
     from flask import redirect, url_for
     return redirect(url_for('icloud_process.stop_process'), code=307)  # 307保持原始方法
 
 @process_bp.route('/api/process/delete', methods=['POST'])
+@login_required
 def delete_process():
     # 重定向到icloud_process.py中的完整实现
     from flask import redirect, url_for

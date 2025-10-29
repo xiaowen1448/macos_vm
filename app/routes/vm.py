@@ -1,25 +1,17 @@
 from flask import Blueprint, render_template
-from functools import wraps
 from app.utils.vm_utils import get_vm_list_from_directory
 from config import *
 from app.utils.vm_utils import get_wuma_info_generic, get_ju_info_generic, get_vm_online_status
 # 导入日志工具
 from app.utils.log_utils import get_logger
+# 导入带session超时检查的login_required装饰器
+from app.utils.common_utils import login_required
 
 # 获取日志记录器
 logger = get_logger(__name__)
 
 # 创建虚拟机相关的蓝图
 vm_bp = Blueprint('vm', __name__)
-
-# 导入login_required装饰器
-def login_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        # 这里应该导入实际的login_required逻辑
-        # 由于我们是从主应用移动过来，暂时保持简单
-        return f(*args, **kwargs)
-    return decorated_function
 
 
 @vm_bp.route('/clone_vm')

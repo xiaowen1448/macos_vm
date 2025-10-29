@@ -28,6 +28,7 @@ except ImportError:
 try:
     from app.utils.ssh_utils import *
     from app.utils.common_utils import logger
+    from app.utils.vm_utils import *
 except ImportError:
     setup_ssh_trust = None
 
@@ -35,6 +36,8 @@ except ImportError:
 
 # 导入日志工具
 from app.utils.log_utils import get_logger
+# 导入带session超时检查的login_required装饰器
+from app.utils.common_utils import login_required
 
 # 创建虚拟机批量克隆蓝图
 vm_clone_bp = Blueprint('vm_clone', __name__)
@@ -44,15 +47,7 @@ logger = get_logger(__name__)
 
 # 定义日志目录
 log_dir = logs_dir  # 从config.py导入的logs_dir
-
-# 导入login_required装饰器
-def login_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        # 这里应该导入实际的login_required逻辑
-        # 由于我们是从主应用移动过来，暂时保持简单
-        return f(*args, **kwargs)
-    return decorated_function
+    
 
 
 # 注意：clear_sessions_on_startup不应在此处调用，而应在应用主入口处调用一次
@@ -60,7 +55,8 @@ VM_DIRS = {
     '10_12': clone_dir,
     'chengpin': vm_chengpin_dir
 }
-clone_tasks = {}
+# 从vm_utils导入共享的clone_tasks字典
+from app.utils.vm_utils import clone_tasks
 tasks = {}
 websockify_processes = {}  # 存储websockify进程信息
 

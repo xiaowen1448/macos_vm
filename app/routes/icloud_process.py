@@ -23,11 +23,8 @@ logger = logging.getLogger('icloud_process')
 # 创建蓝图
 icloud_process_bp = Blueprint('icloud_process', __name__)
 
-# 尝试导入login_required装饰器，如果不存在则创建一个简单的替代
-try:
-    from app.routes.login import login_required
-except ImportError:
-    login_required = lambda f: f  # 临时替代装饰器
+# 导入带session超时检查的login_required装饰器
+from app.utils.common_utils import login_required
 
 # 配置项
 SCRIPT_DIR = restart_scptRunner

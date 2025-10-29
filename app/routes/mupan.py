@@ -8,16 +8,8 @@ from flask import Blueprint, request, jsonify
 import logging
 from config import *
 from app.utils.ssh_utils import setup_ssh_trust
-from functools import wraps
-
-# 导入login_required装饰器
-def login_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        # 这里应该导入实际的login_required逻辑
-        # 由于我们是从主应用移动过来，暂时保持简单
-        return f(*args, **kwargs)
-    return decorated_function
+# 导入带session超时检查的login_required装饰器
+from app.utils.common_utils import login_required
 
 # 创建蓝图
 mupan_bp = Blueprint('mupan', __name__)

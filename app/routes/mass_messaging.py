@@ -1,5 +1,4 @@
 from flask import Blueprint, request, jsonify, render_template
-from functools import wraps
 import os
 import subprocess
 import time
@@ -9,6 +8,8 @@ import json
 import sqlite3
 from config import *
 from app.utils.ssh_utils import SSHClient
+# 导入带session超时检查的login_required装饰器
+from app.utils.common_utils import login_required
 
 # 创建蓝图
 mass_messaging_bp = Blueprint('mass_messaging', __name__)
@@ -18,15 +19,6 @@ from app.utils.log_utils import get_logger
 
 # 获取日志记录器
 logger = get_logger(__name__)
-
-# 登录验证装饰器（需要从主应用导入）
-def login_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        # 这里应该实现登录验证逻辑
-        # 暂时跳过验证，实际使用时需要从主应用导入
-        return f(*args, **kwargs)
-    return decorated_function
 
 # 群发管理页面路由已移至vm.py文件中
 

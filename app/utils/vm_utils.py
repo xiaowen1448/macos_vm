@@ -6,9 +6,9 @@ from datetime import datetime
 import sys
 import time
 import base64
-import subprocess
 import uuid
 import json
+import threading
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, Response
 from pathlib import Path
 from functools import wraps
@@ -230,7 +230,7 @@ def get_vm_ip(vm_name):
             except Exception as e:
                 logger.error(f"从VMX文件读取IP失败: {str(e)}")
 
-        logger.warning(f"无法获取虚拟机 {vm_name} 的IP地址")
+       # logger.warning(f"无法获取虚拟机 {vm_name} 的IP地址")
         return None
     except Exception as e:
         logger.error(f"获取虚拟机IP失败: {str(e)}")
@@ -1060,7 +1060,7 @@ def batch_change_wuma_core(selected_vms, config_file_path, task_id=None):
                 vm_ip = get_vm_ip(vm_name)
                 logger.info(f"获取虚拟机 {vm_name} 的IP: {vm_ip}")
                 if not vm_ip:
-                    log_message('error', f'无法获取虚拟机 {vm_name} 的IP')
+                 #   log_message('error', f'无法获取虚拟机 {vm_name} 的IP')
                     results.append({
                         'vm_name': vm_name,
                         'success': False,
@@ -2275,7 +2275,7 @@ def get_vm_list_from_directory(vm_dir, vm_type_name):
                         try:
                             create_time = os.path.getmtime(vm_path)
                         except Exception as e:
-                            logger.warning(f"无法获取虚拟机 {vm_name} 的创建时间: {str(e)}")
+                          #  logger.warning(f"无法获取虚拟机 {vm_name} 的创建时间: {str(e)}")
                             create_time = 0
 
                         vm_info = {
