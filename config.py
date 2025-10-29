@@ -1,5 +1,25 @@
 # 全局配置文件
 # Global Configuration File
+
+# 导入日志模块
+import os
+import logging
+
+# 配置日志
+LOG_LEVEL = logging.INFO
+LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
+
+# 配置基本日志格式
+logging.basicConfig(
+    level=LOG_LEVEL,
+    format=LOG_FORMAT,
+    datefmt=DATE_FORMAT
+)
+
+# 创建全局logger实例
+logger = logging.getLogger('macos_vm')
+
 # 项目根目录
 project_root = r'D:\xiaowen_1448\macos_vm'
 # 用户认证信息

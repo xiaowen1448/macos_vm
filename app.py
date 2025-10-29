@@ -1,5 +1,4 @@
 import json
-import logging
 import ipaddress
 import atexit
 import signal
@@ -18,6 +17,9 @@ import time
 import paramiko
 import re
 import requests
+import threading
+import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from urllib.parse import urlparse
 from datetime import datetime, timedelta
@@ -33,10 +35,23 @@ from app.utils.vm_utils import *
 from app.routes.vm_clone import vm_clone_bp, get_vmrun_path
 from app.routes.vm_management import vm_management_bp
 from app.routes.vm import vm_bp
-# 导入日志工具
-from app.utils.log_utils import get_logger
-# 获取日志记录器
-logger = get_logger(__name__)
+
+# 导入日志工具和全局logger
+from app.utils.log_utils import get_logger, logger
+from app.utils.common_utils import clear_sessions_on_startup
+
+# 在应用启动时执行
+clear_sessions_on_startup()
+
+VM_DIRS = {
+    '10_12': clone_dir,
+    'chengpin': vm_chengpin_dir
+}
+clone_tasks = {}
+tasks = {}
+websockify_processes = {}  # 存储websockify进程信息
+
+
 # 虚拟机状态缓存机制
 class VMStatusCache:
     def __init__(self):
@@ -237,6 +252,7 @@ def scan_scripts_from_directories():
 # 通用函数 - 获取虚拟机列表
 def get_vm_list_from_directory(vm_dir, vm_type_name):
     """从指定目录获取虚拟机列表"""
+    global logger
     # logger.info(f"收到获取{vm_type_name}虚拟机列表API请求")
     try:
         # 获取分页参数
@@ -366,7 +382,6 @@ def get_vm_list_from_directory(vm_dir, vm_type_name):
 # 通用函数 - 获取五码信息
 def get_wuma_info_generic(vm_type_name):
     """获取虚拟机五码信息的通用函数"""
-    # 确保logger在函数作用域内可用
     global logger
     #  logger.info(f"收到获取{vm_type_name}虚拟机五码信息请求")
     try:
@@ -428,7 +443,6 @@ def get_wuma_info_generic(vm_type_name):
 # 通用函数 - 获取JU值信息
 def get_ju_info_generic(vm_type_name):
     """获取虚拟机JU值信息的通用函数"""
-    # 确保logger在函数作用域内可用
     global logger
     # logger.info(f"收到获取{vm_type_name}虚拟机JU值信息请求")
     try:
@@ -490,6 +504,7 @@ def get_ju_info_generic(vm_type_name):
 # 通用函数 - 虚拟机操作（启动、停止、重启）
 def vm_operation_generic(operation, vm_type_name, vm_dir):
     """虚拟机操作的通用函数"""
+    global logger
     logger.info(f"收到{operation}{vm_type_name}虚拟机请求")
     try:
         data = request.get_json()
@@ -842,8 +857,6 @@ def add_permissions_generic(vm_type_name):
 # 通用函数 - 获取IP状态
 def get_ip_status_generic(vm_name, vm_type_name, vm_dir):
     """获取虚拟机IP状态的通用函数"""
-    # 确保logger在函数作用域内可用
-    global logger
     # logger.info(f"收到获取{vm_type_name}虚拟机IP状态请求: {vm_name}")
     try:
         # 查找虚拟机文件
@@ -2035,8 +2048,6 @@ def api_vm_ip_status(vm_name):
 @login_required
 def api_vm_public_ip(vm_name):
     """获取虚拟机公网IP地址"""
-    # 确保logger在函数作用域内可用
-    global logger
     # logger.info(f"收到获取虚拟机 {vm_name} 公网IP的请求")
     try:
         # 获取虚拟机IP地址
@@ -2049,7 +2060,7 @@ def api_vm_public_ip(vm_name):
                 'message': '无法获取虚拟机IP地址'
             })
 
-        logger.info(f"虚拟机 {vm_name} 的局域网IP地址: {vm_ip}")
+       # logger.info(f"虚拟机 {vm_name} 的局域网IP地址: {vm_ip}")
 
         # 检查SSH连接
         # logger.debug(f"检查虚拟机 {vm_name} 的SSH连接")
@@ -4327,6 +4338,7 @@ def api_get_10_12_ju_info():
 @login_required
 def api_vm_10_12_online_status():
     """获取10.12目录虚拟机在线状态"""
+    global logger
     # logger.info("收到获取10.12目录虚拟机在线状态请求")
     try:
         data = request.get_json()
@@ -7383,8 +7395,6 @@ signal.signal(signal.SIGINT, signal_handler)  # Ctrl+C
 @login_required
 def api_batch_get_10_12_wuma_info():
     """批量获取10.12目录虚拟机五码信息"""
-    # 确保logger在函数作用域内可用
-    global logger
     # logger.info("收到批量获取10.12目录虚拟机五码信息请求")
     try:
         data = request.get_json()
@@ -7430,8 +7440,6 @@ def api_batch_get_10_12_wuma_info():
 @login_required
 def api_batch_get_10_12_ju_info():
     """批量获取10.12目录虚拟机JU值信息"""
-    # 确保logger在函数作用域内可用
-    global logger
 
     try:
         data = request.get_json()
@@ -7474,11 +7482,6 @@ def api_batch_get_10_12_ju_info():
 
 
 # 批量IM注销
-import threading
-import json
-from concurrent.futures import ThreadPoolExecutor
-
-
 @app.route('/api/batch_im_logout', methods=['POST'])
 def batch_im_logout():
     """批量IM注销API - 多线程异步版本"""

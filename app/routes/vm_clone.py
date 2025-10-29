@@ -1,10 +1,8 @@
 import os
 import json
-import logging
 import threading
 import time
 import sys
-import shutil
 import base64
 import subprocess
 import uuid
@@ -29,6 +27,7 @@ except ImportError:
 # 尝试从ssh_utils导入setup_ssh_trust函数（本地函数中使用）
 try:
     from app.utils.ssh_utils import *
+    from app.utils.common_utils import *
 except ImportError:
     setup_ssh_trust = None
 
@@ -71,128 +70,6 @@ def is_valid_wuma_file_line(line):
             return False
 
     return True
-
-
-
-def execute_remote_script(ip, username, script_name):
-    """通过SSH互信执行目录脚本并获取输出"""
-    try:
-        # 构建详细的SSH调用日志
-        ssh_log = []
-        ssh_log.append(f"[SSH] 开始连接到远程主机: {ip}")
-        ssh_log.append(f"[SSH] 用户名: {username}")
-        ssh_log.append(f"[SSH] 目标脚本: {script_name}")
-
-        # 创建SSH客户端
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh_log.append("[SSH] SSH客户端创建成功")
-
-        # 通过SSH互信连接到远程主机（无需密码）
-        ssh_log.append(f"[SSH] 正在建立SSH连接...")
-        try:
-            ssh.connect(ip, username=username, timeout=10, look_for_keys=True, allow_agent=True)
-            ssh_log.append("[SSH] SSH连接建立成功")
-        except paramiko.AuthenticationException:
-            # 密钥认证失败，尝试密码认证并自动设置互信
-            ssh_log.append("[SSH] 密钥认证失败，尝试密码认证")
-            try:
-                ssh.connect(ip, username=username, password=vm_password, timeout=10)
-                ssh_log.append("[SSH] 密码认证成功，开始设置SSH互信")
-
-                # 设置SSH互信
-                success, message = setup_ssh_trust(ip, username, vm_password)
-                if success:
-                    ssh_log.append("[SSH] SSH互信设置成功")
-                    # 清理缓存
-                    vm_name = get_vm_name_by_ip(ip)
-                    if vm_name:
-                        vm_cache.clear_cache(vm_name, 'online_status')
-                else:
-                    ssh_log.append(f"[SSH] SSH互信设置失败: {message}")
-            except Exception as pwd_e:
-                ssh_log.append(f"[SSH] 密码认证也失败: {str(pwd_e)}")
-                ssh.close()
-                return False, f"SSH连接失败: {str(pwd_e)}", "\n".join(ssh_log)
-
-        # 检查脚本是否存在
-        check_command = f"ls -la {script_name}"
-        #  ssh_log.append(f"[SSH] 检查脚本是否存在: {check_command}")
-        stdin, stdout, stderr = ssh.exec_command(check_command)
-        check_output = stdout.read().decode().strip()
-        check_error = stderr.read().decode().strip()
-
-        if not check_output:
-            ssh_log.append(f"[SSH] 脚本不存在: {script_name}")
-            ssh.close()
-            return False, f"脚本 {script_name} 不存在", "\n".join(ssh_log)
-
-        ssh_log.append(f"[SSH] 脚本存在: {check_output}")
-
-        # 检查脚本执行权限
-        chmod_command = f"chmod +x {script_name}"
-        ssh_log.append(f"[SSH] 添加执行权限: {chmod_command}")
-        stdin, stdout, stderr = ssh.exec_command(chmod_command)
-        chmod_error = stderr.read().decode().strip()
-        if chmod_error:
-            ssh_log.append(f"[SSH] 添加执行权限失败: {chmod_error}")
-        else:
-            ssh_log.append("[SSH] 执行权限添加成功")
-
-        # 执行家目录脚本命令
-        command = f"{script_name}"
-        ssh_log.append(f"[SSH] 执行脚本命令: {command}")
-
-        stdin, stdout, stderr = ssh.exec_command(command)
-        exit_status = stdout.channel.recv_exit_status()
-        output = stdout.read().decode().strip()
-        error = stderr.read().decode().strip()
-
-        ssh_log.append(f"[SSH] 脚本执行完成，退出状态: {exit_status}")
-
-        if output:
-            ssh_log.append(f"[SSH] 脚本输出长度: {len(output)} 字符")
-        if error:
-            ssh_log.append(f"[SSH] 脚本错误输出长度: {len(error)} 字符")
-
-        ssh.close()
-        ssh_log.append("[SSH] SSH连接已关闭")
-
-        # 构建完整的执行日志
-        full_log = "\n".join(ssh_log)
-
-        if exit_status == 0:
-            # logger.info(f"脚本 {script_name} 执行成功，输出长度: {len(output)}")
-            return True, output, full_log
-        else:
-            error_msg = error if error else f"脚本 {script_name} 执行失败，退出状态: {exit_status}"
-            # logger.error(f"脚本 {script_name} 执行失败: {error_msg}")
-            return False, error_msg, full_log
-
-    except ImportError:
-        # logger.error("paramiko库未安装")
-        return False, "需要安装paramiko库: pip install paramiko", "paramiko库未安装"
-    except Exception as e:
-        #  logger.error(f"execute_remote_script异常: {str(e)}")
-        error_msg = f"通过SSH互信执行脚本时发生错误: {str(e)}"
-        return False, error_msg, f"[SSH] 连接异常: {str(e)}"
-
-
-# 启动时清除所有session，确保每次启动都使用新的session
-def clear_sessions_on_startup():
-    """启动时清除所有session"""
-    try:
-        # 清除session文件（如果使用文件session）
-        session_dir = os.path.join(os.path.dirname(__file__), 'flask_session')
-        if os.path.exists(session_dir):
-            shutil.rmtree(session_dir)
-            os.makedirs(session_dir, exist_ok=True)
-            logger.info("已清除所有session文件")
-    except Exception as e:
-        logger.warning(f"清除session文件失败: {e}")
-
-    logger.info("应用启动，所有session已重置")
-
 
 
 def count_available_wuma(file_path):

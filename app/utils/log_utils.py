@@ -73,3 +73,6 @@ def get_default_logger():
         logging.Logger: 默认日志记录器
     """
     return get_logger('default')
+
+# 创建全局logger实例，其他模块可以直接导入使用
+logger = get_logger('macos_vm')
