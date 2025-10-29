@@ -8,6 +8,8 @@ SSH工具类 - 使用paramiko实现SSH和SCP功能
 import os
 import stat
 import logging
+import socket
+import time
 import sys
 import paramiko
 from typing import Tuple, Optional
@@ -470,50 +472,87 @@ def check_ssh_status(ip):
 
 
 def check_ssh_port_open(ip, port=22):
-    """检查SSH端口是否开放"""
+    """检查SSH端口是否开放 - 增强版（修复Windows环境下的检测问题）"""
+    # 导入必要的模块
+
+    
     if not ip:
+        logger.debug("IP地址为空，无法检查SSH端口")
         return False
 
+    logger.info(f"开始检查SSH端口 {port} 是否开放: {ip}")
+    
+    # 增加尝试次数，提高检测准确性
+    max_attempts = 5  # 增加到5次尝试
+    success_count = 0
+    
+    for attempt in range(max_attempts):
+        sock = None
+        try:
+            # 创建socket连接 - 添加更多参数确保稳定性
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            # 禁用Nagle算法，提高实时性
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            # 增加超时时间，特别是在Windows环境下
+            timeout = 10 if attempt == 0 else 6
+            sock.settimeout(timeout)
+            logger.debug(f"尝试 #{attempt+1}/{max_attempts}，超时设置: {timeout}秒")
+
+            # 尝试连接SSH端口
+            start_time = time.time()
+            result = sock.connect_ex((ip, port))
+            elapsed = time.time() - start_time
+            
+            if result == 0:
+                success_count += 1
+                logger.info(f"✅ SSH端口 {port} 检测成功 (尝试 {attempt+1}/{max_attempts}, 耗时: {elapsed:.3f}秒): {ip}")
+                # 只要有一次成功就认为端口开放（修复之前的严格逻辑）
+                return True
+            else:
+                logger.debug(f"❌ SSH端口 {port} 检测失败 (尝试 {attempt+1}/{max_attempts}, 错误码: {result}, 耗时: {elapsed:.3f}秒): {ip}")
+                
+            # 短暂延迟后重试，避免过快重试
+            time.sleep(0.8)
+
+        except socket.timeout:
+            logger.debug(f"⌛ SSH端口检测超时 (尝试 {attempt+1}/{max_attempts}): {ip}")
+            time.sleep(0.8)
+        except Exception as e:
+            logger.debug(f"❗ SSH端口检测异常 (尝试 {attempt+1}/{max_attempts}): {str(e)}")
+            time.sleep(0.8)
+        finally:
+            if sock:
+                try:
+                    sock.close()
+                except:
+                    pass
+    
+    # 如果所有尝试都失败，最后进行一次直接连接测试作为验证
+    sock = None
     try:
-        # 创建socket连接
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(8)  # 增加超时时间到8秒
-
-        # 尝试连接SSH端口
+        sock.settimeout(8)
         result = sock.connect_ex((ip, port))
-        sock.close()
-
         if result == 0:
-            # logger.debug(f"SSH端口 {port} 开放: {ip}")
+            logger.info(f"✅ 最终验证：SSH端口 {port} 开放: {ip}")
             return True
-        else:
-            # 如果端口连接失败，再尝试一次确认
-            logger.debug(f"SSH端口 {port} 首次检测失败，进行二次确认: {ip}")
-            try:
-                sock2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock2.settimeout(5)  # 二次检测用较短超时
-                result2 = sock2.connect_ex((ip, port))
-                sock2.close()
-
-                if result2 == 0:
-                    logger.debug(f"SSH端口 {port} 二次检测成功: {ip}")
-                    return True
-                else:
-                    logger.debug(f"SSH端口 {port} 确认未开放: {ip}")
-                    return False
-            except Exception as e2:
-                logger.debug(f"SSH端口二次检测异常: {str(e2)}")
-                return False
-
     except Exception as e:
-        logger.debug(f"检查SSH端口失败: {str(e)}")
-        return False
+        logger.debug(f"最终验证异常: {str(e)}")
+    finally:
+        if sock:
+            try:
+                sock.close()
+            except:
+                pass
+    
+    logger.info(f"❌ SSH端口 {port} 在 {max_attempts} 次尝试后仍未开放: {ip}")
+    return False
 
 
 def check_ssh_trust_status_old(ip, username=vm_username):
     """旧的SSH互信状态检查实现（已弃用）"""
     # 使用新的SSH工具类实现
-    from utils.ssh_utils import check_ssh_trust_status as new_check_ssh_trust_status
+    from app.utils.ssh_utils import check_ssh_trust_status as new_check_ssh_trust_status
     return new_check_ssh_trust_status(ip, username)
 
 

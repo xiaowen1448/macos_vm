@@ -6,7 +6,7 @@ class VMStatusCache:
     def __init__(self):
         self.cache = {}
         self.cache_lock = threading.Lock()
-        self.cache_timeout = 300  # 5分钟缓存过期时间
+        self.cache_timeout = 30  # 30秒缓存过期时间，更快反映真实状态
         self.wuma_cache_timeout = 600  # 五码信息10分钟缓存
         self.ju_cache_timeout = 600  # JU值信息10分钟缓存
 

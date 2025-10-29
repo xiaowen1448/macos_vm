@@ -3006,6 +3006,10 @@ def get_vm_online_status(vm_name):
         # 5. 检查SSH端口是否开放
         ssh_port_open = check_ssh_port_open(vm_ip)
         ssh_trust_status = check_ssh_trust_status(vm_ip, vm_username)
+        
+        # 增加详细的日志记录
+        logger.debug(f"虚拟机 {vm_name} 状态检查详情: IP={vm_ip}, 端口状态={ssh_port_open}, 互信状态={ssh_trust_status}")
+        
         conditions_met = 0
         total_conditions = 3
 

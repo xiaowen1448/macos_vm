@@ -1016,6 +1016,25 @@ def api_vm_10_12_online_status():
         })
 
 
+@vm_management_bp.route('/api/clear_vm_cache/<vm_name>', methods=['POST'])
+@login_required
+def api_clear_vm_cache(vm_name):
+    """清除特定虚拟机的状态缓存"""
+    try:
+        # 清除指定虚拟机的在线状态缓存
+        vm_cache.clear_cache(vm_name, 'online_status')
+        return jsonify({
+            'success': True,
+            'message': f'虚拟机 {vm_name} 的状态缓存已清除'
+        })
+    except Exception as e:
+        logger.error(f"清除虚拟机缓存失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'清除缓存失败: {str(e)}'
+        })
+
+
 @vm_management_bp.route('/api/ssh_10_12_trust', methods=['POST'])
 @login_required
 def api_ssh_10_12_trust():
