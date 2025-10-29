@@ -1498,86 +1498,6 @@ def test_mupan_page():
     return render_template('test_mupan_direct.html')
 
 
-@app.route('/api/mupan_list')
-@login_required
-def api_mupan_list():
-    """获取母盘虚拟机列表"""
-    logger.info("收到母盘虚拟机列表请求")
-    try:
-        # 扫描TemplateVM目录
-        template_vms = []
-
-        logger.info(f"扫描目录: {template_dir}")
-        if os.path.exists(template_dir):
-            logger.info("TemplateVM目录存在")
-            for root, dirs, files in os.walk(template_dir):
-                logger.info(f"扫描子目录: {root}")
-                for file in files:
-                    if file.endswith('.vmx'):
-                        vm_path = os.path.join(root, file)
-                        vm_name = os.path.splitext(file)[0]  # 去掉.vmx后缀
-                        logger.info(f"找到vmx文件: {vm_path}, 名称: {vm_name}")
-
-                        # 获取文件夹名称作为系统版本
-                        folder_name = os.path.basename(root)
-                        system_version = folder_name
-                        logger.info(f"系统版本: {system_version}")
-
-                        # 获取同vmx文件名的vmdk文件大小
-                        vmdk_path = os.path.join(root, f"{vm_name}.vmdk")
-                        size_str = "未知"
-                        if os.path.exists(vmdk_path):
-                            try:
-                                file_size = os.path.getsize(vmdk_path)
-                                size_str = f"{file_size / (1024 ** 3):.1f}GB"
-                                logger.info(f"vmdk文件大小: {size_str}")
-                            except:
-                                size_str = "未知"
-                                logger.warning(f"无法获取vmdk文件大小: {vmdk_path}")
-                        else:
-                            logger.warning(f"vmdk文件不存在: {vmdk_path}")
-
-                        # 获取vmx文件创建时间
-                        try:
-                            create_time = datetime.fromtimestamp(os.path.getmtime(vm_path))
-                            create_time_str = create_time.strftime('%Y-%m-%d %H:%M:%S')
-                            logger.info(f"创建时间: {create_time_str}")
-                        except:
-                            create_time_str = "未知"
-                            logger.warning(f"无法获取创建时间: {vm_path}")
-
-                        # 调用vmrun获取虚拟机状态
-                        vm_status = get_vm_status(vm_path)
-                        logger.info(f"虚拟机状态: {vm_status}")
-
-                        vm_data = {
-                            'name': vm_name,
-                            'path': vm_path,
-                            'system_version': system_version,
-                            'size': size_str,
-                            'create_time': create_time_str,
-                            'status': vm_status
-                        }
-                        template_vms.append(vm_data)
-                        logger.info(f"添加虚拟机数据: {vm_data}")
-
-        # 按名称排序
-        template_vms.sort(key=lambda x: x['name'])
-        logger.info(f"总共找到 {len(template_vms)} 个虚拟机")
-
-        response_data = {
-            'success': True,
-            'data': template_vms
-        }
-        logger.info(f"返回数据: {response_data}")
-        return jsonify(response_data)
-    except Exception as e:
-        logger.error(f"获取母盘虚拟机列表失败: {str(e)}")
-        return jsonify({
-            'success': False,
-            'message': f'获取母盘虚拟机列表失败: {str(e)}'
-        })
-
 
 @app.route('/encrypt_code')
 @login_required
@@ -1600,10 +1520,26 @@ def encrypt_id_page():
     return render_template('encrypt_id.html')
 
 
+# 导入proxy_assign模块中的函数
+from app.routes.proxy_assign import get_nodes, import_nodes
+
+# 注册代理IP相关的API端点
+@app.route('/api/nodes', methods=['GET'])
+@login_required
+def api_nodes():
+    """获取所有节点列表"""
+    return get_nodes()
+
+@app.route('/api/nodes/import', methods=['POST'])
+@login_required
+def api_nodes_import():
+    """导入VPN配置节点"""
+    return import_nodes()
+
 @app.route('/proxy_assign')
 @login_required
 def proxy_assign_page():
-    """代理ip分配页面"""
+    """代理IP分配页面"""
     return render_template('proxy_assign.html')
 
 

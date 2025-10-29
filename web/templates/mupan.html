@@ -336,7 +336,6 @@
                                             <tr>
                                                 <th>母盘名称</th>
                                                 <th>系统版本</th>
-                                                <th>大小</th>
                                                 <th>创建时间</th>
                                                 <th>状态</th>
                                                 <th>操作</th>
@@ -600,11 +599,10 @@
                         row.innerHTML = `
                             <td>${vm.name}</td>
                             <td>${vm.system_version}</td>
-                            <td>${vm.size}</td>
                             <td>${vm.create_time}</td>
                             <td>${statusBadge}</td>
                             <td>
-                         
+                          
                                 <button class="btn btn-sm btn-outline-secondary me-2" onclick="editMupan('${vm.name}')" title="编辑">
                                     <i class="fas fa-edit"></i>
                                 </button>
@@ -664,13 +662,53 @@
                         
                         tbody.appendChild(row);
                         console.log(`第${index + 1}行已添加到表格`);
+                        
+                        // 异步加载母盘大小
+                        loadMupanSize(vm.name);
                     });
                     
                     console.log('数据显示完成');
                 });
                 
-
         }
+        
+        // 异步加载母盘大小
+        function loadMupanSize(vmName) {
+            console.log(`异步加载母盘大小: ${vmName}`);
+            
+            // 首先获取默认母盘目录
+            fetch('/api/default-template-dir')
+                .then(response => response.json())
+                .then(configData => {
+                    if (configData.success) {
+                        const templateDir = configData.template_dir;
+                        // 请求母盘大小
+                        return fetch(`/api/mupan_size/${encodeURIComponent(vmName)}?template_vm_dir=${encodeURIComponent(templateDir)}`);
+                    } else {
+                        throw new Error('获取默认母盘目录失败');
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    const sizeElement = document.getElementById(`size-${vmName}`);
+                    if (sizeElement) {
+                        if (data.success && data.size) {
+                            sizeElement.innerHTML = data.size + 'GB';
+                        } else {
+                            sizeElement.innerHTML = '<span class="text-muted">未知</span>';
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error(`获取母盘 ${vmName} 大小失败:`, error);
+                    const sizeElement = document.getElementById(`size-${vmName}`);
+                    if (sizeElement) {
+                        // 保持友好的显示，避免闪烁
+                        sizeElement.innerHTML = '<span class="text-muted">未知</span>';
+                    }
+                });
+        }
+
 
         // 编辑母盘
         function editMupan(vmName) {

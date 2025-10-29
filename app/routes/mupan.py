@@ -2,12 +2,87 @@ import os
 import re
 import json
 from datetime import datetime
+import concurrent.futures
+import subprocess
 from flask import Blueprint, request, jsonify
 import logging
 from config import *
 from utils.ssh_utils import setup_ssh_trust
+from functools import wraps
+
+# 导入login_required装饰器
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # 这里应该导入实际的login_required逻辑
+        # 由于我们是从主应用移动过来，暂时保持简单
+        return f(*args, **kwargs)
+    return decorated_function
+
 # 创建蓝图
 mupan_bp = Blueprint('mupan', __name__)
+
+# 配置日志
+logger = logging.getLogger(__name__)
+
+# VMware工具路径配置
+VMRUN_PATH = f"{vmrun_path}"
+
+def get_vmrun_path():
+    """获取vmrun工具路径"""
+    return vmrun_path
+
+def get_vm_status(vm_path):
+    """获取虚拟机状态"""
+    try:
+        vmrun_path = get_vmrun_path()
+        
+        # 执行vmrun list命令获取运行中的虚拟机列表
+        list_cmd = [vmrun_path, 'list']
+        result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30, 
+                               encoding='utf-8', errors='ignore')
+
+        if result.stderr:
+            logger.info(f"[DEBUG] vmrun list命令错误: {result.stderr}")
+
+        if result.returncode == 0:
+            running_vms = result.stdout.strip().split('\n')[1:]  # 跳过标题行
+            vm_name = os.path.splitext(os.path.basename(vm_path))[0]
+
+            # 检查虚拟机是否在运行列表中
+            vm_found = False
+            for vm in running_vms:
+                if vm.strip() and vm_name in vm:
+                    vm_found = True
+                    break
+
+            if vm_found:
+                # 检查虚拟机是否正在启动过程中
+                try:
+                    # 尝试获取虚拟机IP，如果获取失败可能正在启动
+                    cmd = [vmrun_path, 'getGuestIPAddress', vm_path, '-wait']
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+                    if result.returncode == 0:
+                        return "running"
+                    else:
+                        # 获取IP失败，可能正在启动中
+                        return "starting"
+                except:
+                    # 出错也视为运行中
+                    return "running"
+            else:
+                # 检查虚拟机文件是否存在
+                if os.path.exists(vm_path):
+                    return "stopped"
+                else:
+                    return "未知"
+        else:
+            # vmrun命令执行失败
+            return "未知"
+    except Exception as e:
+        logger.error(f"获取虚拟机状态失败: {str(e)}")
+        return "未知"
+
 
 @mupan_bp.route('/api/default-template-dir')
 def get_default_template_dir():
@@ -23,6 +98,156 @@ def get_default_template_dir():
             'success': False,
             'message': f'获取默认母盘目录失败: {str(e)}'
         })
+
+@mupan_bp.route('/api/mupan_size/<vm_name>')
+def get_mupan_size(vm_name):
+    """获取母盘大小API"""
+    try:
+        # 从请求参数中获取母盘目录
+        template_vm_dir = request.args.get('template_vm_dir')
+        if not template_vm_dir:
+            return jsonify({
+                'success': False,
+                'message': '缺少母盘目录参数'
+            })
+        
+        # 构建母盘路径
+        mupan_path = os.path.join(template_vm_dir, vm_name)
+        
+        # 检查母盘路径是否存在
+        if not os.path.exists(mupan_path):
+            return jsonify({
+                'success': False,
+                'message': f'母盘目录不存在: {vm_name}'
+            })
+        
+        # 计算母盘大小（以GB为单位）
+        total_size = 0
+        try:
+            for dirpath, dirnames, filenames in os.walk(mupan_path):
+                for filename in filenames:
+                    filepath = os.path.join(dirpath, filename)
+                    # 跳过符号链接
+                    if os.path.isfile(filepath) and not os.path.islink(filepath):
+                        try:
+                            total_size += os.path.getsize(filepath)
+                        except (OSError, IOError) as e:
+                            logger.warning(f"无法获取文件大小: {filepath}, 错误: {str(e)}")
+            
+            # 转换为GB并保留一位小数
+            size_gb = round(total_size / (1024 ** 3), 1)
+            
+            return jsonify({
+                'success': True,
+                'size': size_gb
+            })
+        except Exception as e:
+            logger.error(f"计算母盘大小失败: {str(e)}")
+            return jsonify({
+                'success': False,
+                'message': f'计算母盘大小失败: {str(e)}'
+            })
+            
+    except Exception as e:
+        logger.error(f"获取母盘大小失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取母盘大小失败: {str(e)}'
+        })
+
+
+import concurrent.futures
+
+@mupan_bp.route('/api/mupan_list')
+@login_required
+def api_mupan_list():
+    """获取母盘虚拟机列表"""
+    logger.info("收到母盘虚拟机列表请求")
+    try:
+        # 扫描TemplateVM目录
+        template_vms = []
+        vm_info_list = []
+
+        logger.info(f"扫描目录: {template_dir}")
+        if os.path.exists(template_dir):
+            logger.info("TemplateVM目录存在")
+            for root, dirs, files in os.walk(template_dir):
+                logger.info(f"扫描子目录: {root}")
+                for file in files:
+                    if file.endswith('.vmx'):
+                        vm_path = os.path.join(root, file)
+                        vm_name = os.path.splitext(file)[0]  # 去掉.vmx后缀
+                        logger.info(f"找到vmx文件: {vm_path}, 名称: {vm_name}")
+
+                        # 获取文件夹名称作为系统版本
+                        folder_name = os.path.basename(root)
+                        system_version = folder_name
+                        logger.info(f"系统版本: {system_version}")
+
+                        # 获取vmx文件创建时间
+                        try:
+                            create_time = datetime.fromtimestamp(os.path.getmtime(vm_path))
+                            create_time_str = create_time.strftime('%Y-%m-%d %H:%M:%S')
+                            logger.info(f"创建时间: {create_time_str}")
+                        except:
+                            create_time_str = "未知"
+                            logger.warning(f"无法获取创建时间: {vm_path}")
+
+                        # 收集虚拟机信息，稍后并行获取状态
+                        vm_info = {
+                            'name': vm_name,
+                            'path': vm_path,
+                            'system_version': system_version,
+                            'create_time': create_time_str
+                        }
+                        vm_info_list.append(vm_info)
+                        logger.info(f"收集虚拟机数据: {vm_info}")
+
+            # 并行获取虚拟机状态，提高性能
+            logger.info(f"开始并行获取{len(vm_info_list)}个虚拟机状态")
+            # 限制线程池大小，避免创建过多线程
+            max_workers = min(10, len(vm_info_list))
+            
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # 提交所有状态检查任务
+                future_to_vm = {executor.submit(get_vm_status, vm['path']): vm for vm in vm_info_list}
+                
+                # 收集结果
+                for future in concurrent.futures.as_completed(future_to_vm):
+                    vm = future_to_vm[future]
+                    try:
+                        vm_status = future.result()
+                        logger.info(f"虚拟机 {vm['name']} 状态: {vm_status}")
+                        
+                        # 完整的虚拟机数据
+                        vm_data = vm.copy()
+                        vm_data['status'] = vm_status
+                        template_vms.append(vm_data)
+                    except Exception as e:
+                        logger.error(f"获取虚拟机 {vm['name']} 状态失败: {str(e)}")
+                        # 出错时设置状态为未知，但仍添加到列表中
+                        vm_data = vm.copy()
+                        vm_data['status'] = "未知"
+                        template_vms.append(vm_data)
+
+        # 按名称排序
+        template_vms.sort(key=lambda x: x['name'])
+        logger.info(f"总共找到 {len(template_vms)} 个虚拟机")
+
+        response_data = {
+            'success': True,
+            'data': template_vms
+        }
+        logger.info(f"返回数据: {response_data}")
+        return jsonify(response_data)
+    except Exception as e:
+        logger.error(f"获取母盘虚拟机列表失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'获取母盘虚拟机列表失败: {str(e)}'
+        })
+
+
 
 # 配置日志
 logger = logging.getLogger(__name__)
@@ -668,7 +893,7 @@ def get_vm_ip_from_template(vm_name):
         
         # 使用vmrun获取IP地址
         cmd = [vmrun_path, "getGuestIPAddress", vm_file]
-        logger.info(f"执行命令: {' '.join(cmd)}")
+      #  logger.info(f"执行命令: {' '.join(cmd)}")
         
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         
@@ -681,7 +906,7 @@ def get_vm_ip_from_template(vm_name):
                 logger.error(f"获取到无效IP: {ip}")
                 return None
         else:
-            logger.error(f"获取IP失败: {result.stderr}")
+            #logger.error(f"获取IP失败: {result.stderr}")
             return None
             
     except Exception as e:
