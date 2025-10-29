@@ -91,5 +91,16 @@ def get_default_logger():
     """
     return get_logger('default')
 
-# 创建全局logger实例，其他模块可以直接导入使用
-logger = setup_logger('macos_vm')
+# 惰性加载的全局logger实例
+class LazyLogger:
+    def __init__(self):
+        self._logger = None
+    
+    def __getattr__(self, name):
+        if self._logger is None:
+            # 首次访问时才初始化logger
+            self._logger = setup_logger('macos_vm')
+        return getattr(self._logger, name)
+
+# 创建惰性加载的logger实例
+logger = LazyLogger()

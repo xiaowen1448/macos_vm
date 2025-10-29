@@ -1,7 +1,8 @@
 from flask import Blueprint, render_template
 from functools import wraps
-import logging
-
+from app.utils.vm_utils import get_vm_list_from_directory
+from config import *
+from app.utils.vm_utils import get_wuma_info_generic, get_ju_info_generic, get_vm_online_status
 # 导入日志工具
 from app.utils.log_utils import get_logger
 
@@ -207,3 +208,56 @@ def mass_messaging_page():
 def vm_management_page():
     """虚拟机信息管理页面"""
     return render_template('vm_management.html')
+
+
+
+
+@vm_bp.route('/api/vm_chengpin_list')
+@login_required
+def api_vm_chengpin_list():
+    """获取成品虚拟机列表"""
+    return get_vm_list_from_directory(VM_DIRS['chengpin'], '成品虚拟机')
+
+
+@vm_bp.route('/api/get_chengpin_wuma_info', methods=['POST'])
+@login_required
+def api_get_chengpin_wuma_info():
+    """获取成品虚拟机五码信息"""
+    return get_wuma_info_generic('成品虚拟机')
+
+
+@vm_bp.route('/api/get_chengpin_ju_info', methods=['POST'])
+@login_required
+def api_get_chengpin_ju_info():
+    """获取成品虚拟机JU值信息"""
+    return get_ju_info_generic('成品虚拟机')
+
+
+
+
+# 虚拟机目录配置
+VM_DIRS = {
+    '10_12': clone_dir,
+    'chengpin': vm_chengpin_dir
+}
+
+
+@vm_bp.route('/api/vm_10_12_list')
+@login_required
+def api_vm_10_12_list():
+    """获取10.12目录虚拟机列表"""
+    return get_vm_list_from_directory(VM_DIRS['10_12'], '10.12目录')
+
+
+@vm_bp.route('/api/get_10_12_wuma_info', methods=['POST'])
+@login_required
+def api_get_10_12_wuma_info():
+    """获取10.12目录虚拟机五码信息"""
+    return get_wuma_info_generic('10.12目录')
+
+
+@vm_bp.route('/api/get_10_12_ju_info', methods=['POST'])
+@login_required
+def api_get_10_12_ju_info():
+    """获取10.12目录虚拟机JU值信息"""
+    return get_ju_info_generic('10.12目录')

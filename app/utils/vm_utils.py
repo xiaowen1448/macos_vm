@@ -47,6 +47,110 @@ websockify_processes = {}  # 存储websockify进程信息
 
 
 
+def find_vmx_file_by_ip(target_ip):
+    """根据IP地址查找对应的VMX文件"""
+    try:
+        vmrun_path = get_vmrun_path()
+
+        # 首先获取运行中的虚拟机列表
+        list_cmd = [vmrun_path, 'list']
+        result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=30, encoding='utf-8', errors='ignore')
+
+        if result.returncode != 0:
+            logger.error(f"获取运行中虚拟机列表失败: {result.stderr}")
+            return None
+
+        running_vms = []
+        lines = result.stdout.strip().split('\n')
+
+        # 解析vmrun list输出
+        for line in lines[1:]:  # 跳过第一行（Total running VMs: X）
+            line = line.strip()
+            if line and os.path.exists(line) and line.endswith('.vmx'):
+                running_vms.append(line)
+
+        # 对每个运行中的虚拟机，检查其IP地址是否匹配
+        for vm_path in running_vms:
+            try:
+                # 使用vmrun获取虚拟机IP
+                command = f'"{vmrun_path}" getGuestIPAddress "{vm_path}"'
+                ip_result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=10)
+
+                if ip_result.returncode == 0:
+                    vm_ip = ip_result.stdout.strip()
+                    # 如果IP匹配且有VNC配置，返回这个VMX文件
+                    if vm_ip == target_ip and has_vnc_config(vm_path):
+                        #  logger.info(f"找到匹配IP {target_ip} 的VMX文件: {vm_path}")
+                        return vm_path
+
+            except Exception as e:
+                logger.debug(f"检查虚拟机 {vm_path} 的IP时出错: {str(e)}")
+                continue
+
+        # 如果没有找到匹配的运行中虚拟机，尝试根据IP查找对应的VMX文件
+        logger.warning(f"未找到运行中的虚拟机匹配IP {target_ip}，尝试根据IP查找对应的VMX文件")
+
+        # 根据IP地址推断可能的虚拟机名称或目录
+        # 搜索克隆目录中包含该IP信息的VMX文件
+        for root, dirs, files in os.walk(clone_dir):
+            for file in files:
+                if file.endswith('.vmx'):
+                    vmx_path = os.path.join(root, file)
+                    # 检查VMX文件是否有VNC配置，并且路径中包含IP相关信息
+                    if has_vnc_config(vmx_path):
+                        # 尝试从VMX文件路径或内容中匹配IP
+                        if is_vmx_for_ip(vmx_path, target_ip):
+                            logger.info(f"根据IP匹配找到VMX文件: {vmx_path}")
+                            return vmx_path
+
+        # 如果仍然没找到，记录错误并返回None
+        logger.error(f"无法找到IP {target_ip} 对应的VMX文件")
+
+        return None
+    except Exception as e:
+        logger.error(f"查找VMX文件时出错: {str(e)}")
+        return None
+
+
+def is_vmx_for_ip(vmx_path, target_ip):
+    """判断VMX文件是否对应指定的IP地址"""
+    try:
+        # 方法1: 检查文件路径中是否包含IP相关信息
+        # 从IP地址提取最后一段作为标识符
+        ip_parts = target_ip.split('.')
+        if len(ip_parts) >= 4:
+            last_octet = ip_parts[-1]  # 获取IP的最后一段
+            # 检查VMX文件路径中是否包含这个数字
+            if last_octet in vmx_path:
+                logger.debug(f"VMX文件路径 {vmx_path} 包含IP最后一段 {last_octet}")
+                return True
+
+        # 方法2: 检查VMX文件内容中是否有IP相关配置
+        content, encoding = read_vmx_file_smart(vmx_path)
+        if content is not None:
+            # 检查是否包含目标IP
+            if target_ip in content:
+                logger.debug(f"VMX文件内容包含目标IP {target_ip}")
+                return True
+
+        # 方法3: 尝试从虚拟机名称推断
+        # 提取虚拟机目录名称，通常包含虚拟机标识
+        vm_dir = os.path.dirname(vmx_path)
+        vm_name = os.path.basename(vm_dir)
+
+        # 如果虚拟机名称中包含IP的最后一段，认为匹配
+        if len(ip_parts) >= 4 and ip_parts[-1] in vm_name:
+            logger.debug(f"虚拟机名称 {vm_name} 包含IP最后一段 {ip_parts[-1]}")
+            return True
+
+        return False
+
+    except Exception as e:
+        logger.error(f"判断VMX文件 {vmx_path} 是否对应IP {target_ip} 时出错: {str(e)}")
+        return False
+
+
+
 
 def find_vm_file(vm_name):
     """查找虚拟机文件"""

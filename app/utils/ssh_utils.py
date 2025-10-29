@@ -515,3 +515,100 @@ def check_ssh_trust_status_old(ip, username=vm_username):
     # 使用新的SSH工具类实现
     from utils.ssh_utils import check_ssh_trust_status as new_check_ssh_trust_status
     return new_check_ssh_trust_status(ip, username)
+
+
+
+def execute_chmod_scripts(ip, username, script_names=None):
+    """远程执行chmod +x命令"""
+    logger.info(f"开始为IP {ip} 的用户 {username} 添加脚本执行权限")
+    try:
+        # 创建SSH客户端
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+        # 连接到远程主机（使用SSH互信，无需密码）
+        logger.debug(f"尝试连接到 {ip}")
+        ssh.connect(ip, username=username, timeout=10)
+        logger.debug("SSH连接成功")
+
+        # 根据传入的脚本名决定执行方式
+        if script_names and len(script_names) > 0:
+            # 为指定脚本添加执行权限
+            for script_name in script_names:
+                # 确保脚本名以.sh结尾
+                if script_name.endswith('.sh'):
+                    commands = [f"cd {sh_script_remote_path}"]  # 切换到用户脚本上传目录
+                    commands.append(f"chmod +x {sh_script_remote_path}{script_name}")
+                else:
+                    commands = [f"cd {scpt_script_remote_path}"]  # 切换到用户脚本上传目录
+                    commands.append(f"chmod +x {scpt_script_remote_path}{script_name}")
+            # 列出指定脚本的权限
+            script_list = " ".join([name if name.endswith('.sh') else name + '.sh' for name in script_names])
+            commands.append(f"ls -la {sh_script_remote_path}{script_list} 2>/dev/null || echo '没有找到指定的脚本文件'")
+
+            logger.debug(f"为指定脚本添加执行权限: {script_names}")
+        else:
+            # 为所有sh脚本添加执行权限
+            commands = [
+                f"cd {sh_script_remote_path}",  # 切换到用户家目录
+                f"chmod +x {sh_script_remote_path}*.sh",  # 为所有sh脚本添加执行权限
+                f"ls -la {sh_script_remote_path}*.sh 2>/dev/null || echo '没有找到.sh文件'"  # 列出所有sh文件及其权限
+            ]
+        # logger.debug("为所有.sh文件添加执行权限")
+
+        results = []
+        for cmd in commands:
+            #  logger.debug(f"执行命令: {cmd}")
+            stdin, stdout, stderr = ssh.exec_command(cmd)
+            exit_status = stdout.channel.recv_exit_status()
+            output = stdout.read().decode().strip()
+            error = stderr.read().decode().strip()
+
+            logger.debug(f"命令 '{cmd}' 执行状态: {exit_status}")
+            if output:
+                logger.debug(f"输出: {output}")
+            if error:
+                logger.debug(f"错误: {error}")
+
+            results.append({
+                'command': cmd,
+                'exit_status': exit_status,
+                'output': output,
+                'error': error
+            })
+
+        ssh.close()
+
+        # 检查执行结果
+        chmod_commands = [r for r in results if r['command'].startswith('chmod')]
+        ls_result = results[-1]  # 最后一个命令是ls
+
+        # 检查所有chmod命令是否成功
+        failed_chmods = [r for r in chmod_commands if r['exit_status'] != 0]
+
+        if not failed_chmods:
+            logger.info("chmod命令执行成功")
+            if script_names and len(script_names) > 0:
+                message = f"成功为指定脚本添加执行权限: {', '.join(script_names)}\n"
+            else:
+                message = "成功为目录下的所有.sh文件添加执行权限\n"
+
+            if ls_result['output'] and ls_result['output'] != '没有找到.sh文件' and ls_result[
+                'output'] != '没有找到指定的脚本文件':
+                message += f"文件列表:\n{ls_result['output']}"
+            else:
+                message += "未找到指定的脚本文件"
+            return True, message
+        else:
+            logger.error(f"部分chmod命令执行失败: {failed_chmods}")
+            error_messages = [f"{r['command']}: {r['error']}" for r in failed_chmods]
+            return False, f"部分脚本执行权限设置失败: {'; '.join(error_messages)}"
+
+    except ImportError:
+        logger.error("paramiko库未安装")
+        return False, "需要安装paramiko库: pip install paramiko"
+    except Exception as e:
+        logger.error(f"execute_chmod_scripts异常: {str(e)}")
+        return False, f"远程执行chmod命令时发生错误: {str(e)}"
+
+
