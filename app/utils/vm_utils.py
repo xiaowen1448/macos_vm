@@ -15,6 +15,7 @@ from functools import wraps
 from config import *
 from app.utils.common_utils import logger
 from app.utils.ssh_utils import *
+from app.utils.vnc_utils import *
 
 try:
     import paramiko
@@ -278,7 +279,7 @@ def monitor_vm_and_configure(task_id, vm_name, vm_path, wuma_config_file, max_wa
     """监控虚拟机IP和SSH状态，连通后自动配置五码"""
     start_time = time.time()
 
-    # add_task_log(task_id, 'info', f'开始监控虚拟机 {vm_name} 的网络状态...')
+    add_task_log(task_id, 'info', f'开始监控虚拟机 {vm_name} 的网络状态...')
 
     def update_monitoring_progress(success=False, failed=False, restart_progress=None, wuma_progress=None):
         """更新监控进度"""
@@ -314,7 +315,7 @@ def monitor_vm_and_configure(task_id, vm_name, vm_path, wuma_config_file, max_wa
                     progress_data['wuma_progress'] = task['monitoring']['wuma_progress']
 
                 task['logs'].append(progress_data)
-                # logger.info(f"[DEBUG] 发送监控进度更新: {progress_data}")
+                logger.info(f"[DEBUG] 发送监控进度更新: {progress_data}")
                 sys.stdout.flush()
 
     try:
@@ -323,25 +324,37 @@ def monitor_vm_and_configure(task_id, vm_name, vm_path, wuma_config_file, max_wa
                 # 获取虚拟机IP（已集成强制重启逻辑）
                 vm_ip = get_vm_ip(vm_name)
                 if not vm_ip:
-                    # add_task_log(task_id, 'debug', f'虚拟机 {vm_name} IP获取失败，等待5秒后重试...')
+                    add_task_log(task_id, 'debug', f'虚拟机 {vm_name} IP获取失败，等待5秒后重试...')
                     time.sleep(5)
                     continue
 
                 # 检测IP存活
                 if not ping_vm_ip(vm_ip):
-                    # add_task_log(task_id, 'debug', f'虚拟机 {vm_name} ({vm_ip}) ping不通，等待5秒后重试...')
+                    add_task_log(task_id, 'debug', f'虚拟机 {vm_name} ({vm_ip}) ping不通，等待5秒后重试...')
                     time.sleep(5)
                     continue
 
                 if not check_ssh_connectivity(vm_ip, vm_username):
-                    # add_task_log(task_id, 'debug', f'虚拟机 {vm_name} ({vm_ip}) SSH未就绪，等待10秒后重试...')
+                    add_task_log(task_id, 'debug', f'虚拟机 {vm_name} ({vm_ip}) SSH未就绪，等待10秒后重试...')
                     time.sleep(10)
                     continue
                 try:
-                    result = batch_change_wuma_core([vm_name], wuma_config_file, task_id)
+                        add_task_log(task_id, 'info', f'开始为虚拟机 {vm_name} 配置五码...')
+                        result = batch_change_wuma_core([vm_name], wuma_config_file, task_id)
 
-                    if isinstance(result, dict) and result.get('status') == 'success':
-                        logger.info(f"[DEBUG] 开始为虚拟机 {vm_name} 执行JU值更改")
+                        if isinstance(result, dict) and result.get('status') == 'success':
+                            add_task_log(task_id, 'success', f'虚拟机 {vm_name} 五码配置成功')
+                            add_task_log(task_id, 'info', f'开始为虚拟机 {vm_name} 执行JU值更改')
+                            logger.info(f"[DEBUG] 开始为虚拟机 {vm_name} 执行JU值更改")
+                        else:
+                            error_msg = result.get('message', '未知错误') if isinstance(result, dict) else '配置失败'
+                            add_task_log(task_id, 'error', f'虚拟机 {vm_name} 五码配置失败: {error_msg}')
+                            logger.info(f"[DEBUG] 虚拟机 {vm_name} 五码配置失败: {error_msg}")
+                            update_monitoring_progress(failed=True)
+
+                            # 检查是否所有虚拟机都已完成监控
+                            check_and_complete_task(task_id)
+                            return False
 
                         # 更新五码进度 - 使用线程锁确保线程安全
                         if task_id in clone_tasks and 'monitoring' in clone_tasks[task_id]:
@@ -362,12 +375,14 @@ def monitor_vm_and_configure(task_id, vm_name, vm_path, wuma_config_file, max_wa
 
                         try:
                             # 执行test.sh脚本更改JU值
+                            add_task_log(task_id, 'info', f'执行test.sh脚本更改虚拟机 {vm_name} 的JU值')
                             script_path = f"{sh_script_remote_path}test.sh"
                             success, output, ssh_log = execute_remote_script(vm_ip, vm_username, script_path)
                             if success:
+                                add_task_log(task_id, 'debug', f'JU值更改脚本输出: {output}')
                                 add_task_log(task_id, 'success', f'虚拟机 {vm_name} JU值更改成功')
                                 add_task_log(task_id, 'info', f'开始重启虚拟机 {vm_name}...')
-                                # logger.info(f"[DEBUG] 开始重启虚拟机 {vm_name}")
+                                logger.info(f"[DEBUG] 开始重启虚拟机 {vm_name}")
                                 # 更新重启进度 - 使用线程锁确保线程安全
                                 if task_id in clone_tasks and 'monitoring' in clone_tasks[task_id]:
                                     # 获取或创建任务锁
@@ -392,13 +407,14 @@ def monitor_vm_and_configure(task_id, vm_name, vm_path, wuma_config_file, max_wa
                                 reset_cmd = [vmrun_path, 'reset', vm_path]
                                 try:
                                     # 增加超时时间到120秒，因为虚拟机重启可能需要较长时间
+                                    add_task_log(task_id, 'info', f'执行虚拟机 {vm_name} 重启命令，超时设置为200秒')
+                                    add_task_log(task_id, 'debug', f'重启命令: {" ".join(reset_cmd)}')
                                     reset_result = subprocess.run(reset_cmd, capture_output=True, timeout=200)
 
                                     if reset_result.returncode == 0:
                                         add_task_log(task_id, 'success',
                                                      f'虚拟机 {vm_name} 重启完成，五码和JU值配置全部完成')
                                         logger.info(f"[DEBUG] 虚拟机 {vm_name} 重启完成，五码和JU值配置全部完成")
-
                                         update_monitoring_progress(success=True)
 
                                         # 检查是否所有虚拟机都已完成监控
@@ -431,6 +447,7 @@ def monitor_vm_and_configure(task_id, vm_name, vm_path, wuma_config_file, max_wa
                                     return False
                             else:
                                 add_task_log(task_id, 'error', f'虚拟机 {vm_name} JU值更改失败: {output}')
+                                add_task_log(task_id, 'debug', f'JU值更改失败详情: {ssh_log}')
                                 logger.info(f"[DEBUG] 虚拟机 {vm_name} JU值更改失败: {output}")
                                 update_monitoring_progress(failed=True)
 
@@ -444,15 +461,7 @@ def monitor_vm_and_configure(task_id, vm_name, vm_path, wuma_config_file, max_wa
                             update_monitoring_progress(failed=True)
                             check_and_complete_task(task_id)
                             return False
-                    else:
-                        error_msg = result.get('message', '未知错误') if isinstance(result, dict) else '配置失败'
-                        add_task_log(task_id, 'error', f'虚拟机 {vm_name} 五码配置失败: {error_msg}')
-                        logger.info(f"[DEBUG] 虚拟机 {vm_name} 五码配置失败: {error_msg}")
-                        update_monitoring_progress(failed=True)
 
-                        # 检查是否所有虚拟机都已完成监控
-                        check_and_complete_task(task_id)
-                        return False
                 except Exception as e:
                     error_detail = f'虚拟机 {vm_name} 五码配置异常: {str(e)}'
                     add_task_log(task_id, 'error', error_detail)
@@ -771,10 +780,24 @@ def batch_change_wuma_core(selected_vms, config_file_path, task_id=None):
     """批量更改五码核心函数"""
     logger.info(f"开始批量更改五码核心处理，虚拟机数量: {len(selected_vms)}")
     logger.info(f"使用配置文件: {config_file_path}")
+    # 添加任务日志记录
+    if task_id:
+        add_task_log(task_id, 'info', f'开始批量更改五码配置，虚拟机数量: {len(selected_vms)}，配置文件: {config_file_path}')
 
     def log_message(level, message):
         """统一日志记录函数"""
-        logger.info(message)
+        # 根据不同级别记录日志到logger
+        if level == 'debug':
+            logger.debug(message)
+        elif level == 'info':
+            logger.info(message)
+        elif level == 'warning':
+            logger.warning(message)
+        elif level == 'error':
+            logger.error(message)
+        elif level == 'success':
+            logger.info(message)
+        # 添加到任务日志
         if task_id:
             add_task_log(task_id, level, message)
 
@@ -847,13 +870,16 @@ def batch_change_wuma_core(selected_vms, config_file_path, task_id=None):
             # 为当前批次分配五码（取前N个）
             allocated_wuma_lines = valid_wuma_lines[:len(selected_vms)]
             remaining_wuma_lines = valid_wuma_lines[len(selected_vms):]
-
+            
+            log_message('debug', f'分配五码中，为{len(selected_vms)}个虚拟机分配{len(allocated_wuma_lines)}个五码')
+            
             # 立即更新配置文件，移除已分配的五码
             with open(config_file_path, 'w', encoding='utf-8') as f:
                 for line in remaining_wuma_lines:
                     f.write(line + '\n')
-
-            logger.info(f"已分配 {len(allocated_wuma_lines)} 个五码，剩余 {len(remaining_wuma_lines)} 个")
+            
+            log_message('info', f'已分配 {len(allocated_wuma_lines)} 个五码，剩余 {len(remaining_wuma_lines)} 个')
+            log_message('debug', f'已从配置文件中移除已分配的五码')
 
             # 释放文件锁后继续处理
             try:
@@ -870,6 +896,7 @@ def batch_change_wuma_core(selected_vms, config_file_path, task_id=None):
                 logger.warning(f"释放文件锁时出错: {lock_error}")
 
         # 验证选中的虚拟机是否都在运行
+        log_message('debug', '开始验证选中的虚拟机运行状态')
         vmrun_path = get_vmrun_path()
 
         list_cmd = [vmrun_path, 'list']
@@ -887,6 +914,7 @@ def batch_change_wuma_core(selected_vms, config_file_path, task_id=None):
 
         # 验证选中的虚拟机是否都在运行
         for vm_name in selected_vms:
+            log_message('debug', f'检查虚拟机 {vm_name} 是否在运行中')
             # 检查虚拟机名称是否在运行列表中（支持完整路径匹配）
             vm_running = False
             for running_vm in running_vms:
@@ -1454,6 +1482,7 @@ def clone_vm_worker(task_id):
 
         logger.info(f"[DEBUG] 找到有效五码数量: {len(wuma_codes)}")
         logger.info(f"[DEBUG] 五码列表: {wuma_codes[:3]}...")  # 只显示前3个
+        add_task_log(task_id, 'info', f'找到有效五码数量: {len(wuma_codes)}')
 
         # 开始克隆
         clone_count = int(params['cloneCount'])
@@ -1468,8 +1497,8 @@ def clone_vm_worker(task_id):
             return
         elif clone_count < len(wuma_codes):
             warning_msg = f'五码数量({len(wuma_codes)})多于克隆数量({clone_count})，将使用前{clone_count}个五码'
-            # add_task_log(task_id, 'warning', warning_msg)
-            # logger.info(f"[DEBUG] 警告: {warning_msg}")
+            add_task_log(task_id, 'warning', warning_msg)
+            logger.info(f"[DEBUG] 警告: {warning_msg}")
             # 截取需要的五码数量
             wuma_codes = wuma_codes[:clone_count]
 

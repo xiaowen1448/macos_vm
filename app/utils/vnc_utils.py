@@ -33,12 +33,7 @@ from config import *
 from app.utils.ssh_utils import SSHClient
 from app.utils.vm_utils import *
 from app.utils.common_utils import clear_sessions_on_startup
-# 导入新的蓝图
-from app.routes.vm_clone import vm_clone_bp
-from app.routes.vm_management import vm_management_bp
-from app.routes.vm import vm_bp
-from app.routes.im_manager import im_manager_bp
-from app.routes.vnc_manager import *
+# 蓝图导入将在需要时在函数内部动态导入，避免循环导入
 
 # 导入日志工具和全局logger
 from app.utils.log_utils import logger, logging, setup_logger
