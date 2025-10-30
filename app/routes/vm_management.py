@@ -1084,3 +1084,96 @@ def api_ssh_10_12_trust():
             'success': False,
             'message': f'设置10.12目录虚拟机SSH互信失败: {str(e)}'
         })
+
+
+
+# 批量获取五码和JU值信息的API接口
+@vm_management_bp.route('/api/batch_get_10_12_wuma_info', methods=['POST'])
+@login_required
+def api_batch_get_10_12_wuma_info():
+    """批量获取10.12目录虚拟机五码信息"""
+    # logger.info("收到批量获取10.12目录虚拟机五码信息请求")
+    try:
+        data = request.get_json()
+        vm_names = data.get('vm_names', [])
+
+        if not vm_names:
+            return jsonify({
+                'success': False,
+                'message': '缺少虚拟机名称列表'
+            })
+
+        results = {}
+        for vm_name in vm_names:
+            try:
+                # 模拟单个虚拟机的五码信息获取请求
+                with app.test_request_context('/api/get_10_12_wuma_info',
+                                              method='POST',
+                                              json={'vm_name': vm_name}):
+                    response = get_wuma_info_generic('10.12目录')
+                    response_data = response.get_json()
+                    results[vm_name] = response_data
+                    # logger.info(f"虚拟机 {vm_name} 五码信息获取结果: {response_data.get('success', False)}")
+            except Exception as e:
+                logger.error(f"获取虚拟机 {vm_name} 五码信息失败: {str(e)}")
+                results[vm_name] = {
+                    'success': False,
+                    'message': f'获取五码信息失败: {str(e)}'
+                }
+
+        return jsonify({
+            'success': True,
+            'results': results
+        })
+    except Exception as e:
+        logger.error(f"批量获取10.12目录虚拟机五码信息失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'批量获取五码信息失败: {str(e)}'
+        })
+
+
+@vm_management_bp.route('/api/batch_get_10_12_ju_info', methods=['POST'])
+@login_required
+def api_batch_get_10_12_ju_info():
+    """批量获取10.12目录虚拟机JU值信息"""
+
+    try:
+        data = request.get_json()
+        vm_names = data.get('vm_names', [])
+
+        if not vm_names:
+            return jsonify({
+                'success': False,
+                'message': '缺少虚拟机名称列表'
+            })
+
+        results = {}
+        for vm_name in vm_names:
+            try:
+                # 模拟单个虚拟机的JU值信息获取请求
+                with app.test_request_context('/api/get_10_12_ju_info',
+                                              method='POST',
+                                              json={'vm_name': vm_name}):
+                    response = get_ju_info_generic('10.12目录')
+                    response_data = response.get_json()
+                    results[vm_name] = response_data
+
+            except Exception as e:
+                #
+                results[vm_name] = {
+                    'success': False,
+                    'message': f'获取JU值信息失败: {str(e)}'
+                }
+
+        return jsonify({
+            'success': True,
+            'results': results
+        })
+    except Exception as e:
+        logger.error(f"批量获取10.12目录虚拟机JU值信息失败: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'批量获取JU值信息失败: {str(e)}'
+        })
+

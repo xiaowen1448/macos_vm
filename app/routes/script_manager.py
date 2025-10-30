@@ -102,7 +102,7 @@ def api_all_scripts():
         # 使用新的通用脚本扫描函数
         scripts = scan_scripts_from_directories()
 
-        logger.info(f"成功获取 {len(scripts)} 个脚本文件")
+      ##  logger.info(f"成功获取 {len(scripts)} 个脚本文件")
         return jsonify({
             'success': True,
             'scripts': scripts

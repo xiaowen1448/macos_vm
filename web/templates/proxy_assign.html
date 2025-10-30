@@ -751,6 +751,58 @@ function resetToOptimalPageSize() {
 }
 
 // 加载节点列表 - 从后端API获取真实数据
+// 动态生成地区和协议筛选选项
+function generateFilterOptions() {
+    // 从节点数据中提取唯一的地区
+    const regions = new Set();
+    // 从节点数据中提取唯一的协议
+    const protocols = new Set();
+    
+    // 遍历所有节点，收集地区和协议信息
+    nodeData.forEach(node => {
+        if (node.region) {
+            regions.add(node.region);
+        }
+        if (node.protocol) {
+            protocols.add(node.protocol);
+        }
+    });
+    
+    // 获取地区筛选下拉框并更新选项
+    const regionFilter = document.getElementById('filterRegion');
+    if (regionFilter) {
+        // 保留第一个选项（全部地区）
+        const firstOption = regionFilter.options[0];
+        regionFilter.innerHTML = '';
+        regionFilter.appendChild(firstOption);
+        
+        // 添加所有唯一地区选项
+        regions.forEach(region => {
+            const option = document.createElement('option');
+            option.value = region;
+            option.textContent = region;
+            regionFilter.appendChild(option);
+        });
+    }
+    
+    // 获取协议筛选下拉框并更新选项
+    const protocolFilter = document.getElementById('filterProtocol');
+    if (protocolFilter) {
+        // 保留第一个选项（全部协议）
+        const firstOption = protocolFilter.options[0];
+        protocolFilter.innerHTML = '';
+        protocolFilter.appendChild(firstOption);
+        
+        // 添加所有唯一协议选项
+        protocols.forEach(protocol => {
+            const option = document.createElement('option');
+            option.value = protocol.toLowerCase();
+            option.textContent = protocol;
+            protocolFilter.appendChild(option);
+        });
+    }
+}
+
 function loadNodes() {
     showLoading('正在加载节点列表...');
     
@@ -772,6 +824,9 @@ function loadNodes() {
                 
                 // 计算总页数
                 totalPages = Math.ceil(nodeData.length / pageSize);
+                
+                // 动态生成地区和协议筛选选项
+                generateFilterOptions();
                 
                 // 渲染当前页的节点列表
                 renderNodeList(getCurrentPageNodes());
@@ -856,7 +911,6 @@ function renderNodeList(nodes) {
             <td class="${delayClass}">${delayDisplay}</td>
             <td>
                 <button class="btn btn-sm btn-info test-node-btn" data-id="${node.id}">测速</button>
-                <button class="btn btn-sm btn-warning assign-node-btn" data-id="${node.id}">分配</button>
                 <button class="btn btn-sm btn-danger delete-node-btn" data-id="${node.id}">删除</button>
             </td>
         </tr>
@@ -1065,13 +1119,7 @@ function addNodeButtonListeners() {
         });
     });
     
-    // 分配按钮
-    document.querySelectorAll('.assign-node-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const nodeId = this.getAttribute('data-id');
-            assignNode(nodeId);
-        });
-    });
+    // 分配按钮已移除
     
     // 删除按钮
     document.querySelectorAll('.delete-node-btn').forEach(btn => {
@@ -1192,10 +1240,7 @@ function updateNodeDelay(nodeId, delay) {
     }
 }
 
-// 分配节点
-function assignNode(nodeId) {
-    showNotification(`节点 ${nodeId} 分配功能待实现`, 'info');
-}
+// 分配节点功能已移除
 
 // 删除节点
 function deleteNode(nodeId) {
