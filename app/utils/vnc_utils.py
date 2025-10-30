@@ -1,43 +1,25 @@
 
-import json
-import ipaddress
-import atexit
-import signal
 import threading
 import subprocess
 import base64
 import sys
 import socket
-import secrets
-import shutil
-import csv
-import io
 import os
 import psutil
 import time
-import paramiko
-import re
-import requests
 import threading
-import json
-from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
-from urllib.parse import urlparse
-from datetime import datetime, timedelta
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, Response
+from pathlib import *
+from flask import Flask, request
 from flask_socketio import SocketIO, emit
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from functools import wraps
 from config import *
-from app.utils.ssh_utils import SSHClient
+from app.utils.ssh_utils import *
 from app.utils.vm_utils import *
-from app.utils.common_utils import clear_sessions_on_startup
+from app.utils.common_utils import *
 # 蓝图导入将在需要时在函数内部动态导入，避免循环导入
 
 # 导入日志工具和全局logger
-from app.utils.log_utils import logger, logging, setup_logger
-from app.utils.vm_cache import vm_cache, VMStatusCache
+from app.utils.log_utils import logger 
+from app.utils.vm_cache import *
 from app.utils.im_utils import *
 
 app = Flask(__name__, template_folder='web/templates', static_folder='web/static', static_url_path='/static')
@@ -49,6 +31,8 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 # 旧的VNC WebSocket代理代码（保留以防需要）
 vnc_connections = {}
+# 存储websockify进程信息的字典
+websockify_processes = {}
 
 
 def find_vnc_session_by_ip(client_ip):
@@ -161,6 +145,8 @@ def handle_disconnect():
 def has_vnc_config(vmx_path):
     """检查VMX文件中是否包含VNC配置"""
     try:
+        # 动态导入以避免循环导入问题
+        from app.utils.vm_utils import read_vmx_file_smart
         content, encoding = read_vmx_file_smart(vmx_path)
         if content is None:
             logger.error(f"读取VMX文件 {vmx_path} 时出错")
@@ -176,6 +162,8 @@ def has_vnc_config(vmx_path):
 def read_vnc_config_from_vmx(vmx_path):
     """从VMX文件中读取VNC配置"""
     try:
+        # 动态导入以避免循环导入问题
+        from app.utils.vm_utils import read_vmx_file_smart
         vnc_config = {'port': None, 'password': None}
 
         content, encoding = read_vmx_file_smart(vmx_path)
@@ -280,28 +268,46 @@ def vnc_proxy_worker(session_id, vnc_socket):
         socketio.emit('vnc_disconnected', room=session_id)
 
 
-def start_websockify(client_ip, vnc_port):
-    """启动websockify进程"""
+def start_websockify(vm_name, vnc_port):
+    """启动websockify进程（使用虚拟机名称）"""
     try:
-        # 为每个客户端分配一个唯一的WebSocket端口
+        # 为每个虚拟机分配一个唯一的WebSocket端口
         websocket_port = get_available_websocket_port()
         if not websocket_port:
             logger.error("无法分配WebSocket端口")
             return None
 
         # 停止之前的websockify进程（如果存在）
-        stop_websockify(client_ip)
+        stop_websockify(vm_name)
 
-        # 启动websockify进程
+        # 构建websockify命令
         cmd = [
             sys.executable, '-m', 'websockify',
-            '--web', os.path.join(os.path.dirname(__file__), 'web', 'static'),
+            '--web', os.path.join(os.path.dirname(__file__), '../..', 'web', 'static'),
             f'{websocket_port}',
             f'localhost:{vnc_port}'
         ]
 
-        # logger.info(f"启动websockify命令: {' '.join(cmd)}")
+        logger.info(f"启动websockify命令: {' '.join(cmd)}")
+        logger.info(f"web目录路径: {os.path.join(os.path.dirname(__file__), '../..', 'web', 'static')}")
 
+        # 检查websockify是否安装
+        try:
+            check_cmd = [sys.executable, '-m', 'websockify', '--help']
+            check_process = subprocess.run(
+                check_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0,
+                timeout=5
+            )
+            if check_process.returncode != 0:
+                logger.error(f"websockify未安装或无法运行: {check_process.stderr.decode('utf-8', errors='ignore').strip()}")
+                return None
+        except Exception as check_e:
+            logger.error(f"检查websockify安装时出错: {str(check_e)}")
+
+        # 启动websockify进程
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
@@ -309,8 +315,8 @@ def start_websockify(client_ip, vnc_port):
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
         )
 
-        # 存储进程信息
-        websockify_processes[client_ip] = {
+        # 存储进程信息（使用虚拟机名称作为键）
+        websockify_processes[vm_name] = {
             'process': process,
             'websocket_port': websocket_port,
             'vnc_port': vnc_port,
@@ -322,12 +328,22 @@ def start_websockify(client_ip, vnc_port):
 
         # 检查进程是否正常运行
         if process.poll() is None:
-            # logger.info(f"websockify进程启动成功: PID={process.pid}, WebSocket端口={websocket_port}")
+            logger.info(f"websockify进程启动成功: PID={process.pid}, WebSocket端口={websocket_port}")
             return websocket_port
         else:
+            # 读取错误输出以获取详细信息
+            stdout, stderr = process.communicate(timeout=2)
+            stdout_str = stdout.decode('utf-8', errors='ignore').strip()
+            stderr_str = stderr.decode('utf-8', errors='ignore').strip()
+            
             logger.error(f"websockify进程启动失败: 返回码={process.returncode}")
-            if client_ip in websockify_processes:
-                del websockify_processes[client_ip]
+            if stdout_str:
+                logger.error(f"websockify标准输出: {stdout_str}")
+            if stderr_str:
+                logger.error(f"websockify错误输出: {stderr_str}")
+            
+            if vm_name in websockify_processes:
+                del websockify_processes[vm_name]
             return None
 
     except Exception as e:
@@ -335,16 +351,16 @@ def start_websockify(client_ip, vnc_port):
         return None
 
 
-def stop_websockify(client_ip):
-    """停止指定客户端的websockify进程"""
+def stop_websockify(identifier):
+    """停止指定标识符的websockify进程（支持client_ip或vm_name）"""
     try:
-        if client_ip in websockify_processes:
-            process_info = websockify_processes[client_ip]
+        if identifier in websockify_processes:
+            process_info = websockify_processes[identifier]
             process = process_info['process']
             websocket_port = process_info.get('websocket_port', 'unknown')
 
             logger.info(
-                f"准备停止客户端 {client_ip} 的websockify进程: PID={process.pid}, WebSocket端口={websocket_port}")
+                f"准备停止标识符 {identifier} 的websockify进程: PID={process.pid}, WebSocket端口={websocket_port}")
 
             if process.poll() is None:  # 进程仍在运行
                 logger.info(f"终止websockify进程: PID={process.pid}")
@@ -361,13 +377,67 @@ def stop_websockify(client_ip):
             else:
                 logger.info(f"websockify进程已经结束: PID={process.pid}")
 
-            del websockify_processes[client_ip]
-            logger.info(f"websockify进程信息已清理: {client_ip}, 释放WebSocket端口={websocket_port}")
+            del websockify_processes[identifier]
+            logger.info(f"websockify进程信息已清理: {identifier}, 释放WebSocket端口={websocket_port}")
         else:
-            logger.info(f"客户端 {client_ip} 没有运行中的websockify进程")
+            logger.info(f"客户端 {identifier} 没有运行中的websockify进程")
 
     except Exception as e:
         logger.error(f"停止websockify进程失败: {str(e)}")
+
+def stop_websockify_by_vm_name(vm_name):
+    """根据虚拟机名称停止对应的websockify进程"""
+    try:
+        logger.info(f"尝试根据虚拟机名称 {vm_name} 停止websockify进程")
+        
+        # 查找与该虚拟机名称相关的所有可能的websockify进程
+        # 1. 首先尝试通过vmx文件查找IP
+        vmx_file = find_vmx_file_by_name(vm_name)
+        if vmx_file:
+            # 获取虚拟机IP
+            vm_ip = get_vm_ip_from_vmx(vmx_file)
+            if vm_ip and vm_ip in websockify_processes:
+                # 如果找到对应的IP，使用stop_websockify函数停止
+                stop_websockify(vm_ip)
+                return True
+        
+        # 2. 如果无法通过IP找到，尝试使用psutil查找包含虚拟机名称信息的websockify进程
+        killed_processes = []
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+            try:
+                # 检查是否是websockify进程，并且命令行中包含虚拟机名称相关信息
+                if proc.info['cmdline'] and any('websockify' in str(arg) for arg in proc.info['cmdline']):
+                    cmdline_str = ' '.join(str(arg) for arg in proc.info['cmdline'])
+                    # 如果命令行中包含虚拟机名称的部分信息，尝试终止该进程
+                    if vm_name in cmdline_str:
+                        pid = proc.info['pid']
+                        logger.info(f"发现与虚拟机 {vm_name} 相关的websockify进程: PID={pid}")
+                        
+                        # 终止进程
+                        proc.terminate()
+                        try:
+                            proc.wait(timeout=5)
+                            killed_processes.append(pid)
+                            logger.info(f"websockify进程已正常结束: PID={pid}")
+                        except subprocess.TimeoutExpired:
+                            logger.warning(f"websockify进程未能正常结束，强制终止: PID={pid}")
+                            proc.kill()
+                            killed_processes.append(pid)
+            except Exception as e:
+                logger.error(f"检查进程时出错: {str(e)}")
+        
+        # 3. 清理websockify_processes字典中的相关条目（如果有）
+        # 由于我们没有直接的映射关系，这里暂时无法精确清理
+        
+        if killed_processes:
+            logger.info(f"已停止 {len(killed_processes)} 个与虚拟机 {vm_name} 相关的websockify进程")
+            return True
+        else:
+            logger.info(f"未找到与虚拟机 {vm_name} 相关的websockify进程")
+            return False
+    except Exception as e:
+        logger.error(f"根据虚拟机名称停止websockify进程失败: {str(e)}")
+        return False
 
 
 def cleanup_all_websockify():

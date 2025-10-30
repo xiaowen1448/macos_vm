@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, jsonify, current_app
+from flask import Blueprint, render_template, request, jsonify, current_app, redirect, url_for, session
 import json
 import random
 import re
@@ -10,6 +10,16 @@ import urllib.request
 import urllib.error
 from datetime import datetime
 import logging
+from functools import wraps
+
+# 登录验证装饰器
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'username' not in session:
+            return jsonify({'success': False, 'message': '请先登录'}), 401
+        return f(*args, **kwargs)
+    return decorated_function
 
 # 配置日志记录
 log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'logs')
@@ -66,6 +76,258 @@ def get_nodes():
         'success': True,
         'data': filtered_nodes
     })
+
+@proxy_assign_bp.route('/api/get_countries')
+@login_required
+def get_countries():
+    """
+    获取所有可用的国家地区
+    """
+    try:
+        global nodes_db
+        # 从节点数据库中提取所有不重复的国家/地区
+        countries = set()
+        for node in nodes_db:
+            if 'country' in node and node['country']:
+                countries.add(node['country'])
+            elif 'region' in node and node['region']:
+                countries.add(node['region'])
+        
+        # 转换为列表并排序
+        countries_list = sorted(list(countries))
+        
+        return jsonify({
+            'success': True,
+            'countries': countries_list
+        })
+    except Exception as e:
+        logger.error(f'获取国家地区失败: {str(e)}')
+        return jsonify({
+            'success': False,
+            'message': f'获取国家地区失败: {str(e)}'
+        })
+
+@proxy_assign_bp.route('/api/get_nodes_by_country')
+@login_required
+def get_nodes_by_country():
+    """
+    根据国家获取节点列表
+    """
+    try:
+        country = request.args.get('country', '')
+        if not country:
+            return jsonify({
+                'success': False,
+                'message': '请提供国家参数'
+            })
+        
+        global nodes_db
+        # 过滤指定国家/地区的节点
+        filtered_nodes = []
+        for node in nodes_db:
+            if ('country' in node and node['country'] == country) or \
+               ('region' in node and node['region'] == country):
+                filtered_nodes.append({
+                    'id': node['id'],
+                    'name': node['name'],
+                    'timeout': node.get('timeout', None)
+                })
+        
+        # 按名称排序
+        filtered_nodes.sort(key=lambda x: x['name'])
+        
+        return jsonify({
+            'success': True,
+            'nodes': filtered_nodes
+        })
+    except Exception as e:
+        logger.error(f'获取节点列表失败: {str(e)}')
+        return jsonify({
+            'success': False,
+            'message': f'获取节点列表失败: {str(e)}'
+        })
+
+@proxy_assign_bp.route('/api/batch_assign', methods=['POST'])
+@login_required
+def batch_assign():
+    """
+    批量分配代理
+    """
+    try:
+        data = request.json
+        vm_names = data.get('vm_names', [])
+        node_id = data.get('node_id')
+        
+        if not vm_names or not node_id:
+            return jsonify({
+                'success': False,
+                'message': '请提供虚拟机名称和节点ID'
+            })
+        
+        # 验证节点是否存在
+        global nodes_db
+        selected_node = None
+        for node in nodes_db:
+            if node['id'] == node_id:
+                selected_node = node
+                break
+        
+        if not selected_node:
+            return jsonify({
+                'success': False,
+                'message': '指定的代理节点不存在'
+            })
+        
+        # 创建config_test目录（如果不存在）
+        from config import app_root
+        config_test_dir = os.path.join(app_root, 'config_test')
+        os.makedirs(config_test_dir, exist_ok=True)
+        
+        # 为每个虚拟机生成配置文件
+        success_count = 0
+        for vm_name in vm_names:
+            try:
+                # 生成clash配置文件
+                clash_config = generate_clash_config(selected_node)
+                
+                # 保存配置文件到config_test目录
+                config_filename = f'{vm_name}.yaml'
+                config_filepath = os.path.join(config_test_dir, config_filename)
+                with open(config_filepath, 'w', encoding='utf-8') as f:
+                    f.write(clash_config)
+                
+                # 使用SSH传输文件并重启clashx
+                if transfer_config_and_restart_clash(vm_name, config_filepath):
+                    success_count += 1
+                
+            except Exception as e:
+                logger.error(f'为虚拟机 {vm_name} 分配代理失败: {str(e)}')
+        
+        return jsonify({
+            'success': True,
+            'message': f'成功为 {success_count}/{len(vm_names)} 台虚拟机分配代理',
+            'success_count': success_count,
+            'total_count': len(vm_names)
+        })
+    except Exception as e:
+        logger.error(f'批量分配代理失败: {str(e)}', exc_info=True)
+        return jsonify({
+            'success': False,
+            'message': f'批量分配代理失败: {str(e)}'
+        })
+
+def generate_clash_config(node):
+    """
+    根据节点信息生成clash配置文件
+    """
+    # 基础配置
+    config = {
+        "port": 7890,
+        "socks-port": 7891,
+        "allow-lan": True,
+        "mode": "Rule",
+        "log-level": "info",
+        "external-controller": "127.0.0.1:9090",
+        "proxies": [node],
+        "proxy-groups": [
+            {
+                "name": "PROXY",
+                "type": "select",
+                "proxies": [node['name']]
+            }
+        ],
+        "rules": [
+            "DOMAIN-SUFFIX,google.com,PROXY",
+            "DOMAIN-SUFFIX,facebook.com,PROXY",
+            "DOMAIN-SUFFIX,twitter.com,PROXY",
+            "DOMAIN-SUFFIX,youtube.com,PROXY",
+            "GEOIP,CN,DIRECT",
+            "MATCH,PROXY"
+        ]
+    }
+    
+    # 转换为YAML格式
+    import yaml
+    return yaml.dump(config, default_flow_style=False, allow_unicode=True)
+
+def transfer_config_and_restart_clash(vm_name, config_filepath):
+    """通过SSH传输配置文件并重启ClashX"""
+    try:
+        # 获取虚拟机的IP地址
+        vm_ip = get_vm_ip(vm_name)
+        if not vm_ip:
+            logger.error(f'无法获取虚拟机 {vm_name} 的IP地址')
+            return False
+        
+        # 从config.py获取SSH配置和脚本路径
+        from config import ssh_user, ssh_password, sh_script_remote_path
+        
+        # 创建SSH客户端
+        from app.utils.ssh_utils import SSHClient
+        ssh_client = SSHClient(vm_ip, ssh_user, ssh_password)
+        
+        # 连接SSH
+        if not ssh_client.connect():
+            logger.error(f'无法连接到虚拟机 {vm_name} ({vm_ip})')
+            return False
+        
+        try:
+            # 目标路径
+            target_path = '/Users/wx/.config/clash/config.yaml'
+            
+            # 上传配置文件
+            if not ssh_client.upload_file(config_filepath, target_path):
+                logger.error(f'无法上传配置文件到虚拟机 {vm_name}')
+                return False
+            
+            # 执行重启脚本
+            restart_script = sh_script_remote_path
+            result = ssh_client.execute_command(f'sh {restart_script}')
+            if result.get('status') != 0:
+                logger.error(f'重启ClashX失败: {result.get("error", "未知错误")}')
+                return False
+            
+            logger.info(f'成功为虚拟机 {vm_name} 分配代理并重启ClashX')
+            return True
+        finally:
+            # 关闭SSH连接
+            ssh_client.close()
+            
+    except Exception as e:
+        logger.error(f'SSH操作失败: {str(e)}')
+        return False
+
+def get_vm_ip(vm_name):
+    """获取虚拟机的IP地址"""
+    try:
+        # 尝试从缓存中获取
+        from app.utils.vm_cache import vm_info_cache
+        if vm_name in vm_info_cache:
+            ip = vm_info_cache[vm_name].get('ip')
+            if ip and ip != '获取中...' and ip != '-':
+                return ip
+        
+        # 如果缓存中没有，尝试从虚拟机列表API获取
+        import requests
+        from flask import request as flask_request
+        
+        # 获取当前请求的主机和端口
+        base_url = f"http://{flask_request.host}"
+        response = requests.get(f"{base_url}/api/vm_management/vm_list")
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('success'):
+                for vm in data.get('vms', []):
+                    if vm.get('name') == vm_name:
+                        ip = vm.get('ip')
+                        if ip and ip != '获取中...' and ip != '-':
+                            return ip
+        
+        logger.warning(f'无法获取虚拟机 {vm_name} 的IP地址')
+        return None
+    except Exception as e:
+        logger.error(f'获取虚拟机IP失败: {str(e)}')
+        return None
 
 @proxy_assign_bp.route('/api/nodes/import', methods=['POST'])
 def import_nodes():

@@ -7,15 +7,15 @@ import sys
 import time
 import base64
 import uuid
-import json
 import threading
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, Response
+from flask import  request, jsonify
 from pathlib import Path
 from functools import wraps
 from config import *
 from app.utils.common_utils import logger
 from app.utils.ssh_utils import *
 from app.utils.vnc_utils import *
+from app.utils.vm_utils import *
 
 try:
     import paramiko
@@ -149,6 +149,63 @@ def is_vmx_for_ip(vmx_path, target_ip):
     except Exception as e:
         logger.error(f"判断VMX文件 {vmx_path} 是否对应IP {target_ip} 时出错: {str(e)}")
         return False
+
+def find_vmx_file_by_name(vm_name):
+    """
+    通过虚拟机名称查找对应的VMX文件
+    :param vm_name: 虚拟机名称
+    :return: VMX文件路径或None
+    """
+    logger.info(f"开始查找虚拟机名称 {vm_name} 对应的VMX文件")
+    
+    # 使用现有的find_vm_file函数查找VMX文件
+    vmx_file = find_vm_file(vm_name)
+    if vmx_file:
+        logger.info(f"找到虚拟机名称 {vm_name} 对应的VMX文件: {vmx_file}")
+        return vmx_file
+    
+    # 如果没有找到，尝试在克隆目录中更广泛地搜索
+    try:
+        for root, dirs, files in os.walk(clone_dir):
+            # 检查目录名称是否匹配虚拟机名称
+            if os.path.basename(root) == vm_name:
+                for file in files:
+                    if file.endswith('.vmx'):
+                        vmx_path = os.path.join(root, file)
+                        logger.info(f"在克隆目录中找到匹配的VMX文件: {vmx_path}")
+                        return vmx_path
+                
+        logger.warning(f"未找到虚拟机名称 {vm_name} 对应的VMX文件")
+        return None
+    except Exception as e:
+        logger.error(f"查找虚拟机文件时出错: {str(e)}")
+        return None
+
+def get_vm_ip_from_vmx(vmx_file):
+    """
+    从VMX文件获取虚拟机IP地址
+    :param vmx_file: VMX文件路径
+    :return: IP地址或None
+    """
+    try:
+        vmrun_path = get_vmrun_path()
+        if os.path.exists(vmrun_path) and os.path.exists(vmx_file):
+            # 使用vmrun获取虚拟机IP
+            result = subprocess.run(
+                [vmrun_path, 'getGuestIPAddress', vmx_file, '-wait'],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if result.returncode == 0:
+                vm_ip = result.stdout.strip()
+                if vm_ip:
+                    return vm_ip
+        return None
+    except Exception as e:
+        logger.error(f"获取虚拟机IP地址时出错: {str(e)}")
+        return None
 
 
 
@@ -1879,17 +1936,7 @@ def get_next_vnc_port():
         return vnc_start_port
 
 
-def read_vmx_file_smart(vmx_file_path):
-    """智能读取VMX文件，尝试多种编码"""
-    encodings = ['utf-8', 'ansi', 'latin-1', 'cp1252']
-    for encoding in encodings:
-        try:
-            with open(vmx_file_path, 'r', encoding=encoding) as f:
-                content = f.read()
-                return content, encoding
-        except (UnicodeDecodeError, LookupError):
-            continue
-    return None, None
+# read_vmx_file_smart函数定义移至文件下方(第3120行)，此处保留注释以避免重复定义
 
 def add_uuid_config_to_vmx(vmx_file_path):
     """在VMX文件中添加UUID配置参数"""

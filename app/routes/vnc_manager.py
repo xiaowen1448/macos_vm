@@ -1,6 +1,5 @@
 import os 
 from datetime import datetime
-import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from urllib.parse import urlparse
@@ -19,7 +18,6 @@ from app.routes.vm_clone import vm_clone_bp
 from app.routes.vm_management import vm_management_bp
 from app.routes.vm import vm_bp
 from app.routes.im_manager import im_manager_bp
-from app.routes.vnc_manager import *
 
 # 导入日志工具和全局logger
 from app.utils.log_utils import logger, logging, setup_logger
@@ -112,26 +110,30 @@ def api_vnc_connect():
     """VNC连接API - 使用websockify + noVNC方案"""
     try:
         data = request.get_json()
+        vm_name = data.get('vm_name')
         client_ip = data.get('client_ip')
 
-        if not client_ip:
-            return jsonify({'success': False, 'message': '客户端IP不能为空'})
+        # 优先使用vm_name，如果没有则使用client_ip查找虚拟机名称
+        if not vm_name and client_ip:
+            # 通过client_ip查找对应的虚拟机名称
+            vmx_file = find_vmx_file_by_ip(client_ip)
+            if vmx_file:
+                # 从VMX文件路径中提取虚拟机名称
+                vm_name = os.path.basename(os.path.dirname(vmx_file))
+                logger.info(f"通过client_ip {client_ip} 找到虚拟机名称: {vm_name}")
+
+        if not vm_name:
+            return jsonify({'success': False, 'message': '虚拟机名称不能为空，请提供vm_name或有效的client_ip'})
 
         # logger.info(f"=== VNC连接请求开始 ===")
-        #  logger.info(f"请求连接的客户端IP: {client_ip}")
+        # logger.info(f"请求连接的虚拟机名称: {vm_name}")
 
         # 查找对应的VMX文件
-        vmx_file = find_vmx_file_by_ip(client_ip)
+        vmx_file = find_vmx_file_by_name(vm_name)
         if not vmx_file:
-            logger.warning(f"未找到客户端IP {client_ip} 对应的VMX文件")
+            logger.warning(f"未找到虚拟机名称 {vm_name} 对应的VMX文件")
             logger.info(f"=== VNC连接请求结束 (失败: 未找到VMX文件) ===")
-            return jsonify({'success': False, 'message': f'未找到客户端IP {client_ip} 对应的虚拟机配置文件'})
-
-        # 提取虚拟机名称
-        vm_name = os.path.basename(os.path.dirname(vmx_file))
-        # logger.info(f"找到匹配的虚拟机: {vm_name}")
-        # logger.info(f"VMX配置文件路径: {vmx_file}")
-
+            return jsonify({'success': False, 'message': f'未找到虚拟机名称 {vm_name} 对应的虚拟机配置文件'})
         # 读取VNC配置
         vnc_config = read_vnc_config_from_vmx(vmx_file)
         if not vnc_config:
@@ -142,9 +144,18 @@ def api_vnc_connect():
         logger.info(f"VNC配置信息:")
         logger.info(f"  - VNC端口: {vnc_config['port']}")
         # logger.info(f"  - VNC密码: {'已设置' if vnc_config['password'] else '未设置'}")
+        
+        # 获取虚拟机IP地址
+        client_ip = get_vm_ip_from_vmx(vmx_file)
+        if not client_ip:
+            logger.error(f"无法获取虚拟机IP地址")
+            logger.info(f"=== VNC连接请求结束 (失败: 无法获取虚拟机IP) ===")
+            return jsonify({'success': False, 'message': '无法获取虚拟机IP地址'})
+        
+        logger.info(f"  - 虚拟机IP: {client_ip}")
 
         # 启动websockify进程
-        websocket_port = start_websockify(client_ip, vnc_config['port'])
+        websocket_port = start_websockify(vm_name, vnc_config['port'])
         if not websocket_port:
             logger.error(f"websockify启动失败")
             logger.info(f"=== VNC连接请求结束 (失败: websockify启动失败) ===")
@@ -182,13 +193,23 @@ def api_vnc_disconnect():
     """断开VNC连接"""
     try:
         data = request.get_json()
-        client_ip = data.get('client_ip')
+        vm_name = data.get('vm_name')
 
+        if not vm_name:
+            return jsonify({'success': False, 'message': '虚拟机名称不能为空'})
+
+        # 查找对应的VMX文件以获取IP
+        vmx_file = find_vmx_file_by_name(vm_name)
+        if not vmx_file:
+            logger.warning(f"未找到虚拟机名称 {vm_name} 对应的VMX文件")
+            return jsonify({'success': False, 'message': f'未找到虚拟机名称 {vm_name} 对应的虚拟机配置文件'})
+        
+        # 获取虚拟机IP地址
+        client_ip = get_vm_ip_from_vmx(vmx_file)
         if not client_ip:
-            return jsonify({'success': False, 'message': '客户端IP不能为空'})
-
-        # 停止websockify进程
-        stop_websockify(client_ip)
+            logger.warning(f"无法获取虚拟机 {vm_name} 的IP地址")
+        # 统一使用stop_websockify_by_vm_name函数停止进程
+        stop_websockify_by_vm_name(vm_name)
 
         return jsonify({'success': True, 'message': 'VNC连接已断开'})
 

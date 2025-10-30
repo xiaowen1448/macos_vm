@@ -12,6 +12,7 @@ import socket
 import time
 import sys
 import paramiko
+import subprocess
 from typing import Tuple, Optional
 # 导入日志工具和全局logger
 from app.utils.log_utils import logger, logging

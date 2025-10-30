@@ -367,7 +367,7 @@
         }
         
         .stat-number {
-            font-size: 2em;
+            font-size: 1.2em;
             font-weight: bold;
             color: #0d6efd;
         }
@@ -834,6 +834,9 @@
                             <button class="btn btn-info btn-sm me-2" id="batchIMStatusBtn" onclick="batchIMStatus()" disabled>
                                 <i class="fas fa-info-circle me-2"></i>批量IM状态
                             </button>
+                            <button class="btn btn-success btn-sm me-2" id="batchAssignProxyBtn" onclick="openBatchAssignProxyModal()" disabled>
+                                <i class="fas fa-sync-alt me-2"></i>批量分配代理
+                            </button>
                         </div>
                         
                         <!-- 分页控件 -->
@@ -863,6 +866,57 @@
                             </nav>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 批量分配代理模态框 -->
+    <div class="modal fade" id="batchAssignProxyModal" tabindex="-1" aria-labelledby="batchAssignProxyModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="batchAssignProxyModalLabel">批量分配代理</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- 虚拟机列表 -->
+                    <div class="mb-4">
+                        <h6>已选中的虚拟机（运行中）</h6>
+                        <div style="max-height: 200px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 4px; padding: 10px;">
+                            <ul class="list-group" id="selectedVmsList">
+                                <!-- 选中的虚拟机将在这里动态显示 -->
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <!-- 代理选择 -->
+                    <div class="mb-4">
+                        <label for="countrySelect" class="form-label">选择国家地区</label>
+                        <select class="form-select" id="countrySelect" onchange="loadNodesByCountry()">
+                            <option value="">请选择国家地区</option>
+                            <!-- 国家地区将通过API动态加载 -->
+                        </select>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label for="nodeSelect" class="form-label">选择代理节点</label>
+                        <select class="form-select" id="nodeSelect" disabled>
+                            <option value="">请先选择国家地区</option>
+                            <!-- 代理节点将根据选择的国家动态加载 -->
+                        </select>
+                    </div>
+                    
+                    <div id="nodeTimeoutInfo" class="mb-4 p-3 bg-info bg-opacity-10 rounded d-none">
+                        <strong>节点信息：</strong>
+                        <span id="timeoutValue">--</span>ms
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" id="confirmAssignBtn" onclick="confirmBatchAssignProxy()" disabled>
+                        确定分配
+                    </button>
                 </div>
             </div>
         </div>
@@ -998,23 +1052,295 @@
                     if (isAutoCalculated) {
                         const newPageSize = calculateOptimalPageSize();
                         if (newPageSize !== pageSize) {
-                            document.getElementById('pageSizeSelect').value = newPageSize.toString();
                             pageSize = newPageSize;
-                            currentPage = 1; // 重置到第一页
-                            
-                            console.log(`窗口大小变化，分页大小: ${newPageSize}`);
-                            console.log('使用外部滚动条模式');
-                            
-                            // 确保使用外部滚动条模式
-                            setScrollbarState(false, `窗口大小变化，外部滚动条模式，分页大小: ${newPageSize}`);
-                            
+                            document.getElementById('pageSizeSelect').value = pageSize;
                             loadVMData(1);
+                            console.log(`窗口大小变化，自动调整分页大小为: ${pageSize}`);
                         }
                     }
-                }, 300); // 延迟300ms，避免频繁调整
+                }, 300);
             });
         });
+        
+        // 更新批量操作按钮状态
+        function updateBatchButtonStates() {
+            // 获取所有批量操作按钮
+            const batchButtons = document.querySelectorAll('#batchChangeWumaBtn, #batchDeleteBtn, #batchIMLoginBtn, #batchIMLogoutBtn, #batchIMStatusBtn, #batchAssignProxyBtn');
+            
+            // 检查是否有选中的虚拟机
+            const hasSelection = selectedVMs.size > 0;
+            
+            // 检查是否有运行中的虚拟机被选中
+            let hasRunningVMs = false;
+            selectedVMs.forEach(vmName => {
+                const vm = totalVMs.find(v => v.name === vmName);
+                if (vm && vm.status === 'running') {
+                    hasRunningVMs = true;
+                }
+            });
+            
+            // 更新按钮状态
+            document.getElementById('batchChangeWumaBtn').disabled = !hasSelection;
+            document.getElementById('batchDeleteBtn').disabled = !hasSelection;
+            document.getElementById('batchIMLoginBtn').disabled = !hasRunningVMs;
+            document.getElementById('batchIMLogoutBtn').disabled = !hasRunningVMs;
+            document.getElementById('batchIMStatusBtn').disabled = !hasRunningVMs;
+            document.getElementById('batchAssignProxyBtn').disabled = !hasRunningVMs;
+        }
+        
+        // 打开批量分配代理模态框
+        function openBatchAssignProxyModal() {
+            const selectedVmsList = document.getElementById('selectedVmsList');
+            selectedVmsList.innerHTML = '';
+            
+            // 获取运行中的虚拟机
+            const runningVms = [];
+            selectedVMs.forEach(vmName => {
+                const vm = totalVMs.find(v => v.name === vmName);
+                if (vm && vm.status === 'running') {
+                    runningVms.push(vm);
+                    
+                    // 添加到列表中
+                    const li = document.createElement('li');
+                    li.className = 'list-group-item d-flex justify-content-between align-items-center';
+                    li.innerHTML = `
+                        <div>
+                            <span class="fw-bold">${vm.name}</span>
+                            <span class="text-muted ms-2">IP: ${vm.ip || '未知'}</span>
+                        </div>
+                    `;
+                    selectedVmsList.appendChild(li);
+                }
+            });
+            
+            // 重置选择器
+            document.getElementById('countrySelect').innerHTML = '<option value="">请选择国家地区</option>';
+            document.getElementById('nodeSelect').innerHTML = '<option value="">请先选择国家地区</option>';
+            document.getElementById('nodeSelect').disabled = true;
+            document.getElementById('confirmAssignBtn').disabled = true;
+            document.getElementById('nodeTimeoutInfo').classList.add('d-none');
+            
+            // 加载国家地区列表
+            loadCountries();
+            
+            // 显示模态框
+            const modal = new bootstrap.Modal(document.getElementById('batchAssignProxyModal'));
+            modal.show();
+        }
+        
+        // 加载国家地区列表
+        function loadCountries() {
+            fetch('/api/proxy/get_countries')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const countrySelect = document.getElementById('countrySelect');
+                        data.countries.forEach(country => {
+                            const option = document.createElement('option');
+                            option.value = country;
+                            option.textContent = country;
+                            countrySelect.appendChild(option);
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('加载国家地区失败:', error);
+                    showNotification('加载国家地区失败', 'error');
+                });
+        }
+        
+        // 根据国家加载节点
+        function loadNodesByCountry() {
+            const country = document.getElementById('countrySelect').value;
+            const nodeSelect = document.getElementById('nodeSelect');
+            
+            if (!country) {
+                nodeSelect.innerHTML = '<option value="">请先选择国家地区</option>';
+                nodeSelect.disabled = true;
+                document.getElementById('confirmAssignBtn').disabled = true;
+                document.getElementById('nodeTimeoutInfo').classList.add('d-none');
+                return;
+            }
+            
+            nodeSelect.innerHTML = '<option value="">加载中...</option>';
+            nodeSelect.disabled = false;
+            
+            fetch(`/api/proxy/get_nodes_by_country?country=${encodeURIComponent(country)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        nodeSelect.innerHTML = '<option value="">请选择代理节点</option>';
+                        data.nodes.forEach(node => {
+                            const option = document.createElement('option');
+                            option.value = node.id;
+                            option.textContent = `${node.name} (${node.timeout || '--'}ms)`;
+                            option.dataset.timeout = node.timeout;
+                            nodeSelect.appendChild(option);
+                        });
+                    } else {
+                        nodeSelect.innerHTML = '<option value="">加载失败</option>';
+                        showNotification('加载节点失败', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('加载节点失败:', error);
+                    nodeSelect.innerHTML = '<option value="">加载失败</option>';
+                    showNotification('加载节点失败', 'error');
+                });
+        }
+        
+        // 监听节点选择变化
+        document.getElementById('nodeSelect')?.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            const confirmBtn = document.getElementById('confirmAssignBtn');
+            const timeoutInfo = document.getElementById('nodeTimeoutInfo');
+            const timeoutValue = document.getElementById('timeoutValue');
+            
+            if (selectedOption.value) {
+                confirmBtn.disabled = false;
+                timeoutValue.textContent = selectedOption.dataset.timeout || '--';
+                timeoutInfo.classList.remove('d-none');
+            } else {
+                confirmBtn.disabled = true;
+                timeoutInfo.classList.add('d-none');
+            }
+        });
+        
+        // 确认批量分配代理
+        function confirmBatchAssignProxy() {
+            const nodeId = document.getElementById('nodeSelect').value;
+            
+            if (!nodeId) {
+                showNotification('请选择代理节点', 'warning');
+                return;
+            }
+            
+            // 获取运行中的虚拟机
+            const runningVms = [];
+            selectedVMs.forEach(vmName => {
+                const vm = totalVMs.find(v => v.name === vmName);
+                if (vm && vm.status === 'running') {
+                    runningVms.push(vm.name);
+                }
+            });
+            
+            if (runningVms.length === 0) {
+                showNotification('没有选中运行中的虚拟机', 'warning');
+                return;
+            }
+            
+            // 显示加载状态
+            showLoading('正在分配代理，请稍候...');
+            
+            // 调用API分配代理
+            fetch('/api/proxy/batch_assign', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    vm_names: runningVms,
+                    node_id: parseInt(nodeId)
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                if (data.success) {
+                    showNotification(data.message || '代理分配成功', 'success');
+                    // 关闭模态框
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('batchAssignProxyModal'));
+                    modal.hide();
+                } else {
+                    showNotification(data.message || '代理分配失败', 'error');
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                console.error('分配代理失败:', error);
+                showNotification('分配代理失败', 'error');
+            });
+        }
+        
+        // 初始化事件监听器
+        document.addEventListener('DOMContentLoaded', function() {
+            // 之前的初始化代码将在这里继续
+            
+            // 初始化分页大小
+            currentPageSize = calculateOptimalPageSize();
+            
+            // 加载虚拟机数据
+            loadVMData(1);
+            
+            // 初始化事件监听
+            initEventListeners();
+        });
 
+
+        // 初始化事件监听器函数
+        function initEventListeners() {
+            // 窗口大小变化事件监听
+            window.addEventListener('resize', handleWindowResize);
+            
+            // 批量操作按钮事件监听
+            document.getElementById('batchAssignProxyBtn')?.addEventListener('click', openBatchAssignProxyModal);
+            
+            // 分页控件事件监听
+            document.getElementById('pageSizeSelect')?.addEventListener('change', handlePageSizeChange);
+            
+            // 搜索按钮事件监听
+            document.getElementById('searchBtn')?.addEventListener('click', handleSearch);
+            
+            // 全选复选框事件监听
+            document.getElementById('selectAllCheckbox')?.addEventListener('change', handleSelectAll);
+        }
+        
+        // 窗口大小变化处理函数
+        function handleWindowResize() {
+            // 使用防抖处理
+            clearTimeout(window.resizeTimeout);
+            window.resizeTimeout = setTimeout(() => {
+                const newPageSize = calculateOptimalPageSize();
+                if (newPageSize !== currentPageSize) {
+                    currentPageSize = newPageSize;
+                    currentPage = 1; // 重置到第一页
+                    
+                    console.log(`窗口大小变化，分页大小: ${newPageSize}`);
+                    console.log('使用外部滚动条模式');
+                    
+                    // 确保使用外部滚动条模式
+                    setScrollbarState(false, `窗口大小变化，外部滚动条模式，分页大小: ${newPageSize}`);
+                    
+                    loadVMData(1);
+                }
+            }, 300); // 延迟300ms，避免频繁调整
+        }
+        
+        // 分页大小变化处理函数
+        function handlePageSizeChange() {
+            if (this.value) {
+                currentPageSize = parseInt(this.value);
+                currentPage = 1; // 重置到第一页
+                loadVMData(1);
+            }
+        }
+        
+        // 搜索处理函数
+        function handleSearch() {
+            currentPage = 1; // 重置到第一页
+            loadVMData(1);
+        }
+        
+        // 全选处理函数
+        function handleSelectAll() {
+            const isChecked = this.checked;
+            const checkboxes = document.querySelectorAll('.vm-checkbox');
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = isChecked;
+            });
+            updateBatchButtonStates();
+        }
+        
         // 计算最佳分页大小
         function calculateOptimalPageSize() {
             // 获取可用区域高度
@@ -2585,6 +2911,9 @@
             // 检查选中虚拟机的运行状态并更新批量更改五码按钮
             checkSelectedVMsRunningState();
             
+            // 更新批量操作按钮状态
+            updateBatchButtonStates();
+            
             // 立即更新UI
             updateSelectAllState();
         }
@@ -2616,6 +2945,9 @@
             
             // 检查选中虚拟机的运行状态并更新批量更改五码按钮
             checkSelectedVMsRunningState();
+            
+            // 更新批量操作按钮状态
+            updateBatchButtonStates();
             
             // 立即更新UI
             updateSelectAllState();
@@ -7010,28 +7342,14 @@
             console.log('连接VNC:', vmName);
             
             try {
-                // 首先获取虚拟机的IP地址
-                let vmInfo = vmDataList.find(vm => vm.name === vmName);
-                if (!vmInfo) {
-                    vmInfo = totalVMs.find(vm => vm.name === vmName);
-                }
-                
-                if (!vmInfo || !vmInfo.ip) {
-                    alert('无法获取虚拟机IP地址，请确保虚拟机正在运行');
-                    return;
-                }
-                
-                const clientIp = vmInfo.ip;
-                console.log('虚拟机IP地址:', clientIp);
-                
-                // 调用后端API启动websockify并获取连接信息
+                // 调用后端API启动websockify并获取连接信息，直接传递虚拟机名称
                 const response = await fetch('/api/vnc/connect', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        client_ip: clientIp
+                        vm_name: vmName
                     })
                 });
                 
@@ -7039,7 +7357,8 @@
                 
                 if (data.success) {
                     // 构建连接字符串并加密
-                    const connectionString = `ip=${clientIp}&port=${data.vnc_config.websocket_port}&password=${data.vnc_config.password || ''}`;
+                    // 使用vmName作为IP占位符，因为实际连接使用localhost
+                    const connectionString = `ip=${vmName}&port=${data.vnc_config.websocket_port}&password=${data.vnc_config.password || ''}`;
                     const encryptedParams = encryptConnectionString(connectionString);
                     
                     // 在新窗口中打开VNC连接，使用127.0.0.1作为服务器地址
