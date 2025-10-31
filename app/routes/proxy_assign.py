@@ -201,11 +201,11 @@ def test_node_delay(node_id):
         protocol = node.get('protocol', '').upper()
         node_name = node.get('name', 'Unknown')
         
-        logger.info(f'开始测试节点延迟: ID={node_id}, 名称={node_name}, 服务器={server}:{port}')
+      #  logger.info(f'开始测试节点延迟: ID={node_id}, 名称={node_name}, 服务器={server}:{port}')
         
         # 验证必要的服务器信息
         if not server:
-            logger.warning(f"节点 {node_id} 测速失败: 节点缺少服务器信息")
+          #  logger.warning(f"节点 {node_id} 测速失败: 节点缺少服务器信息")
             return jsonify({
                 'success': False,
                 'message': '节点缺少服务器信息',
@@ -222,10 +222,10 @@ def test_node_delay(node_id):
                     ping_result = ping_server(server, port, timeout=1.5)  # 减少超时时间
                     if ping_result != float('inf'):
                         pings.append(ping_result)
-                        logger.debug(f'Ping尝试 {i+1} 成功: {ping_result}ms')
+                      #  logger.debug(f'Ping尝试 {i+1} 成功: {ping_result}ms')
                     else:
                         errors.append(f'尝试 {i+1} 连接失败')
-                        logger.debug(f'Ping尝试 {i+1} 失败')
+                      #  logger.debug(f'Ping尝试 {i+1} 失败')
                 
                 if pings:
                     delay = int(sum(pings) / len(pings))  # 计算平均延迟
@@ -248,7 +248,7 @@ def test_node_delay(node_id):
                     node['timeout'] = True
                     
                     error_details = ', '.join(errors)
-                    logger.warning(f'节点测速失败: ID={node_id}, 服务器={server}:{port}, 错误={error_details}')
+                  #  logger.warning(f'节点测速失败: ID={node_id}, 服务器={server}:{port}, 错误={error_details}')
                     
                     return jsonify({
                         'success': False,
@@ -256,7 +256,7 @@ def test_node_delay(node_id):
                         'message': f'测速失败: {error_details}'
                     })
             except Exception as e:
-                logger.error(f'测试节点延迟异常: ID={node_id}, 错误: {str(e)}')
+              #  logger.error(f'测试节点延迟异常: ID={node_id}, 错误: {str(e)}')
                 return jsonify({
                     'success': False,
                     'message': f'测速异常: {str(e)}',
@@ -269,7 +269,7 @@ def test_node_delay(node_id):
                 'node_id': node_id
             })
     except Exception as e:
-        logger.error(f'测试节点延迟失败: ID={node_id}, 错误: {str(e)}')
+      #  logger.error(f'测试节点延迟失败: ID={node_id}, 错误: {str(e)}')
         return jsonify({
             'success': False,
             'message': f'测速失败: {str(e)}',
@@ -675,7 +675,7 @@ def ping_server(server, port, timeout=2):
             return float('inf')
         
         # 记录开始测试
-        logger.debug(f'开始测试服务器连接: {server}:{port}, 超时设置: {timeout}秒')
+      #  logger.debug(f'开始测试服务器连接: {server}:{port}, 超时设置: {timeout}秒')
         
         start_time = time.time()
         
@@ -686,20 +686,20 @@ def ping_server(server, port, timeout=2):
             
         # 计算延迟
         delay = int((time.time() - start_time) * 1000)  # 转换为毫秒
-        logger.debug(f'服务器连接成功: {server}:{port}, 延迟: {delay}ms')
+      #  logger.debug(f'服务器连接成功: {server}:{port}, 延迟: {delay}ms')
         return delay
         
     except socket.timeout:
-        logger.warning(f'连接超时: {server}:{port}, 超时设置: {timeout}秒')
+       # logger.warning(f'连接超时: {server}:{port}, 超时设置: {timeout}秒')
         return float('inf')
     except socket.gaierror:
-        logger.warning(f'域名解析失败: {server}')
+       # logger.warning(f'域名解析失败: {server}')
         return float('inf')
     except socket.error as e:
-        logger.warning(f'连接失败: {server}:{port}, 错误: {str(e)}')
+       # logger.warning(f'连接失败: {server}:{port}, 错误: {str(e)}')
         return float('inf')
     except Exception as e:
-        logger.error(f'测试延迟异常: {server}:{port}, 错误: {str(e)}')
+      #  logger.error(f'测试延迟异常: {server}:{port}, 错误: {str(e)}')
         return float('inf')  # 任何异常都返回无限大
 
 def test_download_speed():

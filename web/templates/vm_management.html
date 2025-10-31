@@ -1228,6 +1228,14 @@
                 .then(data => {
                     if (data.success) {
                         const countrySelect = document.getElementById('countrySelect');
+                        // 清空下拉框中的现有选项，避免重复
+                        countrySelect.innerHTML = '';
+                        // 添加默认选项
+                        const defaultOption = document.createElement('option');
+                        defaultOption.value = '';
+                        defaultOption.textContent = '请选择国家地区';
+                        countrySelect.appendChild(defaultOption);
+                        // 添加国家列表选项
                         data.countries.forEach(country => {
                             const option = document.createElement('option');
                             option.value = country;
