@@ -1,5 +1,6 @@
 import threading
 import time 
+from app.utils.log_utils import logger
 
 # 虚拟机状态缓存机制
 class VMStatusCache:

@@ -7,6 +7,8 @@ import logging
 LOG_LEVEL = logging.INFO
 # 项目根目录
 project_root = r'D:\xiaowen_1448\macos_vm'
+# 应用根目录（为了兼容性）
+app_root = project_root
 #脚本项目根目录
 macos_script_project_root = r'D:\xiaowen_1448\macos_script'
 # 用户认证信息
@@ -99,6 +101,9 @@ icloud_txt_path=f'{vm_macos_home_dir}/Desktop/icloud.txt'
 icloud2_txt_path=f'{vm_macos_home_dir}/Desktop/icloud2.txt'
 #错误id文本
 error_txt_path=f'{vm_macos_home_dir}/Desktop/error.txt'
+
+clash_config=f'{vm_macos_home_dir}/.config/clash/config.yaml'
+
 # iCloud处理时间配置
 # 查询成功后等待执行注销的时间（秒）
 icloud_wait_after_query = 5

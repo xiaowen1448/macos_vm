@@ -906,11 +906,6 @@
                             <!-- 代理节点将根据选择的国家动态加载 -->
                         </select>
                     </div>
-                    
-                    <div id="nodeTimeoutInfo" class="mb-4 p-3 bg-info bg-opacity-10 rounded d-none">
-                        <strong>节点信息：</strong>
-                        <span id="timeoutValue">--</span>ms
-                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
@@ -1118,19 +1113,117 @@
             document.getElementById('nodeSelect').innerHTML = '<option value="">请先选择国家地区</option>';
             document.getElementById('nodeSelect').disabled = true;
             document.getElementById('confirmAssignBtn').disabled = true;
-            document.getElementById('nodeTimeoutInfo').classList.add('d-none');
+            // 检查nodeTimeoutInfo元素是否存在，避免空引用错误
+            const nodeTimeoutInfo = document.getElementById('nodeTimeoutInfo');
+            if (nodeTimeoutInfo) {
+                nodeTimeoutInfo.classList.add('d-none');
+            }
             
             // 加载国家地区列表
             loadCountries();
             
             // 显示模态框
             const modal = new bootstrap.Modal(document.getElementById('batchAssignProxyModal'));
+            
+            // 添加关闭事件监听器，确保关闭时移除遮罩和清理状态
+            const modalElement = document.getElementById('batchAssignProxyModal');
+            
+            // 移除之前可能存在的事件监听器，避免重复添加
+            const handleModalClose = function() {
+                hideLoading();
+                
+                // 清理所有加载状态
+                document.getElementById('nodeSelect').innerHTML = '<option value="">请先选择国家地区</option>';
+                document.getElementById('countrySelect').innerHTML = '<option value="">请选择国家地区</option>';
+                
+                // 确保移除所有模态框背景元素
+                const backdrop = document.querySelector('.modal-backdrop');
+                if (backdrop) {
+                    backdrop.remove();
+                }
+                
+                // 移除body上的modal-open类，允许页面滚动
+                document.body.classList.remove('modal-open');
+                document.body.style.paddingRight = '';
+                
+                // 移除这个事件监听器，避免内存泄漏
+                modalElement.removeEventListener('hidden.bs.modal', handleModalClose);
+            };
+            
+            modalElement.addEventListener('hidden.bs.modal', handleModalClose);
+            
             modal.show();
+        }
+        
+        // 通知提示函数
+        function showNotification(message, type = 'success') {
+            const notificationContainer = document.createElement('div');
+            notificationContainer.className = `notification ${type}`;
+            notificationContainer.style.position = 'fixed';
+            notificationContainer.style.top = '20px';
+            notificationContainer.style.right = '20px';
+            notificationContainer.style.zIndex = '9999';
+            notificationContainer.style.padding = '15px 20px';
+            notificationContainer.style.borderRadius = '8px';
+            notificationContainer.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+            notificationContainer.style.fontWeight = '500';
+            notificationContainer.style.fontSize = '14px';
+            notificationContainer.style.transition = 'all 0.3s ease';
+            notificationContainer.style.opacity = '0';
+            notificationContainer.style.transform = 'translateX(100%)';
+            
+            if (type === 'success') {
+                notificationContainer.style.backgroundColor = '#52c41a';
+                notificationContainer.style.color = 'white';
+                notificationContainer.innerHTML = `<i class="fas fa-check-circle mr-2"></i>${message}`;
+            } else if (type === 'error') {
+                notificationContainer.style.backgroundColor = '#ff4d4f';
+                notificationContainer.style.color = 'white';
+                notificationContainer.innerHTML = `<i class="fas fa-times-circle mr-2"></i>${message}`;
+            } else if (type === 'warning') {
+                notificationContainer.style.backgroundColor = '#faad14';
+                notificationContainer.style.color = 'white';
+                notificationContainer.innerHTML = `<i class="fas fa-exclamation-circle mr-2"></i>${message}`;
+            } else if (type === 'info') {
+                notificationContainer.style.backgroundColor = '#1890ff';
+                notificationContainer.style.color = 'white';
+                notificationContainer.innerHTML = `<i class="fas fa-info-circle mr-2"></i>${message}`;
+            }
+            
+            document.body.appendChild(notificationContainer);
+            
+            // 显示通知
+            setTimeout(() => {
+                notificationContainer.style.opacity = '1';
+                notificationContainer.style.transform = 'translateX(0)';
+            }, 10);
+            
+            // 自动消失
+            setTimeout(() => {
+                notificationContainer.style.opacity = '0';
+                notificationContainer.style.transform = 'translateX(100%)';
+                setTimeout(() => {
+                    if (notificationContainer.parentNode === document.body) {
+                        document.body.removeChild(notificationContainer);
+                    }
+                }, 300);
+            }, 3000);
+            
+            // 点击立即关闭
+            notificationContainer.addEventListener('click', () => {
+                notificationContainer.style.opacity = '0';
+                notificationContainer.style.transform = 'translateX(100%)';
+                setTimeout(() => {
+                    if (notificationContainer.parentNode === document.body) {
+                        document.body.removeChild(notificationContainer);
+                    }
+                }, 300);
+            });
         }
         
         // 加载国家地区列表
         function loadCountries() {
-            fetch('/api/proxy/get_countries')
+            fetch('/api/get_countries')
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
@@ -1149,6 +1242,46 @@
                 });
         }
         
+        // 测试单个节点延迟 - 使用真实后端测速
+        function testNodeDelay(nodeId, optionElement) {
+            // 显示测速中
+            const originalText = optionElement.textContent;
+            const nodeName = originalText.split(' (')[0];
+            optionElement.textContent = `${nodeName} (测速中...)`;
+            
+            // 调用后端API进行真实测速
+            fetch(`/api/test_node_delay/${nodeId}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        // 更新节点延迟信息
+                        const delay = data.delay;
+                        optionElement.textContent = `${nodeName} (${delay}ms)`;
+                        optionElement.dataset.timeout = delay;
+                        
+                        // 如果当前选中的是这个节点，更新超时信息显示
+                        const nodeSelect = document.getElementById('nodeSelect');
+                        if (nodeSelect.value === nodeId.toString()) {
+                            document.getElementById('timeoutValue').textContent = delay;
+                        }
+                    } else {
+                        // 测速失败，使用默认值或显示错误
+                        optionElement.textContent = `${nodeName} (测速失败)`;
+                        optionElement.dataset.timeout = '--';
+                    }
+                })
+                .catch(error => {
+                    console.error('测速失败:', error);
+                    optionElement.textContent = `${nodeName} (${nodeName.includes('(测速中...)') ? '测速中...' : '测速失败'})`;
+                    optionElement.dataset.timeout = '--';
+                });
+        }
+        
         // 根据国家加载节点
         function loadNodesByCountry() {
             const country = document.getElementById('countrySelect').value;
@@ -1158,34 +1291,64 @@
                 nodeSelect.innerHTML = '<option value="">请先选择国家地区</option>';
                 nodeSelect.disabled = true;
                 document.getElementById('confirmAssignBtn').disabled = true;
-                document.getElementById('nodeTimeoutInfo').classList.add('d-none');
+                // 检查nodeTimeoutInfo元素是否存在，避免空引用错误
+                const nodeTimeoutInfo = document.getElementById('nodeTimeoutInfo');
+                if (nodeTimeoutInfo) {
+                    nodeTimeoutInfo.classList.add('d-none');
+                }
                 return;
             }
             
             nodeSelect.innerHTML = '<option value="">加载中...</option>';
             nodeSelect.disabled = false;
             
-            fetch(`/api/proxy/get_nodes_by_country?country=${encodeURIComponent(country)}`)
-                .then(response => response.json())
+            // 使用正确的API路径
+            fetch(`/api/get_nodes_by_country?country=${encodeURIComponent(country)}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
                 .then(data => {
-                    if (data.success) {
+                    if (data.success && data.nodes && Array.isArray(data.nodes)) {
                         nodeSelect.innerHTML = '<option value="">请选择代理节点</option>';
+                        const nodeOptions = [];
+                        
+                        // 先创建所有节点选项
                         data.nodes.forEach(node => {
                             const option = document.createElement('option');
                             option.value = node.id;
+                            // 直接显示从后端获取的延迟值
                             option.textContent = `${node.name} (${node.timeout || '--'}ms)`;
-                            option.dataset.timeout = node.timeout;
+                            option.dataset.timeout = node.timeout || '--';
                             nodeSelect.appendChild(option);
+                            nodeOptions.push({id: node.id, option: option, hasServerInfo: node.server && node.port});
+                        });
+                        
+                        // 为有服务器信息的节点启动自动测速（刷新延迟值）
+                        const nodesToTest = nodeOptions.filter(item => item.hasServerInfo);
+                        nodesToTest.forEach(({id, option}, index) => {
+                            // 依次延迟测速，避免同时发送太多请求
+                            setTimeout(() => {
+                                // 先将选项文本设置为测速中
+                                const originalText = option.textContent;
+                                const nodeName = originalText.split(' (')[0];
+                                option.textContent = `${nodeName} (测速中...)`;
+                                
+                                // 执行测速
+                                testNodeDelay(id, option);
+                            }, index * 500); // 增加延迟间隔，减少并发请求
                         });
                     } else {
-                        nodeSelect.innerHTML = '<option value="">加载失败</option>';
-                        showNotification('加载节点失败', 'error');
+                        nodeSelect.innerHTML = '<option value="">无可用节点</option>';
+                        showNotification('加载节点失败或无可用节点', 'error');
                     }
                 })
                 .catch(error => {
                     console.error('加载节点失败:', error);
                     nodeSelect.innerHTML = '<option value="">加载失败</option>';
-                    showNotification('加载节点失败', 'error');
+                    showNotification('加载节点失败: ' + (error.message || '未知错误'), 'error');
                 });
         }
         
@@ -1196,13 +1359,20 @@
             const timeoutInfo = document.getElementById('nodeTimeoutInfo');
             const timeoutValue = document.getElementById('timeoutValue');
             
+            // 无论是否有超时信息元素，都要正确设置按钮状态
             if (selectedOption.value) {
                 confirmBtn.disabled = false;
-                timeoutValue.textContent = selectedOption.dataset.timeout || '--';
-                timeoutInfo.classList.remove('d-none');
+                // 如果超时信息元素存在，才更新它们
+                if (timeoutValue && timeoutInfo) {
+                    timeoutValue.textContent = selectedOption.dataset.timeout || '--';
+                    timeoutInfo.classList.remove('d-none');
+                }
             } else {
                 confirmBtn.disabled = true;
-                timeoutInfo.classList.add('d-none');
+                // 如果超时信息元素存在，才更新它们
+                if (timeoutInfo) {
+                    timeoutInfo.classList.add('d-none');
+                }
             }
         });
         
@@ -1233,7 +1403,7 @@
             showLoading('正在分配代理，请稍候...');
             
             // 调用API分配代理
-            fetch('/api/proxy/batch_assign', {
+            fetch('/api/batch_assign', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -3129,8 +3299,22 @@
 
         // 隐藏加载状态
         function hideLoading() {
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('vmTable').style.display = 'table';
+            // 隐藏局部加载状态
+            const loadingElement = document.getElementById('loading');
+            if (loadingElement) {
+                loadingElement.style.display = 'none';
+            }
+            
+            const vmTable = document.getElementById('vmTable');
+            if (vmTable) {
+                vmTable.style.display = 'table';
+            }
+            
+            // 隐藏全屏遮罩层
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            if (loadingOverlay && loadingOverlay.parentNode === document.body) {
+                document.body.removeChild(loadingOverlay);
+            }
         }
 
         // 显示错误信息
@@ -7341,54 +7525,156 @@
         async function connectVNC(vmName) {
             console.log('连接VNC:', vmName);
             
+            // 记录开始时间用于性能监控
+            const startTime = Date.now();
+            
+            // 创建临时的加载提示
+            let loadingElement;
             try {
-                // 调用后端API启动websockify并获取连接信息，直接传递虚拟机名称
-                const response = await fetch('/api/vnc/connect', {
+                // 创建加载指示器
+                loadingElement = document.createElement('div');
+                loadingElement.className = 'vnc-loading-indicator';
+                loadingElement.style.cssText = `
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    background: rgba(0, 0, 0, 0.8);
+                    color: white;
+                    padding: 20px 30px;
+                    border-radius: 8px;
+                    z-index: 9999;
+                    font-size: 16px;
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+                    text-align: center;
+                `;
+                loadingElement.textContent = `正在连接VNC (${vmName})...`;
+                document.body.appendChild(loadingElement);
+                
+                // 优化的API调用，添加超时处理
+                const fetchPromise = fetch('/api/vnc/connect', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
                     },
                     body: JSON.stringify({
                         vm_name: vmName
-                    })
+                    }),
+                    // 启用HTTP/2推送提示（如果支持）
+                    hints: {
+                        preload: [{
+                            url: '/vnc_viewer',
+                            as: 'document'
+                        }]
+                    }
                 });
+                
+                // 添加超时处理，避免请求卡住
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('连接超时，请稍后重试')), 10000)
+                );
+                
+                // 使用Promise.race处理超时
+                const response = await Promise.race([fetchPromise, timeoutPromise]);
+                
+                // 检查HTTP响应状态
+                if (!response.ok) {
+                    throw new Error(`服务器响应错误: ${response.status}`);
+                }
                 
                 const data = await response.json();
                 
+                // 记录API响应时间
+                const apiTime = Date.now() - startTime;
+                console.log(`VNC连接API响应时间: ${apiTime}ms`);
+                
                 if (data.success) {
                     // 构建连接字符串并加密
-                    // 使用vmName作为IP占位符，因为实际连接使用localhost
-                    const connectionString = `ip=${vmName}&port=${data.vnc_config.websocket_port}&password=${data.vnc_config.password || ''}`;
+                    const connectionString = `ip=${encodeURIComponent(vmName)}&port=${data.vnc_config.websocket_port}&password=${encodeURIComponent(data.vnc_config.password || '')}`;
                     const encryptedParams = encryptConnectionString(connectionString);
                     
-                    // 在新窗口中打开VNC连接，使用127.0.0.1作为服务器地址
-                    const vncUrl = `http://127.0.0.1:5000/vnc_viewer?params=${encryptedParams}`;
+                    // 使用相对路径，避免硬编码IP地址
+                    const vncUrl = `/vnc_viewer?params=${encryptedParams}`;
                     
-                    // 生成唯一的窗口名称，包含时间戳确保每次都是新窗口
+                    // 生成唯一的窗口名称
                     const timestamp = Date.now();
                     const windowName = `vnc_${vmName.replace(/[^a-zA-Z0-9]/g, '_')}_${timestamp}`;
                     
-                    // 打开新窗口，设置合适的尺寸
-                    const vncWindow = window.open(
-                        vncUrl,
-                        windowName,
-                        'width=1024,height=768,resizable=yes,scrollbars=no,toolbar=no,menubar=no,location=no,status=no'
-                    );
+                    // 根据屏幕尺寸设置更智能的窗口大小
+                    const screenWidth = window.screen.availWidth * 0.85;
+                    const screenHeight = window.screen.availHeight * 0.85;
+                    const windowFeatures = `
+                        width=${Math.floor(screenWidth)},
+                        height=${Math.floor(screenHeight)},
+                        resizable=yes,
+                        scrollbars=no,
+                        toolbar=no,
+                        menubar=no,
+                        location=no,
+                        status=no,
+                        left=${Math.floor((window.screen.availWidth - screenWidth) / 2)},
+                        top=${Math.floor((window.screen.availHeight - screenHeight) / 2)}
+                    `.replace(/\s+/g, ''); // 移除所有空白字符
+                    
+                    // 先预加载vnc_viewer页面资源
+                    const preloadLink = document.createElement('link');
+                    preloadLink.rel = 'prefetch';
+                    preloadLink.href = '/vnc_viewer';
+                    document.head.appendChild(preloadLink);
+                    
+                    // 打开新窗口
+                    const vncWindow = window.open(vncUrl, windowName, windowFeatures);
                     
                     if (!vncWindow) {
                         alert('无法打开VNC窗口，请检查浏览器弹窗设置');
                         return;
                     }
                     
-                    // 设置窗口标题
-                    vncWindow.document.title = `VNC - ${vmName}`;
+                    // 尝试设置窗口标题（兼容不同浏览器）
+                    try {
+                        vncWindow.document.title = `VNC - ${vmName}`;
+                    } catch (e) {
+                        // 某些浏览器可能禁止跨窗口操作
+                        console.warn('无法设置VNC窗口标题:', e);
+                    }
+                    
+                    // 记录总体连接时间
+                    const totalTime = Date.now() - startTime;
+                    console.log(`VNC连接总时间: ${totalTime}ms`);
                     
                 } else {
-                    alert(`VNC连接失败: ${data.message || '未知错误'}\n\n可能的原因:\n- VMX文件不存在或无法读取\n- VNC配置未启用\n- 虚拟机未运行\n- websockify启动失败`);
+                    // 显示更友好的错误信息，包含具体错误原因
+                    let errorMsg = `VNC连接失败: ${data.message || '未知错误'}`;
+                    
+                    // 根据错误信息提供更具体的建议
+                    if (data.message.includes('websockify')) {
+                        errorMsg += '\n\n建议: 尝试关闭可能存在的VNC窗口后重试';
+                    } else if (data.message.includes('VMX')) {
+                        errorMsg += '\n\n建议: 检查虚拟机是否存在且配置正确';
+                    }
+                    
+                    alert(errorMsg);
                 }
             } catch (error) {
-                console.error('VNC连接失败:', error);
-                alert(`VNC连接失败: ${error.message || '未知错误'}`);
+                console.error('VNC连接错误:', error);
+                // 提供更详细的错误信息和重试选项
+                if (confirm(`VNC连接失败: ${error.message || '未知错误'}\n\n是否重试连接?`)) {
+                    // 重试连接
+                    return connectVNC(vmName);
+                }
+            } finally {
+                // 清理加载指示器
+                if (loadingElement && document.body.contains(loadingElement)) {
+                    // 添加淡出动画
+                    loadingElement.style.transition = 'opacity 0.3s ease';
+                    loadingElement.style.opacity = '0';
+                    setTimeout(() => {
+                        if (document.body.contains(loadingElement)) {
+                            document.body.removeChild(loadingElement);
+                        }
+                    }, 300);
+                }
             }
         }
 

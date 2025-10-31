@@ -22,6 +22,9 @@
                             <button id="batchDeleteBtn" class="btn btn-danger" disabled>
                                 <i class="fas fa-trash-alt"></i> 批量删除
                             </button>
+                            <button id="batchAssignBtn" class="btn btn-warning" disabled>
+                                <i class="fas fa-random"></i> 批量分配
+                            </button>
                         </div>
                         <div style="margin-left: auto; display: flex; flex-wrap: wrap; gap: 10px;">
                             <select id="filterRegion" class="form-control form-control-sm d-inline-block w-auto">
@@ -48,11 +51,11 @@
                             <thead class="thead-light">
                                 <tr>
                                     <th width="5%"><input type="checkbox" id="selectAllNodes">  全选</th>
-                                    <th width="30%">节点名称</th>
+                                    <th width="40%">节点名称</th>
                                     <th width="15%">地区</th>
                                     <th width="10%">协议</th>
-                                    <th width="10%">延迟(ms)</th>
-                                    <th width="30%">操作</th>
+                                    <th width="15%">延迟(ms)</th>
+                                    <th width="15%">操作</th>
                                 </tr>
                             </thead>
                             <tbody id="nodeList">
@@ -876,52 +879,62 @@ function updatePaginationInfo(startIndex, endIndex, totalCount) {
     }
 }
 
-// 渲染节点列表
-function renderNodeList(nodes) {
-    // 确保表格容器有滚动条样式
-    const tableContainer = document.querySelector('.table-responsive');
-    if (tableContainer) {
-        tableContainer.style.maxHeight = '500px';
-        tableContainer.style.overflowY = 'auto';
-        tableContainer.style.overflowX = 'auto';
-        tableContainer.style.position = 'relative';
-        tableContainer.style.marginBottom = '15px';
+// 获取延迟对应的CSS类
+    function getDelayClass(delay) {
+        if (delay === null || delay === undefined || isNaN(delay)) {
+            return 'text-muted';
+        }
+        if (delay < 100) return 'text-success font-weight-bold';
+        if (delay < 200) return 'text-warning font-weight-bold';
+        return 'text-danger font-weight-bold';
     }
     
-    const nodeListElement = document.getElementById('nodeList');
-    if (!nodeListElement) return;
-    
-    if (!nodes || nodes.length === 0) {
-        nodeListElement.innerHTML = '<tr><td colspan="6" class="text-center">暂无节点数据</td></tr>';
-        return;
-    }
-    
-    let html = '';
-    nodes.forEach(node => {
-        // 使用getDelayDisplay函数显示延迟值
-        const delayDisplay = getDelayDisplay(node.delay);
-        const delayClass = getDelayClass(node.delay);
+    // 渲染节点列表
+    function renderNodeList(nodes) {
+        // 确保表格容器有滚动条样式
+        const tableContainer = document.querySelector('.table-responsive');
+        if (tableContainer) {
+            tableContainer.style.maxHeight = '500px';
+            tableContainer.style.overflowY = 'auto';
+            tableContainer.style.overflowX = 'auto';
+            tableContainer.style.position = 'relative';
+            tableContainer.style.marginBottom = '15px';
+        }
         
-        html += `
-        <tr>
-            <td><input type="checkbox" class="node-checkbox" data-id="${node.id}"></td>
-            <td>${node.name || '未知节点'}</td>
-            <td>${node.region || '未知地区'}</td>
-            <td>${node.protocol || '未知协议'}</td>
-            <td class="${delayClass}">${delayDisplay}</td>
-            <td>
-                <button class="btn btn-sm btn-info test-node-btn" data-id="${node.id}">测速</button>
-                <button class="btn btn-sm btn-danger delete-node-btn" data-id="${node.id}">删除</button>
-            </td>
-        </tr>
-        `;
-    });
-    
-    nodeListElement.innerHTML = html;
-    
-    // 为按钮添加事件监听器
-    addNodeButtonListeners();
-}
+        const nodeListElement = document.getElementById('nodeList');
+        if (!nodeListElement) return;
+        
+        if (!nodes || nodes.length === 0) {
+            nodeListElement.innerHTML = '<tr><td colspan="6" class="text-center">暂无节点数据</td></tr>';
+            return;
+        }
+        
+        let html = '';
+        nodes.forEach(node => {
+            // 使用getDelayDisplay函数显示延迟值
+            const delayDisplay = getDelayDisplay(node.delay);
+            const delayClass = getDelayClass(node.delay);
+            
+            html += `
+            <tr>
+                <td><input type="checkbox" class="node-checkbox" data-id="${node.id}"></td>
+                <td>${node.name || '未知节点'}</td>
+                <td>${node.region || '未知地区'}</td>
+                <td>${node.protocol || '未知协议'}</td>
+                <td class="${delayClass}">${delayDisplay}</td>
+                <td>
+                    <button class="btn btn-sm btn-info test-node-btn" data-id="${node.id}">测速</button>
+                    <button class="btn btn-sm btn-danger delete-node-btn" data-id="${node.id}">删除</button>
+                </td>
+            </tr>
+            `;
+        });
+        
+        nodeListElement.innerHTML = html;
+        
+        // 为按钮添加事件监听器
+        addNodeButtonListeners();
+    }
 
 // 筛选节点数据
 function filterNodes() {
@@ -1101,78 +1114,89 @@ function goToPage(page) {
 }
 
 // 为节点操作按钮添加事件监听器
-function addNodeButtonListeners() {
-    // 测速按钮
-    document.querySelectorAll('.test-node-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const nodeId = this.getAttribute('data-id');
-            testNode(nodeId);
+    function addNodeButtonListeners() {
+        // 测速按钮
+        document.querySelectorAll('.test-node-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const nodeId = this.getAttribute('data-id');
+                testNode(nodeId);
+            });
         });
-    });
-    
-    // 分配按钮
-    // 测速按钮
-    document.querySelectorAll('.test-node-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const nodeId = this.getAttribute('data-id');
-            testNode(nodeId);
-        });
-    });
-    
-    // 分配按钮已移除
-    
-    // 删除按钮
-    document.querySelectorAll('.delete-node-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const nodeId = this.getAttribute('data-id');
-            deleteNode(nodeId);
-        });
-    });
-    
-    // 节点复选框事件
-    document.querySelectorAll('.node-checkbox').forEach(checkbox => {
-        checkbox.addEventListener('change', updateBatchDeleteButtonStatus);
-    });
-}
-
-// 测试单个节点
-function testNode(nodeId) {
-    // 显示加载指示器
-    showLoadingIndicator(nodeId);
-    
-    // 模拟测速请求
-    setTimeout(function() {
-        const randomDelay = Math.floor(Math.random() * 300) + 50;
         
-        // 更新节点延迟
-        updateNodeDelay(nodeId, randomDelay);
-    }, 1500);
-}
+        // 删除按钮
+        document.querySelectorAll('.delete-node-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const nodeId = this.getAttribute('data-id');
+                deleteNode(nodeId);
+            });
+        });
+        
+        // 节点复选框事件
+        document.querySelectorAll('.node-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', updateBatchDeleteButtonStatus);
+        });
+        
+        // 批量分配按钮事件
+        const batchAssignBtn = document.getElementById('batchAssignBtn');
+        if (batchAssignBtn) {
+            batchAssignBtn.addEventListener('click', batchAssignNodes);
+        }
+    }
+
+// 测试单个节点 - 异步测速优化版
+    function testNode(nodeId) {
+        // 显示加载指示器
+        showLoadingIndicator(nodeId);
+        
+        // 调用后端异步测速接口
+        fetch(`/api/test_node_delay/${nodeId}`)
+            .then(response => response.json())
+            .then(data => {
+                // 更新节点延迟
+                if (data.success) {
+                    updateNodeDelay(nodeId, data.delay);
+                    // 移除测速成功提示框
+                } else {
+                    updateNodeDelay(nodeId, null); // 测速失败
+                    
+                    // 简化错误信息
+                    let errorMessage = `节点测速失败: ${data.message || '未知错误'}`;
+                    showNotification(errorMessage, 'warning');
+                }
+            })
+            .catch(error => {
+                console.error('测速请求失败:', error);
+                updateNodeDelay(nodeId, null); // 测速失败
+                showNotification('测速请求失败，请检查网络连接', 'error');
+            });
+    }
+    
+
 
 
 // 显示加载指示器
-function showLoadingIndicator(nodeId) {
-    const rows = document.querySelectorAll('#nodeList tr');
-    rows.forEach(row => {
-        const checkbox = row.querySelector('.node-checkbox');
-        if (checkbox && checkbox.getAttribute('data-id') === nodeId) {
-            const delayCell = row.querySelector('td:nth-child(5)');
-            if (delayCell) {
-                // 保存原始类名
-                delayCell.dataset.originalClass = delayCell.className;
-                // 创建加载动画HTML
-                const loadingHtml = `
-                    <div class="loading-spinner">
-                        <div class="spinner"></div>
-                        <span>测速中...</span>
-                    </div>
-                `;
-                delayCell.innerHTML = loadingHtml;
-                delayCell.className = 'loading';
+    function showLoadingIndicator(nodeId) {
+        const rows = document.querySelectorAll('#nodeList tr');
+        rows.forEach(row => {
+            const checkbox = row.querySelector('.node-checkbox');
+            if (checkbox && checkbox.getAttribute('data-id') === nodeId) {
+                const delayCell = row.querySelector('td:nth-child(5)'); // 修改为第5列
+                if (delayCell) {
+                    // 保存原始类名
+                    delayCell.dataset.originalClass = delayCell.className;
+                    // 创建加载动画HTML
+                    const loadingHtml = `
+                        <div class="loading-spinner">
+                            <div class="spinner"></div>
+                            <span>测速中...</span>
+                        </div>
+                    `;
+                    delayCell.innerHTML = loadingHtml;
+                    delayCell.className = 'loading';
+                }
             }
-        }
-    });
-}
+        });
+    }
 
 // 批量测试节点
 function testAllNodes() {
@@ -1211,36 +1235,111 @@ function testAllNodes() {
 }
 
 // 更新节点延迟
-function updateNodeDelay(nodeId, delay) {
-    const rows = document.querySelectorAll('#nodeList tr');
-    
-    // 更新DOM中的节点延迟
-    rows.forEach(row => {
-        const checkbox = row.querySelector('.node-checkbox');
-        if (checkbox && checkbox.getAttribute('data-id') === nodeId) {
-            const delayCell = row.querySelector('td:nth-child(5)');
-            if (delayCell) {
-                // 恢复原始类名或使用新的延迟类
-                if (delayCell.dataset.originalClass) {
-                    delayCell.className = delayCell.dataset.originalClass;
-                } else {
-                    delayCell.className = getDelayClass(delay);
+    function updateNodeDelay(nodeId, delay) {
+        const rows = document.querySelectorAll('#nodeList tr');
+        
+        // 更新DOM中的节点延迟
+        rows.forEach(row => {
+            const checkbox = row.querySelector('.node-checkbox');
+            if (checkbox && checkbox.getAttribute('data-id') === nodeId) {
+                const delayCell = row.querySelector('td:nth-child(5)'); // 修改为第5列
+                if (delayCell) {
+                    // 恢复原始类名或使用新的延迟类
+                    if (delayCell.dataset.originalClass) {
+                        delayCell.className = delayCell.dataset.originalClass;
+                    } else {
+                        delayCell.className = getDelayClass(delay);
+                    }
+                    // 直接设置文本内容，确保居中显示
+                    const delayDisplay = getDelayDisplay(delay);
+                    delayCell.innerHTML = `<span style="display: inline-block; vertical-align: middle;">${delayDisplay}</span>`;
                 }
-                // 直接设置文本内容，确保居中显示
-                const delayDisplay = getDelayDisplay(delay);
-                delayCell.innerHTML = `<span style="display: inline-block; vertical-align: middle;">${delayDisplay}</span>`;
             }
+        });
+        
+        // 同时更新全局数据中的节点延迟
+        const nodeIndex = nodeData.findIndex(node => node.id === nodeId);
+        if (nodeIndex !== -1) {
+            nodeData[nodeIndex].delay = delay;
         }
-    });
+    }
+
+// 批量分配节点功能
+function batchAssignNodes() {
+    // 获取当前页面选中的节点ID
+    const selectedCheckboxes = document.querySelectorAll('.node-checkbox:checked');
+    const selectedNodeIds = Array.from(selectedCheckboxes).map(cb => cb.getAttribute('data-id'));
     
-    // 同时更新全局数据中的节点延迟
-    const nodeIndex = nodeData.findIndex(node => node.id === nodeId);
-    if (nodeIndex !== -1) {
-        nodeData[nodeIndex].delay = delay;
+    if (selectedNodeIds.length === 0) {
+        showNotification('请先选择要分配的节点', 'error');
+        return;
+    }
+    
+    if (selectedNodeIds.length > 1) {
+        showNotification('一次只能分配一个节点', 'error');
+        return;
+    }
+    
+    // 获取节点信息
+    const nodeId = selectedNodeIds[0];
+    const node = nodeData.find(n => n.id === nodeId);
+    
+    if (!node) {
+        showNotification('节点信息不存在', 'error');
+        return;
+    }
+    
+    // 提示用户输入虚拟机名称
+    const vmNamesInput = prompt(`请输入要分配的虚拟机名称（多个虚拟机用逗号分隔）:\n\n将分配节点: ${node.name}`);
+    
+    if (!vmNamesInput || vmNamesInput.trim() === '') {
+        return; // 用户取消操作
+    }
+    
+    // 解析虚拟机名称列表
+    const vmNames = vmNamesInput.split(',').map(vm => vm.trim()).filter(vm => vm !== '');
+    
+    if (vmNames.length === 0) {
+        showNotification('请输入有效的虚拟机名称', 'error');
+        return;
+    }
+    
+    if (confirm(`确定要将节点 ${node.name} 分配给以下 ${vmNames.length} 台虚拟机吗？\n${vmNames.join('\n')}`)) {
+        showLoading('正在批量分配节点...');
+        
+        // 调用后端API进行批量分配
+        fetch('/api/batch_assign', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                vm_names: vmNames,
+                node_id: nodeId
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            hideLoading();
+            
+            if (data.success) {
+                // 显示详细的分配结果
+                let resultMessage = data.message + '\n\n详细结果：\n';
+                data.vm_results.forEach(vm => {
+                    resultMessage += `${vm.name}: ${vm.success ? '成功' : '失败 - ' + vm.message}\n`;
+                });
+                
+                showNotification(resultMessage, 'success');
+            } else {
+                showNotification(`批量分配失败: ${data.message}`, 'error');
+            }
+        })
+        .catch(error => {
+            hideLoading();
+            showNotification('批量分配请求失败: ' + error.message, 'error');
+        });
     }
 }
-
-// 分配节点功能已移除
 
 // 删除节点
 function deleteNode(nodeId) {
@@ -1324,10 +1423,13 @@ function batchDeleteNodes() {
 // 更新批量删除按钮状态
 function updateBatchDeleteButtonStatus() {
     const batchDeleteBtn = document.getElementById('batchDeleteBtn');
-    if (!batchDeleteBtn) return;
+    const batchAssignBtn = document.getElementById('batchAssignBtn');
+    
+    if (!batchDeleteBtn || !batchAssignBtn) return;
     
     const selectedCheckboxes = document.querySelectorAll('.node-checkbox:checked');
     batchDeleteBtn.disabled = selectedCheckboxes.length === 0;
+    batchAssignBtn.disabled = selectedCheckboxes.length === 0 || selectedCheckboxes.length > 1;
 }
 
 // 导入配置文件

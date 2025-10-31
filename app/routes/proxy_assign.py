@@ -6,11 +6,16 @@ import yaml
 import os
 import time
 import socket
-import urllib.request
-import urllib.error
+import yaml
 from datetime import datetime
 import logging
 from functools import wraps
+from app.utils.vm_utils import get_vm_ip as standard_get_vm_ip
+from app.utils.vm_cache import vm_cache
+from config import *
+from config import app_root
+from app.utils.ssh_utils import SSHClient
+
 
 # 登录验证装饰器
 def login_required(f):
@@ -85,6 +90,10 @@ def get_countries():
     """
     try:
         global nodes_db
+        # 初始化节点数据（如果为空）
+        if not nodes_db:
+            init_nodes()
+            
         # 从节点数据库中提取所有不重复的国家/地区
         countries = set()
         for node in nodes_db:
@@ -111,7 +120,7 @@ def get_countries():
 @login_required
 def get_nodes_by_country():
     """
-    根据国家获取节点列表
+    根据国家获取节点列表 - 返回完整节点信息，包括服务器配置
     """
     try:
         country = request.args.get('country', '')
@@ -127,11 +136,33 @@ def get_nodes_by_country():
         for node in nodes_db:
             if ('country' in node and node['country'] == country) or \
                ('region' in node and node['region'] == country):
-                filtered_nodes.append({
+                # 返回完整的节点信息，包括所有服务器配置
+                node_info = {
                     'id': node['id'],
                     'name': node['name'],
-                    'timeout': node.get('timeout', None)
-                })
+                    'timeout': node.get('timeout'),
+                    'delay': node.get('delay'),
+                    'server': node.get('server', ''),
+                    'port': node.get('port', 0),
+                    'protocol': node.get('protocol', ''),
+                    'region': node.get('region', ''),
+                    'type': node.get('type', ''),
+                    'config_file': node.get('config_file', '')
+                }
+                
+                # 添加协议特定信息
+                if node.get('protocol') == 'TROJAN':
+                    node_info['password'] = node.get('password', '')
+                    node_info['sni'] = node.get('sni', '')
+                elif node.get('protocol') == 'SS':
+                    node_info['password'] = node.get('password', '')
+                    node_info['cipher'] = node.get('cipher', '')
+                elif node.get('protocol') == 'VMESS':
+                    node_info['id'] = node.get('uuid', '')
+                    node_info['alterId'] = node.get('alterId', 0)
+                    node_info['cipher'] = node.get('cipher', 'auto')
+                
+                filtered_nodes.append(node_info)
         
         # 按名称排序
         filtered_nodes.sort(key=lambda x: x['name'])
@@ -147,18 +178,121 @@ def get_nodes_by_country():
             'message': f'获取节点列表失败: {str(e)}'
         })
 
+@proxy_assign_bp.route('/api/test_node_delay/<int:node_id>')
+@login_required
+def test_node_delay(node_id):
+    """
+    测试单个节点的延迟
+    """
+    try:
+        global nodes_db
+        node = next((n for n in nodes_db if n['id'] == node_id), None)
+        
+        if not node:
+            return jsonify({
+                'success': False,
+                'message': '节点不存在',
+                'node_id': node_id
+            })
+        
+        # 获取服务器信息
+        server = node.get('server')
+        port = node.get('port')
+        protocol = node.get('protocol', '').upper()
+        node_name = node.get('name', 'Unknown')
+        
+        logger.info(f'开始测试节点延迟: ID={node_id}, 名称={node_name}, 服务器={server}:{port}')
+        
+        # 验证必要的服务器信息
+        if not server:
+            logger.warning(f"节点 {node_id} 测速失败: 节点缺少服务器信息")
+            return jsonify({
+                'success': False,
+                'message': '节点缺少服务器信息',
+                'node_id': node_id
+            })
+        
+        # 如果节点有服务器地址和端口，进行真实ping测试
+        if server and port:
+            try:
+                # 优化ping测试：减少尝试次数为2次，加快响应速度
+                pings = []
+                errors = []
+                for i in range(2):  # 减少为2次尝试
+                    ping_result = ping_server(server, port, timeout=1.5)  # 减少超时时间
+                    if ping_result != float('inf'):
+                        pings.append(ping_result)
+                        logger.debug(f'Ping尝试 {i+1} 成功: {ping_result}ms')
+                    else:
+                        errors.append(f'尝试 {i+1} 连接失败')
+                        logger.debug(f'Ping尝试 {i+1} 失败')
+                
+                if pings:
+                    delay = int(sum(pings) / len(pings))  # 计算平均延迟
+                    # 更新节点信息
+                    node['delay'] = delay
+                    node['timeout'] = delay
+                    node['last_test'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    node['timeout'] = False
+                    
+                    return jsonify({
+                        'success': True,
+                        'node_id': node_id,
+                        'delay': delay,
+                        'message': f'测速成功: {delay}ms'
+                    })
+                else:
+                    # 测试失败时，更新节点状态但不阻塞返回
+                    node['delay'] = None
+                    node['last_test'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    node['timeout'] = True
+                    
+                    error_details = ', '.join(errors)
+                    logger.warning(f'节点测速失败: ID={node_id}, 服务器={server}:{port}, 错误={error_details}')
+                    
+                    return jsonify({
+                        'success': False,
+                        'node_id': node_id,
+                        'message': f'测速失败: {error_details}'
+                    })
+            except Exception as e:
+                logger.error(f'测试节点延迟异常: ID={node_id}, 错误: {str(e)}')
+                return jsonify({
+                    'success': False,
+                    'message': f'测速异常: {str(e)}',
+                    'node_id': node_id
+                })
+        else:
+            return jsonify({
+                'success': False,
+                'message': '节点信息不完整，缺少服务器信息',
+                'node_id': node_id
+            })
+    except Exception as e:
+        logger.error(f'测试节点延迟失败: ID={node_id}, 错误: {str(e)}')
+        return jsonify({
+            'success': False,
+            'message': f'测速失败: {str(e)}',
+            'node_id': node_id
+        })
+
 @proxy_assign_bp.route('/api/batch_assign', methods=['POST'])
 @login_required
 def batch_assign():
     """
-    批量分配代理
+    批量分配代理 - 添加详细日志记录
     """
     try:
+        logger.info("===== 开始批量分配代理操作 =====")
+        
         data = request.json
         vm_names = data.get('vm_names', [])
         node_id = data.get('node_id')
         
+        logger.info(f"收到批量分配请求: 虚拟机数量={len(vm_names)}, 节点ID={node_id}")
+        
         if not vm_names or not node_id:
+            logger.warning("批量分配请求缺少必要参数: 虚拟机名称列表或节点ID为空")
             return jsonify({
                 'success': False,
                 'message': '请提供虚拟机名称和节点ID'
@@ -173,44 +307,75 @@ def batch_assign():
                 break
         
         if not selected_node:
+            logger.warning(f"指定的代理节点不存在: 节点ID={node_id}")
             return jsonify({
                 'success': False,
                 'message': '指定的代理节点不存在'
             })
         
-        # 创建config_test目录（如果不存在）
-        from config import app_root
-        config_test_dir = os.path.join(app_root, 'config_test')
+        logger.info(f"成功找到代理节点: 名称='{selected_node.get('name', '未知')}'")
+        
+        # 创建config_test目录（如果不存在）- 修改为app目录下的config_test
+        config_test_dir = os.path.join(app_root, 'app', 'config_test')
         os.makedirs(config_test_dir, exist_ok=True)
+        logger.info(f"配置文件临时目录: {config_test_dir}")
         
         # 为每个虚拟机生成配置文件
         success_count = 0
+        vm_results = []
+        
         for vm_name in vm_names:
+            logger.info(f"开始处理虚拟机: {vm_name}")
+            vm_result = {'name': vm_name, 'success': False, 'step': '开始'}
+            
             try:
                 # 生成clash配置文件
+                vm_result['step'] = '生成配置文件'
+                logger.info(f"[{vm_name}] 正在生成Clash配置文件...")
                 clash_config = generate_clash_config(selected_node)
+                logger.info(f"[{vm_name}] 成功生成Clash配置文件，内容长度={len(clash_config)}字节")
                 
                 # 保存配置文件到config_test目录
                 config_filename = f'{vm_name}.yaml'
                 config_filepath = os.path.join(config_test_dir, config_filename)
                 with open(config_filepath, 'w', encoding='utf-8') as f:
                     f.write(clash_config)
+                logger.info(f"[{vm_name}] 配置文件已保存到: {config_filepath}")
                 
-                # 使用SSH传输文件并重启clashx
+                # 使用SFTP传输文件并重启clashx
+                vm_result['step'] = '传输配置文件并重启服务'
+                logger.info(f"[{vm_name}] 开始传输配置文件到远程虚拟机...")
+                
                 if transfer_config_and_restart_clash(vm_name, config_filepath):
                     success_count += 1
+                    vm_result['success'] = True
+                    vm_result['message'] = '成功'
+                    logger.info(f"[{vm_name}] 配置文件传输和服务重启成功")
+                else:
+                    vm_result['message'] = '配置文件传输或服务重启失败'
+                    logger.error(f"[{vm_name}] 配置文件传输或服务重启失败")
                 
             except Exception as e:
-                logger.error(f'为虚拟机 {vm_name} 分配代理失败: {str(e)}')
+                error_msg = f"处理失败: {str(e)}"
+                vm_result['message'] = error_msg
+                logger.error(f"[{vm_name}] 在{vm_result['step']}步骤失败: {str(e)}", exc_info=True)
+            
+            vm_results.append(vm_result)
+            logger.info(f"[{vm_name}] 处理完成: 结果={'成功' if vm_result['success'] else '失败'}")
+        
+        logger.info(f"批量分配操作完成: 成功={success_count}, 总数={len(vm_names)}")
+        logger.info("===== 批量分配代理操作结束 =====")
         
         return jsonify({
             'success': True,
             'message': f'成功为 {success_count}/{len(vm_names)} 台虚拟机分配代理',
             'success_count': success_count,
-            'total_count': len(vm_names)
+            'total_count': len(vm_names),
+            'vm_results': vm_results  # 详细的每台虚拟机处理结果
         })
     except Exception as e:
-        logger.error(f'批量分配代理失败: {str(e)}', exc_info=True)
+        logger.error(f'批量分配代理过程中发生系统错误: {str(e)}', exc_info=True)
+        logger.info("===== 批量分配代理操作异常结束 =====")
         return jsonify({
             'success': False,
             'message': f'批量分配代理失败: {str(e)}'
@@ -218,115 +383,172 @@ def batch_assign():
 
 def generate_clash_config(node):
     """
-    根据节点信息生成clash配置文件
+    根据节点信息生成clash配置文件，确保格式与标准config.yaml一致
     """
-    # 基础配置
+    # 将节点信息转换为Clash配置格式
+    clash_proxy = {
+        "name": node['name'],
+        "type": node['protocol'].lower() if 'protocol' in node else 'trojan',
+        "server": node.get('server', ''),
+        "port": node.get('port', 0)
+    }
+    
+    # 添加协议特定字段
+    if clash_proxy['type'] == 'trojan':
+        clash_proxy['password'] = node.get('password', '')
+        clash_proxy['sni'] = node.get('sni', '')
+        clash_proxy['udp'] = node.get('udp', True)
+        clash_proxy['skip-cert-verify'] = True
+    elif clash_proxy['type'] == 'ss':
+        clash_proxy['password'] = node.get('password', '')
+        clash_proxy['cipher'] = node.get('cipher', 'chacha20-ietf-poly1305')
+        clash_proxy['udp'] = node.get('udp', True)
+    elif clash_proxy['type'] == 'vmess':
+        clash_proxy['id'] = node.get('uuid', node.get('id', ''))
+        clash_proxy['alterId'] = node.get('alterId', 0)
+        clash_proxy['cipher'] = node.get('cipher', 'auto')
+        clash_proxy['udp'] = node.get('udp', True)
+    
+    # 基础配置，与样例格式保持一致
     config = {
         "port": 7890,
         "socks-port": 7891,
-        "allow-lan": True,
+        "allow-lan": False,
         "mode": "Rule",
         "log-level": "info",
-        "external-controller": "127.0.0.1:9090",
-        "proxies": [node],
+        "proxies": [clash_proxy],
         "proxy-groups": [
             {
-                "name": "PROXY",
+                "name": "Proxy",  # 注意大小写，与样例一致
                 "type": "select",
-                "proxies": [node['name']]
+                "proxies": [
+                    node['name'],  # 默认首选节点
+                    "DIRECT"  # 添加DIRECT选项
+                ]
             }
         ],
         "rules": [
-            "DOMAIN-SUFFIX,google.com,PROXY",
-            "DOMAIN-SUFFIX,facebook.com,PROXY",
-            "DOMAIN-SUFFIX,twitter.com,PROXY",
-            "DOMAIN-SUFFIX,youtube.com,PROXY",
-            "GEOIP,CN,DIRECT",
-            "MATCH,PROXY"
+            "MATCH,Proxy"  # 简单的匹配规则
         ]
     }
     
     # 转换为YAML格式
-    import yaml
+
     return yaml.dump(config, default_flow_style=False, allow_unicode=True)
 
 def transfer_config_and_restart_clash(vm_name, config_filepath):
-    """通过SSH传输配置文件并重启ClashX"""
+    """通过SFTP传输配置文件并重启ClashX - 增强版日志记录"""
+    logger.info(f"[{vm_name}] 开始SFTP传输和服务重启流程")
+    
     try:
-        # 获取虚拟机的IP地址
+        # 步骤1: 获取虚拟机的IP地址
+        logger.info(f"[{vm_name}] 步骤1/5: 获取虚拟机IP地址")
         vm_ip = get_vm_ip(vm_name)
         if not vm_ip:
-            logger.error(f'无法获取虚拟机 {vm_name} 的IP地址')
+            logger.error(f"[{vm_name}] 无法获取虚拟机IP地址")
             return False
+        logger.info(f"[{vm_name}] 成功获取虚拟机IP: {vm_ip}")
         
-        # 从config.py获取SSH配置和脚本路径
-        from config import ssh_user, ssh_password, sh_script_remote_path
+        # 步骤2: 获取配置信息
+        logger.info(f"[{vm_name}] 步骤2/5: 获取SSH配置和脚本路径")
+
         
-        # 创建SSH客户端
-        from app.utils.ssh_utils import SSHClient
-        ssh_client = SSHClient(vm_ip, ssh_user, ssh_password)
+        # 修正脚本路径，确保指向正确的重启脚本
+        restart_script_path = sh_script_remote_path.rstrip('/') + '/restart_clashx.sh'
+        
+        # 检查脚本路径配置
+        if not restart_script_path:
+            logger.error(f"[{vm_name}] 无法确定重启脚本路径")
+            return False
+        logger.info(f"[{vm_name}] 脚本路径配置: {restart_script_path}")
+        
+        # 步骤3: 建立SSH连接
+        logger.info(f"[{vm_name}] 步骤3/5: 创建SSH客户端并建立连接")
+
+        ssh_client = SSHClient(vm_ip, vm_username, vm_password)
         
         # 连接SSH
-        if not ssh_client.connect():
-            logger.error(f'无法连接到虚拟机 {vm_name} ({vm_ip})')
+        logger.info(f"[{vm_name}] 尝试连接到 {vm_username}@{vm_ip}...")
+        connect_success, connect_msg = ssh_client.connect()
+        if not connect_success:
+            logger.error(f"[{vm_name}] SSH连接失败: {connect_msg}")
             return False
+        logger.info(f"[{vm_name}] SSH连接成功: {connect_msg}")
         
         try:
-            # 目标路径
-            target_path = '/Users/wx/.config/clash/config.yaml'
+            # 步骤4: SFTP传输配置文件
+            logger.info(f"[{vm_name}] 步骤4/5: 通过SFTP传输配置文件")
+            # 目标路径 - 按照需求固定为/Users/wx/.config/clash/config.yaml
+            target_path = clash_config
+            logger.info(f"[{vm_name}] 目标路径: {target_path}")
             
-            # 上传配置文件
-            if not ssh_client.upload_file(config_filepath, target_path):
-                logger.error(f'无法上传配置文件到虚拟机 {vm_name}')
+            # 确保远程目录存在
+            remote_dir = os.path.dirname(target_path)
+            logger.info(f"[{vm_name}] 确保远程目录存在: {remote_dir}")
+            mkdir_success, mkdir_msg = ssh_client.create_directory(remote_dir)
+            if not mkdir_success:
+                logger.warning(f"[{vm_name}] 创建远程目录失败 (可能已存在): {mkdir_msg}")
+            else:
+                logger.info(f"[{vm_name}] 远程目录准备完成: {mkdir_msg}")
+            
+            # 使用SFTP上传配置文件
+            logger.info(f"[{vm_name}] 开始SFTP上传: {config_filepath} -> {target_path}")
+            upload_success, upload_msg = ssh_client.upload_file(config_filepath, target_path)
+            if not upload_success:
+                logger.error(f"[{vm_name}] SFTP上传失败: {upload_msg}")
+                return False
+            logger.info(f"[{vm_name}] SFTP上传成功: {upload_msg}")
+            
+            # 步骤5: 执行重启脚本restart_clashx.sh
+            logger.info(f"[{vm_name}] 步骤5/5: 执行重启脚本")
+            restart_command = f'sh {restart_script_path}'
+            logger.info(f"[{vm_name}] 执行命令: {restart_command}")
+            cmd_success, stdout_data, stderr_data, exit_status = ssh_client.execute_command(restart_command)
+            
+            # 检查执行结果
+            if not cmd_success or exit_status != 0:
+                error_msg = stderr_data if stderr_data else '未知错误'
+                logger.error(f"[{vm_name}] 重启脚本执行失败 (退出码: {exit_status}): {error_msg}")
+                logger.info(f"[{vm_name}] 脚本标准输出: {stdout_data}")
+                logger.info(f"[{vm_name}] 脚本错误输出: {stderr_data}")
                 return False
             
-            # 执行重启脚本
-            restart_script = sh_script_remote_path
-            result = ssh_client.execute_command(f'sh {restart_script}')
-            if result.get('status') != 0:
-                logger.error(f'重启ClashX失败: {result.get("error", "未知错误")}')
-                return False
-            
-            logger.info(f'成功为虚拟机 {vm_name} 分配代理并重启ClashX')
+            logger.info(f"[{vm_name}] 重启脚本执行成功 (退出码: {exit_status})")
+            logger.info(f"[{vm_name}] 脚本执行输出: {stdout_data}")
+            logger.info(f"[{vm_name}] SFTP传输和服务重启流程完成 - 成功")
             return True
         finally:
             # 关闭SSH连接
+            logger.info(f"[{vm_name}] 关闭SSH连接")
             ssh_client.close()
             
     except Exception as e:
-        logger.error(f'SSH操作失败: {str(e)}')
+        logger.error(f"[{vm_name}] SFTP传输和脚本操作异常失败: {str(e)}", exc_info=True)
         return False
 
+# 使用应用中标准的get_vm_ip函数
 def get_vm_ip(vm_name):
-    """获取虚拟机的IP地址"""
+    """获取虚拟机的IP地址 - 使用应用中的标准函数"""
     try:
-        # 尝试从缓存中获取
-        from app.utils.vm_cache import vm_info_cache
-        if vm_name in vm_info_cache:
-            ip = vm_info_cache[vm_name].get('ip')
-            if ip and ip != '获取中...' and ip != '-':
-                return ip
+        # 先尝试从vm_cache中获取
+        cached_ip = vm_cache.get_cached_status(vm_name, 'ip_address')
+        if cached_ip:
+            logger.info(f"[{vm_name}] 从缓存获取IP地址: {cached_ip}")
+            return cached_ip
         
-        # 如果缓存中没有，尝试从虚拟机列表API获取
-        import requests
-        from flask import request as flask_request
+        # 如果缓存中没有，使用标准的get_vm_ip函数
+        ip = standard_get_vm_ip(vm_name)
         
-        # 获取当前请求的主机和端口
-        base_url = f"http://{flask_request.host}"
-        response = requests.get(f"{base_url}/api/vm_management/vm_list")
-        if response.status_code == 200:
-            data = response.json()
-            if data.get('success'):
-                for vm in data.get('vms', []):
-                    if vm.get('name') == vm_name:
-                        ip = vm.get('ip')
-                        if ip and ip != '获取中...' and ip != '-':
-                            return ip
+        # 如果获取到了IP，缓存起来
+        if ip:
+            vm_cache.set_cached_status(vm_name, ip, 'ip_address')
+            logger.info(f"[{vm_name}] 获取并缓存IP地址: {ip}")
+        else:
+            logger.warning(f'[{vm_name}] 无法获取IP地址')
         
-        logger.warning(f'无法获取虚拟机 {vm_name} 的IP地址')
-        return None
+        return ip
     except Exception as e:
-        logger.error(f'获取虚拟机IP失败: {str(e)}')
+        logger.error(f'[{vm_name}] 获取虚拟机IP失败: {str(e)}')
         return None
 
 @proxy_assign_bp.route('/api/nodes/import', methods=['POST'])
@@ -444,16 +666,41 @@ def import_nodes():
 
 def ping_server(server, port, timeout=2):
     """
-    测试服务器延迟
+    测试服务器延迟 - 增强版：添加详细错误处理和日志记录
     """
     try:
+        # 验证输入参数
+        if not server or not isinstance(port, int) or port <= 0 or port > 65535:
+            logger.warning(f'无效的服务器参数: server={server}, port={port}')
+            return float('inf')
+        
+        # 记录开始测试
+        logger.debug(f'开始测试服务器连接: {server}:{port}, 超时设置: {timeout}秒')
+        
         start_time = time.time()
+        
+        # 创建socket并连接
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.settimeout(timeout)
             s.connect((server, port))
-        return int((time.time() - start_time) * 1000)  # 转换为毫秒
-    except:
-        return float('inf')  # 连接失败返回无限大
+            
+        # 计算延迟
+        delay = int((time.time() - start_time) * 1000)  # 转换为毫秒
+        logger.debug(f'服务器连接成功: {server}:{port}, 延迟: {delay}ms')
+        return delay
+        
+    except socket.timeout:
+        logger.warning(f'连接超时: {server}:{port}, 超时设置: {timeout}秒')
+        return float('inf')
+    except socket.gaierror:
+        logger.warning(f'域名解析失败: {server}')
+        return float('inf')
+    except socket.error as e:
+        logger.warning(f'连接失败: {server}:{port}, 错误: {str(e)}')
+        return float('inf')
+    except Exception as e:
+        logger.error(f'测试延迟异常: {server}:{port}, 错误: {str(e)}')
+        return float('inf')  # 任何异常都返回无限大
 
 def test_download_speed():
     """
@@ -759,7 +1006,7 @@ def generate_mock_nodes(count):
 
 def load_config_from_directory():
     """
-    从temp/fongi目录加载配置文件
+    从temp/config目录加载配置文件
     """
     try:
         # 查找目录中最新的yaml文件

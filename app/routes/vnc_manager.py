@@ -113,6 +113,10 @@ def api_vnc_connect():
         vm_name = data.get('vm_name')
         client_ip = data.get('client_ip')
 
+        # 快速参数验证
+        if not vm_name and not client_ip:
+            return jsonify({'success': False, 'message': '虚拟机名称不能为空，请提供vm_name或有效的client_ip'})
+
         # 优先使用vm_name，如果没有则使用client_ip查找虚拟机名称
         if not vm_name and client_ip:
             # 通过client_ip查找对应的虚拟机名称
@@ -123,51 +127,35 @@ def api_vnc_connect():
                 logger.info(f"通过client_ip {client_ip} 找到虚拟机名称: {vm_name}")
 
         if not vm_name:
-            return jsonify({'success': False, 'message': '虚拟机名称不能为空，请提供vm_name或有效的client_ip'})
-
-        # logger.info(f"=== VNC连接请求开始 ===")
-        # logger.info(f"请求连接的虚拟机名称: {vm_name}")
+            return jsonify({'success': False, 'message': '无法通过client_ip找到对应的虚拟机'})
 
         # 查找对应的VMX文件
         vmx_file = find_vmx_file_by_name(vm_name)
         if not vmx_file:
             logger.warning(f"未找到虚拟机名称 {vm_name} 对应的VMX文件")
-            logger.info(f"=== VNC连接请求结束 (失败: 未找到VMX文件) ===")
             return jsonify({'success': False, 'message': f'未找到虚拟机名称 {vm_name} 对应的虚拟机配置文件'})
+            
         # 读取VNC配置
         vnc_config = read_vnc_config_from_vmx(vmx_file)
         if not vnc_config:
             logger.warning(f"VMX文件 {vmx_file} 中未找到VNC配置")
-            logger.info(f"=== VNC连接请求结束 (失败: 无VNC配置) ===")
             return jsonify({'success': False, 'message': '虚拟机未启用VNC或配置不完整'})
 
-        logger.info(f"VNC配置信息:")
-        logger.info(f"  - VNC端口: {vnc_config['port']}")
-        # logger.info(f"  - VNC密码: {'已设置' if vnc_config['password'] else '未设置'}")
+        # 记录关键配置信息（减少日志输出）
+        logger.info(f"VNC配置信息: VNC端口={vnc_config['port']}")
         
-        # 获取虚拟机IP地址
-        client_ip = get_vm_ip_from_vmx(vmx_file)
-        if not client_ip:
-            logger.error(f"无法获取虚拟机IP地址")
-            logger.info(f"=== VNC连接请求结束 (失败: 无法获取虚拟机IP) ===")
-            return jsonify({'success': False, 'message': '无法获取虚拟机IP地址'})
-        
-        logger.info(f"  - 虚拟机IP: {client_ip}")
-
-        # 启动websockify进程
+        # 启动websockify进程（使用优化后的函数，支持进程重用）
         websocket_port = start_websockify(vm_name, vnc_config['port'])
         if not websocket_port:
             logger.error(f"websockify启动失败")
-            logger.info(f"=== VNC连接请求结束 (失败: websockify启动失败) ===")
             return jsonify({'success': False, 'message': 'websockify启动失败'})
 
-        logger.info(f"websockify启动成功:")
-        # logger.info(f"  - 客户端IP: {client_ip}")
-        # logger.info(f"  - 虚拟机名称: {vm_name}")
-        # logger.info(f"  - VMX文件: {vmx_file}")
-        # #logger.info(f"  - VNC端口: {vnc_config['port']}")
-        # logger.info(f"  - WebSocket端口: {websocket_port}")
-        logger.info(f"=== VNC连接请求结束 (成功) ===")
+        # 获取虚拟机IP地址（放在websockify成功后，避免不必要的操作）
+        client_ip = get_vm_ip_from_vmx(vmx_file)
+        if client_ip:
+            logger.info(f"虚拟机IP: {client_ip}")
+
+        logger.info(f"=== VNC连接请求成功，WebSocket端口={websocket_port} ===")
 
         return jsonify({
             'success': True,
@@ -182,7 +170,7 @@ def api_vnc_connect():
 
     except Exception as e:
         logger.error(f"VNC连接失败: {str(e)}")
-        return jsonify({'success': False, 'message': str(e)})
+        return jsonify({'success': False, 'message': f'VNC连接处理错误: {str(e)}'})
 
 
 

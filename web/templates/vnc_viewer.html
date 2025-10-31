@@ -3,29 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>VNC 远程桌面</title>
+    <!-- 预加载关键资源 -->
+    <link rel="preload" href="{{ url_for('static', filename='lib/bootstrap.min.css') }}" as="style">
+    <link rel="preload" href="{{ url_for('static', filename='lib/all.min.css') }}" as="style">
+    <link rel="preload" href="{{ url_for('static', filename='js/noVNC-1.4.0/core/rfb.js') }}" as="script">
+    
+    <!-- 引入CSS -->
     <link href="{{ url_for('static', filename='lib/bootstrap.min.css') }}" rel="stylesheet">
-<link href="{{ url_for('static', filename='lib/all.min.css') }}" rel="stylesheet">
-      <!-- noVNC CSS -->
-    <!-- noVNC CSS暂时禁用，避免CDN资源被阻止 -->
-    <!-- <link rel="stylesheet" href="https://unpkg.com/novnc@1.4.0/app/styles/base.css"> -->
-    <!-- <link rel="stylesheet" href="https://unpkg.com/novnc@1.4.0/app/styles/ui.css"> -->
-    <!-- Socket.IO -->
-    <script type="module" src="static/js/novnc/rfb.js"></script>
-    <script src="{{ url_for('static', filename='lib/socket.io-4.7.2.min.js') }}"></script>
-    <script src="{{ url_for('static', filename='lib/bootstrap.bundle.min.js') }}"></script>
-     
-    <!-- noVNC库 (使用jsDelivr CDN) -->
+    <link href="{{ url_for('static', filename='lib/all.min.css') }}" rel="stylesheet">
+    
+    <!-- 使用ES模块导入noVNC库 -->
     <script type="module">
         import RFB from '/static/js/noVNC-1.4.0/core/rfb.js';
         window.RFB = RFB;
     </script>
-    
-    <!-- Socket.IO库 -->
-    <script src="{{ url_for('static', filename='lib/socket.io-4.5.0.min.js') }}"></script>
-    
-    <!-- Bootstrap JavaScript -->
-    <script src="{{ url_for('static', filename='lib/bootstrap.bundle.min.js') }}"></script>
     
   <style>
         body {
@@ -214,10 +207,8 @@
         </div>
     </div>
 
-    <!-- JavaScript 库 -->
+    <!-- JavaScript 库 - 只引入必要的库 -->
     <script src="{{ url_for('static', filename='lib/bootstrap.bundle.min.js') }}"></script>
-    <!-- noVNC 库 (使用jsDelivr CDN) -->
-    <script src="{{ url_for('static', filename='js/noVNC-1.4.0/core/rfb.js') }}"></script>
     
     <script>
         // 全局变量
@@ -291,18 +282,27 @@
             connectToVNC();
         }
         
-        // 连接到VNC服务器
+        // 连接到VNC服务器 - 优化连接逻辑
         function connectToVNC() {
+            // 预先缓存DOM元素以减少重复查询
+            const vncLoading = document.getElementById('vncLoading');
+            const vncError = document.getElementById('vncError');
+            const vncDisplay = document.getElementById('vncDisplay');
+            
             try {
                 // 显示加载状态
-                document.getElementById('vncLoading').style.display = 'block';
-                document.getElementById('vncError').style.display = 'none';
+                vncLoading.style.display = 'block';
+                vncError.style.display = 'none';
                 updateConnectionStatus('connecting');
                 
                 // 创建noVNC连接，使用127.0.0.1作为WebSocket服务器地址
-                const wsUrl = `ws://127.0.0.1:${vncParams.port}`;
-                currentRfb = new RFB(document.getElementById('vncDisplay'), wsUrl, {
-                    credentials: { password: vncParams.password }
+                // 合并参数创建，避免多次字符串拼接
+                const wsUrl = 'ws://127.0.0.1:' + vncParams.port;
+                currentRfb = new RFB(vncDisplay, wsUrl, {
+                    credentials: { password: vncParams.password || '' },
+                    // 直接在构造函数中设置选项
+                    scaleViewport: true,
+                    resizeSession: false
                 });
                 
                 // 设置事件监听器
@@ -311,13 +311,9 @@
                 currentRfb.addEventListener('credentialsrequired', onVNCCredentialsRequired);
                 currentRfb.addEventListener('securityfailure', onVNCSecurityFailure);
                 
-                // 设置显示参数
-                currentRfb.scaleViewport = true;
-                currentRfb.resizeSession = false;
-                
             } catch (error) {
-                console.error('VNC连接失败:', error);
-                showError('连接失败: ' + error.message);
+                // 错误处理保留但减少日志输出
+                showError('连接失败: ' + (error.message || '未知错误'));
             }
         }
         
@@ -440,17 +436,12 @@
             }, 1000);
         }
         
-        // 页面加载完成后初始化
+        // 页面加载完成后初始化 - 优化执行顺序
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('VNC查看器已加载');
-            
-            // 监听全屏状态变化
+            // 优先设置事件监听
             document.addEventListener('fullscreenchange', onFullscreenChange);
             document.addEventListener('webkitfullscreenchange', onFullscreenChange);
             document.addEventListener('msfullscreenchange', onFullscreenChange);
-            
-            // 初始化VNC连接
-            initVNCConnection();
             
             // 监听窗口关闭事件
             window.addEventListener('beforeunload', function() {
@@ -458,6 +449,9 @@
                     currentRfb.disconnect();
                 }
             });
+            
+            // 初始化VNC连接 - 减少不必要的日志输出以提高性能
+            initVNCConnection();
         });
         
         // 键盘快捷键

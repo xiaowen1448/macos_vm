@@ -55,6 +55,10 @@ logging.getLogger('paramiko.transport').setLevel(logging.WARNING)
 
 app = Flask(__name__, template_folder='web/templates', static_folder='web/static', static_url_path='/static')
 
+# 增加缓冲区大小以解决大型文件的ERR_CONTENT_LENGTH_MISMATCH问题
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # 禁用缓存
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
+
 # 注册新蓝图
 app.register_blueprint(vm_clone_bp)
 app.register_blueprint(vm_management_bp)
@@ -184,7 +188,7 @@ def login():
 
 
 # 导入proxy_assign模块中的函数
-from app.routes.proxy_assign import get_nodes, import_nodes
+from app.routes.proxy_assign import get_nodes, import_nodes, get_countries, get_nodes_by_country, batch_assign
 
 # 注册代理IP相关的API端点
 @app.route('/api/nodes', methods=['GET'])
@@ -198,6 +202,31 @@ def api_nodes():
 def api_nodes_import():
     """导入VPN配置节点"""
     return import_nodes()
+
+@app.route('/api/get_countries')
+@login_required
+def api_get_countries():
+    """获取所有可用的国家地区"""
+    return get_countries()
+
+@app.route('/api/get_nodes_by_country')
+@login_required
+def api_get_nodes_by_country():
+    """根据国家获取节点列表"""
+    return get_nodes_by_country()
+
+@app.route('/api/test_node_delay/<int:node_id>')
+@login_required
+def api_test_node_delay(node_id):
+    """测试单个节点的延迟"""
+    from app.routes.proxy_assign import test_node_delay
+    return test_node_delay(node_id)
+
+@app.route('/api/batch_assign', methods=['POST'])
+@login_required
+def api_batch_assign():
+    """批量分配代理"""
+    return batch_assign()
 
 # 以下路由已移至app/routes/vm.py蓝图中
 # /proxy_assign

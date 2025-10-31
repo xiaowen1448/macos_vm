@@ -271,14 +271,27 @@ def vnc_proxy_worker(session_id, vnc_socket):
 def start_websockify(vm_name, vnc_port):
     """启动websockify进程（使用虚拟机名称）"""
     try:
+        # 检查是否已经存在可用的websockify进程
+        if vm_name in websockify_processes:
+            process_info = websockify_processes[vm_name]
+            process = process_info['process']
+            websocket_port = process_info['websocket_port']
+            
+            # 检查进程是否仍在运行且配置匹配
+            if process.poll() is None and process_info.get('vnc_port') == vnc_port:
+                logger.info(f"重用现有websockify进程: PID={process.pid}, WebSocket端口={websocket_port}")
+                # 更新启动时间
+                process_info['start_time'] = time.time()
+                return websocket_port
+            else:
+                logger.info(f"现有websockify进程无效或配置不匹配，需要重启")
+                stop_websockify(vm_name)
+        
         # 为每个虚拟机分配一个唯一的WebSocket端口
         websocket_port = get_available_websocket_port()
         if not websocket_port:
             logger.error("无法分配WebSocket端口")
             return None
-
-        # 停止之前的websockify进程（如果存在）
-        stop_websockify(vm_name)
 
         # 构建websockify命令
         cmd = [
@@ -547,12 +560,36 @@ def get_available_websocket_port():
     start_port = 6080
     max_attempts = 100
 
+    # 定期清理无效的websockify进程记录
+    current_time = time.time()
+    for client_ip, process_info in list(websockify_processes.items()):
+        process = process_info['process']
+        if process.poll() is not None:
+            # 进程已终止，清理记录
+            logger.info(f"发现终止的websockify进程，清理记录: {client_ip}")
+            del websockify_processes[client_ip]
+
     # 获取已被websockify进程占用的端口
     used_ports = set()
-    for client_ip, process_info in websockify_processes.items():
+    for process_info in websockify_processes.values():
         if 'websocket_port' in process_info:
             used_ports.add(process_info['websocket_port'])
 
+    # 优先检查上次成功分配的端口附近
+    if hasattr(get_available_websocket_port, 'last_port'):
+        last_port = getattr(get_available_websocket_port, 'last_port', start_port)
+        # 先尝试上次成功的端口
+        if last_port not in used_ports:
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.bind(('localhost', last_port))
+                    logger.info(f"重用上次WebSocket端口: {last_port}")
+                    get_available_websocket_port.last_port = last_port
+                    return last_port
+            except OSError:
+                pass
+
+    # 从start_port开始查找
     for i in range(max_attempts):
         port = start_port + i
 
@@ -565,6 +602,8 @@ def get_available_websocket_port():
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.bind(('localhost', port))
                 logger.info(f"分配WebSocket端口: {port}")
+                # 记录最后成功的端口
+                get_available_websocket_port.last_port = port
                 return port
         except OSError:
             continue
