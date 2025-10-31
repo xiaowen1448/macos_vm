@@ -116,7 +116,7 @@ def encrypt_id_page():
     """id加密页面"""
     return render_template('encrypt_id.html')
 
-# 代理IP分配页面
+# 代理配置页面
 @vm_bp.route('/proxy_assign')
 @login_required
 def proxy_assign_page():
