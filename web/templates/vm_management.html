@@ -873,7 +873,7 @@
 
     <!-- 批量分配代理模态框 -->
     <div class="modal fade" id="batchAssignProxyModal" tabindex="-1" aria-labelledby="batchAssignProxyModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-xl">
+        <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="batchAssignProxyModalLabel">批量分配代理</h5>
@@ -889,8 +889,7 @@
                                     <tr>
                                         <th style="width: auto; min-width: 150px; white-space: nowrap;">虚拟机名称</th>
                                         <th>选择国家地区</th>
-                                        <th>选择代理节点</th>
-                                        <th>节点延迟</th>
+                                        <th style="width: auto;">选择代理节点</th>
                                     </tr>
                                 </thead>
                                 <tbody id="selectedVmsTableBody">
@@ -1069,7 +1068,8 @@
             
             // 更新按钮状态
             document.getElementById('batchChangeWumaBtn').disabled = !hasSelection;
-            document.getElementById('batchDeleteBtn').disabled = !hasSelection;
+            // 批量删除按钮：有选中的虚拟机，但不能有运行中的虚拟机
+            document.getElementById('batchDeleteBtn').disabled = !hasSelection || hasRunningVMs;
             document.getElementById('batchIMLoginBtn').disabled = !hasRunningVMs;
             document.getElementById('batchIMLogoutBtn').disabled = !hasRunningVMs;
             document.getElementById('batchIMStatusBtn').disabled = !hasRunningVMs;
@@ -1078,6 +1078,9 @@
         
         // 打开批量分配代理模态框
         function openBatchAssignProxyModal() {
+            // 确保国家数据已加载（如果还没加载完成）
+            preloadCountries();
+            
             const selectedVmsTableBody = document.getElementById('selectedVmsTableBody');
             selectedVmsTableBody.innerHTML = '';
             
@@ -1103,12 +1106,9 @@
                             </select>
                         </td>
                         <td>
-                            <select class="form-select form-select-sm node-select" id="node-select-${vm.name}" disabled>
+                            <select class="form-select form-select-sm node-select" id="node-select-${vm.name}" disabled style="width: 100%;">
                                 <option value="">请先选择国家地区</option>
                             </select>
-                        </td>
-                        <td>
-                            <span class="timeout-value" id="timeout-${vm.name}">--</span>
                         </td>
                     `;
                     selectedVmsTableBody.appendChild(tr);
@@ -1147,29 +1147,69 @@
             modal.show();
         }
         
-        // 为所有虚拟机加载国家地区列表
+        // 缓存国家地区数据，避免重复请求
+        let cachedCountries = null;
+        let countriesLoading = false;
+        
+        // 预加载国家地区数据
+        function preloadCountries() {
+            if (!cachedCountries && !countriesLoading) {
+                countriesLoading = true;
+                fetch('/api/get_countries')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            cachedCountries = data.countries;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('预加载国家地区失败:', error);
+                    })
+                    .finally(() => {
+                        countriesLoading = false;
+                    });
+            }
+        }
+        
+        // 为所有虚拟机加载国家地区列表（使用缓存）
         function loadCountriesForAllVMs() {
+            // 如果缓存中有数据，直接使用
+            if (cachedCountries) {
+                populateCountrySelectors();
+                return;
+            }
+            
+            // 如果没有缓存但正在加载中，等待加载完成
+            if (countriesLoading) {
+                setTimeout(() => {
+                    if (cachedCountries) {
+                        populateCountrySelectors();
+                    } else {
+                        // 如果仍然没有缓存，进行直接请求
+                        fetch('/api/get_countries')
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.success) {
+                                    cachedCountries = data.countries; // 更新缓存
+                                    populateCountrySelectors();
+                                }
+                            })
+                            .catch(error => {
+                                console.error('加载国家地区失败:', error);
+                                showNotification('加载国家地区失败', 'error');
+                            });
+                    }
+                }, 100); // 短暂等待后重试
+                return;
+            }
+            
+            // 正常请求流程（应该不会走到这里，但保留作为兜底）
             fetch('/api/get_countries')
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        // 为每个虚拟机的国家选择器添加选项
-                        document.querySelectorAll('.country-select').forEach(select => {
-                            // 清空下拉框中的现有选项，避免重复
-                            select.innerHTML = '';
-                            // 添加默认选项
-                            const defaultOption = document.createElement('option');
-                            defaultOption.value = '';
-                            defaultOption.textContent = '请选择国家地区';
-                            select.appendChild(defaultOption);
-                            // 添加国家列表选项
-                            data.countries.forEach(country => {
-                                const option = document.createElement('option');
-                                option.value = country;
-                                option.textContent = country;
-                                select.appendChild(option);
-                            });
-                        });
+                        cachedCountries = data.countries; // 更新缓存
+                        populateCountrySelectors();
                     }
                 })
                 .catch(error => {
@@ -1178,15 +1218,38 @@
                 });
         }
         
+        // 填充国家选择器的通用函数
+        function populateCountrySelectors() {
+            if (!cachedCountries) return;
+            
+            document.querySelectorAll('.country-select').forEach(select => {
+                // 清空下拉框中的现有选项，避免重复
+                select.innerHTML = '';
+                // 添加默认选项
+                const defaultOption = document.createElement('option');
+                defaultOption.value = '';
+                defaultOption.textContent = '请选择国家地区';
+                select.appendChild(defaultOption);
+                // 添加国家列表选项
+                cachedCountries.forEach(country => {
+                    const option = document.createElement('option');
+                    option.value = country;
+                    option.textContent = country;
+                    select.appendChild(option);
+                });
+            });
+        }
+        
+        // 在页面加载时预加载国家地区数据
+        window.addEventListener('DOMContentLoaded', preloadCountries);
+        
         // 根据国家为特定虚拟机加载节点
         function loadNodesByCountryForVM(vmName, country) {
             const nodeSelect = document.getElementById(`node-select-${vmName}`);
-            const timeoutValue = document.getElementById(`timeout-${vmName}`);
             
             if (!country) {
                 nodeSelect.innerHTML = '<option value="">请先选择国家地区</option>';
                 nodeSelect.disabled = true;
-                timeoutValue.textContent = '--';
                 return;
             }
             
@@ -1219,23 +1282,50 @@
                 }
             };
             
-            // 保持change事件，用于更新节点延迟显示
+            // 保持change事件，用于更新节点延迟显示和检查所有节点选择状态
             nodeSelect.onchange = function() {
+                // 在事件处理函数内部获取超时显示元素
+                const timeoutValue = document.getElementById(`node-timeout-${vmName}`);
                 const selectedOption = this.options[this.selectedIndex];
                 const selectedNodeId = this.value;
                 
                 if (selectedNodeId) {
                     // 使用已测速的延迟值或实时测速
-                    if (selectedOption.dataset.timeout && selectedOption.dataset.timeout !== '--') {
+                    if (timeoutValue && selectedOption.dataset.timeout && selectedOption.dataset.timeout !== '--') {
                         timeoutValue.textContent = selectedOption.dataset.timeout;
-                    } else {
+                    } else if (timeoutValue) {
                         timeoutValue.textContent = '测速中...';
+                    }
+                    if (selectedNodeId) {
                         testNodeDelay(selectedNodeId, selectedOption, vmName);
                     }
-                } else {
+                } else if (timeoutValue) {
                     timeoutValue.textContent = '--';
                 }
+                
+                // 检查所有虚拟机的节点选择状态，更新确定分配按钮状态
+                updateConfirmAssignButtonStatus();
             };
+            
+            // 添加一个函数来检查所有虚拟机的节点选择状态，更新确定分配按钮状态
+            function updateConfirmAssignButtonStatus() {
+                const confirmBtn = document.getElementById('confirmAssignBtn');
+                const allNodeSelects = document.querySelectorAll('.node-select');
+                let allNodesSelected = true;
+                
+                // 检查每个节点选择器是否都已选择节点
+                allNodeSelects.forEach(select => {
+                    if (!select.value) {
+                        allNodesSelected = false;
+                    }
+                });
+                
+                // 更新确定分配按钮的禁用状态
+                confirmBtn.disabled = !allNodesSelected;
+            }
+            
+            // 初始检查一次按钮状态
+            updateConfirmAssignButtonStatus();
             
             // 当模态框关闭时重置测速状态，确保下次打开时重新测速
             const modalElement = document.getElementById('batchAssignProxyModal');
@@ -1475,12 +1565,6 @@
                     // 更新UI
                     optionElement.textContent = displayText;
                     optionElement.dataset.timeout = delayValue;
-                    
-                    // 更新超时信息显示
-                    const timeoutElement = document.getElementById(`timeout-${vmName}`);
-                    if (timeoutElement && nodeSelect.value === nodeId.toString()) {
-                        timeoutElement.textContent = delayValue;
-                    }
                 })
                 .catch(error => {
                     console.error('测速处理失败:', error);
@@ -1492,12 +1576,6 @@
                     if (nodeSelect && document.body.contains(optionElement)) {
                         optionElement.textContent = `${nodeName} (测速失败)`;
                         optionElement.dataset.timeout = '--';
-                        
-                        // 更新超时信息显示
-                        const timeoutElement = document.getElementById(`timeout-${vmName}`);
-                        if (timeoutElement && nodeSelect.value === nodeId.toString()) {
-                            timeoutElement.textContent = '测速失败';
-                        }
                     }
                 });
         }
@@ -2208,13 +2286,30 @@
         }
 
         // 加载虚拟机数据
-        function loadVMData(page = 1) {
+        // 带超时和重试功能的fetch封装
+        function fetchWithTimeout(url, options = {}, timeout = 30000) {
+            return Promise.race([
+                fetch(url, options),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('请求超时')), timeout))
+            ]);
+        }
+        
+        // 加载虚拟机数据函数，添加超时处理和重试机制
+        function loadVMData(page = 1, retryCount = 0) {
+            const maxRetries = 3; // 最大重试次数
+            const timeoutDelay = 30000; // 超时时间：30秒
+            
             showLoading();
             hideError();
             currentPage = page;
             
-            fetch(`/api/vm_10_12_list?page=${page}&page_size=${pageSize}`)
-                .then(response => response.json())
+            fetchWithTimeout(`/api/vm_10_12_list?page=${page}&page_size=${pageSize}`, {}, timeoutDelay)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP错误: ${response.status}`);
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     hideLoading();
                     if (data.success) {
@@ -2250,13 +2345,64 @@
                             setScrollbarState(false, '数据加载完成，使用外部滚动条模式');
                         }, 100);
                     } else {
-                        showError(data.message || '获取虚拟机信息失败');
+                        showErrorWithRetry(data.message || '获取虚拟机信息失败', page);
                     }
                 })
                 .catch(error => {
                     hideLoading();
-                    showError('网络错误: ' + error.message);
+                    
+                    // 自动重试逻辑
+                    if (retryCount < maxRetries) {
+                        retryCount++;
+                        console.log(`加载失败，第 ${retryCount}/${maxRetries} 次重试...`);
+                        
+                        // 显示重试信息
+                        showRetryMessage(error.message, retryCount, maxRetries);
+                        
+                        // 延迟重试，使用递增的延迟时间
+                        setTimeout(() => {
+                            loadVMData(page, retryCount);
+                        }, 2000 * retryCount); // 第1次等待2秒，第2次等待4秒，第3次等待6秒
+                    } else {
+                        // 达到最大重试次数，显示错误并提供手动重试选项
+                        showErrorWithRetry('获取虚拟机信息失败，请检查网络连接后重试', page);
+                    }
                 });
+        }
+        
+        // 显示带重试按钮的错误信息
+        function showErrorWithRetry(message, page) {
+            const errorElement = document.getElementById('errorMessage');
+            if (errorElement) {
+                errorElement.innerHTML = `
+                    <div class="alert alert-danger d-flex justify-content-between align-items-center" role="alert">
+                        <div>
+                            <i class="fas fa-exclamation-circle me-2"></i>
+                            <span>${message}</span>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-primary ml-2" onclick="loadVMData(${page}, 0)">
+                            <i class="fas fa-sync-alt"></i> 重试
+                        </button>
+                    </div>
+                `;
+                errorElement.style.display = 'block';
+            }
+        }
+        
+        // 显示重试进度信息
+        function showRetryMessage(error, retryCount, maxRetries) {
+            const errorElement = document.getElementById('errorMessage');
+            if (errorElement) {
+                errorElement.innerHTML = `
+                    <div class="alert alert-warning d-flex justify-content-between align-items-center" role="alert">
+                        <div>
+                            <i class="fas fa-spinner fa-spin me-2"></i>
+                            <span>${error}，正在重试(${retryCount}/${maxRetries})...</span>
+                        </div>
+                    </div>
+                `;
+                errorElement.style.display = 'block';
+            }
         }
 
         // 防抖变量

@@ -57,7 +57,30 @@ app = Flask(__name__, template_folder='web/templates', static_folder='web/static
 
 # 增加缓冲区大小以解决大型文件的ERR_CONTENT_LENGTH_MISMATCH问题
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # 禁用缓存
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
+app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # 增加到32MB
+
+# 添加响应头设置和请求大小限制
+app.config['TEMPLATES_AUTO_RELOAD'] = True  # 启用模板自动重载
+
+# 增加Flask的内部缓冲区大小
+class CustomResponse(Response):
+    default_mimetype = 'text/html'
+    default_content_type = 'text/html; charset=utf-8'
+
+# 替换默认的Response类
+app.response_class = CustomResponse
+
+# 添加一个中间件来增加缓冲区大小和确保正确的内容长度
+@app.after_request
+def after_request(response):
+    # 确保设置内容类型
+    if 'Content-Type' not in response.headers:
+        response.headers['Content-Type'] = 'text/html; charset=utf-8'
+    # 禁用缓存以避免内容不匹配问题
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 # 注册新蓝图
 app.register_blueprint(vm_clone_bp)
